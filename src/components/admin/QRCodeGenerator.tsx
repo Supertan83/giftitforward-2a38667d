@@ -14,7 +14,9 @@ import {
   FileSpreadsheet,
   Loader2,
   Database,
-  XCircle
+  XCircle,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +34,17 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CSVImport } from '@/components/admin/CSVImport';
 import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
@@ -61,6 +74,10 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   const [cardSize, setCardSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [activeTab, setActiveTab] = useState('generate');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [cardToUnregister, setCardToUnregister] = useState<string | null>(null);
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [isUnregistering, setIsUnregistering] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -68,12 +85,15 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   const { addCards, unregisterCard } = useCardOperations();
   const existingCardIds = qrCards.map(c => c.uniqueId);
 
-  const handleUnregisterCard = async (uniqueId: string) => {
+  const handleConfirmUnregister = async () => {
+    if (!cardToUnregister) return;
+    
+    setIsUnregistering(true);
     try {
-      await unregisterCard.mutateAsync(uniqueId);
+      await unregisterCard.mutateAsync(cardToUnregister);
       toast({
         title: 'Card unregistered',
-        description: `Card ${uniqueId} has been removed from the system`,
+        description: `Card ${cardToUnregister} has been removed from the system`,
       });
     } catch (error) {
       toast({
@@ -81,6 +101,57 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
         description: error instanceof Error ? error.message : 'Failed to unregister card',
         variant: 'destructive',
       });
+    } finally {
+      setIsUnregistering(false);
+      setCardToUnregister(null);
+    }
+  };
+
+  const handleBulkUnregister = async () => {
+    if (selectedCards.size === 0) return;
+    
+    setIsUnregistering(true);
+    const cardIds = Array.from(selectedCards);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const uniqueId of cardIds) {
+      try {
+        await unregisterCard.mutateAsync(uniqueId);
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    toast({
+      title: 'Bulk unregister complete',
+      description: `${successCount} cards removed${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      variant: failCount > 0 ? 'destructive' : 'default',
+    });
+
+    setSelectedCards(new Set());
+    setShowBulkConfirm(false);
+    setIsUnregistering(false);
+  };
+
+  const toggleCardSelection = (uniqueId: string) => {
+    setSelectedCards(prev => {
+      const next = new Set(prev);
+      if (next.has(uniqueId)) {
+        next.delete(uniqueId);
+      } else {
+        next.add(uniqueId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCards.size === qrCards.length) {
+      setSelectedCards(new Set());
+    } else {
+      setSelectedCards(new Set(qrCards.map(c => c.uniqueId)));
     }
   };
 
@@ -339,14 +410,27 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
 
             <TabsContent value="registered">
               <div className="space-y-4">
-                <div className="flex items-start gap-2 md:gap-3 p-3 md:p-4 bg-muted rounded-lg">
-                  <Database className="w-4 h-4 md:w-5 md:h-5 text-primary mt-0.5 shrink-0" />
-                  <div className="text-xs md:text-sm">
-                    <p className="font-medium">Registered Cards ({qrCards.length})</p>
-                    <p className="text-muted-foreground">
-                      View and unregister QR cards from the system.
-                    </p>
+                <div className="flex items-start justify-between gap-2 md:gap-3 p-3 md:p-4 bg-muted rounded-lg">
+                  <div className="flex items-start gap-2 md:gap-3">
+                    <Database className="w-4 h-4 md:w-5 md:h-5 text-primary mt-0.5 shrink-0" />
+                    <div className="text-xs md:text-sm">
+                      <p className="font-medium">Registered Cards ({qrCards.length})</p>
+                      <p className="text-muted-foreground">
+                        View and unregister QR cards from the system.
+                      </p>
+                    </div>
                   </div>
+                  {selectedCards.size > 0 && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowBulkConfirm(true)}
+                      className="shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Unregister ({selectedCards.size})
+                    </Button>
+                  )}
                 </div>
                 
                 {qrCards.length === 0 ? (
@@ -359,6 +443,13 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     <table className="w-full text-xs md:text-sm">
                       <thead className="bg-muted sticky top-0">
                         <tr>
+                          <th className="p-2 md:p-3 w-10">
+                            <Checkbox
+                              checked={selectedCards.size === qrCards.length && qrCards.length > 0}
+                              onCheckedChange={toggleSelectAll}
+                              aria-label="Select all"
+                            />
+                          </th>
                           <th className="text-left p-2 md:p-3 font-medium">Card ID</th>
                           <th className="text-left p-2 md:p-3 font-medium">Status</th>
                           <th className="text-left p-2 md:p-3 font-medium">Credits</th>
@@ -367,7 +458,17 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                       </thead>
                       <tbody>
                         {qrCards.map((card) => (
-                          <tr key={card.id} className="border-t border-border hover:bg-muted/50">
+                          <tr key={card.id} className={cn(
+                            "border-t border-border hover:bg-muted/50",
+                            selectedCards.has(card.uniqueId) && "bg-primary/5"
+                          )}>
+                            <td className="p-2 md:p-3">
+                              <Checkbox
+                                checked={selectedCards.has(card.uniqueId)}
+                                onCheckedChange={() => toggleCardSelection(card.uniqueId)}
+                                aria-label={`Select ${card.uniqueId}`}
+                              />
+                            </td>
                             <td className="p-2 md:p-3 font-mono">{card.uniqueId}</td>
                             <td className="p-2 md:p-3">
                               <span className={cn(
@@ -384,8 +485,8 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleUnregisterCard(card.uniqueId)}
-                                disabled={unregisterCard.isPending}
+                                onClick={() => setCardToUnregister(card.uniqueId)}
+                                disabled={isUnregistering}
                                 className="text-danger hover:text-danger hover:bg-danger/10"
                               >
                                 <XCircle className="w-4 h-4" />
@@ -489,6 +590,64 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
           )}
         </div>
       </main>
+
+      {/* Single Card Unregister Confirmation */}
+      <AlertDialog open={!!cardToUnregister} onOpenChange={(open) => !open && setCardToUnregister(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unregister Card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove card <span className="font-mono font-semibold">{cardToUnregister}</span> and all its transaction history from the system. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnregistering}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmUnregister}
+              disabled={isUnregistering}
+              className="bg-danger hover:bg-danger/90"
+            >
+              {isUnregistering ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Unregistering...
+                </>
+              ) : (
+                'Unregister'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Unregister Confirmation */}
+      <AlertDialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unregister {selectedCards.size} Cards?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove {selectedCards.size} selected cards and all their transaction history from the system. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnregistering}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkUnregister}
+              disabled={isUnregistering}
+              className="bg-danger hover:bg-danger/90"
+            >
+              {isUnregistering ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Unregistering...
+                </>
+              ) : (
+                `Unregister ${selectedCards.size} Cards`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Print Styles */}
       <style>{`
