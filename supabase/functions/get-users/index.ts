@@ -1,11 +1,42 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// Get allowed origins from environment or use defaults
+const getAllowedOrigins = () => {
+  const envOrigins = Deno.env.get('ALLOWED_ORIGINS');
+  if (envOrigins) {
+    return envOrigins.split(',').map(o => o.trim());
+  }
+  return [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://*.lovable.app',
+    'https://*.lovable.dev'
+  ];
+};
+
+const getCorsHeaders = (origin: string | null) => {
+  const allowedOrigins = getAllowedOrigins();
+  const isAllowed = origin && (
+    allowedOrigins.includes(origin) ||
+    allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace('*', '.*');
+        return new RegExp(`^${pattern}$`).test(origin);
+      }
+      return false;
+    })
+  );
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+};
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -20,7 +51,7 @@ Deno.serve(async (req) => {
     // Verify the requesting user is an admin
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -30,7 +61,7 @@ Deno.serve(async (req) => {
     const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token)
     
     if (authError || !requestingUser) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Invalid authentication' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -45,20 +76,22 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!roleData) {
-      return new Response(JSON.stringify({ error: 'Admin access required' }), {
+      return new Response(JSON.stringify({ error: 'Insufficient permissions' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Get all user roles
+    // Get all user roles with pagination limit
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from('user_roles')
       .select('*')
       .order('created_at', { ascending: false })
+      .limit(500) // Prevent unlimited data retrieval
 
     if (rolesError) {
-      return new Response(JSON.stringify({ error: rolesError.message }), {
+      console.error('Error fetching roles:', rolesError);
+      return new Response(JSON.stringify({ error: 'Unable to fetch users' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -68,7 +101,8 @@ Deno.serve(async (req) => {
     const { data: { users: authUsers }, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
 
     if (usersError) {
-      return new Response(JSON.stringify({ error: usersError.message }), {
+      console.error('Error fetching auth users:', usersError);
+      return new Response(JSON.stringify({ error: 'Unable to fetch user details' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -91,8 +125,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('Unexpected error in get-users:', error);
+    return new Response(JSON.stringify({ error: 'An unexpected error occurred' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { QRCard, ItemType, Transaction, CardStatus, TransactionType } from '@/types';
 import { useEffect } from 'react';
 import { Json } from '@/integrations/supabase/types';
+import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
 
 // Type helpers for database mapping
 type DbCardStatus = 'inactive' | 'active' | 'checked_out';
@@ -52,7 +53,7 @@ export const useQRCards = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
 
       return (data || []).map(card => ({
         id: card.id,
@@ -94,7 +95,7 @@ export const useItemTypes = () => {
         .select('*')
         .order('name');
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
 
       return (data || []).map(item => ({
         id: item.id,
@@ -166,7 +167,7 @@ export const useCardOperations = () => {
         .ilike('unique_id', uniqueId)
         .maybeSingle();
 
-      if (findError || !card) throw new Error('Card not found');
+      if (findError || !card) throw new SafeError('Card not found');
       if (card.status === 'active') return card;
 
       // Update card with beneficiary info
@@ -191,7 +192,7 @@ export const useCardOperations = () => {
         .select()
         .single();
 
-      if (updateError) throw updateError;
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
       // Create transaction
       await supabase.from('transactions').insert({
@@ -216,9 +217,9 @@ export const useCardOperations = () => {
         .ilike('unique_id', uniqueId)
         .maybeSingle();
 
-      if (findError || !card) throw new Error('Card not found');
-      if (card.status !== 'active') throw new Error('Card is not active. Please check in first.');
-      if (card.credit_balance <= 0) throw new Error('LIMIT REACHED (0/15). No more items allowed.');
+      if (findError || !card) throw new SafeError('Card not found');
+      if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
+      if (card.credit_balance <= 0) throw new SafeError('LIMIT REACHED (0/15). No more items allowed.');
 
       // Update card
       const { error: updateError } = await supabase
@@ -229,7 +230,7 @@ export const useCardOperations = () => {
         })
         .eq('id', card.id);
 
-      if (updateError) throw updateError;
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
       // Update item distributed count
       const { data: item } = await supabase
@@ -269,9 +270,9 @@ export const useCardOperations = () => {
         .ilike('unique_id', uniqueId)
         .maybeSingle();
 
-      if (findError || !card) throw new Error('Card not found');
-      if (card.status !== 'active') throw new Error('Card is not active');
-      if (card.total_items_collected <= 0) throw new Error('No items to return');
+      if (findError || !card) throw new SafeError('Card not found');
+      if (card.status !== 'active') throw new SafeError('Card is not active');
+      if (card.total_items_collected <= 0) throw new SafeError('No items to return');
 
       const newBalance = Math.min(card.credit_balance + 1, 15);
 
@@ -283,7 +284,7 @@ export const useCardOperations = () => {
         })
         .eq('id', card.id);
 
-      if (updateError) throw updateError;
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
       await supabase.from('transactions').insert({
         card_id: card.id,
@@ -307,7 +308,7 @@ export const useCardOperations = () => {
         .ilike('unique_id', uniqueId)
         .maybeSingle();
 
-      if (findError || !card) throw new Error('Card not found');
+      if (findError || !card) throw new SafeError('Card not found');
 
       const totalCollected = card.total_items_collected;
 
@@ -321,7 +322,7 @@ export const useCardOperations = () => {
         })
         .eq('id', card.id);
 
-      if (updateError) throw updateError;
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
       await supabase.from('transactions').insert({
         card_id: card.id,
@@ -351,7 +352,7 @@ export const useCardOperations = () => {
         .insert(cards)
         .select();
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return data?.length || 0;
     },
     onSuccess: () => {
@@ -381,7 +382,7 @@ export const useCardOperations = () => {
         .delete()
         .ilike('unique_id', uniqueId);
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
     },
     onSuccess: () => {
@@ -412,10 +413,10 @@ export const useInventoryOperations = () => {
         .eq('id', itemId)
         .single();
 
-      if (findError || !item) throw new Error('Item not found');
+      if (findError || !item) throw new SafeError('Item not found');
 
       const availableStock = item.total_stock - item.allocated_to_marketplace;
-      if (quantity > availableStock) throw new Error('Insufficient stock');
+      if (quantity > availableStock) throw new SafeError('Insufficient stock');
 
       const { error: updateError } = await supabase
         .from('item_types')
@@ -424,7 +425,7 @@ export const useInventoryOperations = () => {
         })
         .eq('id', itemId);
 
-      if (updateError) throw updateError;
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
       return true;
     },
     onSuccess: () => {
@@ -444,7 +445,7 @@ export const useInventoryOperations = () => {
           distributed: 0
         });
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
     },
     onSuccess: () => {
@@ -459,7 +460,7 @@ export const useInventoryOperations = () => {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
     },
     onSuccess: () => {
@@ -474,7 +475,7 @@ export const useInventoryOperations = () => {
         .update({ total_stock: totalStock })
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
     },
     onSuccess: () => {
@@ -581,7 +582,7 @@ export const useMarketplaces = () => {
         .select('*')
         .order('event_date', { ascending: true });
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return (data || []).map(item => ({
         ...item,
         status: item.status as 'upcoming' | 'active' | 'completed'
@@ -619,7 +620,7 @@ export const useCreateMarketplace = () => {
         .from('marketplace_events')
         .insert(marketplace);
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
     },
     onSuccess: () => {
@@ -638,7 +639,7 @@ export const useDeleteMarketplace = () => {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
     },
     onSuccess: () => {
@@ -664,7 +665,7 @@ export const useBeneficiaryDemographics = () => {
         .select('gender, marital_status, children_count, nationality')
         .not('gender', 'is', null);
 
-      if (error) throw error;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
 
       const genderCounts: Record<string, number> = {};
       const maritalCounts: Record<string, number> = {};
