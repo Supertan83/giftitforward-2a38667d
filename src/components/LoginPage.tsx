@@ -54,7 +54,7 @@ export const LoginPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card rounded-xl md:rounded-2xl border border-border shadow-elevated p-4 md:p-6 max-w-md mx-auto"
+          className="bg-card rounded-xl md:rounded-2xl border border-border shadow-elevated p-4 md:p-6 max-w-md mx-auto relative z-10"
         >
           <h2 className="font-display font-semibold text-lg md:text-xl text-center mb-1.5 md:mb-2">
             Welcome Back
