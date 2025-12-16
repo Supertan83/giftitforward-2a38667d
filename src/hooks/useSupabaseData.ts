@@ -147,7 +147,18 @@ export const useCardOperations = () => {
   };
 
   const activateCard = useMutation({
-    mutationFn: async (uniqueId: string) => {
+    mutationFn: async ({ 
+      uniqueId, 
+      beneficiaryInfo 
+    }: { 
+      uniqueId: string; 
+      beneficiaryInfo?: { 
+        gender: string; 
+        maritalStatus: string; 
+        childrenCount: number; 
+        nationality: string; 
+      } 
+    }) => {
       // Find card
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
@@ -158,15 +169,24 @@ export const useCardOperations = () => {
       if (findError || !card) throw new Error('Card not found');
       if (card.status === 'active') return card;
 
-      // Update card
+      // Update card with beneficiary info
+      const updateData: Record<string, unknown> = {
+        status: 'active' as DbCardStatus,
+        credit_balance: 15,
+        total_items_collected: 0,
+        collected_items: []
+      };
+
+      if (beneficiaryInfo) {
+        updateData.gender = beneficiaryInfo.gender;
+        updateData.marital_status = beneficiaryInfo.maritalStatus;
+        updateData.children_count = beneficiaryInfo.childrenCount;
+        updateData.nationality = beneficiaryInfo.nationality;
+      }
+
       const { data: updated, error: updateError } = await supabase
         .from('qr_cards')
-        .update({
-          status: 'active' as DbCardStatus,
-          credit_balance: 15,
-          total_items_collected: 0,
-          collected_items: []
-        })
+        .update(updateData)
         .eq('id', card.id)
         .select()
         .single();
@@ -623,6 +643,55 @@ export const useDeleteMarketplace = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace_events'] });
+    }
+  });
+};
+
+// Beneficiary Demographics
+interface DemographicsData {
+  genderBreakdown: { gender: string; count: number }[];
+  maritalBreakdown: { status: string; count: number }[];
+  nationalityBreakdown: { nationality: string; count: number }[];
+  totalChildren: number;
+}
+
+export const useBeneficiaryDemographics = () => {
+  return useQuery({
+    queryKey: ['beneficiary_demographics'],
+    queryFn: async (): Promise<DemographicsData> => {
+      const { data, error } = await supabase
+        .from('qr_cards')
+        .select('gender, marital_status, children_count, nationality')
+        .not('gender', 'is', null);
+
+      if (error) throw error;
+
+      const genderCounts: Record<string, number> = {};
+      const maritalCounts: Record<string, number> = {};
+      const nationalityCounts: Record<string, number> = {};
+      let totalChildren = 0;
+
+      (data || []).forEach(card => {
+        if (card.gender) {
+          genderCounts[card.gender] = (genderCounts[card.gender] || 0) + 1;
+        }
+        if (card.marital_status) {
+          maritalCounts[card.marital_status] = (maritalCounts[card.marital_status] || 0) + 1;
+        }
+        if (card.nationality) {
+          nationalityCounts[card.nationality] = (nationalityCounts[card.nationality] || 0) + 1;
+        }
+        totalChildren += card.children_count || 0;
+      });
+
+      return {
+        genderBreakdown: Object.entries(genderCounts).map(([gender, count]) => ({ gender, count })),
+        maritalBreakdown: Object.entries(maritalCounts).map(([status, count]) => ({ status, count })),
+        nationalityBreakdown: Object.entries(nationalityCounts)
+          .map(([nationality, count]) => ({ nationality, count }))
+          .sort((a, b) => b.count - a.count),
+        totalChildren
+      };
     }
   });
 };

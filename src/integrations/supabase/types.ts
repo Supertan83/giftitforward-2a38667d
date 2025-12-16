@@ -79,30 +79,42 @@ export type Database = {
       }
       qr_cards: {
         Row: {
+          children_count: number | null
           collected_items: Json
           created_at: string
           credit_balance: number
+          gender: string | null
           id: string
+          marital_status: string | null
+          nationality: string | null
           status: Database["public"]["Enums"]["card_status"]
           total_items_collected: number
           unique_id: string
           updated_at: string
         }
         Insert: {
+          children_count?: number | null
           collected_items?: Json
           created_at?: string
           credit_balance?: number
+          gender?: string | null
           id?: string
+          marital_status?: string | null
+          nationality?: string | null
           status?: Database["public"]["Enums"]["card_status"]
           total_items_collected?: number
           unique_id: string
           updated_at?: string
         }
         Update: {
+          children_count?: number | null
           collected_items?: Json
           created_at?: string
           credit_balance?: number
+          gender?: string | null
           id?: string
+          marital_status?: string | null
+          nationality?: string | null
           status?: Database["public"]["Enums"]["card_status"]
           total_items_collected?: number
           unique_id?: string
