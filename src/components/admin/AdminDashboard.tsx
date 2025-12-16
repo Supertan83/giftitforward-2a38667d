@@ -9,7 +9,8 @@ import {
   Calendar,
   TrendingUp,
   Loader2,
-  Users
+  Users,
+  Store
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,12 +34,12 @@ import { StatCard } from '@/components/StatCard';
 import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
 import { StatisticsDashboard } from '@/components/admin/StatisticsDashboard';
 import { UserManagement } from '@/components/admin/UserManagement';
+import { MarketplaceManagement } from '@/components/admin/MarketplaceManagement';
 import { useAuth } from '@/contexts/AuthContext';
-import { useItemTypes, useInventoryOperations } from '@/hooks/useSupabaseData';
-import { mockMarketplaceEvents } from '@/data/mockData';
+import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -49,6 +50,7 @@ export const AdminDashboard = () => {
 
   const { signOut } = useAuth();
   const { data: itemTypes = [], isLoading } = useItemTypes();
+  const { data: marketplaces = [] } = useMarketplaces();
   const { allocateItems } = useInventoryOperations();
   const { toast } = useToast();
 
@@ -98,6 +100,11 @@ export const AdminDashboard = () => {
   // Show User Management view
   if (currentView === 'users') {
     return <UserManagement onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Marketplace Management view
+  if (currentView === 'marketplaces') {
+    return <MarketplaceManagement onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -156,7 +163,7 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6 md:mb-8">
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -242,6 +249,29 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Manage Users</h3>
                 <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   Create and manage volunteer accounts
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('marketplaces')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors shrink-0">
+                <Store className="w-6 h-6 md:w-7 md:h-7 text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Marketplaces</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
+                  Manage distribution events
                 </p>
               </div>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
@@ -333,7 +363,7 @@ export const AdminDashboard = () => {
                   <SelectValue placeholder="Choose an event..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockMarketplaceEvents.map((event) => (
+                  {marketplaces.map((event) => (
                     <SelectItem key={event.id} value={event.id}>
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
