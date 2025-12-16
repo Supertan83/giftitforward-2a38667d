@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, ShoppingBag, LogOut, Menu, User } from 'lucide-react';
+import { LogIn, ShoppingBag, LogOut, User } from 'lucide-react';
 import { EntranceZone } from '@/components/zones/EntranceZone';
 import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
 import { ExitZone } from '@/components/zones/ExitZone';
-import { useAppStore } from '@/store/useAppStore';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +26,7 @@ const zones = [
 
 export const VolunteerInterface = () => {
   const [activeZone, setActiveZone] = useState<Zone>('entrance');
-  const { currentUser, logout } = useAppStore();
+  const { user, signOut } = useAuth();
 
   const renderZone = () => {
     switch (activeZone) {
@@ -63,12 +63,12 @@ export const VolunteerInterface = () => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
                 <div>
-                  <p className="font-medium">{currentUser?.name}</p>
-                  <p className="text-xs text-muted-foreground">{currentUser?.email}</p>
+                  <p className="font-medium">Volunteer</p>
+                  <p className="text-xs text-muted-foreground">{user?.email}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout}>
+              <DropdownMenuItem onClick={signOut}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
               </DropdownMenuItem>

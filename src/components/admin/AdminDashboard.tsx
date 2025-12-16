@@ -4,12 +4,11 @@ import {
   Package, 
   BarChart3, 
   QrCode,
-  Plus,
   ArrowRight,
   Building,
   Calendar,
-  Printer,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +31,8 @@ import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
 import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
 import { StatisticsDashboard } from '@/components/admin/StatisticsDashboard';
-import { useAppStore } from '@/store/useAppStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { useItemTypes, useInventoryOperations } from '@/hooks/useSupabaseData';
 import { mockMarketplaceEvents } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,7 +45,9 @@ export const AdminDashboard = () => {
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [allocationQuantity, setAllocationQuantity] = useState('');
 
-  const { itemTypes, allocateItemsToMarketplace, logout } = useAppStore();
+  const { signOut } = useAuth();
+  const { data: itemTypes = [], isLoading } = useItemTypes();
+  const { allocateItems } = useInventoryOperations();
   const { toast } = useToast();
 
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
@@ -57,15 +59,14 @@ export const AdminDashboard = () => {
     ? selectedItem.totalStock - selectedItem.allocatedToMarketplace 
     : 0;
 
-  const handleAllocate = () => {
+  const handleAllocate = async () => {
     if (!selectedItemId || !selectedEventId || !allocationQuantity) return;
 
     const quantity = parseInt(allocationQuantity);
     if (isNaN(quantity) || quantity <= 0) return;
 
-    const success = allocateItemsToMarketplace(selectedItemId, quantity);
-
-    if (success) {
+    try {
+      await allocateItems.mutateAsync({ itemId: selectedItemId, quantity });
       toast({
         title: 'Items Allocated Successfully',
         description: `${quantity} ${selectedItem?.name} allocated to marketplace`,
@@ -73,10 +74,10 @@ export const AdminDashboard = () => {
       setShowAllocationModal(false);
       setAllocationQuantity('');
       setSelectedItemId(null);
-    } else {
+    } catch (error) {
       toast({
         title: 'Allocation Failed',
-        description: 'Not enough stock available',
+        description: error instanceof Error ? error.message : 'Not enough stock available',
         variant: 'destructive',
       });
     }
@@ -90,6 +91,14 @@ export const AdminDashboard = () => {
   // Show Statistics Dashboard view
   if (currentView === 'statistics') {
     return <StatisticsDashboard onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
@@ -107,7 +116,7 @@ export const AdminDashboard = () => {
                 <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Admin Dashboard</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={logout} className="text-xs md:text-sm">
+            <Button variant="outline" size="sm" onClick={signOut} className="text-xs md:text-sm">
               Sign Out
             </Button>
           </div>
@@ -127,14 +136,14 @@ export const AdminDashboard = () => {
             icon={Building}
             label="Allocated to Events"
             value={totalAllocated.toLocaleString()}
-            subValue={`${Math.round((totalAllocated / totalStock) * 100)}% of inventory`}
+            subValue={totalStock > 0 ? `${Math.round((totalAllocated / totalStock) * 100)}% of inventory` : '0% of inventory'}
             variant="primary"
           />
           <StatCard
             icon={BarChart3}
             label="Total Distributed"
             value={totalDistributed.toLocaleString()}
-            subValue={`${Math.round((totalDistributed / totalAllocated) * 100)}% of allocated`}
+            subValue={totalAllocated > 0 ? `${Math.round((totalDistributed / totalAllocated) * 100)}% of allocated` : '0% of allocated'}
             variant="success"
           />
         </div>
@@ -221,18 +230,26 @@ export const AdminDashboard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-            {itemTypes.map((item, index) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <ItemCard item={item} showStats />
-              </motion.div>
-            ))}
-          </div>
+          {itemTypes.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No item types configured yet.</p>
+              <p className="text-sm">Add item types to start managing inventory.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
+              {itemTypes.map((item, index) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <ItemCard item={item} showStats />
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
@@ -322,8 +339,9 @@ export const AdminDashboard = () => {
             </Button>
             <Button 
               onClick={handleAllocate}
-              disabled={!selectedItemId || !selectedEventId || !allocationQuantity}
+              disabled={!selectedItemId || !selectedEventId || !allocationQuantity || allocateItems.isPending}
             >
+              {allocateItems.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Confirm Allocation
               <ArrowRight className="w-4 h-4" />
             </Button>

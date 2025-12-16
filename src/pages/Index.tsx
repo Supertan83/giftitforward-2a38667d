@@ -1,16 +1,43 @@
-import { useAppStore } from '@/store/useAppStore';
-import { LoginPage } from '@/components/LoginPage';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { VolunteerInterface } from '@/components/VolunteerInterface';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
+import { Loader2 } from 'lucide-react';
 
 const Index = () => {
-  const { isAuthenticated, currentUser } = useAppStore();
+  const { user, userRole, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-  if (!isAuthenticated) {
-    return <LoginPage />;
+  useEffect(() => {
+    if (!isLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, isLoading, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
-  if (currentUser?.role === 'admin') {
+  if (!user || !userRole) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center p-6">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your role...</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            If this takes too long, contact an admin to assign your role.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (userRole === 'admin') {
     return <AdminDashboard />;
   }
 

@@ -1,12 +1,11 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, QrCode, CheckCircle, Package, RefreshCcw } from 'lucide-react';
+import { LogOut, QrCode, CheckCircle, Package, RefreshCcw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { useAppStore } from '@/store/useAppStore';
-import { QRCard } from '@/types';
+import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
 
 export const ExitZone = () => {
   const [showScanner, setShowScanner] = useState(false);
@@ -16,37 +15,47 @@ export const ExitZone = () => {
     subtitle?: string;
   } | null>(null);
   const [lastCheckout, setLastCheckout] = useState<{
-    card: QRCard;
+    uniqueId: string;
     itemsCollected: number;
   } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const { checkoutCard, qrCards } = useAppStore();
+  const { data: qrCards = [], isLoading } = useQRCards();
+  const { checkoutCard, findCardByUniqueId } = useCardOperations();
 
   const checkedOutToday = qrCards.filter(c => c.status === 'checked_out').length;
   const activeCards = qrCards.filter(c => c.status === 'active').length;
 
-  const handleScan = useCallback((code: string) => {
+  const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
-    const result = checkoutCard(code);
+    setIsProcessing(true);
 
-    if (result.success && result.card) {
+    try {
+      // Get card info before checkout
+      const card = await findCardByUniqueId(code);
+      const itemsCollected = card?.totalItemsCollected || 0;
+      
+      await checkoutCard.mutateAsync(code);
+      
       setLastCheckout({
-        card: result.card,
-        itemsCollected: result.card.totalItemsCollected,
+        uniqueId: code,
+        itemsCollected,
       });
       setFeedback({
         type: 'success',
         title: 'Check-Out Complete!',
-        subtitle: `Collected ${result.card.totalItemsCollected}/15 items. Card is ready for reuse.`,
+        subtitle: `Collected ${itemsCollected}/15 items. Card is ready for reuse.`,
       });
-    } else {
+    } catch (error) {
       setFeedback({
         type: 'error',
         title: 'Check-Out Failed',
-        subtitle: result.message,
+        subtitle: error instanceof Error ? error.message : 'Please try again',
       });
+    } finally {
+      setIsProcessing(false);
     }
-  }, [checkoutCard]);
+  }, [checkoutCard, findCardByUniqueId]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -73,13 +82,13 @@ export const ExitZone = () => {
         <StatCard
           icon={CheckCircle}
           label="Checked Out"
-          value={checkedOutToday}
+          value={isLoading ? '-' : checkedOutToday}
           variant="success"
         />
         <StatCard
           icon={Package}
           label="Still Active"
-          value={activeCards}
+          value={isLoading ? '-' : activeCards}
           variant="warning"
         />
       </div>
@@ -108,9 +117,14 @@ export const ExitZone = () => {
           variant="danger" 
           size="xl" 
           className="w-full"
+          disabled={isProcessing}
         >
-          <QrCode className="w-5 h-5 md:w-6 md:h-6" />
-          Scan to Check-Out
+          {isProcessing ? (
+            <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
+          ) : (
+            <QrCode className="w-5 h-5 md:w-6 md:h-6" />
+          )}
+          {isProcessing ? 'Processing...' : 'Scan to Check-Out'}
         </Button>
       </motion.div>
 
@@ -130,7 +144,7 @@ export const ExitZone = () => {
               <div>
                 <h3 className="font-display font-semibold text-sm md:text-base">Last Check-Out</h3>
                 <p className="text-xs md:text-sm text-muted-foreground font-mono">
-                  {lastCheckout.card.uniqueId}
+                  {lastCheckout.uniqueId}
                 </p>
               </div>
             </div>

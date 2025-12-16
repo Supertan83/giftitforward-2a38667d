@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, QrCode, RotateCcw, Package } from 'lucide-react';
+import { ShoppingBag, QrCode, RotateCcw, Package, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
-import { useAppStore } from '@/store/useAppStore';
+import { useItemTypes, useCardOperations } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
 
 type Mode = 'distribute' | 'return';
@@ -21,13 +21,15 @@ export const MarketplaceZone = () => {
     subtitle?: string;
     credits?: number;
   } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const { itemTypes, distributeItem, returnItem } = useAppStore();
+  const { data: itemTypes = [], isLoading } = useItemTypes();
+  const { distributeItem, returnItem } = useCardOperations();
 
   const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
   const totalAllocated = itemTypes.reduce((sum, item) => sum + item.allocatedToMarketplace, 0);
 
-  const handleScan = useCallback((code: string) => {
+  const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
     
     if (!selectedItemId) {
@@ -39,25 +41,48 @@ export const MarketplaceZone = () => {
       return;
     }
 
-    const result = mode === 'distribute' 
-      ? distributeItem(code, selectedItemId)
-      : returnItem(code, selectedItemId);
+    const selectedItem = itemTypes.find(i => i.id === selectedItemId);
+    if (!selectedItem) return;
 
-    if (result.success) {
+    setIsProcessing(true);
+
+    try {
+      if (mode === 'distribute') {
+        const result = await distributeItem.mutateAsync({
+          uniqueId: code,
+          itemId: selectedItemId,
+          itemName: selectedItem.name
+        });
+        setFeedback({
+          type: 'success',
+          title: 'Item Distributed!',
+          subtitle: `${result.itemName} distributed. Remaining: ${result.creditBalance}/15`,
+          credits: result.creditBalance,
+        });
+      } else {
+        const result = await returnItem.mutateAsync({
+          uniqueId: code,
+          itemId: selectedItemId,
+          itemName: selectedItem.name
+        });
+        setFeedback({
+          type: 'success',
+          title: 'Item Returned!',
+          subtitle: `${result.itemName} returned. Credits restored: ${result.creditBalance}/15`,
+          credits: result.creditBalance,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Operation failed';
       setFeedback({
-        type: 'success',
-        title: mode === 'distribute' ? 'Item Distributed!' : 'Item Returned!',
-        subtitle: result.message,
-        credits: result.card?.creditBalance,
+        type: message.includes('LIMIT') ? 'error' : 'warning',
+        title: message.includes('LIMIT') ? 'Limit Reached!' : 'Action Failed',
+        subtitle: message,
       });
-    } else {
-      setFeedback({
-        type: result.message.includes('LIMIT') ? 'error' : 'warning',
-        title: result.message.includes('LIMIT') ? 'Limit Reached!' : 'Action Failed',
-        subtitle: result.message,
-      });
+    } finally {
+      setIsProcessing(false);
     }
-  }, [selectedItemId, mode, distributeItem, returnItem]);
+  }, [selectedItemId, mode, itemTypes, distributeItem, returnItem]);
 
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
 
@@ -86,14 +111,14 @@ export const MarketplaceZone = () => {
         <StatCard
           icon={Package}
           label="Distributed"
-          value={totalDistributed.toLocaleString()}
+          value={isLoading ? '-' : totalDistributed.toLocaleString()}
           subValue={`of ${totalAllocated.toLocaleString()}`}
           variant="success"
         />
         <StatCard
           icon={ShoppingBag}
           label="Item Types"
-          value={itemTypes.length}
+          value={isLoading ? '-' : itemTypes.length}
           variant="default"
         />
       </div>
@@ -131,16 +156,27 @@ export const MarketplaceZone = () => {
         <h3 className="text-xs md:text-sm font-medium text-muted-foreground mb-2 md:mb-3">
           Select Item Type
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {itemTypes.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              isSelected={selectedItemId === item.id}
-              onClick={() => setSelectedItemId(item.id)}
-            />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          </div>
+        ) : itemTypes.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No item types available</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {itemTypes.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                isSelected={selectedItemId === item.id}
+                onClick={() => setSelectedItemId(item.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Scan Button */}
@@ -154,12 +190,18 @@ export const MarketplaceZone = () => {
           variant={mode === 'distribute' ? 'scan' : 'warning'} 
           size="xl" 
           className="w-full"
-          disabled={!selectedItemId}
+          disabled={!selectedItemId || isProcessing}
         >
-          <QrCode className="w-6 h-6" />
-          {selectedItem 
-            ? `${mode === 'distribute' ? 'Give' : 'Return'} ${selectedItem.icon} ${selectedItem.name}`
-            : 'Select an Item First'
+          {isProcessing ? (
+            <Loader2 className="w-6 h-6 animate-spin" />
+          ) : (
+            <QrCode className="w-6 h-6" />
+          )}
+          {isProcessing 
+            ? 'Processing...'
+            : selectedItem 
+              ? `${mode === 'distribute' ? 'Give' : 'Return'} ${selectedItem.icon} ${selectedItem.name}`
+              : 'Select an Item First'
           }
         </Button>
       </motion.div>

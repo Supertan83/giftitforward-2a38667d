@@ -11,7 +11,8 @@ import {
   CreditCard,
   Grid3X3,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +31,7 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { CSVImport } from '@/components/admin/CSVImport';
-import { useAppStore } from '@/store/useAppStore';
+import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -57,10 +58,12 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   const [quantity, setQuantity] = useState('10');
   const [cardSize, setCardSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [activeTab, setActiveTab] = useState('generate');
+  const [isRegistering, setIsRegistering] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const { qrCards, importCards } = useAppStore();
+  const { data: qrCards = [] } = useQRCards();
+  const { addCards } = useCardOperations();
   const existingCardIds = qrCards.map(c => c.uniqueId);
 
   const sizeConfig = {
@@ -138,36 +141,58 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     });
   };
 
-  const handleCSVImport = useCallback((uniqueIds: string[]) => {
-    // Import to store (registers them in the system)
-    const importedCount = importCards(uniqueIds);
+  const handleCSVImport = useCallback(async (uniqueIds: string[]) => {
+    setIsRegistering(true);
+    try {
+      // Import to database
+      const importedCount = await addCards.mutateAsync(uniqueIds);
 
-    // Also add to print preview
-    const newCards: GeneratedCard[] = uniqueIds.map(uniqueId => ({
-      id: crypto.randomUUID(),
-      uniqueId,
-      createdAt: new Date(),
-    }));
+      // Also add to print preview
+      const newCards: GeneratedCard[] = uniqueIds.map(uniqueId => ({
+        id: crypto.randomUUID(),
+        uniqueId,
+        createdAt: new Date(),
+      }));
 
-    setCards(prev => [...prev, ...newCards]);
+      setCards(prev => [...prev, ...newCards]);
 
-    toast({
-      title: 'Cards imported',
-      description: `${importedCount} cards registered in system and added to print queue`,
-    });
-  }, [importCards, toast]);
+      toast({
+        title: 'Cards imported',
+        description: `${importedCount} cards registered in system and added to print queue`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Import failed',
+        description: error instanceof Error ? error.message : 'Failed to import cards',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRegistering(false);
+    }
+  }, [addCards, toast]);
 
-  const handleRegisterGeneratedCards = useCallback(() => {
+  const handleRegisterGeneratedCards = useCallback(async () => {
     if (cards.length === 0) return;
 
-    const uniqueIds = cards.map(c => c.uniqueId);
-    const importedCount = importCards(uniqueIds);
+    setIsRegistering(true);
+    try {
+      const uniqueIds = cards.map(c => c.uniqueId);
+      const importedCount = await addCards.mutateAsync(uniqueIds);
 
-    toast({
-      title: 'Cards registered',
-      description: `${importedCount} cards registered in the system`,
-    });
-  }, [cards, importCards, toast]);
+      toast({
+        title: 'Cards registered',
+        description: `${importedCount} cards registered in the system`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Registration failed',
+        description: error instanceof Error ? error.message : 'Failed to register cards',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRegistering(false);
+    }
+  }, [cards, addCards, toast]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -189,9 +214,9 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                 <Download className="w-3 h-3 md:w-4 md:h-4" />
                 <span className="hidden sm:inline">Export</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0} className="text-xs">
-                <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
-                <span className="hidden sm:inline">Register</span>
+              <Button variant="outline" size="sm" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0 || isRegistering} className="text-xs">
+                {isRegistering ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <CreditCard className="w-3 h-3 md:w-4 md:h-4" />}
+                <span className="hidden sm:inline">{isRegistering ? 'Registering...' : 'Register'}</span>
               </Button>
               <Button size="sm" onClick={handlePrint} disabled={cards.length === 0} className="text-xs">
                 <Printer className="w-3 h-3 md:w-4 md:h-4" />
