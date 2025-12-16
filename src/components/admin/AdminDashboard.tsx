@@ -35,11 +35,12 @@ import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
 import { StatisticsDashboard } from '@/components/admin/StatisticsDashboard';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { MarketplaceManagement } from '@/components/admin/MarketplaceManagement';
+import { InventoryManagement } from '@/components/admin/InventoryManagement';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -105,6 +106,11 @@ export const AdminDashboard = () => {
   // Show Marketplace Management view
   if (currentView === 'marketplaces') {
     return <MarketplaceManagement onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Inventory Management view
+  if (currentView === 'inventory') {
+    return <InventoryManagement onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -192,7 +198,7 @@ export const AdminDashboard = () => {
             transition={{ delay: 0.1 }}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
-            onClick={() => setShowAllocationModal(true)}
+            onClick={() => setCurrentView('inventory')}
             className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
           >
             <div className="flex items-start gap-3 md:gap-4">
@@ -200,9 +206,9 @@ export const AdminDashboard = () => {
                 <Package className="w-6 h-6 md:w-7 md:h-7 text-accent-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Allocate Inventory</h3>
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Manage Inventory</h3>
                 <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
-                  Assign items to marketplace events
+                  Add and manage item types
                 </p>
               </div>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
