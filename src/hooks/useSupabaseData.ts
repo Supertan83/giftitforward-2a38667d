@@ -546,3 +546,22 @@ export const useCreateMarketplace = () => {
     }
   });
 };
+
+export const useDeleteMarketplace = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('marketplace_events')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace_events'] });
+    }
+  });
+};
