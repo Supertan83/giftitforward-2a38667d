@@ -25,6 +25,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isProcessingRef = useRef(false);
 
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
@@ -65,8 +66,23 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
       await scannerRef.current.start(
         cameraConfig,
         config,
-        (decodedText) => {
-          // Successfully scanned
+        async (decodedText) => {
+          // Prevent multiple scans - check and set lock immediately
+          if (isProcessingRef.current) return;
+          isProcessingRef.current = true;
+
+          // Stop scanner immediately to prevent more scans
+          try {
+            if (scannerRef.current) {
+              const state = scannerRef.current.getState();
+              if (state === Html5QrcodeScannerState.SCANNING) {
+                await scannerRef.current.stop();
+              }
+            }
+          } catch (err) {
+            console.log('Stop during scan error:', err);
+          }
+
           setScannedCode(decodedText);
           setStatus('success');
           
@@ -75,12 +91,12 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
             navigator.vibrate(100);
           }
 
-          // Auto-submit after brief delay
+          // Submit after brief visual feedback
           setTimeout(() => {
-            stopScanner();
             onScan(decodedText);
             setStatus('idle');
             setScannedCode(null);
+            isProcessingRef.current = false;
           }, 500);
         },
         () => {
@@ -106,6 +122,8 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
   // Start scanner when dialog opens
   useEffect(() => {
     if (isOpen) {
+      // Reset processing lock when opening
+      isProcessingRef.current = false;
       // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         startScanner();
@@ -116,6 +134,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
       setStatus('idle');
       setScannedCode(null);
       setErrorMessage('');
+      isProcessingRef.current = false;
     }
   }, [isOpen, startScanner, stopScanner]);
 
@@ -127,6 +146,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
   }, [stopScanner]);
 
   const handleSwitchCamera = useCallback(async () => {
+    isProcessingRef.current = false;
     setUseFrontCamera(!useFrontCamera);
     await stopScanner();
     setTimeout(startScanner, 100);
