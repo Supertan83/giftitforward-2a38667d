@@ -173,67 +173,68 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     <div className="min-h-screen bg-background">
       {/* Header - Hidden in print */}
       <header className="bg-card border-b border-border sticky top-0 z-10 print:hidden">
-        <div className="container max-w-6xl py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={onBack}>
+        <div className="container max-w-6xl py-3 md:py-4 px-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
+            <div className="flex items-center gap-2 md:gap-3">
+              <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="font-display font-bold text-lg">QR Code Generator</h1>
-                <p className="text-sm text-muted-foreground">Create & import beneficiary cards</p>
+                <h1 className="font-display font-bold text-base md:text-lg">QR Code Generator</h1>
+                <p className="text-xs md:text-sm text-muted-foreground">Create & import beneficiary cards</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleExportCSV} disabled={cards.length === 0}>
-                <Download className="w-4 h-4" />
-                Export CSV
+            <div className="flex gap-2 ml-9 sm:ml-0">
+              <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={cards.length === 0} className="text-xs">
+                <Download className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Export</span>
               </Button>
-              <Button variant="outline" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0}>
-                <CreditCard className="w-4 h-4" />
-                Register All
+              <Button variant="outline" size="sm" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0} className="text-xs">
+                <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Register</span>
               </Button>
-              <Button onClick={handlePrint} disabled={cards.length === 0}>
-                <Printer className="w-4 h-4" />
-                Print Cards
+              <Button size="sm" onClick={handlePrint} disabled={cards.length === 0} className="text-xs">
+                <Printer className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Print</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="container max-w-6xl py-6 print:py-0 print:max-w-none">
+      <main className="container max-w-6xl py-4 md:py-6 px-4 print:py-0 print:max-w-none">
         {/* Generator/Import Controls - Hidden in print */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-card rounded-2xl border border-border p-6 shadow-card mb-6 print:hidden"
+          className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card mb-4 md:mb-6 print:hidden"
         >
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="generate" className="gap-2">
-                <QrCode className="w-4 h-4" />
+            <TabsList className="grid w-full grid-cols-2 mb-4 md:mb-6">
+              <TabsTrigger value="generate" className="gap-1 md:gap-2 text-xs md:text-sm">
+                <QrCode className="w-3 h-3 md:w-4 md:h-4" />
                 Generate New
               </TabsTrigger>
-              <TabsTrigger value="import" className="gap-2">
-                <Upload className="w-4 h-4" />
+              <TabsTrigger value="import" className="gap-1 md:gap-2 text-xs md:text-sm">
+                <Upload className="w-3 h-3 md:w-4 md:h-4" />
                 Import CSV
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="generate" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>ID Prefix</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                <div className="space-y-1.5 md:space-y-2">
+                  <Label className="text-xs md:text-sm">ID Prefix</Label>
                   <Input
                     value={prefix}
                     onChange={(e) => setPrefix(e.target.value.toUpperCase())}
                     placeholder="QR"
                     maxLength={4}
+                    className="text-sm"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Quantity</Label>
+                <div className="space-y-1.5 md:space-y-2">
+                  <Label className="text-xs md:text-sm">Quantity</Label>
                   <Input
                     type="number"
                     value={quantity}
@@ -241,29 +242,30 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     min={1}
                     max={100}
                     placeholder="10"
+                    className="text-sm"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Card Size</Label>
+                <div className="space-y-1.5 md:space-y-2">
+                  <Label className="text-xs md:text-sm">Card Size</Label>
                   <Select value={cardSize} onValueChange={(v: 'small' | 'medium' | 'large') => setCardSize(v)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="small">Small (80px)</SelectItem>
-                      <SelectItem value="medium">Medium (120px)</SelectItem>
-                      <SelectItem value="large">Large (160px)</SelectItem>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex items-end gap-2">
-                  <Button onClick={handleGenerate} className="flex-1">
-                    <Plus className="w-4 h-4" />
+                  <Button onClick={handleGenerate} className="flex-1 text-xs md:text-sm" size="sm">
+                    <Plus className="w-3 h-3 md:w-4 md:h-4" />
                     Generate
                   </Button>
                   {cards.length > 0 && (
-                    <Button variant="outline" onClick={handleClearAll}>
-                      <Trash2 className="w-4 h-4" />
+                    <Button variant="outline" size="sm" onClick={handleClearAll}>
+                      <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                     </Button>
                   )}
                 </div>
@@ -272,13 +274,12 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
 
             <TabsContent value="import">
               <div className="space-y-4">
-                <div className="flex items-start gap-3 p-4 bg-muted rounded-lg">
-                  <FileSpreadsheet className="w-5 h-5 text-primary mt-0.5" />
-                  <div className="text-sm">
+                <div className="flex items-start gap-2 md:gap-3 p-3 md:p-4 bg-muted rounded-lg">
+                  <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5 text-primary mt-0.5 shrink-0" />
+                  <div className="text-xs md:text-sm">
                     <p className="font-medium">Import Pre-Printed Cards</p>
                     <p className="text-muted-foreground">
-                      Upload a CSV file with QR card IDs to register them in the system. 
-                      Cards will be added to the print queue for verification.
+                      Upload a CSV file with QR card IDs to register them in the system.
                     </p>
                   </div>
                 </div>
@@ -291,17 +292,17 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
           </Tabs>
 
           {/* Preview info */}
-          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-4 pt-4 border-t border-border">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground mt-4 pt-4 border-t border-border">
             <span className="flex items-center gap-1">
-              <CreditCard className="w-4 h-4" />
+              <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
               {cards.length} cards in queue
             </span>
             <span className="flex items-center gap-1">
-              <Grid3X3 className="w-4 h-4" />
+              <Grid3X3 className="w-3 h-3 md:w-4 md:h-4" />
               {sizeConfig[cardSize].cols.includes('4') ? '4' : '3'} per row
             </span>
             <span className="flex items-center gap-1 text-primary">
-              <QrCode className="w-4 h-4" />
+              <QrCode className="w-3 h-3 md:w-4 md:h-4" />
               {qrCards.length} total registered
             </span>
           </div>
@@ -313,13 +314,13 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-card rounded-2xl border border-border p-12 text-center print:hidden"
+              className="bg-card rounded-xl md:rounded-2xl border border-border p-8 md:p-12 text-center print:hidden"
             >
-              <div className="w-20 h-20 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <QrCode className="w-10 h-10 text-muted-foreground" />
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-muted rounded-xl md:rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-4">
+                <QrCode className="w-8 h-8 md:w-10 md:h-10 text-muted-foreground" />
               </div>
-              <h3 className="font-display font-semibold text-lg mb-2">No Cards in Queue</h3>
-              <p className="text-muted-foreground mb-4">
+              <h3 className="font-display font-semibold text-base md:text-lg mb-1.5 md:mb-2">No Cards in Queue</h3>
+              <p className="text-xs md:text-sm text-muted-foreground mb-4">
                 Generate new cards or import existing IDs to preview and print
               </p>
             </motion.div>

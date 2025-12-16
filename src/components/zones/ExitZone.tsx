@@ -49,27 +49,27 @@ export const ExitZone = () => {
   }, [checkoutCard]);
 
   return (
-    <div className="min-h-full p-4 pb-24">
+    <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="mb-4 md:mb-6"
       >
         <div className="flex items-center gap-2 text-danger mb-1">
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium uppercase tracking-wider">Step 3</span>
+          <LogOut className="w-4 h-4 md:w-5 md:h-5" />
+          <span className="text-xs md:text-sm font-medium uppercase tracking-wider">Step 3</span>
         </div>
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">
           Exit Zone
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-0.5 md:mt-1">
           Check-out beneficiaries and reset their QR cards
         </p>
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-2 md:gap-3 mb-4 md:mb-6">
         <StatCard
           icon={CheckCircle}
           label="Checked Out"
@@ -89,16 +89,16 @@ export const ExitZone = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1 }}
-        className="bg-card rounded-2xl border border-border p-6 shadow-card mb-6"
+        className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card mb-4 md:mb-6"
       >
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-danger-soft rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <RefreshCcw className="w-10 h-10 text-danger" />
+        <div className="text-center mb-4 md:mb-6">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-danger-soft rounded-xl md:rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-4">
+            <RefreshCcw className="w-8 h-8 md:w-10 md:h-10 text-danger" />
           </div>
-          <h2 className="font-display font-semibold text-lg mb-2">
+          <h2 className="font-display font-semibold text-base md:text-lg mb-1.5 md:mb-2">
             Ready to Check-Out
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Scan the beneficiary's QR card to view their summary and reset the card
           </p>
         </div>
@@ -109,7 +109,7 @@ export const ExitZone = () => {
           size="xl" 
           className="w-full"
         >
-          <QrCode className="w-6 h-6" />
+          <QrCode className="w-5 h-5 md:w-6 md:h-6" />
           Scan to Check-Out
         </Button>
       </motion.div>
@@ -121,29 +121,29 @@ export const ExitZone = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-success-soft rounded-2xl border border-success/20 p-6"
+            className="bg-success-soft rounded-xl md:rounded-2xl border border-success/20 p-4 md:p-6"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-success/20 rounded-xl flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-success" />
+            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-success/20 rounded-lg md:rounded-xl flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-success" />
               </div>
               <div>
-                <h3 className="font-display font-semibold">Last Check-Out</h3>
-                <p className="text-sm text-muted-foreground font-mono">
+                <h3 className="font-display font-semibold text-sm md:text-base">Last Check-Out</h3>
+                <p className="text-xs md:text-sm text-muted-foreground font-mono">
                   {lastCheckout.card.uniqueId}
                 </p>
               </div>
             </div>
             
-            <div className="bg-background/50 rounded-xl p-4 text-center">
-              <p className="text-sm text-muted-foreground mb-1">Items Collected</p>
-              <p className="text-4xl font-display font-bold text-success">
+            <div className="bg-background/50 rounded-lg md:rounded-xl p-3 md:p-4 text-center">
+              <p className="text-xs md:text-sm text-muted-foreground mb-0.5 md:mb-1">Items Collected</p>
+              <p className="text-3xl md:text-4xl font-display font-bold text-success">
                 {lastCheckout.itemsCollected}
-                <span className="text-lg text-muted-foreground">/15</span>
+                <span className="text-base md:text-lg text-muted-foreground">/15</span>
               </p>
             </div>
 
-            <p className="text-center text-sm text-muted-foreground mt-4">
+            <p className="text-center text-xs md:text-sm text-muted-foreground mt-3 md:mt-4">
               Card has been reset and is ready for the next beneficiary
             </p>
           </motion.div>
