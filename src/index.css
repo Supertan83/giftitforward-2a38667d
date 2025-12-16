@@ -143,6 +143,36 @@
   }
 }
 
+/* html5-qrcode scanner styling */
+#qr-reader {
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0.75rem;
+}
+
+#qr-reader__scan_region {
+  min-height: 100% !important;
+}
+
+#qr-reader__dashboard {
+  display: none !important;
+}
+
+#qr-reader__status_span {
+  display: none !important;
+}
+
+#qr-reader__header_message {
+  display: none !important;
+}
+
 @layer components {
   .gradient-hero {
     background: var(--gradient-hero);
