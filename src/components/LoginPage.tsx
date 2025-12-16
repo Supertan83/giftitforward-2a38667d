@@ -20,10 +20,10 @@ export const LoginPage = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Hero Section */}
-      <div className="gradient-hero pt-12 pb-20 px-6 relative overflow-hidden">
+      <div className="gradient-hero pt-10 md:pt-12 pb-16 md:pb-20 px-4 md:px-6 relative overflow-hidden">
         {/* Decorative circles */}
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary-foreground/5 rounded-full" />
-        <div className="absolute -bottom-32 -left-16 w-80 h-80 bg-primary-foreground/5 rounded-full" />
+        <div className="absolute -top-20 -right-20 w-48 md:w-64 h-48 md:h-64 bg-primary-foreground/5 rounded-full" />
+        <div className="absolute -bottom-32 -left-16 w-64 md:w-80 h-64 md:h-80 bg-primary-foreground/5 rounded-full" />
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -34,37 +34,37 @@ export const LoginPage = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, delay: 0.1 }}
-            className="w-20 h-20 bg-primary-foreground/20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+            className="w-16 h-16 md:w-20 md:h-20 bg-primary-foreground/20 rounded-xl md:rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6"
           >
-            <Heart className="w-10 h-10 text-primary-foreground" fill="currentColor" />
+            <Heart className="w-8 h-8 md:w-10 md:h-10 text-primary-foreground" fill="currentColor" />
           </motion.div>
           
-          <h1 className="text-3xl font-display font-bold text-primary-foreground mb-2">
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-primary-foreground mb-1.5 md:mb-2">
             Charity Marketplace
           </h1>
-          <p className="text-primary-foreground/80">
+          <p className="text-sm md:text-base text-primary-foreground/80">
             Distribution System
           </p>
         </motion.div>
       </div>
 
       {/* Login Card */}
-      <div className="flex-1 -mt-10 px-4">
+      <div className="flex-1 -mt-8 md:-mt-10 px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card rounded-2xl border border-border shadow-elevated p-6 max-w-md mx-auto"
+          className="bg-card rounded-xl md:rounded-2xl border border-border shadow-elevated p-4 md:p-6 max-w-md mx-auto"
         >
-          <h2 className="font-display font-semibold text-xl text-center mb-2">
+          <h2 className="font-display font-semibold text-lg md:text-xl text-center mb-1.5 md:mb-2">
             Welcome Back
           </h2>
-          <p className="text-sm text-muted-foreground text-center mb-6">
+          <p className="text-xs md:text-sm text-muted-foreground text-center mb-4 md:mb-6">
             Select your role to continue
           </p>
 
           {/* Role Selection */}
-          <div className="space-y-3 mb-6">
+          <div className="space-y-2 md:space-y-3 mb-4 md:mb-6">
             <RoleCard
               role="admin"
               title="Admin"
@@ -89,20 +89,20 @@ export const LoginPage = () => {
             disabled={!selectedRole}
             variant="hero"
             size="xl"
-            className="w-full"
+            className="w-full text-sm md:text-base"
           >
             Continue as {selectedRole === 'admin' ? 'Admin' : selectedRole === 'volunteer' ? 'Volunteer' : '...'}
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
           </Button>
 
-          <p className="text-xs text-muted-foreground text-center mt-4">
+          <p className="text-[10px] md:text-xs text-muted-foreground text-center mt-3 md:mt-4">
             Demo mode: No authentication required
           </p>
         </motion.div>
 
         {/* Footer */}
-        <div className="text-center py-8">
-          <p className="text-sm text-muted-foreground">
+        <div className="text-center py-6 md:py-8">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Powered by <span className="font-semibold text-primary">Charity Aid</span>
           </p>
         </div>
@@ -127,32 +127,32 @@ const RoleCard = ({ title, description, icon: Icon, isSelected, onClick }: RoleC
       whileTap={{ scale: 0.99 }}
       onClick={onClick}
       className={cn(
-        'w-full p-4 rounded-xl border-2 text-left transition-all duration-200',
+        'w-full p-3 md:p-4 rounded-lg md:rounded-xl border-2 text-left transition-all duration-200',
         isSelected
           ? 'border-primary bg-primary-soft shadow-soft'
           : 'border-border bg-background hover:border-primary/50'
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5 md:gap-3">
         <div className={cn(
-          'w-12 h-12 rounded-xl flex items-center justify-center',
+          'w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center shrink-0',
           isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
         )}>
-          <Icon className="w-6 h-6" />
+          <Icon className="w-5 h-5 md:w-6 md:h-6" />
         </div>
-        <div className="flex-1">
-          <h3 className="font-display font-semibold text-foreground">{title}</h3>
-          <p className="text-sm text-muted-foreground">{description}</p>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-display font-semibold text-sm md:text-base text-foreground">{title}</h3>
+          <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">{description}</p>
         </div>
         <div className={cn(
-          'w-6 h-6 rounded-full border-2 flex items-center justify-center mt-1',
+          'w-5 h-5 md:w-6 md:h-6 rounded-full border-2 flex items-center justify-center mt-0.5 md:mt-1 shrink-0',
           isSelected ? 'border-primary bg-primary' : 'border-border'
         )}>
           {isSelected && (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="w-2.5 h-2.5 bg-primary-foreground rounded-full"
+              className="w-2 h-2 md:w-2.5 md:h-2.5 bg-primary-foreground rounded-full"
             />
           )}
         </div>

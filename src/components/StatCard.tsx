@@ -38,22 +38,22 @@ export const StatCard = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        'p-4 rounded-xl border shadow-card',
+        'p-3 md:p-4 rounded-lg md:rounded-xl border shadow-card',
         variants[variant],
         className
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className={cn('p-2.5 rounded-lg', iconVariants[variant])}>
-          <Icon className="w-5 h-5" />
+      <div className="flex items-start gap-2 md:gap-3">
+        <div className={cn('p-2 md:p-2.5 rounded-md md:rounded-lg shrink-0', iconVariants[variant])}>
+          <Icon className="w-4 h-4 md:w-5 md:h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-muted-foreground mb-0.5">{label}</p>
-          <p className="text-2xl font-display font-bold text-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground mb-0.5 truncate">{label}</p>
+          <p className="text-xl md:text-2xl font-display font-bold text-foreground">
             {value}
           </p>
           {subValue && (
-            <p className="text-xs text-muted-foreground mt-0.5">{subValue}</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 truncate">{subValue}</p>
           )}
         </div>
       </div>

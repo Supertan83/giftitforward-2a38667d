@@ -45,27 +45,27 @@ export const EntranceZone = () => {
   }, [activateCard]);
 
   return (
-    <div className="min-h-full p-4 pb-24">
+    <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="mb-4 md:mb-6"
       >
         <div className="flex items-center gap-2 text-primary mb-1">
-          <LogIn className="w-5 h-5" />
-          <span className="text-sm font-medium uppercase tracking-wider">Step 1</span>
+          <LogIn className="w-4 h-4 md:w-5 md:h-5" />
+          <span className="text-xs md:text-sm font-medium uppercase tracking-wider">Step 1</span>
         </div>
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">
           Entrance Zone
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-0.5 md:mt-1">
           Check-in beneficiaries and activate their QR cards
         </p>
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-2 md:gap-3 mb-4 md:mb-6">
         <StatCard
           icon={Users}
           label="Active Cards"
@@ -85,16 +85,16 @@ export const EntranceZone = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1 }}
-        className="bg-card rounded-2xl border border-border p-6 shadow-card mb-6"
+        className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card mb-4 md:mb-6"
       >
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-primary-soft rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Scan className="w-10 h-10 text-primary" />
+        <div className="text-center mb-4 md:mb-6">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-primary-soft rounded-xl md:rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-4">
+            <Scan className="w-8 h-8 md:w-10 md:h-10 text-primary" />
           </div>
-          <h2 className="font-display font-semibold text-lg mb-2">
+          <h2 className="font-display font-semibold text-base md:text-lg mb-1.5 md:mb-2">
             Ready to Check-In
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Scan the beneficiary's QR card to activate it with 15 credits
           </p>
         </div>
@@ -105,7 +105,7 @@ export const EntranceZone = () => {
           size="xl" 
           className="w-full"
         >
-          <QrCode className="w-6 h-6" />
+          <QrCode className="w-5 h-5 md:w-6 md:h-6" />
           Scan QR Card
         </Button>
       </motion.div>

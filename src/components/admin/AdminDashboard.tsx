@@ -96,27 +96,27 @@ export const AdminDashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
-        <div className="container max-w-6xl py-4">
+        <div className="container max-w-6xl py-3 md:py-4 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-                <Package className="w-5 h-5 text-primary-foreground" />
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl gradient-hero flex items-center justify-center">
+                <Package className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="font-display font-bold text-lg">Charity Marketplace</h1>
-                <p className="text-sm text-muted-foreground">Admin Dashboard</p>
+                <h1 className="font-display font-bold text-base md:text-lg">Charity Marketplace</h1>
+                <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Admin Dashboard</p>
               </div>
             </div>
-            <Button variant="outline" onClick={logout}>
+            <Button variant="outline" size="sm" onClick={logout} className="text-xs md:text-sm">
               Sign Out
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="container max-w-6xl py-6">
+      <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
           <StatCard
             icon={Package}
             label="Total Inventory"
@@ -140,26 +140,26 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             onClick={() => setCurrentView('qr-generator')}
-            className="bg-card rounded-2xl border border-border p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
           >
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-xl bg-primary-soft flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <QrCode className="w-7 h-7 text-primary" />
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-primary-soft flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
+                <QrCode className="w-6 h-6 md:w-7 md:h-7 text-primary" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-display font-semibold text-lg mb-1">Generate QR Cards</h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Generate QR Cards</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   Create and print new beneficiary cards
                 </p>
               </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
             </div>
           </motion.button>
 
@@ -170,19 +170,19 @@ export const AdminDashboard = () => {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             onClick={() => setShowAllocationModal(true)}
-            className="bg-card rounded-2xl border border-border p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
           >
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-xl bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors">
-                <Package className="w-7 h-7 text-accent-foreground" />
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors shrink-0">
+                <Package className="w-6 h-6 md:w-7 md:h-7 text-accent-foreground" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-display font-semibold text-lg mb-1">Allocate Inventory</h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Allocate Inventory</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   Assign items to marketplace events
                 </p>
               </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
             </div>
           </motion.button>
 
@@ -193,35 +193,35 @@ export const AdminDashboard = () => {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             onClick={() => setCurrentView('statistics')}
-            className="bg-card rounded-2xl border border-border p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group sm:col-span-2 lg:col-span-1"
           >
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                <TrendingUp className="w-7 h-7 text-emerald-500" />
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                <TrendingUp className="w-6 h-6 md:w-7 md:h-7 text-emerald-500" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-display font-semibold text-lg mb-1">Live Statistics</h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Live Statistics</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   View real-time distribution analytics
                 </p>
               </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
             </div>
           </motion.button>
         </div>
 
         {/* Inventory Section */}
-        <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card">
+          <div className="flex items-center justify-between mb-4 md:mb-6">
             <div>
-              <h2 className="font-display font-bold text-xl">Inventory Overview</h2>
-              <p className="text-sm text-muted-foreground mt-1">
+              <h2 className="font-display font-bold text-lg md:text-xl">Inventory Overview</h2>
+              <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
                 Current stock levels and distribution status
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
             {itemTypes.map((item, index) => (
               <motion.div
                 key={item.id}
