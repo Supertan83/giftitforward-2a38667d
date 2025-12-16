@@ -1,0 +1,121 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { LogIn, ShoppingBag, LogOut, Menu, User } from 'lucide-react';
+import { EntranceZone } from '@/components/zones/EntranceZone';
+import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
+import { ExitZone } from '@/components/zones/ExitZone';
+import { useAppStore } from '@/store/useAppStore';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+type Zone = 'entrance' | 'marketplace' | 'exit';
+
+const zones = [
+  { id: 'entrance' as Zone, label: 'Entrance', icon: LogIn, color: 'text-primary' },
+  { id: 'marketplace' as Zone, label: 'Marketplace', icon: ShoppingBag, color: 'text-warning' },
+  { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
+];
+
+export const VolunteerInterface = () => {
+  const [activeZone, setActiveZone] = useState<Zone>('entrance');
+  const { currentUser, logout } = useAppStore();
+
+  const renderZone = () => {
+    switch (activeZone) {
+      case 'entrance':
+        return <EntranceZone />;
+      case 'marketplace':
+        return <MarketplaceZone />;
+      case 'exit':
+        return <ExitZone />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <header className="bg-card border-b border-border sticky top-0 z-10">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg gradient-hero flex items-center justify-center">
+              <ShoppingBag className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="font-display font-bold text-sm">Charity Marketplace</h1>
+              <p className="text-xs text-muted-foreground">Volunteer Mode</p>
+            </div>
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <User className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>
+                <div>
+                  <p className="font-medium">{currentUser?.name}</p>
+                  <p className="text-xs text-muted-foreground">{currentUser?.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto">
+        {renderZone()}
+      </main>
+
+      {/* Bottom Navigation */}
+      <nav className="bg-card border-t border-border sticky bottom-0 z-10 safe-area-inset-bottom">
+        <div className="flex">
+          {zones.map((zone) => {
+            const Icon = zone.icon;
+            const isActive = activeZone === zone.id;
+            
+            return (
+              <button
+                key={zone.id}
+                onClick={() => setActiveZone(zone.id)}
+                className={cn(
+                  'flex-1 py-3 flex flex-col items-center gap-1 transition-all relative',
+                  isActive ? zone.color : 'text-muted-foreground'
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute top-0 left-2 right-2 h-0.5 bg-current rounded-full"
+                  />
+                )}
+                <Icon className={cn('w-5 h-5', isActive && 'scale-110')} />
+                <span className={cn(
+                  'text-xs font-medium',
+                  isActive && 'font-semibold'
+                )}>
+                  {zone.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+};
