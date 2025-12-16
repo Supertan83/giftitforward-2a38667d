@@ -339,13 +339,44 @@ export const useCardOperations = () => {
     }
   });
 
+  const unregisterCard = useMutation({
+    mutationFn: async (uniqueId: string) => {
+      // First delete associated transactions
+      const { data: card } = await supabase
+        .from('qr_cards')
+        .select('id')
+        .ilike('unique_id', uniqueId)
+        .maybeSingle();
+
+      if (card) {
+        await supabase
+          .from('transactions')
+          .delete()
+          .eq('card_id', card.id);
+      }
+
+      // Then delete the card
+      const { error } = await supabase
+        .from('qr_cards')
+        .delete()
+        .ilike('unique_id', uniqueId);
+
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+    }
+  });
+
   return {
     findCardByUniqueId,
     activateCard,
     distributeItem,
     returnItem,
     checkoutCard,
-    addCards
+    addCards,
+    unregisterCard
   };
 };
 
