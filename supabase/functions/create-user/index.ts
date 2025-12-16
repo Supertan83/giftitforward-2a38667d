@@ -1,11 +1,56 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// Get allowed origins from environment or use defaults
+const getAllowedOrigins = () => {
+  const envOrigins = Deno.env.get('ALLOWED_ORIGINS');
+  if (envOrigins) {
+    return envOrigins.split(',').map(o => o.trim());
+  }
+  return [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://*.lovable.app',
+    'https://*.lovable.dev'
+  ];
+};
+
+const getCorsHeaders = (origin: string | null) => {
+  const allowedOrigins = getAllowedOrigins();
+  const isAllowed = origin && (
+    allowedOrigins.includes(origin) ||
+    allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace('*', '.*');
+        return new RegExp(`^${pattern}$`).test(origin);
+      }
+      return false;
+    })
+  );
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+};
+
+// Input validation helpers
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && email.length <= 255;
+};
+
+const isValidPassword = (password: string): boolean => {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 128;
+};
+
+const isValidRole = (role: string): role is 'admin' | 'volunteer' => {
+  return role === 'admin' || role === 'volunteer';
+};
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -20,7 +65,7 @@ Deno.serve(async (req) => {
     // Verify the requesting user is an admin
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -30,7 +75,7 @@ Deno.serve(async (req) => {
     const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token)
     
     if (authError || !requestingUser) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Invalid authentication' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -45,23 +90,62 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!roleData) {
-      return new Response(JSON.stringify({ error: 'Admin access required' }), {
+      return new Response(JSON.stringify({ error: 'Insufficient permissions' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const { email, password, role } = await req.json()
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid request format' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    if (!email || !password || !role) {
-      return new Response(JSON.stringify({ error: 'Email, password, and role are required' }), {
+    const { email, password, role } = body;
+
+    // Comprehensive input validation
+    if (!email || typeof email !== 'string') {
+      return new Response(JSON.stringify({ error: 'Email is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    if (!['admin', 'volunteer'].includes(role)) {
-      return new Response(JSON.stringify({ error: 'Invalid role' }), {
+    if (!isValidEmail(email)) {
+      return new Response(JSON.stringify({ error: 'Please provide a valid email address' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!password || typeof password !== 'string') {
+      return new Response(JSON.stringify({ error: 'Password is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!isValidPassword(password)) {
+      return new Response(JSON.stringify({ error: 'Password must be between 8 and 128 characters' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!role || typeof role !== 'string') {
+      return new Response(JSON.stringify({ error: 'Role is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!isValidRole(role)) {
+      return new Response(JSON.stringify({ error: 'Please select a valid role' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -69,13 +153,21 @@ Deno.serve(async (req) => {
 
     // Create user
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: email.trim().toLowerCase(),
       password,
       email_confirm: true,
     })
 
     if (createError) {
-      return new Response(JSON.stringify({ error: createError.message }), {
+      console.error('User creation error:', createError);
+      // Map known errors to user-friendly messages
+      if (createError.message?.includes('already registered')) {
+        return new Response(JSON.stringify({ error: 'This email is already registered' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ error: 'Unable to create user. Please try again.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -87,9 +179,10 @@ Deno.serve(async (req) => {
       .insert({ user_id: newUser.user.id, role })
 
     if (roleError) {
+      console.error('Role assignment error:', roleError);
       // Cleanup: delete user if role assignment fails
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
-      return new Response(JSON.stringify({ error: 'Failed to assign role' }), {
+      return new Response(JSON.stringify({ error: 'Unable to complete user setup. Please try again.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -102,8 +195,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('Unexpected error in create-user:', error);
+    return new Response(JSON.stringify({ error: 'An unexpected error occurred' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
