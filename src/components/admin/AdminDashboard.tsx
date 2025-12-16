@@ -8,7 +8,8 @@ import {
   Building,
   Calendar,
   TrendingUp,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,12 +32,13 @@ import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
 import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
 import { StatisticsDashboard } from '@/components/admin/StatisticsDashboard';
+import { UserManagement } from '@/components/admin/UserManagement';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations } from '@/hooks/useSupabaseData';
 import { mockMarketplaceEvents } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -91,6 +93,11 @@ export const AdminDashboard = () => {
   // Show Statistics Dashboard view
   if (currentView === 'statistics') {
     return <StatisticsDashboard onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show User Management view
+  if (currentView === 'users') {
+    return <UserManagement onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -149,7 +156,7 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -202,7 +209,7 @@ export const AdminDashboard = () => {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             onClick={() => setCurrentView('statistics')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group sm:col-span-2 lg:col-span-1"
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
           >
             <div className="flex items-start gap-3 md:gap-4">
               <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
@@ -212,6 +219,29 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Live Statistics</h3>
                 <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   View real-time distribution analytics
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('users')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors shrink-0">
+                <Users className="w-6 h-6 md:w-7 md:h-7 text-violet-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Manage Users</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
+                  Create and manage volunteer accounts
                 </p>
               </div>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
