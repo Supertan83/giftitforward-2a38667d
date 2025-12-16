@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { useMarketplaces, useCreateMarketplace } from '@/hooks/useSupabaseData';
+import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -44,6 +44,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
 
   const { data: marketplaces = [], isLoading } = useMarketplaces();
   const createMarketplace = useCreateMarketplace();
+  const deleteMarketplace = useDeleteMarketplace();
   const { toast } = useToast();
 
   const handleCreate = async () => {
@@ -86,6 +87,24 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     } catch (error) {
       toast({
         title: 'Failed to Create Marketplace',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+    
+    try {
+      await deleteMarketplace.mutateAsync(id);
+      toast({
+        title: 'Marketplace Deleted',
+        description: `${name} has been removed`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Delete',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -218,7 +237,18 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                       </div>
                     </div>
                   </div>
-                  {getStatusBadge(marketplace.status)}
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(marketplace.status)}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(marketplace.id, marketplace.name)}
+                      disabled={deleteMarketplace.isPending}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </motion.div>
               ))}
             </div>
