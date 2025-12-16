@@ -6,11 +6,14 @@ import { QRScanner } from '@/components/QRScanner';
 import { CardStatusDisplay } from '@/components/CardStatusDisplay';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
+import { BeneficiaryInfoForm, BeneficiaryInfo } from '@/components/BeneficiaryInfoForm';
 import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
 import { QRCard } from '@/types';
 
 export const EntranceZone = () => {
   const [showScanner, setShowScanner] = useState(false);
+  const [showBeneficiaryForm, setShowBeneficiaryForm] = useState(false);
+  const [scannedCardId, setScannedCardId] = useState<string>('');
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'warning';
     title: string;
@@ -26,12 +29,21 @@ export const EntranceZone = () => {
   const activeCards = qrCards.filter(c => c.status === 'active').length;
   const readyCards = qrCards.filter(c => c.status === 'ready').length;
 
-  const handleScan = useCallback(async (code: string) => {
+  const handleScan = useCallback((code: string) => {
     setShowScanner(false);
+    setScannedCardId(code);
+    setShowBeneficiaryForm(true);
+  }, []);
+
+  const handleBeneficiarySubmit = useCallback(async (info: BeneficiaryInfo) => {
+    setShowBeneficiaryForm(false);
     setIsProcessing(true);
     
     try {
-      const result = await activateCard.mutateAsync(code);
+      const result = await activateCard.mutateAsync({
+        uniqueId: scannedCardId,
+        beneficiaryInfo: info
+      });
       
       if (result) {
         const card: QRCard = {
@@ -58,8 +70,9 @@ export const EntranceZone = () => {
       });
     } finally {
       setIsProcessing(false);
+      setScannedCardId('');
     }
-  }, [activateCard]);
+  }, [activateCard, scannedCardId]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -154,6 +167,17 @@ export const EntranceZone = () => {
         onClose={() => setShowScanner(false)}
         onScan={handleScan}
         title="Activate QR Card"
+      />
+
+      {/* Beneficiary Info Form */}
+      <BeneficiaryInfoForm
+        isOpen={showBeneficiaryForm}
+        onClose={() => {
+          setShowBeneficiaryForm(false);
+          setScannedCardId('');
+        }}
+        onSubmit={handleBeneficiarySubmit}
+        cardId={scannedCardId}
       />
 
       {/* Feedback Overlay */}
