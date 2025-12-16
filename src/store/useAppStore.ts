@@ -21,6 +21,8 @@ interface AppState {
   distributeItem: (uniqueId: string, itemId: string) => { success: boolean; message: string; card?: QRCard };
   returnItem: (uniqueId: string, itemId: string) => { success: boolean; message: string; card?: QRCard };
   checkoutCard: (uniqueId: string) => { success: boolean; message: string; card?: QRCard };
+  addCards: (uniqueIds: string[]) => number;
+  importCards: (uniqueIds: string[]) => number;
   
   // Inventory operations
   allocateItemsToMarketplace: (itemId: string, quantity: number) => boolean;
@@ -230,5 +232,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     set({ itemTypes: updatedItems });
     return true;
+  },
+
+  addCards: (uniqueIds) => {
+    const { qrCards } = get();
+    const existingIds = new Set(qrCards.map(c => c.uniqueId.toLowerCase()));
+    
+    const newCards: QRCard[] = uniqueIds
+      .filter(id => !existingIds.has(id.toLowerCase()))
+      .map(uniqueId => ({
+        id: crypto.randomUUID(),
+        uniqueId,
+        status: 'ready' as const,
+        creditBalance: 0,
+        totalItemsCollected: 0,
+        transactions: [],
+      }));
+    
+    if (newCards.length > 0) {
+      set({ qrCards: [...qrCards, ...newCards] });
+    }
+    
+    return newCards.length;
+  },
+
+  importCards: (uniqueIds) => {
+    return get().addCards(uniqueIds);
   },
 }));
