@@ -12,7 +12,9 @@ import {
   Grid3X3,
   Upload,
   FileSpreadsheet,
-  Loader2
+  Loader2,
+  Database,
+  XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,8 +65,24 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   const { toast } = useToast();
 
   const { data: qrCards = [] } = useQRCards();
-  const { addCards } = useCardOperations();
+  const { addCards, unregisterCard } = useCardOperations();
   const existingCardIds = qrCards.map(c => c.uniqueId);
+
+  const handleUnregisterCard = async (uniqueId: string) => {
+    try {
+      await unregisterCard.mutateAsync(uniqueId);
+      toast({
+        title: 'Card unregistered',
+        description: `Card ${uniqueId} has been removed from the system`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Unregister failed',
+        description: error instanceof Error ? error.message : 'Failed to unregister card',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const sizeConfig = {
     small: { qr: 80, card: 'w-32', cols: 'grid-cols-4 md:grid-cols-6' },
@@ -235,14 +253,18 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
           className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card mb-4 md:mb-6 print:hidden"
         >
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 mb-4 md:mb-6">
+            <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-6">
               <TabsTrigger value="generate" className="gap-1 md:gap-2 text-xs md:text-sm">
                 <QrCode className="w-3 h-3 md:w-4 md:h-4" />
-                Generate New
+                Generate
               </TabsTrigger>
               <TabsTrigger value="import" className="gap-1 md:gap-2 text-xs md:text-sm">
                 <Upload className="w-3 h-3 md:w-4 md:h-4" />
-                Import CSV
+                Import
+              </TabsTrigger>
+              <TabsTrigger value="registered" className="gap-1 md:gap-2 text-xs md:text-sm">
+                <Database className="w-3 h-3 md:w-4 md:h-4" />
+                Registered
               </TabsTrigger>
             </TabsList>
 
@@ -312,6 +334,70 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                   onImport={handleCSVImport}
                   existingCardIds={existingCardIds}
                 />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="registered">
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 md:gap-3 p-3 md:p-4 bg-muted rounded-lg">
+                  <Database className="w-4 h-4 md:w-5 md:h-5 text-primary mt-0.5 shrink-0" />
+                  <div className="text-xs md:text-sm">
+                    <p className="font-medium">Registered Cards ({qrCards.length})</p>
+                    <p className="text-muted-foreground">
+                      View and unregister QR cards from the system.
+                    </p>
+                  </div>
+                </div>
+                
+                {qrCards.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <QrCode className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No registered cards in system</p>
+                  </div>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto border border-border rounded-lg">
+                    <table className="w-full text-xs md:text-sm">
+                      <thead className="bg-muted sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 md:p-3 font-medium">Card ID</th>
+                          <th className="text-left p-2 md:p-3 font-medium">Status</th>
+                          <th className="text-left p-2 md:p-3 font-medium">Credits</th>
+                          <th className="text-right p-2 md:p-3 font-medium">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {qrCards.map((card) => (
+                          <tr key={card.id} className="border-t border-border hover:bg-muted/50">
+                            <td className="p-2 md:p-3 font-mono">{card.uniqueId}</td>
+                            <td className="p-2 md:p-3">
+                              <span className={cn(
+                                'px-2 py-0.5 rounded-full text-xs',
+                                card.status === 'active' ? 'bg-success/20 text-success' :
+                                card.status === 'checked_out' ? 'bg-warning/20 text-warning' :
+                                'bg-muted text-muted-foreground'
+                              )}>
+                                {card.status}
+                              </span>
+                            </td>
+                            <td className="p-2 md:p-3">{card.creditBalance}/15</td>
+                            <td className="p-2 md:p-3 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleUnregisterCard(card.uniqueId)}
+                                disabled={unregisterCard.isPending}
+                                className="text-danger hover:text-danger hover:bg-danger/10"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                <span className="hidden sm:inline ml-1">Unregister</span>
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>
