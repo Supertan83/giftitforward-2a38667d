@@ -3,12 +3,12 @@ import { motion } from 'framer-motion';
 import { 
   Package, 
   BarChart3, 
-  Settings, 
   QrCode,
   Plus,
   ArrowRight,
   Building,
-  Calendar
+  Calendar,
+  Printer
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,11 +29,15 @@ import {
 } from '@/components/ui/dialog';
 import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
+import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
 import { useAppStore } from '@/store/useAppStore';
 import { mockMarketplaceEvents } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
 
+type AdminView = 'dashboard' | 'qr-generator';
+
 export const AdminDashboard = () => {
+  const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -75,6 +79,11 @@ export const AdminDashboard = () => {
       });
     }
   };
+
+  // Show QR Generator view
+  if (currentView === 'qr-generator') {
+    return <QRCodeGenerator onBack={() => setCurrentView('dashboard')} />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,19 +132,63 @@ export const AdminDashboard = () => {
           />
         </div>
 
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('qr-generator')}
+            className="bg-card rounded-2xl border border-border p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-xl bg-primary-soft flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <QrCode className="w-7 h-7 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-lg mb-1">Generate QR Cards</h3>
+                <p className="text-sm text-muted-foreground">
+                  Create and print new beneficiary cards with unique QR codes
+                </p>
+              </div>
+              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setShowAllocationModal(true)}
+            className="bg-card rounded-2xl border border-border p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-xl bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors">
+                <Package className="w-7 h-7 text-accent-foreground" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-lg mb-1">Allocate Inventory</h3>
+                <p className="text-sm text-muted-foreground">
+                  Assign items from warehouse to marketplace events
+                </p>
+              </div>
+              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
+            </div>
+          </motion.button>
+        </div>
+
         {/* Inventory Section */}
         <div className="bg-card rounded-2xl border border-border p-6 shadow-card">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="font-display font-bold text-xl">Inventory Management</h2>
+              <h2 className="font-display font-bold text-xl">Inventory Overview</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Allocate items to marketplace events
+                Current stock levels and distribution status
               </p>
             </div>
-            <Button onClick={() => setShowAllocationModal(true)}>
-              <Plus className="w-4 h-4" />
-              Allocate Items
-            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
