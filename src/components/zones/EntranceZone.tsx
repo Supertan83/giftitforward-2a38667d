@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, QrCode, CheckCircle2, Users, Scan } from 'lucide-react';
+import { LogIn, QrCode, Users, Scan, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { CardStatusDisplay } from '@/components/CardStatusDisplay';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { useAppStore } from '@/store/useAppStore';
+import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
+import { QRCard } from '@/types';
 
 export const EntranceZone = () => {
   const [showScanner, setShowScanner] = useState(false);
@@ -16,31 +17,47 @@ export const EntranceZone = () => {
     subtitle?: string;
     credits?: number;
   } | null>(null);
-  const [lastActivatedCard, setLastActivatedCard] = useState<ReturnType<typeof activateCard>>(null);
+  const [lastActivatedCard, setLastActivatedCard] = useState<QRCard | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const { activateCard, qrCards } = useAppStore();
+  const { data: qrCards = [], isLoading } = useQRCards();
+  const { activateCard } = useCardOperations();
 
   const activeCards = qrCards.filter(c => c.status === 'active').length;
   const readyCards = qrCards.filter(c => c.status === 'ready').length;
 
-  const handleScan = useCallback((code: string) => {
+  const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
-    const card = activateCard(code);
+    setIsProcessing(true);
     
-    if (card) {
-      setLastActivatedCard(card);
-      setFeedback({
-        type: 'success',
-        title: 'Card Activated!',
-        subtitle: '15 Credits Assigned',
-        credits: 15,
-      });
-    } else {
+    try {
+      const result = await activateCard.mutateAsync(code);
+      
+      if (result) {
+        const card: QRCard = {
+          id: result.id,
+          uniqueId: result.unique_id,
+          status: 'active',
+          creditBalance: result.credit_balance,
+          totalItemsCollected: result.total_items_collected,
+          transactions: []
+        };
+        setLastActivatedCard(card);
+        setFeedback({
+          type: 'success',
+          title: 'Card Activated!',
+          subtitle: '15 Credits Assigned',
+          credits: 15,
+        });
+      }
+    } catch (error) {
       setFeedback({
         type: 'error',
         title: 'Card Not Found',
-        subtitle: 'Please check the QR code and try again',
+        subtitle: error instanceof Error ? error.message : 'Please check the QR code and try again',
       });
+    } finally {
+      setIsProcessing(false);
     }
   }, [activateCard]);
 
@@ -69,13 +86,13 @@ export const EntranceZone = () => {
         <StatCard
           icon={Users}
           label="Active Cards"
-          value={activeCards}
+          value={isLoading ? '-' : activeCards}
           variant="success"
         />
         <StatCard
           icon={QrCode}
           label="Cards Ready"
-          value={readyCards}
+          value={isLoading ? '-' : readyCards}
           variant="default"
         />
       </div>
@@ -104,9 +121,14 @@ export const EntranceZone = () => {
           variant="scan" 
           size="xl" 
           className="w-full"
+          disabled={isProcessing}
         >
-          <QrCode className="w-5 h-5 md:w-6 md:h-6" />
-          Scan QR Card
+          {isProcessing ? (
+            <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
+          ) : (
+            <QrCode className="w-5 h-5 md:w-6 md:h-6" />
+          )}
+          {isProcessing ? 'Processing...' : 'Scan QR Card'}
         </Button>
       </motion.div>
 

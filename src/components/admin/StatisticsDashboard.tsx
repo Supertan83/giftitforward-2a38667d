@@ -6,11 +6,12 @@ import {
   TrendingUp, 
   CreditCard,
   ArrowLeft,
-  Activity
+  Activity,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAppStore } from '@/store/useAppStore';
+import { useQRCards, useItemTypes } from '@/hooks/useSupabaseData';
 import {
   BarChart,
   Bar,
@@ -22,8 +23,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  AreaChart,
-  Area,
   Legend
 } from 'recharts';
 
@@ -40,15 +39,16 @@ const COLORS = [
 ];
 
 export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
-  const { qrCards, itemTypes } = useAppStore();
+  const { data: qrCards = [], isLoading: cardsLoading } = useQRCards();
+  const { data: itemTypes = [], isLoading: itemsLoading } = useItemTypes();
+
+  const isLoading = cardsLoading || itemsLoading;
 
   const stats = useMemo(() => {
     const activeCards = qrCards.filter(c => c.status === 'active').length;
-    const checkedOutCards = qrCards.filter(c => c.status === 'checked_out' || 
-      c.transactions.some(t => t.type === 'check_out')).length;
-    const beneficiariesServed = qrCards.filter(c => 
-      c.transactions.length > 0
-    ).length;
+    const checkedOutCards = qrCards.filter(c => c.status === 'checked_out').length;
+    // Count cards that have been used (not in 'ready' status)
+    const beneficiariesServed = qrCards.filter(c => c.status !== 'ready').length;
     
     const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
     
@@ -70,38 +70,6 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
       }))
       .sort((a, b) => b.value - a.value);
   }, [itemTypes]);
-
-  const hourlyData = useMemo(() => {
-    const hourMap = new Map<number, { distributions: number; checkIns: number }>();
-    
-    // Initialize all hours
-    for (let i = 0; i < 24; i++) {
-      hourMap.set(i, { distributions: 0, checkIns: 0 });
-    }
-    
-    // Aggregate transactions by hour
-    qrCards.forEach(card => {
-      card.transactions.forEach(tx => {
-        const hour = new Date(tx.timestamp).getHours();
-        const current = hourMap.get(hour)!;
-        
-        if (tx.type === 'distribution') {
-          current.distributions++;
-        } else if (tx.type === 'check_in') {
-          current.checkIns++;
-        }
-      });
-    });
-    
-    // Convert to array, filter to business hours (6am - 10pm)
-    return Array.from(hourMap.entries())
-      .filter(([hour]) => hour >= 6 && hour <= 22)
-      .map(([hour, data]) => ({
-        hour: `${hour}:00`,
-        distributions: data.distributions,
-        checkIns: data.checkIns
-      }));
-  }, [qrCards]);
 
   const summaryCards = [
     {
@@ -129,6 +97,14 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
       color: 'text-blue-500'
     }
   ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -284,69 +260,18 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
           </motion.div>
         </div>
 
-        {/* Hourly Trends */}
+        {/* Info Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
         >
           <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <Activity className="h-5 w-5 text-primary" />
-                Hourly Distribution Trends
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={hourlyData}>
-                    <defs>
-                      <linearGradient id="colorDistributions" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorCheckIns" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="hour" 
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fontSize: 11 }}
-                    />
-                    <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
-                      }}
-                    />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="distributions"
-                      name="Distributions"
-                      stroke="hsl(var(--primary))"
-                      fillOpacity={1}
-                      fill="url(#colorDistributions)"
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="checkIns"
-                      name="Check-ins"
-                      stroke="hsl(var(--chart-2))"
-                      fillOpacity={1}
-                      fill="url(#colorCheckIns)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+            <CardContent className="p-6 text-center">
+              <Activity className="h-8 w-8 text-primary mx-auto mb-3" />
+              <p className="text-muted-foreground">
+                Statistics update in real-time as distributions occur.
+              </p>
             </CardContent>
           </Card>
         </motion.div>

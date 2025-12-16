@@ -148,6 +148,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_item_distributed: {
+        Args: { item_id: string }
+        Returns: undefined
+      }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {

@@ -212,7 +212,18 @@ export const useCardOperations = () => {
       if (updateError) throw updateError;
 
       // Update item distributed count
-      await supabase.rpc('increment_item_distributed', { item_id: itemId });
+      const { data: item } = await supabase
+        .from('item_types')
+        .select('distributed')
+        .eq('id', itemId)
+        .single();
+      
+      if (item) {
+        await supabase
+          .from('item_types')
+          .update({ distributed: item.distributed + 1 })
+          .eq('id', itemId);
+      }
 
       // Create transaction
       await supabase.from('transactions').insert({
