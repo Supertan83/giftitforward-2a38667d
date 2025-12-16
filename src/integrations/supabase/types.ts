@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_events: {
+        Row: {
+          created_at: string
+          event_date: string | null
+          id: string
+          location: string | null
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_date?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_date?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       qr_cards: {
         Row: {
           collected_items: Json

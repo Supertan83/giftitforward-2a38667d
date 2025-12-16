@@ -478,3 +478,71 @@ export const useCreateUser = () => {
     }
   });
 };
+
+// Marketplace Events
+interface MarketplaceEvent {
+  id: string;
+  name: string;
+  location: string | null;
+  event_date: string | null;
+  status: 'upcoming' | 'active' | 'completed';
+  created_at: string;
+}
+
+export const useMarketplaces = () => {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['marketplace_events'],
+    queryFn: async (): Promise<MarketplaceEvent[]> => {
+      const { data, error } = await supabase
+        .from('marketplace_events')
+        .select('*')
+        .order('event_date', { ascending: true });
+
+      if (error) throw error;
+      return (data || []).map(item => ({
+        ...item,
+        status: item.status as 'upcoming' | 'active' | 'completed'
+      }));
+    }
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('marketplace_events_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_events' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['marketplace_events'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return query;
+};
+
+export const useCreateMarketplace = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (marketplace: { 
+      name: string; 
+      location: string | null; 
+      event_date: string | null; 
+      status: 'upcoming' | 'active' | 'completed';
+    }) => {
+      const { error } = await supabase
+        .from('marketplace_events')
+        .insert(marketplace);
+
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace_events'] });
+    }
+  });
+};
