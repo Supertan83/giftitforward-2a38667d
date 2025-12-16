@@ -403,3 +403,78 @@ export const useInventoryOperations = () => {
 
   return { allocateItems, addItemType };
 };
+
+// Users Management
+interface UserWithRole {
+  id: string;
+  email: string;
+  role: 'admin' | 'volunteer';
+  created_at: string;
+}
+
+export const useUsers = () => {
+  return useQuery({
+    queryKey: ['users_with_roles'],
+    queryFn: async (): Promise<UserWithRole[]> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-users`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch users');
+      }
+
+      return data.users.map((user: { id: string; email: string; role: string; created_at: string }) => ({
+        id: user.id,
+        email: user.email,
+        role: user.role as 'admin' | 'volunteer',
+        created_at: user.created_at
+      }));
+    }
+  });
+};
+
+export const useCreateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ email, password, role }: { email: string; password: string; role: 'admin' | 'volunteer' }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ email, password, role }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create user');
+      }
+
+      return data.user;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
+    }
+  });
+};
