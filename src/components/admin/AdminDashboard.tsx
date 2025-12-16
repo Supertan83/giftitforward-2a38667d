@@ -8,7 +8,8 @@ import {
   ArrowRight,
   Building,
   Calendar,
-  Printer
+  Printer,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,11 +31,12 @@ import {
 import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
 import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
+import { StatisticsDashboard } from '@/components/admin/StatisticsDashboard';
 import { useAppStore } from '@/store/useAppStore';
 import { mockMarketplaceEvents } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -85,6 +87,11 @@ export const AdminDashboard = () => {
     return <QRCodeGenerator onBack={() => setCurrentView('dashboard')} />;
   }
 
+  // Show Statistics Dashboard view
+  if (currentView === 'statistics') {
+    return <StatisticsDashboard onBack={() => setCurrentView('dashboard')} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -133,7 +140,7 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -149,7 +156,7 @@ export const AdminDashboard = () => {
               <div className="flex-1">
                 <h3 className="font-display font-semibold text-lg mb-1">Generate QR Cards</h3>
                 <p className="text-sm text-muted-foreground">
-                  Create and print new beneficiary cards with unique QR codes
+                  Create and print new beneficiary cards
                 </p>
               </div>
               <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
@@ -172,7 +179,30 @@ export const AdminDashboard = () => {
               <div className="flex-1">
                 <h3 className="font-display font-semibold text-lg mb-1">Allocate Inventory</h3>
                 <p className="text-sm text-muted-foreground">
-                  Assign items from warehouse to marketplace events
+                  Assign items to marketplace events
+                </p>
+              </div>
+              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('statistics')}
+            className="bg-card rounded-2xl border border-border p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                <TrendingUp className="w-7 h-7 text-emerald-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-lg mb-1">Live Statistics</h3>
+                <p className="text-sm text-muted-foreground">
+                  View real-time distribution analytics
                 </p>
               </div>
               <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors mt-2" />
