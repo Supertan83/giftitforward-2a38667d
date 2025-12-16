@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { QrCode, X, Camera, AlertCircle, SwitchCamera, Flashlight } from 'lucide-react';
+import { QrCode, X, Camera, AlertCircle, SwitchCamera, Flashlight, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,7 +14,9 @@ interface QRScannerProps {
   title?: string;
 }
 
-type ScannerStatus = 'idle' | 'requesting' | 'scanning' | 'error' | 'success';
+type ScannerStatus = 'idle' | 'requesting' | 'scanning' | 'error' | 'success' | 'cooldown';
+
+const COOLDOWN_DURATION = 2000; // 2 seconds cooldown
 
 export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScannerProps) => {
   const [manualCode, setManualCode] = useState('');
@@ -22,10 +24,12 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
   const [errorMessage, setErrorMessage] = useState('');
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [useFrontCamera, setUseFrontCamera] = useState(false);
+  const [cooldownProgress, setCooldownProgress] = useState(0);
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isProcessingRef = useRef(false);
+  const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
@@ -91,12 +95,29 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
             navigator.vibrate(100);
           }
 
-          // Submit after brief visual feedback
+          // Submit and start cooldown
           setTimeout(() => {
             onScan(decodedText);
-            setStatus('idle');
-            setScannedCode(null);
-            isProcessingRef.current = false;
+            setStatus('cooldown');
+            setCooldownProgress(0);
+            
+            // Animate cooldown progress
+            const startTime = Date.now();
+            cooldownIntervalRef.current = setInterval(() => {
+              const elapsed = Date.now() - startTime;
+              const progress = Math.min((elapsed / COOLDOWN_DURATION) * 100, 100);
+              setCooldownProgress(progress);
+              
+              if (progress >= 100) {
+                if (cooldownIntervalRef.current) {
+                  clearInterval(cooldownIntervalRef.current);
+                }
+                setScannedCode(null);
+                isProcessingRef.current = false;
+                // Auto-close scanner after cooldown
+                onClose();
+              }
+            }, 50);
           }, 500);
         },
         () => {
@@ -134,7 +155,11 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
       setStatus('idle');
       setScannedCode(null);
       setErrorMessage('');
+      setCooldownProgress(0);
       isProcessingRef.current = false;
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
     }
   }, [isOpen, startScanner, stopScanner]);
 
@@ -142,6 +167,9 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
   useEffect(() => {
     return () => {
       stopScanner();
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
     };
   }, [stopScanner]);
 
@@ -281,6 +309,51 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
                 </div>
               </div>
             )}
+
+            {/* Cooldown State */}
+            <AnimatePresence>
+              {status === 'cooldown' && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-primary/90 flex items-center justify-center"
+                >
+                  <div className="text-center text-primary-foreground">
+                    {/* Circular progress */}
+                    <div className="relative w-20 h-20 mx-auto mb-3">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          className="opacity-20"
+                        />
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeDasharray={`${cooldownProgress} 100`}
+                          strokeLinecap="round"
+                          className="transition-all duration-100"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Clock className="w-8 h-8" />
+                      </div>
+                    </div>
+                    <p className="font-semibold">Processing...</p>
+                    <p className="text-sm opacity-80 font-mono">{scannedCode}</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Camera Controls */}
