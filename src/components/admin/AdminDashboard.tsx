@@ -129,7 +129,9 @@ export const AdminDashboard = () => {
         <div className="container max-w-6xl py-3 md:py-4 px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
-              <img src={SurplussLogo} alt="Surpluss" className="w-16 h-16 md:w-20 md:h-20" />
+              <div className="w-14 h-10 md:w-16 md:h-12 flex items-center justify-center rounded-lg" style={{ backgroundColor: '#20c0c2' }}>
+                <img src={SurplussLogo} alt="Surpluss" className="w-auto h-[80%]" />
+              </div>
               <div>
                 <h1 className="font-display font-bold text-base md:text-lg">GIF (Gift it Forward)</h1>
                 <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Admin Dashboard</p>
