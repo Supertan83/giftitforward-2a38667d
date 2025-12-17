@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Mail, Lock, Heart, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import SurplussLogo from '@/assets/surpluss-logogram.svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
@@ -88,9 +89,7 @@ const AuthPage = () => {
       {/* Header */}
       <header className="p-4 md:p-6">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-primary flex items-center justify-center">
-            <ShoppingBag className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
-          </div>
+          <img src={SurplussLogo} alt="Surpluss" className="w-8 h-8 md:w-10 md:h-10" />
           <span className="font-display font-bold text-lg md:text-xl">GIF (Gift it Forward)</span>
         </div>
       </header>
@@ -108,9 +107,9 @@ const AuthPage = () => {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', delay: 0.1 }}
-              className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-primary to-accent mx-auto mb-4 flex items-center justify-center"
+              className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 flex items-center justify-center"
             >
-              <Heart className="w-8 h-8 md:w-10 md:h-10 text-white" />
+              <img src={SurplussLogo} alt="Surpluss" className="w-full h-full" />
             </motion.div>
             <h1 className="font-display font-bold text-2xl md:text-3xl mb-2">
               {isLogin ? 'Welcome Back' : 'Join Our Team'}
