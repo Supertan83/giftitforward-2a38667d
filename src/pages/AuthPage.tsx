@@ -93,12 +93,7 @@ const AuthPage = () => {
   }
   return <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="p-4 md:p-6">
-        <div className="flex items-center gap-3">
-          <BrandLogo size="sm" />
-          <span className="font-display font-bold text-lg md:text-xl">GIF (Gift it Forward)</span>
-        </div>
-      </header>
+      
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 md:p-8">
