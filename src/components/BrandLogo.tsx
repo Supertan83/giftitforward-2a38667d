@@ -26,7 +26,7 @@ export const BrandLogo = ({ size = 'md', className }: BrandLogoProps) => {
       <img
         src={SurplussLogo}
         alt="GIF (Gift it Forward)"
-        className={cn('w-auto relative z-10', size === 'lg' ? 'h-[90%]' : 'h-[80%]')}
+        className={cn('w-auto relative z-10 brightness-0 invert', size === 'lg' ? 'h-[90%]' : 'h-[80%]')}
       />
     </div>
   );
