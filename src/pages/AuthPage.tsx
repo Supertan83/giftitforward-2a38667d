@@ -111,16 +111,7 @@ const AuthPage = () => {
       }} className="w-full max-w-md">
           {/* Hero */}
           <div className="text-center mb-6 md:mb-8">
-            <motion.div initial={{
-            scale: 0
-          }} animate={{
-            scale: 1
-          }} transition={{
-            type: 'spring',
-            delay: 0.1
-          }}>
-              <BrandLogo size="lg" className="mx-auto mb-4" />
-            </motion.div>
+            
             <h1 className="font-display font-bold text-2xl md:text-3xl mb-2">
               {isLogin ? 'Welcome To GIF' : 'Join Our Team'}
             </h1>
