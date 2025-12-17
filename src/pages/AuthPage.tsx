@@ -91,7 +91,7 @@ const AuthPage = () => {
           <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-primary flex items-center justify-center">
             <ShoppingBag className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
           </div>
-          <span className="font-display font-bold text-lg md:text-xl">Charity Marketplace</span>
+          <span className="font-display font-bold text-lg md:text-xl">GIF (Gift it Forward)</span>
         </div>
       </header>
 

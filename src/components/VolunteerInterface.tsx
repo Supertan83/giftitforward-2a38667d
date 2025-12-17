@@ -49,7 +49,7 @@ export const VolunteerInterface = () => {
               <ShoppingBag className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-display font-bold text-sm">Charity Marketplace</h1>
+              <h1 className="font-display font-bold text-sm">GIF (Gift it Forward)</h1>
               <p className="text-xs text-muted-foreground">Volunteer Mode</p>
             </div>
           </div>
