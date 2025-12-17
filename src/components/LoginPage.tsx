@@ -35,7 +35,7 @@ export const LoginPage = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, delay: 0.1 }}
-            className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 md:mb-6"
+            className="w-32 h-32 md:w-40 md:h-40 mx-auto mb-4 md:mb-6"
           >
             <img src={SurplussLogo} alt="Surpluss" className="w-full h-full" />
           </motion.div>

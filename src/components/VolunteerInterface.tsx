@@ -46,7 +46,7 @@ export const VolunteerInterface = () => {
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={SurplussLogo} alt="Surpluss" className="w-9 h-9" />
+            <img src={SurplussLogo} alt="Surpluss" className="w-16 h-16" />
             <div>
               <h1 className="font-display font-bold text-sm">GIF (Gift it Forward)</h1>
               <p className="text-xs text-muted-foreground">Volunteer Mode</p>

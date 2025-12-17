@@ -89,7 +89,7 @@ const AuthPage = () => {
       {/* Header */}
       <header className="p-4 md:p-6">
         <div className="flex items-center gap-2">
-          <img src={SurplussLogo} alt="Surpluss" className="w-8 h-8 md:w-10 md:h-10" />
+          <img src={SurplussLogo} alt="Surpluss" className="w-16 h-16 md:w-20 md:h-20" />
           <span className="font-display font-bold text-lg md:text-xl">GIF (Gift it Forward)</span>
         </div>
       </header>
@@ -107,7 +107,7 @@ const AuthPage = () => {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', delay: 0.1 }}
-              className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 flex items-center justify-center"
+              className="w-32 h-32 md:w-40 md:h-40 mx-auto mb-4 flex items-center justify-center"
             >
               <img src={SurplussLogo} alt="Surpluss" className="w-full h-full" />
             </motion.div>
