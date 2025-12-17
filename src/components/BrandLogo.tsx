@@ -37,7 +37,7 @@ export const BrandLogo = ({
         whileHover={{ scale: 1.05 }}
         className={cn(
           sizeClasses[size],
-          'w-auto z-10',
+          'w-auto z-10 transition-all duration-300 hover:drop-shadow-[0_0_15px_rgba(32,192,194,0.6)]',
           className
         )}
       />
@@ -50,7 +50,7 @@ export const BrandLogo = ({
       alt="Surpluss Logo" 
       className={cn(
         sizeClasses[size],
-        'w-auto transition-transform duration-200 hover:scale-105 z-10',
+        'w-auto transition-all duration-300 hover:scale-105 hover:drop-shadow-[0_0_15px_rgba(32,192,194,0.6)] z-10',
         className
       )}
     />
