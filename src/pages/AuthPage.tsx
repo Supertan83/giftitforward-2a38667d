@@ -118,8 +118,8 @@ const AuthPage = () => {
           }} transition={{
             type: 'spring',
             delay: 0.1
-          }} className="w-32 h-32 md:w-40 md:h-40 mx-auto mb-4 flex items-center justify-center">
-              <img alt="Surpluss" className="w-full h-full" src="/lovable-uploads/8667f9e4-d442-4534-9d21-0e5370511b67.svg" />
+          }} className="w-32 h-32 md:w-40 md:h-40 mx-auto mb-4 flex items-center justify-center rounded-2xl" style={{ backgroundColor: '#20c0c2' }}>
+              <img alt="Surpluss" className="w-3/4 h-3/4" src="/lovable-uploads/8667f9e4-d442-4534-9d21-0e5370511b67.svg" />
             </motion.div>
             <h1 className="font-display font-bold text-2xl md:text-3xl mb-2">
               {isLogin ? 'Welcome To GIF' : 'Join Our Team'}
