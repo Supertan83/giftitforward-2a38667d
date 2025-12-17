@@ -62,7 +62,9 @@
     --chart-4: 210 33% 9%;
     --chart-5: 152 60% 42%;
 
-    /* Custom tokens */
+    /* Brand Teal - Surpluss Logo */
+    --brand-teal: 181 72% 44%;
+    --brand-teal-foreground: 0 0% 100%;
     --gradient-hero: linear-gradient(135deg, hsl(4 78% 48%) 0%, hsl(4 78% 40%) 100%);
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(30 15% 97%) 100%);
     --gradient-accent: linear-gradient(135deg, hsl(210 4% 34%) 0%, hsl(210 33% 9%) 100%);
@@ -131,6 +133,10 @@
     --chart-3: 31 18% 60%;
     --chart-4: 152 55% 50%;
     --chart-5: 45 90% 55%;
+
+    /* Brand Teal - Surpluss Logo (same in dark mode) */
+    --brand-teal: 181 72% 44%;
+    --brand-teal-foreground: 0 0% 100%;
 
     --sidebar-background: 210 33% 9%;
     --sidebar-foreground: 30 15% 95%;

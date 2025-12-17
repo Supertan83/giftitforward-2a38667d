@@ -46,7 +46,7 @@ export const VolunteerInterface = () => {
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-14 h-10 flex items-center justify-center rounded-lg" style={{ backgroundColor: '#20c0c2' }}>
+            <div className="w-14 h-10 flex items-center justify-center rounded-lg bg-brand-teal">
               <img src={SurplussLogo} alt="Surpluss" className="w-auto h-[80%]" />
             </div>
             <div>
