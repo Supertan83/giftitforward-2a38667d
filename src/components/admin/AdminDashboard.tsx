@@ -132,7 +132,7 @@ export const AdminDashboard = () => {
                 <Package className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="font-display font-bold text-base md:text-lg">Charity Marketplace</h1>
+                <h1 className="font-display font-bold text-base md:text-lg">GIF (Gift it Forward)</h1>
                 <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Admin Dashboard</p>
               </div>
             </div>

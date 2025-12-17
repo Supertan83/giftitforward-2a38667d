@@ -577,7 +577,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     {/* Branding */}
                     <div className="mt-2 pt-2 border-t border-border w-full text-center">
                       <p className="text-[10px] text-muted-foreground font-medium">
-                        CHARITY MARKETPLACE
+                        GIF (GIFT IT FORWARD)
                       </p>
                       <p className="text-[8px] text-muted-foreground">
                         15 Item Credits

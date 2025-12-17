@@ -40,7 +40,7 @@ export const LoginPage = () => {
           </motion.div>
           
           <h1 className="text-2xl md:text-3xl font-display font-bold text-primary-foreground mb-1.5 md:mb-2">
-            Charity Marketplace
+            GIF (Gift it Forward)
           </h1>
           <p className="text-sm md:text-base text-primary-foreground/80">
             Distribution System
@@ -103,7 +103,7 @@ export const LoginPage = () => {
         {/* Footer */}
         <div className="text-center py-6 md:py-8">
           <p className="text-xs md:text-sm text-muted-foreground">
-            Powered by <span className="font-semibold text-primary">Charity Aid</span>
+            Powered by <span className="font-semibold text-primary">GIF</span>
           </p>
         </div>
       </div>
