@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Outfit', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
+        display: ['Merriweather', 'serif'],
+        body: ['Rubik', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
