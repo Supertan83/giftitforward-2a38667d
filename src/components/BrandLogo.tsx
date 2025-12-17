@@ -1,18 +1,32 @@
 import { cn } from '@/lib/utils';
-import SurplussLogo from '@/assets/surpluss-logogram.svg';
+import SurplussFullLogo from '@/assets/surpluss-full-logo.svg';
+
 type BrandLogoSize = 'sm' | 'md' | 'lg';
+
 interface BrandLogoProps {
   size?: BrandLogoSize;
   className?: string;
 }
+
 const sizeClasses: Record<BrandLogoSize, string> = {
-  sm: 'w-14 h-10 rounded-lg',
-  md: 'w-14 h-10 md:w-16 md:h-12 rounded-lg',
-  lg: 'w-56 h-20 md:w-72 md:h-24 rounded-2xl'
+  sm: 'h-10',
+  md: 'h-10 md:h-12',
+  lg: 'h-20 md:h-24'
 };
+
 export const BrandLogo = ({
   size = 'md',
   className
 }: BrandLogoProps) => {
-  return;
+  return (
+    <img 
+      src={SurplussFullLogo} 
+      alt="Surpluss Logo" 
+      className={cn(
+        sizeClasses[size],
+        'w-auto transition-transform duration-200 hover:scale-105 z-10',
+        className
+      )}
+    />
+  );
 };
