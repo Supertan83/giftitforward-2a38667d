@@ -122,7 +122,7 @@ const AuthPage = () => {
               <img src={SurplussLogo} alt="Surpluss" className="w-full h-full" />
             </motion.div>
             <h1 className="font-display font-bold text-2xl md:text-3xl mb-2">
-              {isLogin ? 'Welcome Back' : 'Join Our Team'}
+              {isLogin ? 'Welcome To GIF' : 'Join Our Team'}
             </h1>
             <p className="text-muted-foreground text-sm md:text-base">
               {isLogin ? 'Sign in to continue to the distribution system' : 'Create an account to get started'}
