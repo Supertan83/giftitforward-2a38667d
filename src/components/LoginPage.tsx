@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { UserCog, Users, ArrowRight } from 'lucide-react';
-import SurplussLogo from '@/assets/surpluss-logogram.svg';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/useAppStore';
 import { cn } from '@/lib/utils';
@@ -35,9 +35,8 @@ export const LoginPage = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, delay: 0.1 }}
-            className="w-56 h-20 md:w-72 md:h-24 mx-auto mb-4 md:mb-6 flex items-center justify-center rounded-2xl bg-brand-teal"
           >
-            <img src={SurplussLogo} alt="Surpluss" className="w-auto h-[90%]" />
+            <BrandLogo size="lg" className="mx-auto mb-4 md:mb-6" />
           </motion.div>
           
           <h1 className="text-2xl md:text-3xl font-display font-bold text-primary-foreground mb-1.5 md:mb-2">

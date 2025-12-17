@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
-import SurplussLogo from '@/assets/surpluss-logogram.svg';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
@@ -94,8 +94,8 @@ const AuthPage = () => {
   return <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="p-4 md:p-6">
-        <div className="flex items-center gap-0">
-          <img src={SurplussLogo} alt="Surpluss" className="w-16 h-16 md:w-20 md:h-20" />
+        <div className="flex items-center gap-3">
+          <BrandLogo size="sm" />
           <span className="font-display font-bold text-lg md:text-xl">GIF (Gift it Forward)</span>
         </div>
       </header>
@@ -118,8 +118,8 @@ const AuthPage = () => {
           }} transition={{
             type: 'spring',
             delay: 0.1
-          }} className="w-56 h-20 md:w-72 md:h-24 mx-auto mb-4 flex items-center justify-center rounded-2xl bg-brand-teal">
-              <img alt="Surpluss" className="w-auto h-[90%]" src="/lovable-uploads/8667f9e4-d442-4534-9d21-0e5370511b67.svg" />
+          }}>
+              <BrandLogo size="lg" className="mx-auto mb-4" />
             </motion.div>
             <h1 className="font-display font-bold text-2xl md:text-3xl mb-2">
               {isLogin ? 'Welcome To GIF' : 'Join Our Team'}
