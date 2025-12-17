@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, ShoppingBag, LogOut, User } from 'lucide-react';
+import SurplussLogo from '@/assets/surpluss-logogram.svg';
 import { EntranceZone } from '@/components/zones/EntranceZone';
 import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
 import { ExitZone } from '@/components/zones/ExitZone';
@@ -45,9 +46,7 @@ export const VolunteerInterface = () => {
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg gradient-hero flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img src={SurplussLogo} alt="Surpluss" className="w-9 h-9" />
             <div>
               <h1 className="font-display font-bold text-sm">GIF (Gift it Forward)</h1>
               <p className="text-xs text-muted-foreground">Volunteer Mode</p>

@@ -12,6 +12,7 @@ import {
   Users,
   Store
 } from 'lucide-react';
+import SurplussLogo from '@/assets/surpluss-logogram.svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,9 +129,7 @@ export const AdminDashboard = () => {
         <div className="container max-w-6xl py-3 md:py-4 px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl gradient-hero flex items-center justify-center">
-                <Package className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
-              </div>
+              <img src={SurplussLogo} alt="Surpluss" className="w-9 h-9 md:w-10 md:h-10" />
               <div>
                 <h1 className="font-display font-bold text-base md:text-lg">GIF (Gift it Forward)</h1>
                 <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Admin Dashboard</p>

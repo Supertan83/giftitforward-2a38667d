@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, UserCog, Users, ArrowRight, Heart } from 'lucide-react';
+import { UserCog, Users, ArrowRight } from 'lucide-react';
+import SurplussLogo from '@/assets/surpluss-logogram.svg';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/useAppStore';
 import { cn } from '@/lib/utils';
@@ -34,9 +35,9 @@ export const LoginPage = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, delay: 0.1 }}
-            className="w-16 h-16 md:w-20 md:h-20 bg-primary-foreground/20 rounded-xl md:rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6"
+            className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 md:mb-6"
           >
-            <Heart className="w-8 h-8 md:w-10 md:h-10 text-primary-foreground" fill="currentColor" />
+            <img src={SurplussLogo} alt="Surpluss" className="w-full h-full" />
           </motion.div>
           
           <h1 className="text-2xl md:text-3xl font-display font-bold text-primary-foreground mb-1.5 md:mb-2">
