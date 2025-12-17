@@ -9,9 +9,9 @@ interface BrandLogoProps {
 }
 
 const sizeClasses: Record<BrandLogoSize, string> = {
-  sm: 'h-24',
-  md: 'h-28 md:h-32',
-  lg: 'h-52 md:h-64'
+  sm: 'h-12',
+  md: 'h-16 md:h-20',
+  lg: 'h-48 md:h-64'
 };
 
 export const BrandLogo = ({
