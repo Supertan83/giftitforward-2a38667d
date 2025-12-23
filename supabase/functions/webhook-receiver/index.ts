@@ -32,6 +32,17 @@ interface UpdateVolunteerPayload {
   };
 }
 
+interface ProcessMappedDataPayload {
+  action: 'process_mapped_data';
+  event_id: string;
+  array_path: string;
+  field_mappings: {
+    email: string;
+    name?: string;
+    phone?: string;
+  };
+}
+
 interface VolunteerResult {
   email: string;
   status: 'created' | 'failed';
@@ -430,6 +441,138 @@ serve(async (req) => {
           user: {
             email: updatedUser.user?.email,
             metadata: updatedUser.user?.user_metadata
+          }
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Process mapped data from webhook event
+    if (payload.action === 'process_mapped_data') {
+      const mappedPayload = payload as ProcessMappedDataPayload;
+      
+      if (!mappedPayload.event_id || !mappedPayload.array_path || !mappedPayload.field_mappings?.email) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Missing required fields: event_id, array_path, field_mappings.email' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fetch the original webhook event
+      const { data: eventData, error: eventError } = await supabase
+        .from('webhook_events')
+        .select('payload')
+        .eq('id', mappedPayload.event_id)
+        .single();
+
+      if (eventError || !eventData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Webhook event not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Get the array from the payload using the array path
+      const getArrayByPath = (obj: unknown, path: string): unknown[] => {
+        const parts = path.split('.');
+        let current: unknown = obj;
+        for (const part of parts) {
+          if (current === null || current === undefined) return [];
+          current = (current as Record<string, unknown>)[part];
+        }
+        return Array.isArray(current) ? current : [];
+      };
+
+      const dataArray = getArrayByPath(eventData.payload, mappedPayload.array_path);
+      
+      if (dataArray.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: `No data found at path: ${mappedPayload.array_path}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Extract volunteers from the mapped data
+      const volunteers: VolunteerData[] = dataArray.map(item => {
+        const record = item as Record<string, unknown>;
+        return {
+          email: String(record[mappedPayload.field_mappings.email] || ''),
+          name: mappedPayload.field_mappings.name ? String(record[mappedPayload.field_mappings.name] || '') : undefined,
+          phone: mappedPayload.field_mappings.phone ? String(record[mappedPayload.field_mappings.phone] || '') : undefined,
+        };
+      }).filter(v => v.email && isValidEmail(v.email));
+
+      console.log(`Processing ${volunteers.length} volunteers from mapped data`);
+
+      const results: VolunteerResult[] = [];
+      let createdCount = 0;
+      let failedCount = 0;
+
+      for (const volunteer of volunteers) {
+        const tempPassword = generateTempPassword();
+
+        try {
+          const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+            email: volunteer.email,
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: {
+              name: volunteer.name || '',
+              phone: volunteer.phone || '',
+              onboarded_via: 'partner_webhook_mapped'
+            }
+          });
+
+          if (createError) {
+            console.error(`Failed to create user ${volunteer.email}:`, createError);
+            results.push({ email: volunteer.email, status: 'failed', error: createError.message });
+            failedCount++;
+            continue;
+          }
+
+          if (!userData.user) {
+            results.push({ email: volunteer.email, status: 'failed', error: 'User creation returned no user data' });
+            failedCount++;
+            continue;
+          }
+
+          // Assign volunteer role
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .insert({ user_id: userData.user.id, role: 'volunteer' });
+
+          if (roleError) {
+            console.error(`Failed to assign role to ${volunteer.email}:`, roleError);
+            results.push({ email: volunteer.email, status: 'created', temp_password: tempPassword, error: 'Role assignment failed' });
+          } else {
+            results.push({ email: volunteer.email, status: 'created', temp_password: tempPassword });
+          }
+
+          createdCount++;
+          console.log(`Successfully created volunteer: ${volunteer.email}`);
+
+        } catch (err) {
+          console.error(`Unexpected error creating ${volunteer.email}:`, err);
+          results.push({ email: volunteer.email, status: 'failed', error: err instanceof Error ? err.message : 'Unknown error' });
+          failedCount++;
+        }
+      }
+
+      // Mark the webhook event as processed
+      await supabase
+        .from('webhook_events')
+        .update({ processed: true })
+        .eq('id', mappedPayload.event_id);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Mapped data processed successfully',
+          results: {
+            total: volunteers.length,
+            created: createdCount,
+            failed: failedCount,
+            details: results
           }
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
