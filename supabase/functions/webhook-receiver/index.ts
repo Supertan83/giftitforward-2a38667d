@@ -17,11 +17,39 @@ interface CreateVolunteerPayload {
   volunteers: VolunteerData[];
 }
 
+interface CheckVolunteerPayload {
+  action: 'check_volunteer_status';
+  emails: string[];
+}
+
+interface UpdateVolunteerPayload {
+  action: 'update_volunteer';
+  email: string;
+  updates: {
+    name?: string;
+    phone?: string;
+    active?: boolean;
+  };
+}
+
 interface VolunteerResult {
   email: string;
   status: 'created' | 'failed';
   temp_password?: string;
   error?: string;
+}
+
+interface VolunteerStatusResult {
+  email: string;
+  exists: boolean;
+  user_id?: string;
+  has_role: boolean;
+  metadata?: {
+    name?: string;
+    phone?: string;
+    onboarded_via?: string;
+  };
+  created_at?: string;
 }
 
 function generateTempPassword(length = 12): string {
@@ -235,6 +263,176 @@ serve(async (req) => {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
+      );
+    }
+
+    // Check volunteer status
+    if (payload.action === 'check_volunteer_status') {
+      // Validate API key
+      if (!webhookApiKey || providedApiKey !== webhookApiKey) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Unauthorized: Invalid or missing API key' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const statusPayload = payload as CheckVolunteerPayload;
+      
+      if (!Array.isArray(statusPayload.emails) || statusPayload.emails.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid payload: emails array is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const results: VolunteerStatusResult[] = [];
+
+      for (const email of statusPayload.emails) {
+        if (!isValidEmail(email)) {
+          results.push({ email, exists: false, has_role: false });
+          continue;
+        }
+
+        // Get user by email
+        const { data: userData, error: userError } = await supabase.auth.admin.listUsers();
+        
+        if (userError) {
+          console.error('Error listing users:', userError);
+          results.push({ email, exists: false, has_role: false });
+          continue;
+        }
+
+        const user = userData.users.find(u => u.email === email);
+        
+        if (!user) {
+          results.push({ email, exists: false, has_role: false });
+          continue;
+        }
+
+        // Check if user has volunteer role
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'volunteer')
+          .maybeSingle();
+
+        results.push({
+          email,
+          exists: true,
+          user_id: user.id,
+          has_role: !!roleData,
+          metadata: {
+            name: user.user_metadata?.name,
+            phone: user.user_metadata?.phone,
+            onboarded_via: user.user_metadata?.onboarded_via
+          },
+          created_at: user.created_at
+        });
+      }
+
+      console.log(`Checked status for ${results.length} volunteers`);
+
+      return new Response(
+        JSON.stringify({ success: true, results }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Update volunteer information
+    if (payload.action === 'update_volunteer') {
+      // Validate API key
+      if (!webhookApiKey || providedApiKey !== webhookApiKey) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Unauthorized: Invalid or missing API key' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const updatePayload = payload as UpdateVolunteerPayload;
+      
+      if (!updatePayload.email || !isValidEmail(updatePayload.email)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid payload: valid email is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!updatePayload.updates || Object.keys(updatePayload.updates).length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid payload: updates object is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Find user by email
+      const { data: userData, error: listError } = await supabase.auth.admin.listUsers();
+      
+      if (listError) {
+        console.error('Error listing users:', listError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to find user' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const user = userData.users.find(u => u.email === updatePayload.email);
+      
+      if (!user) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Volunteer not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Update user metadata
+      const newMetadata = { ...user.user_metadata };
+      if (updatePayload.updates.name !== undefined) {
+        newMetadata.name = updatePayload.updates.name;
+      }
+      if (updatePayload.updates.phone !== undefined) {
+        newMetadata.phone = updatePayload.updates.phone;
+      }
+
+      const updateData: { user_metadata?: object; ban_duration?: string } = {
+        user_metadata: newMetadata
+      };
+
+      // Handle active status (ban/unban)
+      if (updatePayload.updates.active === false) {
+        updateData.ban_duration = '87600h'; // ~10 years
+      }
+
+      const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(
+        user.id,
+        updateData
+      );
+
+      // If reactivating, we need to unban
+      if (updatePayload.updates.active === true) {
+        await supabase.auth.admin.updateUserById(user.id, { ban_duration: 'none' });
+      }
+
+      if (updateError) {
+        console.error('Error updating user:', updateError);
+        return new Response(
+          JSON.stringify({ success: false, error: updateError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Updated volunteer: ${updatePayload.email}`);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Volunteer updated successfully',
+          user: {
+            email: updatedUser.user?.email,
+            metadata: updatedUser.user?.user_metadata
+          }
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
