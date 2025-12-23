@@ -157,11 +157,30 @@ export const WebhookDataMapper = () => {
   }, [selectedEvent]);
 
   const arrayPaths = useMemo(() => {
-    return detectedPaths.filter(p => {
-      const value = getValueByPath(selectedEvent?.payload, p);
-      return Array.isArray(value);
-    });
-  }, [detectedPaths, selectedEvent]);
+    if (!selectedEvent?.payload) return [];
+    
+    const findArrayPaths = (obj: unknown, prefix = ''): string[] => {
+      const paths: string[] = [];
+      if (obj === null || obj === undefined) return paths;
+      
+      if (Array.isArray(obj)) {
+        // Don't add root arrays without a key
+        if (prefix) paths.push(prefix);
+      } else if (typeof obj === 'object') {
+        Object.entries(obj as Record<string, unknown>).forEach(([key, value]) => {
+          const newPath = prefix ? `${prefix}.${key}` : key;
+          if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+            paths.push(newPath);
+          } else if (typeof value === 'object' && value !== null) {
+            paths.push(...findArrayPaths(value, newPath));
+          }
+        });
+      }
+      return paths;
+    };
+    
+    return findArrayPaths(selectedEvent.payload);
+  }, [selectedEvent]);
 
   const fieldPaths = useMemo(() => {
     if (!arrayPath || !selectedEvent) return [];
