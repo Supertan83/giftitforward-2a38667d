@@ -38,6 +38,29 @@ interface MappingTemplate {
   created_at: string;
 }
 
+// Common field name patterns for auto-detection
+const EMAIL_PATTERNS = ['email', 'mail', 'e-mail', 'email_address', 'emailaddress', 'user_email', 'useremail'];
+const NAME_PATTERNS = ['name', 'fullname', 'full_name', 'displayname', 'display_name', 'username', 'user_name', 'volunteer_name', 'volunteername'];
+const PHONE_PATTERNS = ['phone', 'mobile', 'telephone', 'tel', 'phone_number', 'phonenumber', 'mobile_number', 'mobilenumber', 'cell', 'cellphone'];
+
+function suggestFieldMapping(fields: string[]): FieldMapping {
+  const lowerFields = fields.map(f => f.toLowerCase());
+  
+  const findMatch = (patterns: string[]): string => {
+    for (const pattern of patterns) {
+      const idx = lowerFields.findIndex(f => f === pattern || f.includes(pattern));
+      if (idx !== -1) return fields[idx];
+    }
+    return '';
+  };
+  
+  return {
+    email: findMatch(EMAIL_PATTERNS),
+    name: findMatch(NAME_PATTERNS),
+    phone: findMatch(PHONE_PATTERNS),
+  };
+}
+
 // Recursively extract all paths from an object
 function extractPaths(obj: unknown, prefix = ''): string[] {
   const paths: string[] = [];
@@ -188,6 +211,26 @@ export const WebhookDataMapper = () => {
     if (arr.length === 0) return [];
     return Object.keys(arr[0] as Record<string, unknown>);
   }, [arrayPath, selectedEvent]);
+
+  // Auto-suggest mappings when array path changes
+  const suggestedMappings = useMemo(() => {
+    if (fieldPaths.length === 0) return null;
+    return suggestFieldMapping(fieldPaths);
+  }, [fieldPaths]);
+
+  // Apply suggestions when array path is first selected
+  const handleArrayPathSelect = (path: string) => {
+    setArrayPath(path);
+    // Get fields for the new path and suggest mappings
+    const arr = getArrayByPath(selectedEvent?.payload, path);
+    if (arr.length > 0) {
+      const fields = Object.keys(arr[0] as Record<string, unknown>);
+      const suggestions = suggestFieldMapping(fields);
+      setFieldMappings(suggestions);
+    } else {
+      setFieldMappings({ email: '', name: '', phone: '' });
+    }
+  };
 
   const previewData = useMemo(() => {
     if (!arrayPath || !selectedEvent) return [];
@@ -437,10 +480,7 @@ export const WebhookDataMapper = () => {
                     key={path}
                     size="sm"
                     variant={arrayPath === path ? 'default' : 'outline'}
-                    onClick={() => {
-                      setArrayPath(path);
-                      setFieldMappings({ email: '', name: '', phone: '' });
-                    }}
+                    onClick={() => handleArrayPathSelect(path)}
                   >
                     {path}
                   </Button>
@@ -452,7 +492,15 @@ export const WebhookDataMapper = () => {
           {/* Field Mappings */}
           {arrayPath && fieldPaths.length > 0 && (
             <div className="mb-6 space-y-4">
-              <Label className="text-sm font-medium block">Map Source Fields to Volunteer Fields</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium block">Map Source Fields to Volunteer Fields</Label>
+                {suggestedMappings && (suggestedMappings.email || suggestedMappings.name || suggestedMappings.phone) && (
+                  <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-600">
+                    <Check className="w-3 h-3 mr-1" />
+                    Auto-detected
+                  </Badge>
+                )}
+              </div>
               
               <div className="grid gap-4">
                 {/* Email Mapping */}
