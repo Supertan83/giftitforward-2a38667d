@@ -208,6 +208,39 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_mapping_templates: {
+        Row: {
+          array_path: string | null
+          created_at: string
+          description: string | null
+          field_mappings: Json
+          id: string
+          name: string
+          source_identifier: string | null
+          updated_at: string
+        }
+        Insert: {
+          array_path?: string | null
+          created_at?: string
+          description?: string | null
+          field_mappings?: Json
+          id?: string
+          name: string
+          source_identifier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          array_path?: string | null
+          created_at?: string
+          description?: string | null
+          field_mappings?: Json
+          id?: string
+          name?: string
+          source_identifier?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

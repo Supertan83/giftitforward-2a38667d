@@ -5,11 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { WebhookActionsPanel } from './WebhookActionsPanel';
+import { WebhookDataMapper } from './WebhookDataMapper';
 
 interface WebhookEvent {
   id: string;
@@ -128,122 +130,137 @@ export const WebhookEventsViewer = ({ onBack }: WebhookEventsViewerProps) => {
           </div>
         </motion.div>
 
-        {/* Webhook Actions Panel */}
-        <WebhookActionsPanel />
+        {/* Tabs for different sections */}
+        <Tabs defaultValue="actions" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="actions">Actions</TabsTrigger>
+            <TabsTrigger value="mapper">Data Mapper</TabsTrigger>
+            <TabsTrigger value="events">Events Log</TabsTrigger>
+          </TabsList>
 
-        {/* Events List */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card"
-        >
-          <div className="flex items-center justify-between mb-4 md:mb-6">
-            <div>
-              <h2 className="font-display font-bold text-lg md:text-xl">Recent Events</h2>
-              <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                Last 50 webhook events received
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isRefetching}
+          <TabsContent value="actions">
+            <WebhookActionsPanel />
+          </TabsContent>
+
+          <TabsContent value="mapper">
+            <WebhookDataMapper />
+          </TabsContent>
+
+          <TabsContent value="events">
+            {/* Events List */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card"
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : events.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Webhook className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No webhook events received yet.</p>
-              <p className="text-sm mt-1">Events will appear here when external services send data to your webhook URL.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {events.map((event, index) => (
-                <motion.div
-                  key={event.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.03 }}
-                  className="border border-border rounded-lg overflow-hidden"
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+                <div>
+                  <h2 className="font-display font-bold text-lg md:text-xl">Recent Events</h2>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+                    Last 50 webhook events received
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetch()}
+                  disabled={isRefetching}
                 >
-                  <button
-                    onClick={() => toggleExpand(event.id)}
-                    className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center shrink-0">
-                        <Webhook className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">
-                            Event {event.id.slice(0, 8)}...
-                          </span>
-                          <Badge variant={event.processed ? 'default' : 'secondary'} className="text-xs">
-                            {event.processed ? 'Processed' : 'Pending'}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {format(new Date(event.received_at), 'MMM d, yyyy HH:mm:ss')}
-                          </span>
-                          {event.source_ip && (
-                            <span className="flex items-center gap-1">
-                              <Globe className="w-3 h-3" />
-                              {event.source_ip}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {expandedId === event.id ? (
-                      <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </button>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
 
-                  {expandedId === event.id && (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : events.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Webhook className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No webhook events received yet.</p>
+                  <p className="text-sm mt-1">Events will appear here when external services send data to your webhook URL.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {events.map((event, index) => (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="border-t border-border bg-muted/30"
+                      key={event.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03 }}
+                      className="border border-border rounded-lg overflow-hidden"
                     >
-                      <div className="p-4 space-y-4">
-                        <div>
-                          <h4 className="text-sm font-medium mb-2">Payload</h4>
-                          <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto max-h-64 overflow-y-auto">
-                            {JSON.stringify(event.payload, null, 2)}
-                          </pre>
-                        </div>
-                        {event.headers && (
-                          <div>
-                            <h4 className="text-sm font-medium mb-2">Headers</h4>
-                            <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto max-h-40 overflow-y-auto">
-                              {JSON.stringify(event.headers, null, 2)}
-                            </pre>
+                      <button
+                        onClick={() => toggleExpand(event.id)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center shrink-0">
+                            <Webhook className="w-5 h-5 text-primary" />
                           </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">
+                                Event {event.id.slice(0, 8)}...
+                              </span>
+                              <Badge variant={event.processed ? 'default' : 'secondary'} className="text-xs">
+                                {event.processed ? 'Processed' : 'Pending'}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {format(new Date(event.received_at), 'MMM d, yyyy HH:mm:ss')}
+                              </span>
+                              {event.source_ip && (
+                                <span className="flex items-center gap-1">
+                                  <Globe className="w-3 h-3" />
+                                  {event.source_ip}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {expandedId === event.id ? (
+                          <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-muted-foreground" />
                         )}
-                      </div>
+                      </button>
+
+                      {expandedId === event.id && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="border-t border-border bg-muted/30"
+                        >
+                          <div className="p-4 space-y-4">
+                            <div>
+                              <h4 className="text-sm font-medium mb-2">Payload</h4>
+                              <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto max-h-64 overflow-y-auto">
+                                {JSON.stringify(event.payload, null, 2)}
+                              </pre>
+                            </div>
+                            {event.headers && (
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Headers</h4>
+                                <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto max-h-40 overflow-y-auto">
+                                  {JSON.stringify(event.headers, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
                     </motion.div>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </motion.div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
