@@ -20,17 +20,31 @@ serve(async (req) => {
     // Get the request body
     const payload = await req.json();
     
+    const headersObj = Object.fromEntries(req.headers.entries());
+    const sourceIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    
     console.log('Webhook received:', JSON.stringify(payload, null, 2));
-    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
+    console.log('Request headers:', headersObj);
+    console.log('Source IP:', sourceIp);
     console.log('Timestamp:', new Date().toISOString());
 
-    // You can process the webhook payload here
-    // For example, store it in a database table, trigger actions, etc.
-    
-    // Example: If you want to store webhook events, you could create a table and insert:
-    // const { data, error } = await supabase
-    //   .from('webhook_events')
-    //   .insert({ payload, received_at: new Date().toISOString() });
+    // Store the webhook event in the database
+    const { data, error: insertError } = await supabase
+      .from('webhook_events')
+      .insert({
+        payload,
+        headers: headersObj,
+        source_ip: sourceIp,
+        received_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Failed to store webhook event:', insertError);
+    } else {
+      console.log('Webhook event stored with ID:', data.id);
+    }
 
     return new Response(
       JSON.stringify({ 
