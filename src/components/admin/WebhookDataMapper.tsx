@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Loader2, ChevronRight, ChevronDown, Save, Play, Trash2, 
-  ArrowRight, Check, AlertCircle, FileJson, Users, RefreshCw
+  ArrowRight, Check, AlertCircle, FileJson, Users, RefreshCw, Edit3
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -134,6 +134,10 @@ export const WebhookDataMapper = () => {
   const [fieldMappings, setFieldMappings] = useState<FieldMapping>({ email: '', name: '', phone: '' });
   const [templateName, setTemplateName] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [useCustomArrayPath, setUseCustomArrayPath] = useState(false);
+  const [customArrayPath, setCustomArrayPath] = useState('');
+  const [useCustomFieldPaths, setUseCustomFieldPaths] = useState(false);
+  const [customFieldMappings, setCustomFieldMappings] = useState<FieldMapping>({ email: '', name: '', phone: '' });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -332,6 +336,10 @@ export const WebhookDataMapper = () => {
     setArrayPath('');
     setFieldMappings({ email: '', name: '', phone: '' });
     setTemplateName('');
+    setUseCustomArrayPath(false);
+    setCustomArrayPath('');
+    setUseCustomFieldPaths(false);
+    setCustomFieldMappings({ email: '', name: '', phone: '' });
   };
 
   const togglePath = (path: string) => {
@@ -462,16 +470,57 @@ export const WebhookDataMapper = () => {
 
           {/* Array Path Selection */}
           <div className="mb-6">
-            <Label className="text-sm font-medium mb-2 block">
-              Select Data Array <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm font-medium">
+                Select Data Array <span className="text-destructive">*</span>
+              </Label>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setUseCustomArrayPath(!useCustomArrayPath);
+                  if (!useCustomArrayPath) {
+                    setCustomArrayPath(arrayPath);
+                  }
+                }}
+              >
+                <Edit3 className="w-3 h-3 mr-1" />
+                {useCustomArrayPath ? 'Use detected' : 'Enter custom path'}
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground mb-2">
-              Choose which array contains the volunteer data
+              {useCustomArrayPath 
+                ? 'Enter a custom path to the array (e.g., data.records or nested.items.list)'
+                : 'Choose which array contains the volunteer data'}
             </p>
-            {arrayPaths.length === 0 ? (
+            
+            {useCustomArrayPath ? (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., data.volunteers or response.items"
+                  value={customArrayPath}
+                  onChange={(e) => setCustomArrayPath(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (customArrayPath) {
+                      setArrayPath(customArrayPath);
+                      setFieldMappings({ email: '', name: '', phone: '' });
+                      setUseCustomFieldPaths(true); // Custom array path likely needs custom field paths
+                    }
+                  }}
+                  disabled={!customArrayPath}
+                >
+                  Apply
+                </Button>
+              </div>
+            ) : arrayPaths.length === 0 ? (
               <div className="flex items-center gap-2 text-amber-600 text-sm">
                 <AlertCircle className="w-4 h-4" />
-                <span>No arrays detected in payload</span>
+                <span>No arrays detected in payload - try entering a custom path</span>
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -490,87 +539,149 @@ export const WebhookDataMapper = () => {
           </div>
 
           {/* Field Mappings */}
-          {arrayPath && fieldPaths.length > 0 && (
+          {arrayPath && (fieldPaths.length > 0 || useCustomFieldPaths) && (
             <div className="mb-6 space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium block">Map Source Fields to Volunteer Fields</Label>
-                {suggestedMappings && (suggestedMappings.email || suggestedMappings.name || suggestedMappings.phone) && (
-                  <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-600">
-                    <Check className="w-3 h-3 mr-1" />
-                    Auto-detected
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium block">Map Source Fields to Volunteer Fields</Label>
+                  {suggestedMappings && (suggestedMappings.email || suggestedMappings.name || suggestedMappings.phone) && !useCustomFieldPaths && (
+                    <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-600">
+                      <Check className="w-3 h-3 mr-1" />
+                      Auto-detected
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setUseCustomFieldPaths(!useCustomFieldPaths);
+                    if (!useCustomFieldPaths) {
+                      setCustomFieldMappings(fieldMappings);
+                    }
+                  }}
+                >
+                  <Edit3 className="w-3 h-3 mr-1" />
+                  {useCustomFieldPaths ? 'Use detected fields' : 'Enter custom paths'}
+                </Button>
               </div>
-              
-              <div className="grid gap-4">
-                {/* Email Mapping */}
-                <div className="flex items-center gap-3">
-                  <div className="w-24 text-sm font-medium">Email <span className="text-destructive">*</span></div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                  <div className="flex flex-wrap gap-2">
-                    {fieldPaths.map(field => (
-                      <Button
-                        key={`email-${field}`}
-                        size="sm"
-                        variant={fieldMappings.email === field ? 'default' : 'outline'}
-                        onClick={() => setFieldMappings(m => ({ ...m, email: field }))}
-                      >
-                        {field}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Name Mapping */}
-                <div className="flex items-center gap-3">
-                  <div className="w-24 text-sm font-medium">Name</div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant={fieldMappings.name === '' ? 'secondary' : 'outline'}
-                      onClick={() => setFieldMappings(m => ({ ...m, name: '' }))}
-                    >
-                      (skip)
-                    </Button>
-                    {fieldPaths.map(field => (
-                      <Button
-                        key={`name-${field}`}
-                        size="sm"
-                        variant={fieldMappings.name === field ? 'default' : 'outline'}
-                        onClick={() => setFieldMappings(m => ({ ...m, name: field }))}
-                      >
-                        {field}
-                      </Button>
-                    ))}
+              {useCustomFieldPaths ? (
+                <div className="space-y-3 p-3 bg-muted/50 rounded-lg border border-border">
+                  <p className="text-xs text-muted-foreground">
+                    Enter custom field paths for deeply nested data (e.g., contact.email, profile.fullName)
+                  </p>
+                  <div className="grid gap-3">
+                    <div className="flex items-center gap-3">
+                      <Label className="w-20 text-sm">Email <span className="text-destructive">*</span></Label>
+                      <Input
+                        placeholder="e.g., email or contact.email_address"
+                        value={customFieldMappings.email}
+                        onChange={(e) => setCustomFieldMappings(m => ({ ...m, email: e.target.value }))}
+                        className="flex-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Label className="w-20 text-sm">Name</Label>
+                      <Input
+                        placeholder="e.g., name or profile.fullName"
+                        value={customFieldMappings.name}
+                        onChange={(e) => setCustomFieldMappings(m => ({ ...m, name: e.target.value }))}
+                        className="flex-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Label className="w-20 text-sm">Phone</Label>
+                      <Input
+                        placeholder="e.g., phone or contact.mobile"
+                        value={customFieldMappings.phone}
+                        onChange={(e) => setCustomFieldMappings(m => ({ ...m, phone: e.target.value }))}
+                        className="flex-1"
+                      />
+                    </div>
                   </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setFieldMappings(customFieldMappings);
+                    }}
+                    disabled={!customFieldMappings.email}
+                  >
+                    Apply Custom Mappings
+                  </Button>
                 </div>
+              ) : (
+                <div className="grid gap-4">
+                  {/* Email Mapping */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm font-medium">Email <span className="text-destructive">*</span></div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex flex-wrap gap-2">
+                      {fieldPaths.map(field => (
+                        <Button
+                          key={`email-${field}`}
+                          size="sm"
+                          variant={fieldMappings.email === field ? 'default' : 'outline'}
+                          onClick={() => setFieldMappings(m => ({ ...m, email: field }))}
+                        >
+                          {field}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Phone Mapping */}
-                <div className="flex items-center gap-3">
-                  <div className="w-24 text-sm font-medium">Phone</div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant={fieldMappings.phone === '' ? 'secondary' : 'outline'}
-                      onClick={() => setFieldMappings(m => ({ ...m, phone: '' }))}
-                    >
-                      (skip)
-                    </Button>
-                    {fieldPaths.map(field => (
+                  {/* Name Mapping */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm font-medium">Name</div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex flex-wrap gap-2">
                       <Button
-                        key={`phone-${field}`}
                         size="sm"
-                        variant={fieldMappings.phone === field ? 'default' : 'outline'}
-                        onClick={() => setFieldMappings(m => ({ ...m, phone: field }))}
+                        variant={fieldMappings.name === '' ? 'secondary' : 'outline'}
+                        onClick={() => setFieldMappings(m => ({ ...m, name: '' }))}
                       >
-                        {field}
+                        (skip)
                       </Button>
-                    ))}
+                      {fieldPaths.map(field => (
+                        <Button
+                          key={`name-${field}`}
+                          size="sm"
+                          variant={fieldMappings.name === field ? 'default' : 'outline'}
+                          onClick={() => setFieldMappings(m => ({ ...m, name: field }))}
+                        >
+                          {field}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Phone Mapping */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm font-medium">Phone</div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant={fieldMappings.phone === '' ? 'secondary' : 'outline'}
+                        onClick={() => setFieldMappings(m => ({ ...m, phone: '' }))}
+                      >
+                        (skip)
+                      </Button>
+                      {fieldPaths.map(field => (
+                        <Button
+                          key={`phone-${field}`}
+                          size="sm"
+                          variant={fieldMappings.phone === field ? 'default' : 'outline'}
+                          onClick={() => setFieldMappings(m => ({ ...m, phone: field }))}
+                        >
+                          {field}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
