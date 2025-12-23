@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { WebhookActionsPanel } from './WebhookActionsPanel';
 
 interface WebhookEvent {
   id: string;
@@ -126,6 +127,9 @@ export const WebhookEventsViewer = ({ onBack }: WebhookEventsViewerProps) => {
             </div>
           </div>
         </motion.div>
+
+        {/* Webhook Actions Panel */}
+        <WebhookActionsPanel />
 
         {/* Events List */}
         <motion.div

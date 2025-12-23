@@ -1,0 +1,498 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  UserPlus, 
+  Search, 
+  UserCog, 
+  Loader2, 
+  Send,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  XCircle
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+interface VolunteerInput {
+  email: string;
+  name: string;
+  phone: string;
+}
+
+interface CreateResult {
+  email: string;
+  status: 'created' | 'failed';
+  temp_password?: string;
+  error?: string;
+}
+
+interface StatusResult {
+  email: string;
+  exists: boolean;
+  user_id?: string;
+  has_role: boolean;
+  metadata?: {
+    name?: string;
+    phone?: string;
+    onboarded_via?: string;
+  };
+  created_at?: string;
+}
+
+interface UpdateResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  user?: {
+    email: string;
+    metadata: Record<string, unknown>;
+  };
+}
+
+export const WebhookActionsPanel = () => {
+  const { toast } = useToast();
+  
+  // Create volunteer state
+  const [volunteers, setVolunteers] = useState<VolunteerInput[]>([{ email: '', name: '', phone: '' }]);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createResults, setCreateResults] = useState<CreateResult[] | null>(null);
+  
+  // Check status state
+  const [checkEmails, setCheckEmails] = useState('');
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkResults, setCheckResults] = useState<StatusResult[] | null>(null);
+  
+  // Update volunteer state
+  const [updateEmail, setUpdateEmail] = useState('');
+  const [updateName, setUpdateName] = useState('');
+  const [updatePhone, setUpdatePhone] = useState('');
+  const [updateActive, setUpdateActive] = useState(true);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+
+  const addVolunteerRow = () => {
+    setVolunteers([...volunteers, { email: '', name: '', phone: '' }]);
+  };
+
+  const removeVolunteerRow = (index: number) => {
+    if (volunteers.length > 1) {
+      setVolunteers(volunteers.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateVolunteerField = (index: number, field: keyof VolunteerInput, value: string) => {
+    const updated = [...volunteers];
+    updated[index][field] = value;
+    setVolunteers(updated);
+  };
+
+  const handleCreateVolunteers = async () => {
+    const validVolunteers = volunteers.filter(v => v.email.trim());
+    if (validVolunteers.length === 0) {
+      toast({
+        title: 'No volunteers to create',
+        description: 'Please add at least one email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateResults(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'create_volunteer',
+          volunteers: validVolunteers.map(v => ({
+            email: v.email.trim(),
+            name: v.name.trim() || undefined,
+            phone: v.phone.trim() || undefined,
+          })),
+        },
+      });
+
+      if (error) throw error;
+
+      setCreateResults(data.results?.details || []);
+      toast({
+        title: 'Volunteers Created',
+        description: `Created ${data.results?.created || 0} of ${data.results?.total || 0} volunteers`,
+      });
+    } catch (error) {
+      console.error('Create error:', error);
+      toast({
+        title: 'Failed to create volunteers',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleCheckStatus = async () => {
+    const emails = checkEmails.split(/[,\n]/).map(e => e.trim()).filter(Boolean);
+    if (emails.length === 0) {
+      toast({
+        title: 'No emails to check',
+        description: 'Please enter at least one email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setCheckLoading(true);
+    setCheckResults(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'check_volunteer_status',
+          emails,
+        },
+      });
+
+      if (error) throw error;
+
+      setCheckResults(data.results || []);
+      toast({
+        title: 'Status Check Complete',
+        description: `Checked ${emails.length} email(s)`,
+      });
+    } catch (error) {
+      console.error('Check error:', error);
+      toast({
+        title: 'Failed to check status',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
+  const handleUpdateVolunteer = async () => {
+    if (!updateEmail.trim()) {
+      toast({
+        title: 'Email required',
+        description: 'Please enter the volunteer email to update',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUpdateLoading(true);
+    setUpdateResult(null);
+
+    try {
+      const updates: { name?: string; phone?: string; active?: boolean } = {};
+      if (updateName.trim()) updates.name = updateName.trim();
+      if (updatePhone.trim()) updates.phone = updatePhone.trim();
+      updates.active = updateActive;
+
+      const { data, error } = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'update_volunteer',
+          email: updateEmail.trim(),
+          updates,
+        },
+      });
+
+      if (error) throw error;
+
+      setUpdateResult(data);
+      toast({
+        title: data.success ? 'Volunteer Updated' : 'Update Failed',
+        description: data.message || data.error,
+        variant: data.success ? 'default' : 'destructive',
+      });
+    } catch (error) {
+      console.error('Update error:', error);
+      toast({
+        title: 'Failed to update volunteer',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card"
+    >
+      <div className="mb-4 md:mb-6">
+        <h2 className="font-display font-bold text-lg md:text-xl">Webhook Actions</h2>
+        <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+          Test and manage volunteer onboarding actions
+        </p>
+      </div>
+
+      <Tabs defaultValue="create" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsTrigger value="create" className="flex items-center gap-2">
+            <UserPlus className="w-4 h-4" />
+            <span className="hidden sm:inline">Create</span>
+          </TabsTrigger>
+          <TabsTrigger value="check" className="flex items-center gap-2">
+            <Search className="w-4 h-4" />
+            <span className="hidden sm:inline">Check Status</span>
+          </TabsTrigger>
+          <TabsTrigger value="update" className="flex items-center gap-2">
+            <UserCog className="w-4 h-4" />
+            <span className="hidden sm:inline">Update</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Create Volunteers Tab */}
+        <TabsContent value="create" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Create Volunteers</CardTitle>
+              <CardDescription>
+                Add new volunteer accounts with temporary passwords
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {volunteers.map((volunteer, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="grid grid-cols-3 gap-2 flex-1">
+                    <Input
+                      placeholder="Email *"
+                      value={volunteer.email}
+                      onChange={(e) => updateVolunteerField(index, 'email', e.target.value)}
+                    />
+                    <Input
+                      placeholder="Name"
+                      value={volunteer.name}
+                      onChange={(e) => updateVolunteerField(index, 'name', e.target.value)}
+                    />
+                    <Input
+                      placeholder="Phone"
+                      value={volunteer.phone}
+                      onChange={(e) => updateVolunteerField(index, 'phone', e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeVolunteerRow(index)}
+                    disabled={volunteers.length === 1}
+                    className="shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                </div>
+              ))}
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={addVolunteerRow}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Row
+                </Button>
+                <Button onClick={handleCreateVolunteers} disabled={createLoading}>
+                  {createLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4 mr-2" />
+                  )}
+                  Create Volunteers
+                </Button>
+              </div>
+
+              {createResults && (
+                <div className="mt-4 space-y-2">
+                  <Label>Results</Label>
+                  <div className="bg-muted rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                    {createResults.map((result, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="font-mono">{result.email}</span>
+                        <div className="flex items-center gap-2">
+                          {result.status === 'created' ? (
+                            <>
+                              <Badge variant="default" className="bg-emerald-500">
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Created
+                              </Badge>
+                              {result.temp_password && (
+                                <code className="text-xs bg-background px-2 py-0.5 rounded">
+                                  {result.temp_password}
+                                </code>
+                              )}
+                            </>
+                          ) : (
+                            <Badge variant="destructive">
+                              <XCircle className="w-3 h-3 mr-1" />
+                              {result.error || 'Failed'}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Check Status Tab */}
+        <TabsContent value="check" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Check Volunteer Status</CardTitle>
+              <CardDescription>
+                Look up volunteer accounts by email address
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Email Addresses (comma or newline separated)</Label>
+                <textarea
+                  className="w-full min-h-[100px] px-3 py-2 border border-input rounded-md bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="email1@example.com, email2@example.com"
+                  value={checkEmails}
+                  onChange={(e) => setCheckEmails(e.target.value)}
+                />
+              </div>
+
+              <Button onClick={handleCheckStatus} disabled={checkLoading}>
+                {checkLoading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4 mr-2" />
+                )}
+                Check Status
+              </Button>
+
+              {checkResults && (
+                <div className="mt-4 space-y-2">
+                  <Label>Results</Label>
+                  <div className="bg-muted rounded-lg p-3 space-y-3 max-h-64 overflow-y-auto">
+                    {checkResults.map((result, i) => (
+                      <div key={i} className="border-b border-border pb-2 last:border-0 last:pb-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono text-sm">{result.email}</span>
+                          {result.exists ? (
+                            <Badge variant="default" className="bg-emerald-500">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Exists
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Not Found
+                            </Badge>
+                          )}
+                        </div>
+                        {result.exists && (
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            <p>Role: {result.has_role ? 'Volunteer' : 'No role assigned'}</p>
+                            {result.metadata?.name && <p>Name: {result.metadata.name}</p>}
+                            {result.metadata?.phone && <p>Phone: {result.metadata.phone}</p>}
+                            {result.created_at && (
+                              <p>Created: {new Date(result.created_at).toLocaleDateString()}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Update Volunteer Tab */}
+        <TabsContent value="update" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Update Volunteer</CardTitle>
+              <CardDescription>
+                Modify volunteer information or deactivate account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Volunteer Email *</Label>
+                  <Input
+                    placeholder="volunteer@example.com"
+                    value={updateEmail}
+                    onChange={(e) => setUpdateEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>New Name (optional)</Label>
+                  <Input
+                    placeholder="Leave blank to keep current"
+                    value={updateName}
+                    onChange={(e) => setUpdateName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>New Phone (optional)</Label>
+                  <Input
+                    placeholder="Leave blank to keep current"
+                    value={updatePhone}
+                    onChange={(e) => setUpdatePhone(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center space-x-2 sm:col-span-2">
+                  <Switch
+                    id="active-status"
+                    checked={updateActive}
+                    onCheckedChange={setUpdateActive}
+                  />
+                  <Label htmlFor="active-status">
+                    Account Active {updateActive ? '(enabled)' : '(disabled - user will be banned)'}
+                  </Label>
+                </div>
+              </div>
+
+              <Button onClick={handleUpdateVolunteer} disabled={updateLoading}>
+                {updateLoading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <UserCog className="w-4 h-4 mr-2" />
+                )}
+                Update Volunteer
+              </Button>
+
+              {updateResult && (
+                <div className="mt-4">
+                  <div className={`rounded-lg p-3 ${updateResult.success ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-destructive/10 text-destructive'}`}>
+                    <div className="flex items-center gap-2">
+                      {updateResult.success ? (
+                        <CheckCircle2 className="w-4 h-4" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      <span className="font-medium">
+                        {updateResult.message || updateResult.error}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </motion.div>
+  );
+};
