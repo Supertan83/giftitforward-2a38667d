@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      event_dependents: {
+        Row: {
+          created_at: string
+          dependent_index: number | null
+          dependent_type: string
+          gender: string | null
+          id: string
+          name: string
+          registration_event_id: string
+        }
+        Insert: {
+          created_at?: string
+          dependent_index?: number | null
+          dependent_type: string
+          gender?: string | null
+          id?: string
+          name: string
+          registration_event_id: string
+        }
+        Update: {
+          created_at?: string
+          dependent_index?: number | null
+          dependent_type?: string
+          gender?: string | null
+          id?: string
+          name?: string
+          registration_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_dependents_registration_event_id_fkey"
+            columns: ["registration_event_id"]
+            isOneToOne: false
+            referencedRelation: "registration_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       item_types: {
         Row: {
           allocated_to_marketplace: number
@@ -77,6 +115,104 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_registrations: {
+        Row: {
+          created_at: string
+          emergency_contact_name: string | null
+          emergency_contact_number: string | null
+          emergency_contact_relationship: string | null
+          employee_join_date: string | null
+          employee_number: string | null
+          employee_vertical: string | null
+          events_list: string | null
+          external_company: string | null
+          first_name: string
+          ga_campaign: string | null
+          ga_medium: string | null
+          ga_source: string | null
+          gender: string | null
+          has_medical_condition: boolean | null
+          id: string
+          ip_address: string | null
+          is_employee: boolean | null
+          is_fasting: boolean | null
+          last_name: string
+          medical_condition_details: string | null
+          phone_number: string | null
+          submission_date: string | null
+          terms_accepted: boolean | null
+          updated_at: string
+          webhook_event_id: string | null
+          work_email: string
+        }
+        Insert: {
+          created_at?: string
+          emergency_contact_name?: string | null
+          emergency_contact_number?: string | null
+          emergency_contact_relationship?: string | null
+          employee_join_date?: string | null
+          employee_number?: string | null
+          employee_vertical?: string | null
+          events_list?: string | null
+          external_company?: string | null
+          first_name: string
+          ga_campaign?: string | null
+          ga_medium?: string | null
+          ga_source?: string | null
+          gender?: string | null
+          has_medical_condition?: boolean | null
+          id?: string
+          ip_address?: string | null
+          is_employee?: boolean | null
+          is_fasting?: boolean | null
+          last_name: string
+          medical_condition_details?: string | null
+          phone_number?: string | null
+          submission_date?: string | null
+          terms_accepted?: boolean | null
+          updated_at?: string
+          webhook_event_id?: string | null
+          work_email: string
+        }
+        Update: {
+          created_at?: string
+          emergency_contact_name?: string | null
+          emergency_contact_number?: string | null
+          emergency_contact_relationship?: string | null
+          employee_join_date?: string | null
+          employee_number?: string | null
+          employee_vertical?: string | null
+          events_list?: string | null
+          external_company?: string | null
+          first_name?: string
+          ga_campaign?: string | null
+          ga_medium?: string | null
+          ga_source?: string | null
+          gender?: string | null
+          has_medical_condition?: boolean | null
+          id?: string
+          ip_address?: string | null
+          is_employee?: boolean | null
+          is_fasting?: boolean | null
+          last_name?: string
+          medical_condition_details?: string | null
+          phone_number?: string | null
+          submission_date?: string | null
+          terms_accepted?: boolean | null
+          updated_at?: string
+          webhook_event_id?: string | null
+          work_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_registrations_webhook_event_id_fkey"
+            columns: ["webhook_event_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       qr_cards: {
         Row: {
           children_count: number | null
@@ -121,6 +257,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      registration_events: {
+        Row: {
+          created_at: string
+          event_date: string | null
+          event_slug: string
+          family_members_joining: boolean | null
+          fnb_required: boolean | null
+          id: string
+          number_of_adults: number | null
+          number_of_children: number | null
+          registration_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_date?: string | null
+          event_slug: string
+          family_members_joining?: boolean | null
+          fnb_required?: boolean | null
+          id?: string
+          number_of_adults?: number | null
+          number_of_children?: number | null
+          registration_id: string
+        }
+        Update: {
+          created_at?: string
+          event_date?: string | null
+          event_slug?: string
+          family_members_joining?: boolean | null
+          fnb_required?: boolean | null
+          id?: string
+          number_of_adults?: number | null
+          number_of_children?: number | null
+          registration_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registration_events_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "partner_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {
