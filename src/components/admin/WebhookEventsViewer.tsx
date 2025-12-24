@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Webhook, RefreshCw, Clock, Globe, ChevronDown, ChevronUp, Loader2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Webhook, RefreshCw, Clock, Globe, ChevronDown, ChevronUp, Loader2, Copy, Check, Building2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ interface WebhookEvent {
   payload: Record<string, unknown>;
   headers: Record<string, string> | null;
   source_ip: string | null;
+  source_identifier: string | null;
   received_at: string;
   processed: boolean;
   created_at: string;
@@ -107,11 +108,11 @@ export const WebhookEventsViewer = ({ onBack }: WebhookEventsViewerProps) => {
             <div className="flex-1 min-w-0">
               <h2 className="font-display font-bold text-lg mb-1">Webhook Endpoint</h2>
               <p className="text-sm text-muted-foreground mb-3">
-                Share this URL with external services to receive webhook events
+                Share this URL with external services. Add <code className="bg-muted px-1 rounded">?source=company_name</code> to track the source.
               </p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 bg-muted px-3 py-2 rounded-lg text-sm font-mono truncate">
-                  {webhookUrl}
+                  {webhookUrl}?source=your_company
                 </code>
                 <Button
                   variant="outline"
@@ -200,15 +201,21 @@ export const WebhookEventsViewer = ({ onBack }: WebhookEventsViewerProps) => {
                             <Webhook className="w-5 h-5 text-primary" />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-sm">
                                 Event {event.id.slice(0, 8)}...
                               </span>
                               <Badge variant={event.processed ? 'default' : 'secondary'} className="text-xs">
                                 {event.processed ? 'Processed' : 'Pending'}
                               </Badge>
+                              {event.source_identifier && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Building2 className="w-3 h-3 mr-1" />
+                                  {event.source_identifier}
+                                </Badge>
+                              )}
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {format(new Date(event.received_at), 'MMM d, yyyy HH:mm:ss')}

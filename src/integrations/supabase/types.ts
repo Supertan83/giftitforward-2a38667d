@@ -675,6 +675,7 @@ export type Database = {
           payload: Json
           processed: boolean
           received_at: string
+          source_identifier: string | null
           source_ip: string | null
         }
         Insert: {
@@ -684,6 +685,7 @@ export type Database = {
           payload: Json
           processed?: boolean
           received_at?: string
+          source_identifier?: string | null
           source_ip?: string | null
         }
         Update: {
@@ -693,6 +695,7 @@ export type Database = {
           payload?: Json
           processed?: boolean
           received_at?: string
+          source_identifier?: string | null
           source_ip?: string | null
         }
         Relationships: []
