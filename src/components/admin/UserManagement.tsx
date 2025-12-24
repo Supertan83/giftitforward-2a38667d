@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { useUsers, useCreateUser } from '@/hooks/useSupabaseData';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useUsers, useCreateUser, useDeleteUser } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -35,6 +45,7 @@ const createUserSchema = z.object({
 
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'volunteer'>('volunteer');
@@ -42,6 +53,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
+  const deleteUser = useDeleteUser();
   const { toast } = useToast();
 
   const handleCreate = async () => {
@@ -72,6 +84,25 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     } catch (error) {
       toast({
         title: 'Failed to Create User',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirmUser) return;
+    
+    try {
+      await deleteUser.mutateAsync(deleteConfirmUser.id);
+      toast({
+        title: 'User Deleted',
+        description: `${deleteConfirmUser.email} has been removed`,
+      });
+      setDeleteConfirmUser(null);
+    } catch (error) {
+      toast({
+        title: 'Failed to Delete User',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -175,9 +206,19 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                    {user.role}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                      {user.role}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteConfirmUser({ id: user.id, email: user.email })}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -270,6 +311,29 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmUser} onOpenChange={(open) => !open && setDeleteConfirmUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deleteConfirmUser?.email}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteUser.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteUser.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
