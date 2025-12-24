@@ -88,6 +88,76 @@ interface PartnerRegistration {
   'Checkbox - Terms': boolean;
 }
 
+// External item interfaces
+interface ExternalAddress {
+  id: number;
+  address: string;
+  country: string;
+  state: string | null;
+  city: string | null;
+  zip_code: string | null;
+  location_longitude: number;
+  location_latitude: number;
+  primary: boolean;
+  company_id: number;
+}
+
+interface ExternalMaterialGroup {
+  id: number;
+  name: string;
+  code: string;
+  uom: string;
+}
+
+interface ExternalSdgGoal {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+  image_url: string | null;
+}
+
+interface ExternalCompany {
+  id: number;
+  uuid: string;
+  name: string;
+  main_business: string | null;
+  sector: string | null;
+  company_size: string | null;
+  designation: string | null;
+  image_url: string | null;
+  about_info: string | null;
+  website_url: string | null;
+  currency: string;
+  company_license_number: string | null;
+  is_parent_company: boolean;
+  addresses?: ExternalAddress[];
+}
+
+interface ExternalItem {
+  id: number;
+  uuid: string;
+  title: string;
+  description: string | null;
+  active: boolean;
+  price: number | null;
+  per: string | null;
+  frequency: Record<string, boolean> | null;
+  image_url: string | null;
+  quantity: number;
+  item_count: number;
+  box_count: number | null;
+  type: Record<string, unknown> | null;
+  material_group_id: number;
+  address_id: number;
+  third_level_subcategory_id: number | null;
+  condition_id: number | null;
+  address?: ExternalAddress;
+  material_group?: ExternalMaterialGroup;
+  sdg_goals?: ExternalSdgGoal[];
+  company?: ExternalCompany;
+}
+
 interface VolunteerResult {
   email: string;
   status: 'created' | 'failed';
@@ -120,6 +190,218 @@ function generateTempPassword(length = 12): string {
 function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
+}
+
+// Helper to process external items
+// deno-lint-ignore no-explicit-any
+async function processExternalItems(supabase: any, items: ExternalItem[], webhookEventId: string | null) {
+  const results = {
+    total: items.length,
+    processed: 0,
+    failed: 0,
+    details: [] as Array<{ id: number; status: string; error?: string }>
+  };
+
+  for (const item of items) {
+    try {
+      // Upsert company if present
+      let companyDbId: string | null = null;
+      if (item.company) {
+        const company = item.company;
+        const { data: companyData, error: companyError } = await supabase
+          .from('external_companies')
+          .upsert({
+            external_id: company.id,
+            uuid: company.uuid,
+            name: company.name,
+            main_business: company.main_business,
+            sector: company.sector,
+            company_size: company.company_size,
+            designation: company.designation,
+            image_url: company.image_url,
+            about_info: company.about_info,
+            website_url: company.website_url,
+            currency: company.currency || 'AED',
+            company_license_number: company.company_license_number,
+            is_parent_company: company.is_parent_company || false,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'external_id' })
+          .select('id')
+          .single();
+
+        if (companyError) {
+          console.warn('Failed to upsert company:', companyError);
+        } else {
+          companyDbId = companyData?.id || null;
+        }
+
+        // Upsert company addresses
+        if (company.addresses && companyDbId) {
+          for (const addr of company.addresses) {
+            await supabase
+              .from('external_addresses')
+              .upsert({
+                external_id: addr.id,
+                company_id: companyDbId,
+                address: addr.address,
+                country: addr.country,
+                state: addr.state,
+                city: addr.city,
+                zip_code: addr.zip_code,
+                location_longitude: addr.location_longitude,
+                location_latitude: addr.location_latitude,
+                is_primary: addr.primary || false,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'external_id' });
+          }
+        }
+      }
+
+      // Upsert address if present
+      let addressDbId: string | null = null;
+      if (item.address) {
+        const addr = item.address;
+        const { data: addrData, error: addrError } = await supabase
+          .from('external_addresses')
+          .upsert({
+            external_id: addr.id,
+            company_id: companyDbId,
+            address: addr.address,
+            country: addr.country,
+            state: addr.state,
+            city: addr.city,
+            zip_code: addr.zip_code,
+            location_longitude: addr.location_longitude,
+            location_latitude: addr.location_latitude,
+            is_primary: addr.primary || false,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'external_id' })
+          .select('id')
+          .single();
+
+        if (addrError) {
+          console.warn('Failed to upsert address:', addrError);
+        } else {
+          addressDbId = addrData?.id || null;
+        }
+      }
+
+      // Upsert material group if present
+      let materialGroupDbId: string | null = null;
+      if (item.material_group) {
+        const mg = item.material_group;
+        const { data: mgData, error: mgError } = await supabase
+          .from('external_material_groups')
+          .upsert({
+            external_id: mg.id,
+            name: mg.name,
+            code: mg.code,
+            uom: mg.uom,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'external_id' })
+          .select('id')
+          .single();
+
+        if (mgError) {
+          console.warn('Failed to upsert material group:', mgError);
+        } else {
+          materialGroupDbId = mgData?.id || null;
+        }
+      }
+
+      // Upsert SDG goals
+      const sdgGoalDbIds: string[] = [];
+      if (item.sdg_goals && item.sdg_goals.length > 0) {
+        for (const goal of item.sdg_goals) {
+          const { data: goalData, error: goalError } = await supabase
+            .from('external_sdg_goals')
+            .upsert({
+              external_id: goal.id,
+              name: goal.name,
+              code: goal.code,
+              description: goal.description,
+              image_url: goal.image_url,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'external_id' })
+            .select('id')
+            .single();
+
+          if (!goalError && goalData) {
+            sdgGoalDbIds.push(goalData.id);
+          }
+        }
+      }
+
+      // Upsert the item itself
+      const { data: itemData, error: itemError } = await supabase
+        .from('external_items')
+        .upsert({
+          external_id: item.id,
+          uuid: item.uuid,
+          title: item.title,
+          description: item.description,
+          active: item.active,
+          price: item.price,
+          per: item.per,
+          frequency: item.frequency,
+          image_url: item.image_url,
+          quantity: item.quantity || 0,
+          item_count: item.item_count || 0,
+          box_count: item.box_count,
+          type_data: item.type,
+          condition_id: item.condition_id,
+          company_id: companyDbId,
+          address_id: addressDbId,
+          material_group_id: materialGroupDbId,
+          third_level_subcategory_id: item.third_level_subcategory_id,
+          webhook_event_id: webhookEventId,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'external_id' })
+        .select('id')
+        .single();
+
+      if (itemError) {
+        console.error('Failed to upsert item:', itemError);
+        results.failed++;
+        results.details.push({ id: item.id, status: 'failed', error: itemError.message });
+        continue;
+      }
+
+      // Link SDG goals to item
+      if (itemData && sdgGoalDbIds.length > 0) {
+        // Remove existing links
+        await supabase
+          .from('external_item_sdg_goals')
+          .delete()
+          .eq('item_id', itemData.id);
+
+        // Insert new links
+        for (const goalId of sdgGoalDbIds) {
+          await supabase
+            .from('external_item_sdg_goals')
+            .insert({
+              item_id: itemData.id,
+              sdg_goal_id: goalId
+            });
+        }
+      }
+
+      results.processed++;
+      results.details.push({ id: item.id, status: 'processed' });
+      console.log(`Successfully processed item: ${item.title} (ID: ${item.id})`);
+
+    } catch (err) {
+      console.error(`Error processing item ${item.id}:`, err);
+      results.failed++;
+      results.details.push({ 
+        id: item.id, 
+        status: 'failed', 
+        error: err instanceof Error ? err.message : 'Unknown error' 
+      });
+    }
+  }
+
+  return results;
 }
 
 serve(async (req) => {
@@ -161,6 +443,59 @@ serve(async (req) => {
       console.error('Failed to store webhook event:', insertError);
     } else {
       console.log('Webhook event stored with ID:', eventData.id);
+    }
+
+    // Check if this is an external items payload
+    // Detect by checking for array with 'title' and 'material_group' fields
+    if (Array.isArray(payload) && payload.length > 0 && payload[0].title && payload[0].material_group_id !== undefined) {
+      console.log('Detected external items payload');
+      const items = payload as ExternalItem[];
+      
+      const results = await processExternalItems(supabase, items, eventData?.id || null);
+
+      // Mark webhook event as processed
+      if (eventData?.id) {
+        await supabase
+          .from('webhook_events')
+          .update({ processed: true })
+          .eq('id', eventData.id);
+      }
+
+      console.log(`External items processed: ${results.processed}/${results.total} successful`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'External items processed',
+          results
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if this is a single external item (not in array)
+    if (payload.title && payload.material_group_id !== undefined && !Array.isArray(payload)) {
+      console.log('Detected single external item payload');
+      const items = [payload] as ExternalItem[];
+      
+      const results = await processExternalItems(supabase, items, eventData?.id || null);
+
+      // Mark webhook event as processed
+      if (eventData?.id) {
+        await supabase
+          .from('webhook_events')
+          .update({ processed: true })
+          .eq('id', eventData.id);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'External item processed',
+          results
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Check if this is a volunteer creation request
@@ -543,13 +878,13 @@ serve(async (req) => {
       }
 
       // Fetch the original webhook event
-      const { data: eventData, error: eventError } = await supabase
+      const { data: origEventData, error: eventError } = await supabase
         .from('webhook_events')
         .select('payload')
         .eq('id', mappedPayload.event_id)
         .single();
 
-      if (eventError || !eventData) {
+      if (eventError || !origEventData) {
         return new Response(
           JSON.stringify({ success: false, error: 'Webhook event not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -567,7 +902,7 @@ serve(async (req) => {
         return Array.isArray(current) ? current : [];
       };
 
-      const dataArray = getArrayByPath(eventData.payload, mappedPayload.array_path);
+      const dataArray = getArrayByPath(origEventData.payload, mappedPayload.array_path);
       
       if (dataArray.length === 0) {
         return new Response(

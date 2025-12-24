@@ -52,6 +52,315 @@ export type Database = {
           },
         ]
       }
+      external_addresses: {
+        Row: {
+          address: string
+          city: string | null
+          company_id: string | null
+          country: string | null
+          created_at: string
+          external_id: number
+          id: string
+          is_primary: boolean | null
+          location_latitude: number | null
+          location_longitude: number | null
+          state: string | null
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address: string
+          city?: string | null
+          company_id?: string | null
+          country?: string | null
+          created_at?: string
+          external_id: number
+          id?: string
+          is_primary?: boolean | null
+          location_latitude?: number | null
+          location_longitude?: number | null
+          state?: string | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string
+          city?: string | null
+          company_id?: string | null
+          country?: string | null
+          created_at?: string
+          external_id?: number
+          id?: string
+          is_primary?: boolean | null
+          location_latitude?: number | null
+          location_longitude?: number | null
+          state?: string | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_addresses_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "external_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_companies: {
+        Row: {
+          about_info: string | null
+          company_license_number: string | null
+          company_size: string | null
+          created_at: string
+          currency: string | null
+          designation: string | null
+          external_id: number
+          id: string
+          image_url: string | null
+          is_parent_company: boolean | null
+          main_business: string | null
+          name: string
+          sector: string | null
+          updated_at: string
+          uuid: string | null
+          website_url: string | null
+        }
+        Insert: {
+          about_info?: string | null
+          company_license_number?: string | null
+          company_size?: string | null
+          created_at?: string
+          currency?: string | null
+          designation?: string | null
+          external_id: number
+          id?: string
+          image_url?: string | null
+          is_parent_company?: boolean | null
+          main_business?: string | null
+          name: string
+          sector?: string | null
+          updated_at?: string
+          uuid?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          about_info?: string | null
+          company_license_number?: string | null
+          company_size?: string | null
+          created_at?: string
+          currency?: string | null
+          designation?: string | null
+          external_id?: number
+          id?: string
+          image_url?: string | null
+          is_parent_company?: boolean | null
+          main_business?: string | null
+          name?: string
+          sector?: string | null
+          updated_at?: string
+          uuid?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      external_item_sdg_goals: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          sdg_goal_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          sdg_goal_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          sdg_goal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_item_sdg_goals_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "external_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_item_sdg_goals_sdg_goal_id_fkey"
+            columns: ["sdg_goal_id"]
+            isOneToOne: false
+            referencedRelation: "external_sdg_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_items: {
+        Row: {
+          active: boolean | null
+          address_id: string | null
+          box_count: number | null
+          company_id: string | null
+          condition_id: number | null
+          created_at: string
+          description: string | null
+          external_id: number
+          frequency: Json | null
+          id: string
+          image_url: string | null
+          item_count: number | null
+          material_group_id: string | null
+          per: string | null
+          price: number | null
+          quantity: number | null
+          third_level_subcategory_id: number | null
+          title: string
+          type_data: Json | null
+          updated_at: string
+          uuid: string | null
+          webhook_event_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          address_id?: string | null
+          box_count?: number | null
+          company_id?: string | null
+          condition_id?: number | null
+          created_at?: string
+          description?: string | null
+          external_id: number
+          frequency?: Json | null
+          id?: string
+          image_url?: string | null
+          item_count?: number | null
+          material_group_id?: string | null
+          per?: string | null
+          price?: number | null
+          quantity?: number | null
+          third_level_subcategory_id?: number | null
+          title: string
+          type_data?: Json | null
+          updated_at?: string
+          uuid?: string | null
+          webhook_event_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          address_id?: string | null
+          box_count?: number | null
+          company_id?: string | null
+          condition_id?: number | null
+          created_at?: string
+          description?: string | null
+          external_id?: number
+          frequency?: Json | null
+          id?: string
+          image_url?: string | null
+          item_count?: number | null
+          material_group_id?: string | null
+          per?: string | null
+          price?: number | null
+          quantity?: number | null
+          third_level_subcategory_id?: number | null
+          title?: string
+          type_data?: Json | null
+          updated_at?: string
+          uuid?: string | null
+          webhook_event_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_items_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "external_addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "external_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_items_material_group_id_fkey"
+            columns: ["material_group_id"]
+            isOneToOne: false
+            referencedRelation: "external_material_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_material_groups: {
+        Row: {
+          code: string | null
+          created_at: string
+          external_id: number
+          id: string
+          name: string
+          uom: string | null
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          external_id: number
+          id?: string
+          name: string
+          uom?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          external_id?: number
+          id?: string
+          name?: string
+          uom?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      external_sdg_goals: {
+        Row: {
+          code: string | null
+          created_at: string
+          description: string | null
+          external_id: number
+          id: string
+          image_url: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          external_id: number
+          id?: string
+          image_url?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          external_id?: number
+          id?: string
+          image_url?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       item_types: {
         Row: {
           allocated_to_marketplace: number
