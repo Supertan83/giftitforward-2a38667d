@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Send, 
@@ -9,7 +9,9 @@ import {
   Check,
   Globe,
   Clock,
-  Zap
+  Zap,
+  Save,
+  Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+
+const STORAGE_KEY = 'webhook_testing_api_key';
 
 interface TestResult {
   success: boolean;
@@ -35,11 +39,42 @@ export const WebhookTestingTool = () => {
   const [proxyUrl, setProxyUrl] = useState('');
   const [sourceIdentifier, setSourceIdentifier] = useState('test_source');
   const [apiKey, setApiKey] = useState('');
+  const [isApiKeySaved, setIsApiKeySaved] = useState(false);
   const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status'>('check_status');
   const [customPayload, setCustomPayload] = useState('{\n  "action": "create_volunteer",\n  "volunteers": [\n    {\n      "email": "test@example.com",\n      "name": "Test User"\n    }\n  ]\n}');
   const [isLoading, setIsLoading] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+
+  // Load saved API key on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem(STORAGE_KEY);
+    if (savedKey) {
+      setApiKey(savedKey);
+      setIsApiKeySaved(true);
+    }
+  }, []);
+
+  const handleSaveApiKey = () => {
+    if (apiKey.trim()) {
+      localStorage.setItem(STORAGE_KEY, apiKey.trim());
+      setIsApiKeySaved(true);
+      toast({
+        title: 'API Key Saved',
+        description: 'Your API key has been saved to local storage',
+      });
+    }
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setApiKey('');
+    setIsApiKeySaved(false);
+    toast({
+      title: 'API Key Cleared',
+      description: 'Your saved API key has been removed',
+    });
+  };
 
   const supabaseUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/functions/v1/webhook-proxy';
 
@@ -236,15 +271,49 @@ export const WebhookTestingTool = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>API Key (required for create_volunteer)</Label>
-              <Input
-                type="password"
-                placeholder="Your WEBHOOK_API_KEY"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
+              <Label className="flex items-center gap-2">
+                <Key className="w-4 h-4" />
+                API Key (required for create_volunteer)
+                {isApiKeySaved && (
+                  <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                    Saved
+                  </Badge>
+                )}
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="password"
+                  placeholder="Your WEBHOOK_API_KEY"
+                  value={apiKey}
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    setIsApiKeySaved(false);
+                  }}
+                  className="flex-1"
+                />
+                {apiKey && !isApiKeySaved && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveApiKey}
+                  >
+                    <Save className="w-4 h-4 mr-1" />
+                    Save
+                  </Button>
+                )}
+                {isApiKeySaved && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearApiKey}
+                    className="text-muted-foreground"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
-                Sent as <code className="bg-muted px-1 rounded">x-api-key</code> header for protected actions
+                Sent as <code className="bg-muted px-1 rounded">x-api-key</code> header. Saved locally in your browser.
               </p>
             </div>
           </CardContent>
