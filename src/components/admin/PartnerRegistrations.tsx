@@ -119,7 +119,7 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
               <BrandLogo size="md" />
               <div>
                 <h1 className="font-display font-bold text-base md:text-lg">GIF (Gift it Forward)</h1>
-                <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Partner Registrations</p>
+                <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Dubai Holdings Registrations</p>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={signOut} className="text-xs md:text-sm">
@@ -208,9 +208,9 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : registrations.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+          <div className="text-center py-12 text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No partner registrations yet</p>
+              <p>No Dubai Holdings registrations yet</p>
               <p className="text-sm">Registrations will appear here when received via webhook</p>
             </div>
           ) : (
