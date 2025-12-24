@@ -419,12 +419,19 @@ serve(async (req) => {
     // Get the request body
     const payload = await req.json();
     
+    // Parse URL for query parameters
+    const url = new URL(req.url);
+    const sourceIdentifier = url.searchParams.get('source') || 
+                             req.headers.get('x-source-identifier') || 
+                             null;
+    
     const headersObj = Object.fromEntries(req.headers.entries());
     const sourceIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
     const providedApiKey = req.headers.get('x-api-key');
     
     console.log('Webhook received:', JSON.stringify(payload, null, 2));
     console.log('Source IP:', sourceIp);
+    console.log('Source Identifier:', sourceIdentifier);
     console.log('Timestamp:', new Date().toISOString());
 
     // Store the webhook event in the database
@@ -434,6 +441,7 @@ serve(async (req) => {
         payload,
         headers: headersObj,
         source_ip: sourceIp,
+        source_identifier: sourceIdentifier,
         received_at: new Date().toISOString()
       })
       .select()
