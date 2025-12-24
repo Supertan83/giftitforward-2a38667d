@@ -1,0 +1,330 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  Send, 
+  Loader2, 
+  CheckCircle2, 
+  XCircle, 
+  Copy, 
+  Check,
+  Globe,
+  Clock,
+  Zap
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+
+interface TestResult {
+  success: boolean;
+  status: number;
+  statusText: string;
+  responseTime: number;
+  response: unknown;
+  error?: string;
+}
+
+export const WebhookTestingTool = () => {
+  const { toast } = useToast();
+  
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [sourceIdentifier, setSourceIdentifier] = useState('test_source');
+  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status'>('create_volunteer');
+  const [customPayload, setCustomPayload] = useState('{\n  "action": "create_volunteer",\n  "volunteers": [\n    {\n      "email": "test@example.com",\n      "name": "Test User"\n    }\n  ]\n}');
+  const [isLoading, setIsLoading] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+
+  const supabaseUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/functions/v1/webhook-proxy';
+
+  const getPayload = () => {
+    switch (payloadType) {
+      case 'create_volunteer':
+        return {
+          action: 'create_volunteer',
+          volunteers: [
+            {
+              email: `test-${Date.now()}@example.com`,
+              name: 'Test Volunteer',
+              phone: '+1234567890'
+            }
+          ]
+        };
+      case 'check_status':
+        return {
+          action: 'check_volunteer_status',
+          emails: ['test@example.com']
+        };
+      case 'custom':
+        try {
+          return JSON.parse(customPayload);
+        } catch {
+          return null;
+        }
+    }
+  };
+
+  const handleTest = async () => {
+    const payload = getPayload();
+    if (!payload) {
+      toast({
+        title: 'Invalid JSON',
+        description: 'Please enter valid JSON in the payload field',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Use proxy URL if provided, otherwise use Supabase directly
+    const targetUrl = proxyUrl.trim() || supabaseUrl;
+    const urlWithSource = sourceIdentifier 
+      ? `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}source=${encodeURIComponent(sourceIdentifier)}`
+      : targetUrl;
+
+    setIsLoading(true);
+    setTestResult(null);
+
+    const startTime = performance.now();
+
+    try {
+      const response = await fetch(urlWithSource, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const endTime = performance.now();
+      const responseTime = Math.round(endTime - startTime);
+
+      let responseData;
+      const contentType = response.headers.get('content-type');
+      if (contentType?.includes('application/json')) {
+        responseData = await response.json();
+      } else {
+        responseData = await response.text();
+      }
+
+      setTestResult({
+        success: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        responseTime,
+        response: responseData,
+      });
+
+      toast({
+        title: response.ok ? 'Test Successful' : 'Test Failed',
+        description: `Status: ${response.status} ${response.statusText} (${responseTime}ms)`,
+        variant: response.ok ? 'default' : 'destructive',
+      });
+
+    } catch (error) {
+      const endTime = performance.now();
+      const responseTime = Math.round(endTime - startTime);
+
+      setTestResult({
+        success: false,
+        status: 0,
+        statusText: 'Network Error',
+        responseTime,
+        response: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      toast({
+        title: 'Test Failed',
+        description: error instanceof Error ? error.message : 'Network error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyUrl = async () => {
+    const url = proxyUrl.trim() || supabaseUrl;
+    await navigator.clipboard.writeText(url);
+    setCopiedUrl(true);
+    toast({
+      title: 'URL Copied',
+      description: 'The webhook URL has been copied to your clipboard',
+    });
+    setTimeout(() => setCopiedUrl(false), 2000);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card"
+    >
+      <div className="mb-4 md:mb-6">
+        <h2 className="font-display font-bold text-lg md:text-xl flex items-center gap-2">
+          <Zap className="w-5 h-5 text-primary" />
+          Webhook Testing Tool
+        </h2>
+        <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+          Test your webhook proxy to verify it's working correctly
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        {/* URL Configuration */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Endpoint Configuration</CardTitle>
+            <CardDescription>
+              Configure the webhook URL to test. Leave blank to test the internal proxy.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Proxy URL (optional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="https://your-proxy.workers.dev or leave blank for internal"
+                  value={proxyUrl}
+                  onChange={(e) => setProxyUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopyUrl}
+                  className="shrink-0"
+                >
+                  {copiedUrl ? (
+                    <Check className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {proxyUrl.trim() 
+                  ? `Testing: ${proxyUrl}` 
+                  : `Testing: ${supabaseUrl} (internal)`}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Source Identifier</Label>
+              <Input
+                placeholder="company_name"
+                value={sourceIdentifier}
+                onChange={(e) => setSourceIdentifier(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Added as <code className="bg-muted px-1 rounded">?source=</code> parameter
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payload Configuration */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Test Payload</CardTitle>
+            <CardDescription>
+              Select a preset or create a custom payload
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Payload Type</Label>
+              <Select value={payloadType} onValueChange={(v) => setPayloadType(v as typeof payloadType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="create_volunteer">Create Volunteer</SelectItem>
+                  <SelectItem value="check_status">Check Status</SelectItem>
+                  <SelectItem value="custom">Custom Payload</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {payloadType === 'custom' ? (
+              <div className="space-y-2">
+                <Label>Custom JSON Payload</Label>
+                <Textarea
+                  className="font-mono text-sm min-h-[150px]"
+                  value={customPayload}
+                  onChange={(e) => setCustomPayload(e.target.value)}
+                  placeholder='{"action": "...", "data": {...}}'
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Preview Payload</Label>
+                <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto">
+                  {JSON.stringify(getPayload(), null, 2)}
+                </pre>
+              </div>
+            )}
+
+            <Button onClick={handleTest} disabled={isLoading} className="w-full sm:w-auto">
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Send Test Request
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Test Results */}
+        {testResult && (
+          <Card className={testResult.success ? 'border-emerald-500/50' : 'border-destructive/50'}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                {testResult.success ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-destructive" />
+                )}
+                Test Result
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={testResult.success ? 'default' : 'destructive'} className={testResult.success ? 'bg-emerald-500' : ''}>
+                  <Globe className="w-3 h-3 mr-1" />
+                  {testResult.status} {testResult.statusText}
+                </Badge>
+                <Badge variant="outline">
+                  <Clock className="w-3 h-3 mr-1" />
+                  {testResult.responseTime}ms
+                </Badge>
+              </div>
+
+              {testResult.error ? (
+                <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm">
+                  <strong>Error:</strong> {testResult.error}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Response</Label>
+                  <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto max-h-64 overflow-y-auto">
+                    {typeof testResult.response === 'string'
+                      ? testResult.response
+                      : JSON.stringify(testResult.response, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </motion.div>
+  );
+};
