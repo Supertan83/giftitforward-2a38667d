@@ -43,6 +43,51 @@ interface ProcessMappedDataPayload {
   };
 }
 
+// Partner registration interfaces
+interface PartnerDependent {
+  type: string;
+  index: string;
+  name: string;
+  gender: string;
+}
+
+interface PartnerEventRegistration {
+  event: string;
+  eventDate: string;
+  'family-members-joining': string;
+  'number-of-children': string;
+  'number-of-adults': string;
+  'fnb-required'?: string;
+  dependents?: PartnerDependent[];
+}
+
+interface PartnerRegistration {
+  Date: string;
+  'IP Address': string;
+  'First Name': string;
+  'Last Name': string;
+  'Phone Number': string;
+  'Work Email': string;
+  Gender: string;
+  'Dubai Holding Employee': string;
+  'Dubai Holding Employee - Vertical': string | null;
+  'Dubai Holding Employee - Date of Joining': string | null;
+  'Dubai Holding Employee - Number': number | null;
+  'Not Employee - Company': string | null;
+  'Medical Condition': string;
+  'Medical Condition Details': string | null;
+  'Emergency Contact Name': string;
+  'Emergency Contact Relationship': string;
+  'Emergency Contact Number': number | string;
+  'Fasting during event': string;
+  eventslist: string;
+  eventsjson: PartnerEventRegistration[];
+  'ga-source': string | null;
+  'ga-campaign': string | null;
+  'ga-medium': string | null;
+  'Checkbox - Terms': boolean;
+}
+
 interface VolunteerResult {
   email: string;
   status: 'created' | 'failed';
@@ -613,6 +658,170 @@ serve(async (req) => {
             failed: failedCount,
             details: results
           }
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if this is a partner registration payload (array with specific structure)
+    // Partner sends array of registrations without an "action" field
+    if (Array.isArray(payload) && payload.length > 0 && payload[0]['Work Email']) {
+      console.log('Detected partner registration payload');
+      const registrations = payload as PartnerRegistration[];
+      
+      const results = {
+        total: registrations.length,
+        processed: 0,
+        failed: 0,
+        details: [] as Array<{ email: string; status: string; error?: string; registration_id?: string }>
+      };
+
+      for (const reg of registrations) {
+        try {
+          // Clean phone number (remove quotes)
+          const cleanPhone = reg['Phone Number']?.replace(/'/g, '').trim() || null;
+          
+          // Parse submission date
+          let submissionDate: string | null = null;
+          if (reg.Date) {
+            try {
+              // Parse "12/24/2025 6:35:13 am" format
+              const parts = reg.Date.match(/(\d+)\/(\d+)\/(\d+)\s+(\d+):(\d+):(\d+)\s*(am|pm)?/i);
+              if (parts) {
+                let hour = parseInt(parts[4]);
+                if (parts[7]?.toLowerCase() === 'pm' && hour !== 12) hour += 12;
+                if (parts[7]?.toLowerCase() === 'am' && hour === 12) hour = 0;
+                submissionDate = new Date(
+                  parseInt(parts[3]), parseInt(parts[1]) - 1, parseInt(parts[2]),
+                  hour, parseInt(parts[5]), parseInt(parts[6])
+                ).toISOString();
+              }
+            } catch (e) {
+              console.warn('Failed to parse date:', reg.Date);
+            }
+          }
+
+          // Insert partner registration
+          const { data: regData, error: regError } = await supabase
+            .from('partner_registrations')
+            .insert({
+              submission_date: submissionDate,
+              ip_address: reg['IP Address'] || null,
+              first_name: reg['First Name'],
+              last_name: reg['Last Name'],
+              phone_number: cleanPhone,
+              work_email: reg['Work Email'],
+              gender: reg.Gender || null,
+              is_employee: reg['Dubai Holding Employee'] === 'Yes',
+              employee_vertical: reg['Dubai Holding Employee - Vertical'] || null,
+              employee_join_date: reg['Dubai Holding Employee - Date of Joining'] || null,
+              employee_number: reg['Dubai Holding Employee - Number']?.toString() || null,
+              external_company: reg['Not Employee - Company'] || null,
+              has_medical_condition: reg['Medical Condition'] === 'Yes',
+              medical_condition_details: reg['Medical Condition Details'] || null,
+              emergency_contact_name: reg['Emergency Contact Name'] || null,
+              emergency_contact_relationship: reg['Emergency Contact Relationship'] || null,
+              emergency_contact_number: reg['Emergency Contact Number']?.toString() || null,
+              is_fasting: reg['Fasting during event'] === 'Yes',
+              events_list: reg.eventslist || null,
+              ga_source: reg['ga-source'] || null,
+              ga_campaign: reg['ga-campaign'] || null,
+              ga_medium: reg['ga-medium'] || null,
+              terms_accepted: reg['Checkbox - Terms'] === true,
+              webhook_event_id: eventData?.id || null
+            })
+            .select()
+            .single();
+
+          if (regError) {
+            console.error('Failed to insert registration:', regError);
+            results.failed++;
+            results.details.push({
+              email: reg['Work Email'],
+              status: 'failed',
+              error: regError.message
+            });
+            continue;
+          }
+
+          // Insert event registrations
+          if (reg.eventsjson && Array.isArray(reg.eventsjson)) {
+            for (const eventReg of reg.eventsjson) {
+              const { data: eventRegData, error: eventError } = await supabase
+                .from('registration_events')
+                .insert({
+                  registration_id: regData.id,
+                  event_slug: eventReg.event,
+                  event_date: eventReg.eventDate || null,
+                  family_members_joining: eventReg['family-members-joining'] === 'Yes',
+                  number_of_children: parseInt(eventReg['number-of-children']) || 0,
+                  number_of_adults: parseInt(eventReg['number-of-adults']) || 0,
+                  fnb_required: eventReg['fnb-required'] === 'Yes'
+                })
+                .select()
+                .single();
+
+              if (eventError) {
+                console.warn('Failed to insert event registration:', eventError);
+                continue;
+              }
+
+              // Insert dependents
+              if (eventReg.dependents && Array.isArray(eventReg.dependents)) {
+                for (const dep of eventReg.dependents) {
+                  const { error: depError } = await supabase
+                    .from('event_dependents')
+                    .insert({
+                      registration_event_id: eventRegData.id,
+                      dependent_type: dep.type,
+                      dependent_index: parseInt(dep.index) || null,
+                      name: dep.name,
+                      gender: dep.gender || null
+                    });
+
+                  if (depError) {
+                    console.warn('Failed to insert dependent:', depError);
+                  }
+                }
+              }
+            }
+          }
+
+          results.processed++;
+          results.details.push({
+            email: reg['Work Email'],
+            status: 'processed',
+            registration_id: regData.id
+          });
+
+          console.log(`Successfully processed registration for: ${reg['Work Email']}`);
+
+        } catch (err) {
+          console.error(`Error processing registration for ${reg['Work Email']}:`, err);
+          results.failed++;
+          results.details.push({
+            email: reg['Work Email'],
+            status: 'failed',
+            error: err instanceof Error ? err.message : 'Unknown error'
+          });
+        }
+      }
+
+      // Mark webhook event as processed
+      if (eventData?.id) {
+        await supabase
+          .from('webhook_events')
+          .update({ processed: true })
+          .eq('id', eventData.id);
+      }
+
+      console.log(`Partner registration processed: ${results.processed}/${results.total} successful`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Partner registrations processed',
+          results
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
