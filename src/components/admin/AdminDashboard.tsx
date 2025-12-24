@@ -12,7 +12,8 @@ import {
   Users,
   Store,
   Webhook,
-  ClipboardList
+  ClipboardList,
+  Database
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
@@ -41,11 +42,12 @@ import { MarketplaceManagement } from '@/components/admin/MarketplaceManagement'
 import { InventoryManagement } from '@/components/admin/InventoryManagement';
 import { WebhookEventsViewer } from '@/components/admin/WebhookEventsViewer';
 import { PartnerRegistrations } from '@/components/admin/PartnerRegistrations';
+import { ExternalItemsViewer } from '@/components/admin/ExternalItemsViewer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -126,6 +128,11 @@ export const AdminDashboard = () => {
   // Show Partner Registrations view
   if (currentView === 'partner-registrations') {
     return <PartnerRegistrations onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show External Items view
+  if (currentView === 'external-items') {
+    return <ExternalItemsViewer onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -337,6 +344,29 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Dubai Holdings</h3>
                 <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   View event registrations & dependents
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('external-items')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors shrink-0">
+                <Database className="w-6 h-6 md:w-7 md:h-7 text-teal-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">External Items</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
+                  Partner database items & companies
                 </p>
               </div>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
