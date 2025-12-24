@@ -34,7 +34,8 @@ export const WebhookTestingTool = () => {
   
   const [proxyUrl, setProxyUrl] = useState('');
   const [sourceIdentifier, setSourceIdentifier] = useState('test_source');
-  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status'>('create_volunteer');
+  const [apiKey, setApiKey] = useState('');
+  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status'>('check_status');
   const [customPayload, setCustomPayload] = useState('{\n  "action": "create_volunteer",\n  "volunteers": [\n    {\n      "email": "test@example.com",\n      "name": "Test User"\n    }\n  ]\n}');
   const [isLoading, setIsLoading] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
@@ -86,6 +87,15 @@ export const WebhookTestingTool = () => {
       ? `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}source=${encodeURIComponent(sourceIdentifier)}`
       : targetUrl;
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add API key header if provided (required for create_volunteer action)
+    if (apiKey.trim()) {
+      headers['x-api-key'] = apiKey.trim();
+    }
+
     setIsLoading(true);
     setTestResult(null);
 
@@ -94,9 +104,7 @@ export const WebhookTestingTool = () => {
     try {
       const response = await fetch(urlWithSource, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(payload),
       });
 
@@ -224,6 +232,19 @@ export const WebhookTestingTool = () => {
               />
               <p className="text-xs text-muted-foreground">
                 Added as <code className="bg-muted px-1 rounded">?source=</code> parameter
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>API Key (required for create_volunteer)</Label>
+              <Input
+                type="password"
+                placeholder="Your WEBHOOK_API_KEY"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Sent as <code className="bg-muted px-1 rounded">x-api-key</code> header for protected actions
               </p>
             </div>
           </CardContent>
