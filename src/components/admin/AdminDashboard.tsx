@@ -11,7 +11,8 @@ import {
   Loader2,
   Users,
   Store,
-  Webhook
+  Webhook,
+  ClipboardList
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
@@ -39,11 +40,12 @@ import { UserManagement } from '@/components/admin/UserManagement';
 import { MarketplaceManagement } from '@/components/admin/MarketplaceManagement';
 import { InventoryManagement } from '@/components/admin/InventoryManagement';
 import { WebhookEventsViewer } from '@/components/admin/WebhookEventsViewer';
+import { PartnerRegistrations } from '@/components/admin/PartnerRegistrations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -119,6 +121,11 @@ export const AdminDashboard = () => {
   // Show Webhook Events view
   if (currentView === 'webhooks') {
     return <WebhookEventsViewer onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Partner Registrations view
+  if (currentView === 'partner-registrations') {
+    return <PartnerRegistrations onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -307,6 +314,29 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Webhook Events</h3>
                 <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
                   View incoming webhook logs
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('partner-registrations')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-pink-500/10 flex items-center justify-center group-hover:bg-pink-500/20 transition-colors shrink-0">
+                <ClipboardList className="w-6 h-6 md:w-7 md:h-7 text-pink-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-base md:text-lg mb-0.5 md:mb-1">Partner Registrations</h3>
+                <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
+                  View event registrations & dependents
                 </p>
               </div>
               <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground group-hover:text-primary transition-colors mt-1 md:mt-2 shrink-0" />
