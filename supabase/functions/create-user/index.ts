@@ -1,36 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Get allowed origins from environment or use defaults
-const getAllowedOrigins = () => {
-  const envOrigins = Deno.env.get('ALLOWED_ORIGINS');
-  if (envOrigins) {
-    return envOrigins.split(',').map(o => o.trim());
-  }
-  return [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://*.lovable.app',
-    'https://*.lovable.dev'
-  ];
-};
-
-const getCorsHeaders = (origin: string | null) => {
-  const allowedOrigins = getAllowedOrigins();
-  const isAllowed = origin && (
-    allowedOrigins.includes(origin) ||
-    allowedOrigins.some(allowed => {
-      if (allowed.includes('*')) {
-        const pattern = allowed.replace('*', '.*');
-        return new RegExp(`^${pattern}$`).test(origin);
-      }
-      return false;
-    })
-  );
-  
-  return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 // Input validation helpers
@@ -48,8 +20,6 @@ const isValidRole = (role: string): role is 'admin' | 'volunteer' => {
 };
 
 Deno.serve(async (req) => {
-  const origin = req.headers.get('Origin');
-  const corsHeaders = getCorsHeaders(origin);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
