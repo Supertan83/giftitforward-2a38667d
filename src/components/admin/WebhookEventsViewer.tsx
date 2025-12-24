@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { WebhookActionsPanel } from './WebhookActionsPanel';
 import { WebhookDataMapper } from './WebhookDataMapper';
+import { WebhookTestingTool } from './WebhookTestingTool';
 
 interface WebhookEvent {
   id: string;
@@ -132,12 +133,17 @@ export const WebhookEventsViewer = ({ onBack }: WebhookEventsViewerProps) => {
         </motion.div>
 
         {/* Tabs for different sections */}
-        <Tabs defaultValue="actions" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="testing" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="testing">Testing</TabsTrigger>
             <TabsTrigger value="actions">Actions</TabsTrigger>
             <TabsTrigger value="mapper">Data Mapper</TabsTrigger>
             <TabsTrigger value="events">Events Log</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="testing">
+            <WebhookTestingTool />
+          </TabsContent>
 
           <TabsContent value="actions">
             <WebhookActionsPanel />
