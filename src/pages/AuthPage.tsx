@@ -150,11 +150,12 @@ const AuthPage = () => {
               </Button>
             </form>
 
-            <div className="mt-4 pt-4 border-t border-border text-center">
+            {/* Signup toggle hidden - uncomment to re-enable */}
+            {/* <div className="mt-4 pt-4 border-t border-border text-center">
               <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-sm text-primary hover:underline" disabled={isSubmitting}>
                 {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
               </button>
-            </div>
+            </div> */}
           </motion.div>
 
           <p className="text-center text-xs text-muted-foreground mt-4">
