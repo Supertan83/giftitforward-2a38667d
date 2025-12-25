@@ -78,8 +78,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Delete user role first
-    const { error: roleDeleteError } = await supabaseAdmin
+    // Delete ALL user roles first (user may have multiple roles)
+    const { error: roleDeleteError, count: deletedRolesCount } = await supabaseAdmin
       .from('user_roles')
       .delete()
       .eq('user_id', userId)
@@ -91,6 +91,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+    
+    console.log(`Deleted ${deletedRolesCount ?? 'unknown'} role(s) for user ${userId}`);
 
     // Delete user from auth
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
