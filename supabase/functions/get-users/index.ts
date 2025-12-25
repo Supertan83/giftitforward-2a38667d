@@ -78,17 +78,25 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Map roles to users with emails
-    const usersWithRoles = roles?.map(role => {
-      const authUser = authUsers.find(u => u.id === role.user_id)
-      return {
-        id: role.id,
-        user_id: role.user_id,
-        email: authUser?.email || 'Unknown',
-        role: role.role,
-        created_at: role.created_at
+    // Map roles to users with emails - deduplicate by user_id, prioritize admin role
+    const userMap = new Map<string, { id: string; email: string; role: string; created_at: string }>();
+    
+    roles?.forEach(role => {
+      const authUser = authUsers.find(u => u.id === role.user_id);
+      const existing = userMap.get(role.user_id);
+      
+      // If user not in map, or if this role is 'admin' (higher priority), add/update
+      if (!existing || role.role === 'admin') {
+        userMap.set(role.user_id, {
+          id: role.user_id, // Use user_id as the id, not role.id
+          email: authUser?.email || 'Unknown',
+          role: role.role,
+          created_at: role.created_at
+        });
       }
-    }) || []
+    });
+    
+    const usersWithRoles = Array.from(userMap.values());
 
     return new Response(JSON.stringify({ users: usersWithRoles }), {
       status: 200,
