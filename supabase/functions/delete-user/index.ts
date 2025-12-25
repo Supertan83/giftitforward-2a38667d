@@ -97,10 +97,16 @@ Deno.serve(async (req) => {
 
     if (deleteError) {
       console.error('User deletion error:', deleteError);
-      return new Response(JSON.stringify({ error: 'Unable to delete user' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      // Handle "user not found" gracefully - user may have been already deleted
+      if (deleteError.message?.includes('not found') || (deleteError as any).code === 'user_not_found') {
+        console.log(`User ${userId} not found in auth, may have been already deleted`);
+        // Still return success since the goal (user removed) is achieved
+      } else {
+        return new Response(JSON.stringify({ error: 'Unable to delete user' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     console.log(`User ${userId} deleted successfully by admin ${requestingUser.id}`);
