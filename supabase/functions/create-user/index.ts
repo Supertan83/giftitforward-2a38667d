@@ -143,13 +143,16 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Assign role - use upsert to handle trigger conflict (trigger assigns 'volunteer' by default)
+    // Assign role - delete any existing roles first (trigger may have assigned 'volunteer')
+    // then insert the desired role
+    await supabaseAdmin
+      .from('user_roles')
+      .delete()
+      .eq('user_id', newUser.user.id)
+    
     const { error: roleError } = await supabaseAdmin
       .from('user_roles')
-      .upsert(
-        { user_id: newUser.user.id, role },
-        { onConflict: 'user_id' }
-      )
+      .insert({ user_id: newUser.user.id, role })
 
     if (roleError) {
       console.error('Role assignment error:', roleError);
