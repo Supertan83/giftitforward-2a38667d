@@ -1458,6 +1458,16 @@ serve(async (req) => {
         loginUrl
       );
 
+      // Update email tracking fields
+      await supabase
+        .from('pending_volunteers')
+        .update({
+          email_sent: emailResult.success,
+          email_sent_at: emailResult.success ? new Date().toISOString() : null,
+          email_send_count: 1
+        })
+        .eq('id', pending_id);
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -1466,6 +1476,7 @@ serve(async (req) => {
           temp_password: tempPassword,
           user_id: userData.user.id,
           email_sent: emailResult.success,
+          email_send_count: 1,
           email_error: emailResult.error || null
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1549,6 +1560,109 @@ serve(async (req) => {
           email: updatedData.email
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check for resend_email action
+    if (payload.action === 'resend_email') {
+      // Verify authentication
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { pending_id } = payload;
+      if (!pending_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'pending_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fetch approved volunteer with temp password
+      const { data: volunteer, error: fetchError } = await supabase
+        .from('pending_volunteers')
+        .select('*')
+        .eq('id', pending_id)
+        .eq('status', 'approved')
+        .single();
+
+      if (fetchError || !volunteer) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Approved volunteer not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!volunteer.temp_password) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'No temporary password found for this volunteer' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Send welcome email
+      const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
+      const emailResult = await sendWelcomeEmail(
+        volunteer.email,
+        volunteer.first_name,
+        volunteer.temp_password,
+        loginUrl
+      );
+
+      // Update email tracking fields
+      const newSendCount = (volunteer.email_send_count || 0) + 1;
+      await supabase
+        .from('pending_volunteers')
+        .update({
+          email_sent: emailResult.success,
+          email_sent_at: emailResult.success ? new Date().toISOString() : volunteer.email_sent_at,
+          email_send_count: newSendCount
+        })
+        .eq('id', pending_id);
+
+      console.log(`Resent welcome email to ${volunteer.email} (attempt ${newSendCount})`);
+
+      return new Response(
+        JSON.stringify({
+          success: emailResult.success,
+          message: emailResult.success ? 'Welcome email resent successfully' : 'Failed to resend email',
+          email: volunteer.email,
+          email_send_count: newSendCount,
+          error: emailResult.error || null
+        }),
+        { status: emailResult.success ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
