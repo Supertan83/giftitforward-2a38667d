@@ -63,6 +63,18 @@ interface PendingVolunteersProps {
   onBack: () => void;
 }
 
+// Convert event slug to readable name: "event-13---ejadah-camp" -> "Ejadah Camp"
+const formatEventName = (slug: string): string => {
+  // Remove "event-X---" prefix pattern
+  let name = slug.replace(/^event-\d+---/, '');
+  // Replace remaining dashes with spaces
+  name = name.replace(/-/g, ' ');
+  // Capitalize each word
+  return name.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+};
+
 export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [selectedVolunteer, setSelectedVolunteer] = useState<PendingVolunteer | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -289,7 +301,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Employee</TableHead>
+                        <TableHead>Company</TableHead>
                         <TableHead>Events</TableHead>
                         <TableHead>Submitted</TableHead>
                         <TableHead>Status</TableHead>
@@ -313,15 +325,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               {volunteer.email}
                             </TableCell>
                             <TableCell>
-                              {volunteer.is_employee ? (
-                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                                  DH Employee
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">
-                                  {volunteer.external_company || 'External'}
-                                </span>
-                              )}
+                              <span className="text-sm text-muted-foreground">
+                                {volunteer.is_employee ? 'Dubai Holding' : (volunteer.external_company || 'Not specified')}
+                              </span>
                             </TableCell>
                             <TableCell>
                               <span className="text-sm text-muted-foreground">
@@ -436,28 +442,22 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </div>
               </div>
 
-              {/* Employment Info */}
+              {/* Company Info */}
               <div>
-                <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">Employment</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">Company</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
                     <Building className="w-4 h-4 text-muted-foreground" />
-                    <span>{selectedVolunteer.is_employee ? 'Dubai Holding Employee' : selectedVolunteer.external_company || 'External'}</span>
+                    <span>{selectedVolunteer.is_employee ? 'Dubai Holding' : (selectedVolunteer.external_company || 'Not specified')}</span>
                   </div>
-                  {selectedVolunteer.employee_vertical && (
+                  {selectedVolunteer.is_employee && selectedVolunteer.employee_vertical && (
                     <div className="text-sm">
-                      <span className="text-muted-foreground">Vertical:</span> {selectedVolunteer.employee_vertical}
+                      <span className="text-muted-foreground">Department:</span> {selectedVolunteer.employee_vertical}
                     </div>
                   )}
-                  {selectedVolunteer.employee_number && (
+                  {selectedVolunteer.is_employee && selectedVolunteer.employee_number && (
                     <div className="text-sm">
                       <span className="text-muted-foreground">Employee #:</span> {selectedVolunteer.employee_number}
-                    </div>
-                  )}
-                  {selectedVolunteer.employee_join_date && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span>Joined: {selectedVolunteer.employee_join_date}</span>
                     </div>
                   )}
                 </div>
@@ -509,7 +509,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">Registered Events</h3>
                   <div className="flex flex-wrap gap-2">
                     {selectedVolunteer.events_list.split(',').map((event, idx) => (
-                      <Badge key={idx} variant="secondary">{event.trim()}</Badge>
+                      <Badge key={idx} variant="secondary">{formatEventName(event.trim())}</Badge>
                     ))}
                   </div>
                 </div>
