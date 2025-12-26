@@ -56,6 +56,9 @@ interface PendingVolunteer {
   approved_at: string | null;
   rejection_reason: string | null;
   temp_password: string | null;
+  email_sent: boolean | null;
+  email_sent_at: string | null;
+  email_send_count: number | null;
   created_at: string;
 }
 
@@ -174,6 +177,39 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     onError: (error: Error) => {
       toast({
         title: 'Rejection Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
+  const resendEmailMutation = useMutation({
+    mutationFn: async (pendingId: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'resend_email',
+          pending_id: pendingId
+        }
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      if (!response.data.success) throw new Error(response.data.error || 'Failed to resend email');
+      
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      toast({
+        title: 'Email Sent',
+        description: `Welcome email resent to ${data.email} (${data.email_send_count} total)`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to Send Email',
         description: error.message,
         variant: 'destructive',
       });
@@ -378,21 +414,44 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     </Button>
                                   </>
                                 )}
-                                {activeTab === 'approved' && volunteer.temp_password && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setApprovedCredentials({
-                                        email: volunteer.email,
-                                        password: volunteer.temp_password!,
-                                        emailSent: true // Already approved, assume email was sent
-                                      });
-                                      setShowCredentialsDialog(true);
-                                    }}
-                                  >
-                                    View Credentials
-                                  </Button>
+                                {activeTab === 'approved' && (
+                                  <div className="flex items-center gap-2">
+                                    {volunteer.temp_password && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setApprovedCredentials({
+                                            email: volunteer.email,
+                                            password: volunteer.temp_password!,
+                                            emailSent: volunteer.email_sent ?? false
+                                          });
+                                          setShowCredentialsDialog(true);
+                                        }}
+                                      >
+                                        View Credentials
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => resendEmailMutation.mutate(volunteer.id)}
+                                      disabled={resendEmailMutation.isPending}
+                                      className="gap-1"
+                                    >
+                                      {resendEmailMutation.isPending ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Mail className="w-3 h-3" />
+                                      )}
+                                      Resend
+                                      {(volunteer.email_send_count ?? 0) > 0 && (
+                                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                                          {volunteer.email_send_count}
+                                        </Badge>
+                                      )}
+                                    </Button>
+                                  </div>
                                 )}
                               </div>
                             </TableCell>

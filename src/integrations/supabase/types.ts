@@ -529,6 +529,9 @@ export type Database = {
           created_at: string
           created_user_id: string | null
           email: string
+          email_send_count: number | null
+          email_sent: boolean | null
+          email_sent_at: string | null
           emergency_contact_name: string | null
           emergency_contact_number: string | null
           emergency_contact_relationship: string | null
@@ -560,6 +563,9 @@ export type Database = {
           created_at?: string
           created_user_id?: string | null
           email: string
+          email_send_count?: number | null
+          email_sent?: boolean | null
+          email_sent_at?: string | null
           emergency_contact_name?: string | null
           emergency_contact_number?: string | null
           emergency_contact_relationship?: string | null
@@ -591,6 +597,9 @@ export type Database = {
           created_at?: string
           created_user_id?: string | null
           email?: string
+          email_send_count?: number | null
+          email_sent?: boolean | null
+          email_sent_at?: string | null
           emergency_contact_name?: string | null
           emergency_contact_number?: string | null
           emergency_contact_relationship?: string | null
