@@ -344,6 +344,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                         <TableHead>Events</TableHead>
                         <TableHead>Submitted</TableHead>
                         <TableHead>Status</TableHead>
+                        {activeTab === 'approved' && <TableHead>Email Status</TableHead>}
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -379,6 +380,33 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             <TableCell>
                               {getStatusBadge(volunteer.status)}
                             </TableCell>
+                            {activeTab === 'approved' && (
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  {volunteer.email_sent ? (
+                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit">
+                                      <Check className="w-3 h-3 mr-1" />
+                                      Sent
+                                    </Badge>
+                                  ) : volunteer.email_send_count && volunteer.email_send_count > 0 ? (
+                                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit">
+                                      <X className="w-3 h-3 mr-1" />
+                                      Failed
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-muted text-muted-foreground w-fit">
+                                      <Clock className="w-3 h-3 mr-1" />
+                                      Not sent
+                                    </Badge>
+                                  )}
+                                  {volunteer.email_sent_at && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {new Date(volunteer.email_sent_at).toLocaleDateString()} {new Date(volunteer.email_sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                            )}
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <Button
