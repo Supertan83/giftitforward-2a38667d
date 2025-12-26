@@ -1670,7 +1670,8 @@ serve(async (req) => {
           email_send_count: newSendCount,
           error: emailResult.error || null
         }),
-        { status: emailResult.success ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        // Always return 200 so the frontend can show the provider error message instead of treating it as a transport failure.
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
