@@ -23,7 +23,7 @@ async function sendWelcomeEmail(
     const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pendingId}`;
     
     const { error } = await resend.emails.send({
-      from: "Surpluss Volunteers <onboarding@resend.dev>",
+      from: "Surpluss Volunteers <noreply@thesurpluss.com>",
       to: [email],
       subject: "Welcome to Surpluss - Your Volunteer Account is Ready!",
       html: `
