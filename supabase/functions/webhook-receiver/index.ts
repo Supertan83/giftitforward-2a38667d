@@ -1170,6 +1170,307 @@ serve(async (req) => {
       );
     }
 
+    // Check if this is a DH Webflow volunteer form submission
+    // Format: { triggerType: 'form_submission', payload: { data: { ... } } }
+    if (payload.triggerType === 'form_submission' && payload.payload?.data) {
+      const formData = payload.payload.data;
+      
+      // Check if it has volunteer form fields
+      if (formData['Work Email'] && formData['First Name']) {
+        console.log('Detected DH Webflow volunteer form submission');
+        
+        try {
+          // Parse eventsjson if it's a string
+          let eventsJson = null;
+          if (formData.eventsjson) {
+            try {
+              eventsJson = typeof formData.eventsjson === 'string' 
+                ? JSON.parse(formData.eventsjson) 
+                : formData.eventsjson;
+            } catch (e) {
+              console.warn('Failed to parse eventsjson:', e);
+              eventsJson = formData.eventsjson;
+            }
+          }
+
+          // Create pending volunteer record
+          const { data: pendingData, error: pendingError } = await supabase
+            .from('pending_volunteers')
+            .insert({
+              webhook_event_id: eventData?.id || null,
+              email: formData['Work Email'],
+              first_name: formData['First Name'],
+              last_name: formData['Last Name'] || '',
+              phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
+              gender: formData.Gender || null,
+              is_employee: formData['Dubai Holding Employee'] === 'Yes',
+              employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
+              employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
+              employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
+              external_company: formData['Not Employee - Company'] || null,
+              has_medical_condition: formData['Medical Condition'] === 'Yes',
+              medical_condition_details: formData['Medical Condition Details'] || null,
+              emergency_contact_name: formData['Emergency Contact Name'] || null,
+              emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
+              emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
+              is_fasting: formData['Fasting during event'] === 'Yes',
+              events_list: formData.eventslist || null,
+              events_json: eventsJson,
+              source_data: formData,
+              status: 'pending'
+            })
+            .select()
+            .single();
+
+          if (pendingError) {
+            console.error('Failed to create pending volunteer:', pendingError);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Failed to store volunteer application',
+                details: pendingError.message
+              }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          console.log(`Created pending volunteer record: ${pendingData.id} for ${formData['Work Email']}`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Volunteer application received and pending approval',
+              pending_id: pendingData.id,
+              email: formData['Work Email']
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+
+        } catch (err) {
+          console.error('Error processing volunteer form:', err);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: err instanceof Error ? err.message : 'Unknown error'
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+
+    // Check for approve_volunteer action (admin action)
+    if (payload.action === 'approve_volunteer') {
+      // Verify authentication
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { pending_id } = payload;
+      if (!pending_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'pending_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fetch pending volunteer
+      const { data: pendingVolunteer, error: fetchError } = await supabase
+        .from('pending_volunteers')
+        .select('*')
+        .eq('id', pending_id)
+        .eq('status', 'pending')
+        .single();
+
+      if (fetchError || !pendingVolunteer) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Pending volunteer not found or already processed' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Generate temp password and create user
+      const tempPassword = generateTempPassword();
+      
+      const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+        email: pendingVolunteer.email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: `${pendingVolunteer.first_name} ${pendingVolunteer.last_name}`.trim(),
+          phone: pendingVolunteer.phone_number || '',
+          onboarded_via: 'dh_webhook_approved'
+        }
+      });
+
+      if (createError) {
+        console.error(`Failed to create user ${pendingVolunteer.email}:`, createError);
+        return new Response(
+          JSON.stringify({ success: false, error: createError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!userData.user) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'User creation returned no user data' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Delete any existing roles first (trigger may have added one)
+      await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userData.user.id);
+
+      // Assign volunteer role
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userData.user.id, role: 'volunteer' });
+
+      if (roleError) {
+        console.error(`Failed to assign role to ${pendingVolunteer.email}:`, roleError);
+      }
+
+      // Update pending volunteer record
+      await supabase
+        .from('pending_volunteers')
+        .update({
+          status: 'approved',
+          approved_by: authUser.id,
+          approved_at: new Date().toISOString(),
+          created_user_id: userData.user.id,
+          temp_password: tempPassword
+        })
+        .eq('id', pending_id);
+
+      console.log(`Approved volunteer: ${pendingVolunteer.email}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Volunteer approved and account created',
+          email: pendingVolunteer.email,
+          temp_password: tempPassword,
+          user_id: userData.user.id
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check for reject_volunteer action
+    if (payload.action === 'reject_volunteer') {
+      // Verify authentication
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { pending_id, reason } = payload;
+      if (!pending_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'pending_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Update pending volunteer record
+      const { data: updatedData, error: updateError } = await supabase
+        .from('pending_volunteers')
+        .update({
+          status: 'rejected',
+          approved_by: authUser.id,
+          approved_at: new Date().toISOString(),
+          rejection_reason: reason || null
+        })
+        .eq('id', pending_id)
+        .eq('status', 'pending')
+        .select()
+        .single();
+
+      if (updateError || !updatedData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Pending volunteer not found or already processed' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Rejected volunteer: ${updatedData.email}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Volunteer application rejected',
+          email: updatedData.email
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Default response for other webhook types
     return new Response(
       JSON.stringify({ 

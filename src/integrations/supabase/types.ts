@@ -522,6 +522,110 @@ export type Database = {
           },
         ]
       }
+      pending_volunteers: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_user_id: string | null
+          email: string
+          emergency_contact_name: string | null
+          emergency_contact_number: string | null
+          emergency_contact_relationship: string | null
+          employee_join_date: string | null
+          employee_number: string | null
+          employee_vertical: string | null
+          events_json: Json | null
+          events_list: string | null
+          external_company: string | null
+          first_name: string
+          gender: string | null
+          has_medical_condition: boolean | null
+          id: string
+          is_employee: boolean | null
+          is_fasting: boolean | null
+          last_name: string
+          medical_condition_details: string | null
+          phone_number: string | null
+          rejection_reason: string | null
+          source_data: Json | null
+          status: string
+          temp_password: string | null
+          updated_at: string
+          webhook_event_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_user_id?: string | null
+          email: string
+          emergency_contact_name?: string | null
+          emergency_contact_number?: string | null
+          emergency_contact_relationship?: string | null
+          employee_join_date?: string | null
+          employee_number?: string | null
+          employee_vertical?: string | null
+          events_json?: Json | null
+          events_list?: string | null
+          external_company?: string | null
+          first_name: string
+          gender?: string | null
+          has_medical_condition?: boolean | null
+          id?: string
+          is_employee?: boolean | null
+          is_fasting?: boolean | null
+          last_name: string
+          medical_condition_details?: string | null
+          phone_number?: string | null
+          rejection_reason?: string | null
+          source_data?: Json | null
+          status?: string
+          temp_password?: string | null
+          updated_at?: string
+          webhook_event_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_user_id?: string | null
+          email?: string
+          emergency_contact_name?: string | null
+          emergency_contact_number?: string | null
+          emergency_contact_relationship?: string | null
+          employee_join_date?: string | null
+          employee_number?: string | null
+          employee_vertical?: string | null
+          events_json?: Json | null
+          events_list?: string | null
+          external_company?: string | null
+          first_name?: string
+          gender?: string | null
+          has_medical_condition?: boolean | null
+          id?: string
+          is_employee?: boolean | null
+          is_fasting?: boolean | null
+          last_name?: string
+          medical_condition_details?: string | null
+          phone_number?: string | null
+          rejection_reason?: string | null
+          source_data?: Json | null
+          status?: string
+          temp_password?: string | null
+          updated_at?: string
+          webhook_event_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_volunteers_webhook_event_id_fkey"
+            columns: ["webhook_event_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       qr_cards: {
         Row: {
           children_count: number | null
