@@ -1,10 +1,80 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
+
+// Initialize Resend for sending welcome emails
+const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+
+// Helper function to send welcome email to approved volunteer
+async function sendWelcomeEmail(
+  email: string,
+  firstName: string,
+  tempPassword: string,
+  loginUrl: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await resend.emails.send({
+      from: "Surpluss Volunteers <onboarding@resend.dev>",
+      to: [email],
+      subject: "Welcome to Surpluss - Your Volunteer Account is Ready!",
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Surpluss!</h1>
+          </div>
+          
+          <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
+            <p style="font-size: 18px; margin-top: 0;">Hi ${firstName},</p>
+            
+            <p>Great news! Your volunteer application has been approved. You can now log in to the Surpluss Volunteer Portal.</p>
+            
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 25px 0;">
+              <h3 style="margin-top: 0; color: #059669;">Your Login Credentials</h3>
+              <p style="margin: 8px 0;"><strong>Email:</strong> ${email}</p>
+              <p style="margin: 8px 0;"><strong>Temporary Password:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${tempPassword}</code></p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" style="display: inline-block; background: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Log In Now</a>
+            </div>
+            
+            <p style="color: #6b7280; font-size: 14px;">For security, please change your password after your first login.</p>
+            
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 25px 0;">
+            
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 0;">
+              Thank you for joining our volunteer community!<br>
+              <strong>The Surpluss Team</strong>
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error("Failed to send welcome email:", error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`Welcome email sent successfully to ${email}`);
+    return { success: true };
+  } catch (err) {
+    console.error("Error sending welcome email:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
 
 interface VolunteerData {
   email: string;
@@ -1379,13 +1449,24 @@ serve(async (req) => {
 
       console.log(`Approved volunteer: ${pendingVolunteer.email}`);
 
+      // Send welcome email with login credentials
+      const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
+      const emailResult = await sendWelcomeEmail(
+        pendingVolunteer.email,
+        pendingVolunteer.first_name,
+        tempPassword,
+        loginUrl
+      );
+
       return new Response(
         JSON.stringify({
           success: true,
           message: 'Volunteer approved and account created',
           email: pendingVolunteer.email,
           temp_password: tempPassword,
-          user_id: userData.user.id
+          user_id: userData.user.id,
+          email_sent: emailResult.success,
+          email_error: emailResult.error || null
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

@@ -81,7 +81,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
-  const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   
   const { toast } = useToast();
@@ -122,13 +122,16 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
       setApprovedCredentials({
         email: data.email,
-        password: data.temp_password
+        password: data.temp_password,
+        emailSent: data.email_sent ?? false
       });
       setShowCredentialsDialog(true);
       setShowDetailsDialog(false);
       toast({
         title: 'Volunteer Approved',
-        description: `Account created for ${data.email}`,
+        description: data.email_sent 
+          ? `Account created and welcome email sent to ${data.email}`
+          : `Account created for ${data.email}`,
       });
     },
     onError: (error: Error) => {
@@ -382,7 +385,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     onClick={() => {
                                       setApprovedCredentials({
                                         email: volunteer.email,
-                                        password: volunteer.temp_password!
+                                        password: volunteer.temp_password!,
+                                        emailSent: true // Already approved, assume email was sent
                                       });
                                       setShowCredentialsDialog(true);
                                     }}
@@ -598,11 +602,25 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           <DialogHeader>
             <DialogTitle>Account Credentials</DialogTitle>
             <DialogDescription>
-              Share these credentials with the volunteer so they can log in
+              {approvedCredentials?.emailSent 
+                ? 'A welcome email with these credentials has been sent to the volunteer.'
+                : 'Share these credentials with the volunteer so they can log in.'}
             </DialogDescription>
           </DialogHeader>
           {approvedCredentials && (
             <div className="space-y-4">
+              {approvedCredentials.emailSent && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                  <Mail className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm text-emerald-600 font-medium">Welcome email sent successfully</span>
+                </div>
+              )}
+              {!approvedCredentials.emailSent && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm text-amber-600">Email could not be sent - please share credentials manually</span>
+                </div>
+              )}
               <div className="bg-muted rounded-lg p-4 space-y-3">
                 <div>
                   <label className="text-xs text-muted-foreground uppercase tracking-wide">Email</label>
