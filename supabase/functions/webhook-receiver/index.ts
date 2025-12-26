@@ -10,14 +10,18 @@ const corsHeaders = {
 // Initialize Resend for sending welcome emails
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
-// Helper function to send welcome email to approved volunteer
+// Helper function to send welcome email to approved volunteer with tracking pixel
 async function sendWelcomeEmail(
   email: string,
   firstName: string,
   tempPassword: string,
-  loginUrl: string
+  loginUrl: string,
+  pendingId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pendingId}`;
+    
     const { error } = await resend.emails.send({
       from: "Surpluss Volunteers <onboarding@resend.dev>",
       to: [email],
@@ -58,6 +62,8 @@ async function sendWelcomeEmail(
               <strong>The Surpluss Team</strong>
             </p>
           </div>
+          <!-- Email open tracking pixel -->
+          <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;width:1px;height:1px;border:0;" />
         </body>
         </html>
       `,
@@ -1455,7 +1461,8 @@ serve(async (req) => {
         pendingVolunteer.email,
         pendingVolunteer.first_name,
         tempPassword,
-        loginUrl
+        loginUrl,
+        pending_id
       );
 
       // Update email tracking fields
@@ -1638,7 +1645,8 @@ serve(async (req) => {
         volunteer.email,
         volunteer.first_name,
         volunteer.temp_password,
-        loginUrl
+        loginUrl,
+        pending_id
       );
 
       // Update email tracking fields
@@ -1663,6 +1671,127 @@ serve(async (req) => {
           error: emailResult.error || null
         }),
         { status: emailResult.success ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check for bulk_resend_emails action
+    if (payload.action === 'bulk_resend_emails') {
+      // Verify authentication
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { pending_ids } = payload;
+      if (!pending_ids || !Array.isArray(pending_ids) || pending_ids.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'pending_ids array is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fetch approved volunteers with temp passwords
+      const { data: volunteers, error: fetchError } = await supabase
+        .from('pending_volunteers')
+        .select('*')
+        .in('id', pending_ids)
+        .eq('status', 'approved')
+        .not('temp_password', 'is', null);
+
+      if (fetchError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to fetch volunteers' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!volunteers || volunteers.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'No valid approved volunteers found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
+      
+      const results: { email: string; success: boolean; error?: string }[] = [];
+
+      // Send emails to all selected volunteers
+      for (const volunteer of volunteers) {
+        const emailResult = await sendWelcomeEmail(
+          volunteer.email,
+          volunteer.first_name,
+          volunteer.temp_password!,
+          loginUrl,
+          volunteer.id
+        );
+
+        // Update email tracking fields
+        const newSendCount = (volunteer.email_send_count || 0) + 1;
+        await supabase
+          .from('pending_volunteers')
+          .update({
+            email_sent: emailResult.success,
+            email_sent_at: emailResult.success ? new Date().toISOString() : volunteer.email_sent_at,
+            email_send_count: newSendCount,
+            email_opened: false, // Reset opened status for new email
+            email_opened_at: null
+          })
+          .eq('id', volunteer.id);
+
+        results.push({
+          email: volunteer.email,
+          success: emailResult.success,
+          error: emailResult.error
+        });
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      console.log(`Bulk email sent: ${successCount} success, ${failCount} failed`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Sent ${successCount} emails, ${failCount} failed`,
+          total: results.length,
+          success_count: successCount,
+          fail_count: failCount,
+          results
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

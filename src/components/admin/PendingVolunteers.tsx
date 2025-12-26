@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -32,6 +32,8 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 
+import { Checkbox } from '@/components/ui/checkbox';
+
 interface PendingVolunteer {
   id: string;
   email: string;
@@ -59,6 +61,8 @@ interface PendingVolunteer {
   email_sent: boolean | null;
   email_sent_at: string | null;
   email_send_count: number | null;
+  email_opened: boolean | null;
+  email_opened_at: string | null;
   created_at: string;
 }
 
@@ -86,6 +90,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -216,8 +221,65 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  const bulkResendMutation = useMutation({
+    mutationFn: async (pendingIds: string[]) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'bulk_resend_emails',
+          pending_ids: pendingIds
+        }
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      if (!response.data.success) throw new Error(response.data.error || 'Bulk send failed');
+      
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      setSelectedIds(new Set());
+      toast({
+        title: 'Bulk Email Sent',
+        description: `${data.success_count} emails sent, ${data.fail_count} failed`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Bulk Send Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
   const handleApprove = (volunteer: PendingVolunteer) => {
     approveMutation.mutate(volunteer.id);
+  };
+
+  const handleBulkResend = () => {
+    if (selectedIds.size === 0) return;
+    bulkResendMutation.mutate(Array.from(selectedIds));
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === volunteers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(volunteers.map(v => v.id)));
+    }
   };
 
   const handleReject = () => {
@@ -335,9 +397,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {activeTab === 'approved' && volunteers.length > 0 && (
+                    <div className="flex items-center gap-4 p-4 border-b border-border bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={selectedIds.size === volunteers.length && volunteers.length > 0}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                        </span>
+                      </div>
+                      {selectedIds.size > 0 && (
+                        <Button
+                          size="sm"
+                          onClick={handleBulkResend}
+                          disabled={bulkResendMutation.isPending}
+                          className="gap-2"
+                        >
+                          {bulkResendMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                          Send Emails ({selectedIds.size})
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {activeTab === 'approved' && <TableHead className="w-12"></TableHead>}
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Company</TableHead>
@@ -358,6 +449,14 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             exit={{ opacity: 0 }}
                             className="group"
                           >
+                            {activeTab === 'approved' && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedIds.has(volunteer.id)}
+                                  onCheckedChange={() => toggleSelect(volunteer.id)}
+                                />
+                              </TableCell>
+                            )}
                             <TableCell className="font-medium">
                               {volunteer.first_name} {volunteer.last_name}
                             </TableCell>
@@ -383,7 +482,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             {activeTab === 'approved' && (
                               <TableCell>
                                 <div className="flex flex-col gap-1">
-                                  {volunteer.email_sent ? (
+                                  {volunteer.email_opened ? (
+                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit">
+                                      <MailOpen className="w-3 h-3 mr-1" />
+                                      Opened
+                                    </Badge>
+                                  ) : volunteer.email_sent ? (
                                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit">
                                       <Check className="w-3 h-3 mr-1" />
                                       Sent
@@ -399,11 +503,15 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                       Not sent
                                     </Badge>
                                   )}
-                                  {volunteer.email_sent_at && (
+                                  {volunteer.email_opened_at ? (
                                     <span className="text-xs text-muted-foreground">
-                                      {new Date(volunteer.email_sent_at).toLocaleDateString()} {new Date(volunteer.email_sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      Opened: {new Date(volunteer.email_opened_at).toLocaleDateString()} {new Date(volunteer.email_opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
-                                  )}
+                                  ) : volunteer.email_sent_at ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      Sent: {new Date(volunteer.email_sent_at).toLocaleDateString()} {new Date(volunteer.email_sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </TableCell>
                             )}
