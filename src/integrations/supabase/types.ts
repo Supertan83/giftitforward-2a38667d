@@ -529,6 +529,8 @@ export type Database = {
           created_at: string
           created_user_id: string | null
           email: string
+          email_opened: boolean | null
+          email_opened_at: string | null
           email_send_count: number | null
           email_sent: boolean | null
           email_sent_at: string | null
@@ -563,6 +565,8 @@ export type Database = {
           created_at?: string
           created_user_id?: string | null
           email: string
+          email_opened?: boolean | null
+          email_opened_at?: string | null
           email_send_count?: number | null
           email_sent?: boolean | null
           email_sent_at?: string | null
@@ -597,6 +601,8 @@ export type Database = {
           created_at?: string
           created_user_id?: string | null
           email?: string
+          email_opened?: boolean | null
+          email_opened_at?: string | null
           email_send_count?: number | null
           email_sent?: boolean | null
           email_sent_at?: string | null

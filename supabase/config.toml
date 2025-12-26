@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.webhook-proxy]
 verify_jwt = false
+
+[functions.email-tracker]
+verify_jwt = false
