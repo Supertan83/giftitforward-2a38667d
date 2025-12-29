@@ -1,4 +1,4 @@
-// Slide images - all 20 slides (waiting for final 21-22)
+// Slide images - all 22 slides
 import slide1Hero from '@/assets/training/slide-1-hero.png';
 import slide2Gift from '@/assets/training/slide-2-gift.png';
 import slide3Impact from '@/assets/training/slide-3-impact.png';
@@ -19,6 +19,8 @@ import slide17Workplace from '@/assets/training/slide-17-workplace.png';
 import slide18Secondlife from '@/assets/training/slide-18-secondlife.png';
 import slide19Solutions from '@/assets/training/slide-19-solutions.png';
 import slide20Volunteer from '@/assets/training/slide-20-volunteer.png';
+import slide21Expect from '@/assets/training/slide-21-expect.png';
+import slide22Contact from '@/assets/training/slide-22-contact.png';
 
 export interface Slide {
   id: number;
@@ -129,5 +131,16 @@ export const slides: Slide[] = [
     id: 20,
     title: 'Your Role as a Corporate Volunteer and as a Circular Leader at Work',
     image: slide20Volunteer,
+  },
+  {
+    id: 21,
+    title: 'What To Expect as a Gift It Forward Volunteer',
+    image: slide21Expect,
+  },
+  {
+    id: 22,
+    title: 'Contact Us',
+    image: slide22Contact,
+    isLastSlide: true,
   },
 ];
