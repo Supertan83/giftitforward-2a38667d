@@ -1,13 +1,17 @@
 import { motion, Variants, Easing } from 'framer-motion';
 import { Slide } from './slideData';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface SlideRendererProps {
   slide: Slide;
   onNext: () => void;
+  onPrevious: () => void;
   isLast: boolean;
+  isFirst: boolean;
 }
 
-const SlideRenderer = ({ slide, onNext, isLast }: SlideRendererProps) => {
+const SlideRenderer = ({ slide, onNext, onPrevious, isLast, isFirst }: SlideRendererProps) => {
   const easeOut: Easing = [0.4, 0, 0.2, 1];
   
   const containerVariants: Variants = {
@@ -30,8 +34,7 @@ const SlideRenderer = ({ slide, onNext, isLast }: SlideRendererProps) => {
       initial="hidden"
       animate="visible"
       exit="exit"
-      className="relative w-full h-full flex items-center justify-center cursor-pointer"
-      onClick={onNext}
+      className="relative w-full h-full flex items-center justify-center"
     >
       {/* Slide Image */}
       <img
@@ -41,15 +44,45 @@ const SlideRenderer = ({ slide, onNext, isLast }: SlideRendererProps) => {
         draggable={false}
       />
       
-      {/* Click hint overlay - subtle */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 2, duration: 0.5 }}
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/60 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm"
-      >
-        {isLast ? 'Click to complete' : 'Click anywhere to continue →'}
-      </motion.div>
+      {/* Navigation Buttons Overlay */}
+      <div className="absolute bottom-8 left-0 right-0 flex justify-between items-center px-8 md:px-16">
+        {/* Previous Button - hidden on first slide */}
+        {!isFirst ? (
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrevious();
+            }}
+            variant="outline"
+            className="bg-white/90 hover:bg-white text-gray-800 border-gray-300 shadow-lg backdrop-blur-sm"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
+          </Button>
+        ) : (
+          <div /> // Spacer for layout
+        )}
+
+        {/* Next / Get Started / Complete Button */}
+        <Button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className="bg-[#DA291C] hover:bg-[#b8221a] text-white shadow-lg"
+        >
+          {isFirst ? (
+            'Get Started'
+          ) : isLast ? (
+            'Complete Training'
+          ) : (
+            <>
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </>
+          )}
+        </Button>
+      </div>
     </motion.div>
   );
 };
