@@ -1,167 +1,73 @@
-export type SlideType = 'hero' | 'content' | 'statistics' | 'final';
-
-export interface StatItem {
-  value: string;
-  label: string;
-  icon?: string;
-}
+// Slide images - first 10 slides
+import slide1Hero from '@/assets/training/slide-1-hero.png';
+import slide2Gift from '@/assets/training/slide-2-gift.png';
+import slide3Impact from '@/assets/training/slide-3-impact.png';
+import slide4Circular from '@/assets/training/slide-4-circular.png';
+import slide5Matters from '@/assets/training/slide-5-matters.png';
+import slide6Principles from '@/assets/training/slide-6-principles.png';
+import slide7Everyday from '@/assets/training/slide-7-everyday.png';
+import slide8Butterfly from '@/assets/training/slide-8-butterfly.png';
+import slide9Engage from '@/assets/training/slide-9-engage.png';
+import slide10Value from '@/assets/training/slide-10-value.png';
 
 export interface Slide {
   id: number;
-  type: SlideType;
   title: string;
-  subtitle?: string;
-  content?: string[];
-  bulletPoints?: string[];
-  stats?: StatItem[];
-  imageUrl?: string;
-  buttonText?: string;
+  image: string;
+  hasGetStartedButton?: boolean;
+  isLastSlide?: boolean;
 }
 
 export const slides: Slide[] = [
   {
     id: 1,
-    type: 'hero',
     title: 'Your Role in the Circular Economy',
-    subtitle: 'CE Module Training',
-    content: ['Learn how you can make a difference through Gift It Forward'],
-    buttonText: 'Get Started',
+    image: slide1Hero,
+    hasGetStartedButton: true,
   },
   {
     id: 2,
-    type: 'content',
     title: 'What is Gift It Forward?',
-    content: [
-      'Gift It Forward (GIF) is a humanitarian aid distribution program that connects surplus goods with communities in need.',
-      'Through our marketplace model, we ensure dignified access to essential items while promoting sustainability.',
-    ],
-    bulletPoints: [
-      'Dignified shopping experience for beneficiaries',
-      'Reduces waste by redistributing surplus goods',
-      'Empowers communities through choice',
-    ],
+    image: slide2Gift,
   },
   {
     id: 3,
-    type: 'statistics',
     title: 'Gift It Forward: Cumulative Impact Over The Years',
-    subtitle: 'Making a difference together',
-    stats: [
-      { value: '50,000+', label: 'Items Distributed', icon: '📦' },
-      { value: '10,000+', label: 'Families Served', icon: '👨‍👩‍👧‍👦' },
-      { value: '500+', label: 'Volunteers', icon: '🤝' },
-      { value: '100+', label: 'Partner Organizations', icon: '🏢' },
-    ],
+    image: slide3Impact,
   },
   {
     id: 4,
-    type: 'content',
-    title: 'History of Donation Culture',
-    content: [
-      'Traditional donation models often lack dignity and choice for recipients.',
-      'Gift It Forward transforms this by creating a marketplace experience.',
-    ],
-    bulletPoints: [
-      'From handouts to empowerment',
-      'Respecting individual preferences',
-      'Building sustainable communities',
-    ],
+    title: 'What is the Circular Economy?',
+    image: slide4Circular,
   },
   {
     id: 5,
-    type: 'content',
-    title: 'Why It Matters',
-    content: [
-      'Every year, millions of usable items end up in landfills while communities struggle to access basic necessities.',
-    ],
-    bulletPoints: [
-      'Environmental sustainability',
-      'Social equity and dignity',
-      'Community empowerment',
-      'Reducing waste and consumption',
-    ],
+    title: 'Why this matters',
+    image: slide5Matters,
   },
   {
     id: 6,
-    type: 'content',
-    title: 'What is The Circular Economy?',
-    content: [
-      'A circular economy is an economic system aimed at eliminating waste and promoting the continual use of resources.',
-    ],
-    bulletPoints: [
-      'Design out waste and pollution',
-      'Keep products and materials in use',
-      'Regenerate natural systems',
-      'Create value through redistribution',
-    ],
+    title: 'The 3 Principles of a Circular Economy',
+    image: slide6Principles,
   },
   {
     id: 7,
-    type: 'content',
-    title: 'Product Categories',
-    content: [
-      'Gift It Forward distributes a wide range of essential items:',
-    ],
-    bulletPoints: [
-      'Clothing and footwear',
-      'Household items and furniture',
-      'Electronics and appliances',
-      'Books and educational materials',
-      'Personal care and hygiene products',
-    ],
+    title: 'What this looks like in everyday life',
+    image: slide7Everyday,
   },
   {
     id: 8,
-    type: 'content',
-    title: 'Your Role as a Volunteer',
-    content: [
-      'As a volunteer, you are the heart of Gift It Forward. Your role is crucial in creating a positive experience for beneficiaries.',
-    ],
-    bulletPoints: [
-      'Welcome and guide beneficiaries',
-      'Manage QR card check-in/check-out',
-      'Assist with item selection',
-      'Maintain a dignified environment',
-    ],
+    title: 'The Circular Economy in One Picture',
+    image: slide8Butterfly,
   },
   {
     id: 9,
-    type: 'content',
-    title: 'Key Responsibilities',
-    content: [
-      'Understanding your responsibilities ensures smooth operations:',
-    ],
-    bulletPoints: [
-      'Entrance Zone: Activate cards, assign credits',
-      'Marketplace Zone: Assist with selections, process returns',
-      'Exit Zone: Complete checkout, reset cards',
-      'Always maintain respect and dignity',
-    ],
+    title: 'Ways to engage in the Circular Economy',
+    image: slide9Engage,
   },
   {
     id: 10,
-    type: 'content',
-    title: 'Best Practices',
-    content: [
-      'Follow these guidelines for the best experience:',
-    ],
-    bulletPoints: [
-      'Greet everyone with a smile',
-      'Be patient and understanding',
-      'Respect cultural differences',
-      'Maintain confidentiality',
-      'Ask for help when needed',
-    ],
-  },
-  {
-    id: 11,
-    type: 'final',
-    title: 'Ready to Make an Impact?',
-    subtitle: 'You are now prepared to start your volunteer journey',
-    content: [
-      'Thank you for completing the CE Module training.',
-      'Your contribution makes a real difference in our community.',
-    ],
-    buttonText: 'Complete Training',
+    title: 'But where do companies lose the most value?',
+    image: slide10Value,
   },
 ];

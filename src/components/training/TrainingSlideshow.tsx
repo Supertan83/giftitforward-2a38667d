@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { slides } from './slideData';
 import SlideRenderer from './SlideRenderer';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,58 +17,85 @@ const TrainingSlideshow = () => {
   const isFirstSlide = currentSlide === 0;
   const isLastSlide = currentSlide === slides.length - 1;
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (isLastSlide) {
-      // Training complete - placeholder for certification
       toast({
         title: "Training Complete!",
-        description: "Congratulations! You've completed the CE Module training. Certification coming soon.",
+        description: "Congratulations! You've completed the CE Module training.",
       });
       navigate('/');
     } else {
       setCurrentSlide((prev) => prev + 1);
     }
-  };
+  }, [isLastSlide, navigate, toast]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (!isFirstSlide) {
       setCurrentSlide((prev) => prev - 1);
     }
-  };
+  }, [isFirstSlide]);
 
   const handleClose = () => {
     navigate('/');
   };
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        handleNext();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrevious();
+      } else if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleNext, handlePrevious]);
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-[#1a1a1a] flex flex-col overflow-hidden">
       {/* Header with progress */}
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between max-w-5xl mx-auto">
-          <div className="flex items-center gap-3">
-            {!isFirstSlide && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handlePrevious}
-                aria-label="Previous slide"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            )}
-            <span className="text-sm font-medium text-muted-foreground">
-              {currentSlide + 1} of {slides.length}
+      <header className="flex-shrink-0 bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-2">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handlePrevious}
+              disabled={isFirstSlide}
+              className="text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30"
+              aria-label="Previous slide"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <span className="text-sm font-medium text-white/70 min-w-[60px] text-center">
+              {currentSlide + 1} / {slides.length}
             </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleNext}
+              className="text-white/70 hover:text-white hover:bg-white/10"
+              aria-label="Next slide"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
           </div>
 
-          <div className="flex-1 max-w-xs mx-4">
-            <Progress value={progress} className="h-2" />
+          <div className="flex-1 max-w-md mx-4">
+            <Progress value={progress} className="h-1.5 bg-white/10" />
           </div>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={handleClose}
+            className="text-white/70 hover:text-white hover:bg-white/10"
             aria-label="Close training"
           >
             <X className="h-5 w-5" />
@@ -77,36 +104,30 @@ const TrainingSlideshow = () => {
       </header>
 
       {/* Slide content */}
-      <main className="flex-1 flex items-center justify-center overflow-hidden">
-        <div className="w-full max-w-5xl mx-auto h-full">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentSlide}
-              className="h-full"
-            >
-              <SlideRenderer
-                slide={slides[currentSlide]}
-                onNext={handleNext}
-                isLast={isLastSlide}
-              />
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      <main className="flex-1 min-h-0 flex items-center justify-center p-4">
+        <AnimatePresence mode="wait">
+          <SlideRenderer
+            key={currentSlide}
+            slide={slides[currentSlide]}
+            onNext={handleNext}
+            isLast={isLastSlide}
+          />
+        </AnimatePresence>
       </main>
 
       {/* Slide indicators */}
-      <footer className="py-4 px-4">
-        <div className="flex justify-center gap-1.5 max-w-5xl mx-auto">
+      <footer className="flex-shrink-0 py-3 px-4 bg-[#1a1a1a]">
+        <div className="flex justify-center gap-1.5 max-w-7xl mx-auto flex-wrap">
           {slides.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
-              className={`w-2 h-2 rounded-full transition-all ${
+              className={`h-1.5 rounded-full transition-all ${
                 index === currentSlide 
-                  ? 'bg-primary w-6' 
+                  ? 'bg-white w-6' 
                   : index < currentSlide 
-                    ? 'bg-primary/50' 
-                    : 'bg-muted'
+                    ? 'bg-white/50 w-1.5' 
+                    : 'bg-white/20 w-1.5'
               }`}
               aria-label={`Go to slide ${index + 1}`}
             />
