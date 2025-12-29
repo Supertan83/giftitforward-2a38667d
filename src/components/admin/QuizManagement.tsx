@@ -14,6 +14,8 @@ import {
   ChevronRight,
   FileQuestion,
   CheckCircle2,
+  Download,
+  Award,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +30,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { jsPDF } from 'jspdf';
 
 interface QuizOption {
   id: string;
@@ -144,7 +147,100 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({});
   const [showResults, setShowResults] = useState(false);
+  const [volunteerName, setVolunteerName] = useState('');
+  const [showNameInput, setShowNameInput] = useState(false);
   const { toast } = useToast();
+
+  const generateCertificate = (name: string, quizTitle: string, score: number, date: Date) => {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const width = doc.internal.pageSize.getWidth();
+    const height = doc.internal.pageSize.getHeight();
+
+    // Background gradient effect using rectangles
+    doc.setFillColor(0, 90, 77); // Brand teal color
+    doc.rect(0, 0, width, height, 'F');
+    
+    // Decorative border
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(2);
+    doc.rect(10, 10, width - 20, height - 20, 'S');
+    doc.setLineWidth(0.5);
+    doc.rect(15, 15, width - 30, height - 30, 'S');
+
+    // Certificate title
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(42);
+    doc.text('CERTIFICATE', width / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'normal');
+    doc.text('OF COMPLETION', width / 2, 62, { align: 'center' });
+
+    // Decorative line
+    doc.setLineWidth(1);
+    doc.line(width / 2 - 60, 72, width / 2 + 60, 72);
+
+    // "This is to certify that"
+    doc.setFontSize(14);
+    doc.text('This is to certify that', width / 2, 90, { align: 'center' });
+
+    // Volunteer name
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(32);
+    doc.text(name, width / 2, 108, { align: 'center' });
+
+    // Underline for name
+    const nameWidth = doc.getTextWidth(name);
+    doc.setLineWidth(0.5);
+    doc.line(width / 2 - nameWidth / 2 - 10, 112, width / 2 + nameWidth / 2 + 10, 112);
+
+    // Completion text
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(14);
+    doc.text('has successfully completed the', width / 2, 128, { align: 'center' });
+
+    // Quiz title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    const titleLines = doc.splitTextToSize(quizTitle, width - 80);
+    doc.text(titleLines, width / 2, 142, { align: 'center' });
+
+    // Score
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(14);
+    doc.text(`with a score of ${score}%`, width / 2, 158, { align: 'center' });
+
+    // Date
+    const formattedDate = date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    doc.setFontSize(12);
+    doc.text(`Issued on ${formattedDate}`, width / 2, 175, { align: 'center' });
+
+    // Footer - Organization
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SURPLUSS', width / 2, 190, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Gift It Forward Program', width / 2, 196, { align: 'center' });
+
+    // Save the PDF
+    doc.save(`Certificate_${name.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
+    
+    toast({
+      title: 'Certificate Generated',
+      description: 'Your certificate has been downloaded successfully!',
+    });
+  };
 
   const createNewQuiz = () => {
     const newQuiz: Quiz = {
@@ -311,6 +407,8 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
     setPreviewIndex(0);
     setPreviewAnswers({});
     setShowResults(false);
+    setShowNameInput(false);
+    setVolunteerName('');
     setShowPreview(true);
   };
 
@@ -517,6 +615,78 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                 <p className="text-sm text-muted-foreground mb-6">
                   Passing score: {previewQuiz.passingScore}%
                 </p>
+
+                {/* Certificate Download Section - Only for passing score */}
+                {calculateScore().percentage >= previewQuiz.passingScore && (
+                  <Card className="mb-6 bg-success/5 border-success/20">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-center gap-2 mb-4">
+                        <Award className="w-6 h-6 text-success" />
+                        <span className="font-semibold text-success">You earned a certificate!</span>
+                      </div>
+                      
+                      {!showNameInput ? (
+                        <Button
+                          onClick={() => setShowNameInput(true)}
+                          className="bg-success hover:bg-success/90"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Certificate
+                        </Button>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="volunteerName" className="text-left block">
+                              Enter your full name for the certificate
+                            </Label>
+                            <Input
+                              id="volunteerName"
+                              value={volunteerName}
+                              onChange={(e) => setVolunteerName(e.target.value)}
+                              placeholder="Your full name..."
+                              className="text-center"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-center">
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setShowNameInput(false);
+                                setVolunteerName('');
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                if (volunteerName.trim()) {
+                                  generateCertificate(
+                                    volunteerName.trim(),
+                                    previewQuiz.title,
+                                    calculateScore().percentage,
+                                    new Date()
+                                  );
+                                  setShowNameInput(false);
+                                  setVolunteerName('');
+                                } else {
+                                  toast({
+                                    title: 'Name Required',
+                                    description: 'Please enter your name for the certificate',
+                                    variant: 'destructive',
+                                  });
+                                }
+                              }}
+                              className="bg-success hover:bg-success/90"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Generate PDF
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="space-y-3 text-left">
                   {previewQuiz.questions.map((q, idx) => {
