@@ -54,7 +54,7 @@ const SlideRenderer = ({ slide, onNext, onPrevious, isLast, isFirst }: SlideRend
               onPrevious();
             }}
             variant="outline"
-            className="bg-white/90 hover:bg-white text-gray-800 border-gray-300 shadow-lg backdrop-blur-sm"
+            className="bg-[#54585A] hover:bg-[#3d4042] text-white border-[#54585A] shadow-lg"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             Previous
