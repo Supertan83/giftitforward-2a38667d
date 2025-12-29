@@ -110,7 +110,9 @@ const TrainingSlideshow = () => {
             key={currentSlide}
             slide={slides[currentSlide]}
             onNext={handleNext}
+            onPrevious={handlePrevious}
             isLast={isLastSlide}
+            isFirst={isFirstSlide}
           />
         </AnimatePresence>
       </main>
