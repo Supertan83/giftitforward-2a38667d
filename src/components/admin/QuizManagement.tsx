@@ -340,7 +340,6 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const score = calculateScore();
     const currentDate = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -399,15 +398,11 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     doc.setTextColor(218, 41, 28);
     doc.text(surveyTitle, pageWidth / 2, 140, { align: 'center' });
 
-    // Score
+    // Date
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(12);
     doc.setTextColor(84, 88, 90);
-    doc.text(`Score: ${score.correct}/${score.total} (${score.percentage}%)`, pageWidth / 2, 155, { align: 'center' });
-
-    // Date
-    doc.setFontSize(12);
-    doc.text(`Completed on: ${currentDate}`, pageWidth / 2, 168, { align: 'center' });
+    doc.text(`Completed on: ${currentDate}`, pageWidth / 2, 158, { align: 'center' });
 
     // Footer
     doc.setDrawColor(197, 185, 172); // DH Beige
