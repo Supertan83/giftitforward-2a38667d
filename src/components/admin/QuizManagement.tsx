@@ -144,6 +144,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({});
   const [showResults, setShowResults] = useState(false);
+  const [volunteerName, setVolunteerName] = useState('');
   const { toast } = useToast();
 
   const createNewSurvey = () => {
@@ -331,7 +332,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     };
   };
 
-  const generateCertificate = (surveyTitle: string) => {
+  const generateCertificate = async (volunteerName: string) => {
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -341,105 +342,54 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
-    // Dark background color (#3D3D3D)
-    doc.setFillColor(61, 61, 61);
-    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    try {
+      // Load background image
+      const bgResponse = await fetch('/images/certificate-background.png');
+      const bgBlob = await bgResponse.blob();
+      const bgBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(bgBlob);
+      });
+      
+      // Add background image (full page)
+      doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
 
-    // Draw arrow/chevron design elements
-    // Left chevron (darker)
-    doc.setFillColor(51, 51, 51);
-    doc.triangle(
-      0, 0,
-      pageWidth * 0.45, pageHeight * 0.5,
-      0, pageHeight,
-      'F'
-    );
-    
-    // Right chevron (darker)
-    doc.setFillColor(45, 45, 45);
-    doc.triangle(
-      pageWidth, 0,
-      pageWidth * 0.55, pageHeight * 0.5,
-      pageWidth, pageHeight,
-      'F'
-    );
+      // Load logos image
+      const logoResponse = await fetch('/images/certificate-logos.png');
+      const logoBlob = await logoResponse.blob();
+      const logoBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(logoBlob);
+      });
+      
+      // Add logos centered at top (adjust dimensions as needed)
+      const logoWidth = 80;
+      const logoHeight = 20;
+      doc.addImage(logoBase64, 'PNG', (pageWidth - logoWidth) / 2, 15, logoWidth, logoHeight);
 
-    // Center darker area
-    doc.setFillColor(51, 51, 51);
-    doc.triangle(
-      pageWidth * 0.35, 0,
-      pageWidth * 0.65, pageHeight * 0.5,
-      pageWidth * 0.35, pageHeight,
-      'F'
-    );
+      // Add volunteer name in the middle (on the name line area)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(28);
+      doc.setTextColor(51, 51, 51); // Dark gray text
+      doc.text(volunteerName || 'Volunteer Name', pageWidth / 2, 115, { align: 'center' });
 
-    // Logos area - Dubai Holding | Gift It Forward
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(255, 255, 255);
-    doc.text('DUBAI', pageWidth / 2 - 25, 30, { align: 'center' });
-    doc.setFontSize(8);
-    doc.setTextColor(218, 41, 28); // Red for HOLDING
-    doc.text('HOLDING', pageWidth / 2 - 25, 36, { align: 'center' });
-    
-    // Separator
-    doc.setDrawColor(100, 100, 100);
-    doc.setLineWidth(0.3);
-    doc.line(pageWidth / 2 - 5, 25, pageWidth / 2 - 5, 40);
-    
-    // Gift It Forward text
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text('GIFT IT', pageWidth / 2 + 20, 30, { align: 'center' });
-    doc.setTextColor(218, 41, 28);
-    doc.text('FORW', pageWidth / 2 + 12, 36, { align: 'center' });
-    doc.setTextColor(255, 255, 255);
-    doc.text('>>', pageWidth / 2 + 23, 36, { align: 'center' });
-    doc.setTextColor(218, 41, 28);
-    doc.text('RD', pageWidth / 2 + 30, 36, { align: 'center' });
-
-    // CERTIFICATE OF ATTENDANCE - Main title in red
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(42);
-    doc.setTextColor(218, 41, 28); // DH Red
-    doc.text('CERTIFICATE OF ATTENDANCE', pageWidth / 2, 65, { align: 'center' });
-    
-    // PRESENTED TO
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.setTextColor(150, 150, 150);
-    doc.text('PRESENTED TO', pageWidth / 2, 80, { align: 'center' });
-
-    // Name line
-    doc.setDrawColor(150, 150, 150);
-    doc.setLineWidth(0.5);
-    doc.line(pageWidth / 2 - 70, 120, pageWidth / 2 + 70, 120);
-
-    // Recognition text
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(12);
-    doc.setTextColor(180, 180, 180);
-    doc.text('In recognition of your time and dedication as a ', pageWidth / 2 - 35, 140, { align: 'center' });
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text('Gift It Forward volunteer.', pageWidth / 2 + 55, 140, { align: 'center' });
-
-    // Second line
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(180, 180, 180);
-    doc.text('Your commitment to sustainability and giving back has made a meaningful', pageWidth / 2, 150, { align: 'center' });
-    doc.text('impact, helping spread joy and drive positive change.', pageWidth / 2, 158, { align: 'center' });
-
-    // Thank you line
-    doc.text('Thank you for your invaluable support.', pageWidth / 2, 170, { align: 'center' });
-
-    // Save the PDF
-    doc.save(`certificate-of-attendance.pdf`);
-    
-    toast({
-      title: 'Certificate Downloaded',
-      description: 'Your certificate has been generated and downloaded.',
-    });
+      // Save the PDF
+      doc.save(`certificate-of-attendance-${volunteerName.replace(/\s+/g, '-').toLowerCase() || 'volunteer'}.pdf`);
+      
+      toast({
+        title: 'Certificate Downloaded',
+        description: 'Your certificate has been generated and downloaded.',
+      });
+    } catch (error) {
+      console.error('Error generating certificate:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate certificate. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Survey List View
@@ -633,13 +583,21 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                 <div className="w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center bg-success/10">
                   <Award className="w-12 h-12 text-success" />
                 </div>
-                <h3 className="font-display font-bold text-2xl mb-2">Congratulations!</h3>
-                <p className="text-muted-foreground mb-2">
-                  You have completed the survey.
+                <h3 className="font-display font-bold text-2xl mb-2">Survey Complete!</h3>
+                <p className="text-muted-foreground mb-6">
+                  Enter your name to download your certificate.
                 </p>
-                <p className="text-lg font-semibold text-foreground mb-6">
-                  Score: {calculateScore().correct}/{calculateScore().total} ({calculateScore().percentage}%)
-                </p>
+
+                <div className="max-w-sm mx-auto mb-6">
+                  <Label htmlFor="volunteerName" className="block text-left mb-2">Your Full Name</Label>
+                  <Input
+                    id="volunteerName"
+                    value={volunteerName}
+                    onChange={(e) => setVolunteerName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="text-center"
+                  />
+                </div>
 
                 <div className="flex gap-3 justify-center flex-wrap">
                   <Button
@@ -648,11 +606,15 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                       setShowResults(false);
                       setPreviewIndex(0);
                       setPreviewAnswers({});
+                      setVolunteerName('');
                     }}
                   >
                     Retake Survey
                   </Button>
-                  <Button onClick={() => generateCertificate(previewSurvey.title)}>
+                  <Button 
+                    onClick={() => generateCertificate(volunteerName)}
+                    disabled={!volunteerName.trim()}
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     Download Certificate
                   </Button>
