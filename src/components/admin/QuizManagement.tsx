@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import jsPDF from 'jspdf';
 import {
   ArrowLeft,
   Plus,
@@ -13,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   FileQuestion,
-  CheckCircle2,
+  Award,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -329,6 +331,104 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     };
   };
 
+  const generateCertificate = (surveyTitle: string) => {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const score = calculateScore();
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    // Background color
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+    // Border
+    doc.setDrawColor(218, 41, 28); // DH Red
+    doc.setLineWidth(3);
+    doc.rect(10, 10, pageWidth - 20, pageHeight - 20);
+    
+    // Inner border
+    doc.setLineWidth(0.5);
+    doc.rect(15, 15, pageWidth - 30, pageHeight - 30);
+
+    // Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(36);
+    doc.setTextColor(16, 24, 32); // DH Black
+    doc.text('CERTIFICATE', pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(84, 88, 90); // DH Grey
+    doc.text('OF COMPLETION', pageWidth / 2, 62, { align: 'center' });
+
+    // Decorative line
+    doc.setDrawColor(218, 41, 28);
+    doc.setLineWidth(1);
+    doc.line(pageWidth / 2 - 40, 70, pageWidth / 2 + 40, 70);
+
+    // Main text
+    doc.setFontSize(14);
+    doc.setTextColor(84, 88, 90);
+    doc.text('This is to certify that', pageWidth / 2, 90, { align: 'center' });
+
+    // Volunteer name placeholder
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.setTextColor(16, 24, 32);
+    doc.text('Volunteer Name', pageWidth / 2, 108, { align: 'center' });
+
+    // Survey completion text
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(14);
+    doc.setTextColor(84, 88, 90);
+    doc.text('has successfully completed the', pageWidth / 2, 125, { align: 'center' });
+
+    // Survey title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(218, 41, 28);
+    doc.text(surveyTitle, pageWidth / 2, 140, { align: 'center' });
+
+    // Score
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    doc.setTextColor(84, 88, 90);
+    doc.text(`Score: ${score.correct}/${score.total} (${score.percentage}%)`, pageWidth / 2, 155, { align: 'center' });
+
+    // Date
+    doc.setFontSize(12);
+    doc.text(`Completed on: ${currentDate}`, pageWidth / 2, 168, { align: 'center' });
+
+    // Footer
+    doc.setDrawColor(197, 185, 172); // DH Beige
+    doc.setLineWidth(0.5);
+    doc.line(40, 185, 120, 185);
+    doc.line(pageWidth - 120, 185, pageWidth - 40, 185);
+
+    doc.setFontSize(10);
+    doc.setTextColor(84, 88, 90);
+    doc.text('Program Coordinator', 80, 192, { align: 'center' });
+    doc.text('Date of Issue', pageWidth - 80, 192, { align: 'center' });
+
+    // Save the PDF
+    doc.save(`certificate-${surveyTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+    
+    toast({
+      title: 'Certificate Downloaded',
+      description: 'Your certificate has been generated and downloaded.',
+    });
+  };
+
   // Survey List View
   if (!isEditing) {
     return (
@@ -444,20 +544,47 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                       {previewSurvey.questions[previewIndex].question}
                     </h3>
                     <div className="space-y-2">
-                      {previewSurvey.questions[previewIndex].options.map((option, idx) => (
-                        <button
-                          key={option.id}
-                          onClick={() => handlePreviewAnswer(previewSurvey.questions[previewIndex].id, option.id)}
-                          className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                            previewAnswers[previewSurvey.questions[previewIndex].id] === option.id
-                              ? 'border-primary bg-primary-soft'
-                              : 'border-border hover:border-primary/50'
-                          }`}
-                        >
-                          <span className="font-medium mr-2">{String.fromCharCode(65 + idx)}.</span>
-                          {option.text}
-                        </button>
-                      ))}
+                      {previewSurvey.questions[previewIndex].options.map((option, idx) => {
+                        const currentQuestionId = previewSurvey.questions[previewIndex].id;
+                        const hasAnswered = previewAnswers[currentQuestionId] !== undefined;
+                        const isSelected = previewAnswers[currentQuestionId] === option.id;
+                        const isCorrect = option.isCorrect;
+                        
+                        let borderClass = 'border-border hover:border-primary/50';
+                        if (hasAnswered) {
+                          if (isCorrect) {
+                            borderClass = 'border-success bg-success/10';
+                          } else if (isSelected) {
+                            borderClass = 'border-destructive bg-destructive/10';
+                          } else {
+                            borderClass = 'border-border opacity-50';
+                          }
+                        } else if (isSelected) {
+                          borderClass = 'border-primary bg-primary-soft';
+                        }
+                        
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => !hasAnswered && handlePreviewAnswer(currentQuestionId, option.id)}
+                            disabled={hasAnswered}
+                            className={`w-full p-4 rounded-lg border-2 text-left transition-all ${borderClass} ${hasAnswered ? 'cursor-default' : 'cursor-pointer'}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-medium mr-2">{String.fromCharCode(65 + idx)}.</span>
+                                {option.text}
+                              </div>
+                              {hasAnswered && isCorrect && (
+                                <Check className="w-5 h-5 text-success" />
+                              )}
+                              {hasAnswered && isSelected && !isCorrect && (
+                                <X className="w-5 h-5 text-destructive" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </motion.div>
                 </AnimatePresence>
@@ -491,50 +618,17 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
             {showResults && previewSurvey && (
               <div className="flex-1 overflow-y-auto py-4 text-center">
                 <div className="w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center bg-success/10">
-                  <Check className="w-12 h-12 text-success" />
+                  <Award className="w-12 h-12 text-success" />
                 </div>
-                <h3 className="font-display font-bold text-2xl mb-2">Survey Complete!</h3>
-                <p className="text-muted-foreground mb-4">
-                  You answered {calculateScore().correct} out of {calculateScore().total} correctly ({calculateScore().percentage}%)
+                <h3 className="font-display font-bold text-2xl mb-2">Congratulations!</h3>
+                <p className="text-muted-foreground mb-2">
+                  You have completed the survey.
                 </p>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Review your answers below. You can retake the survey or proceed to get your certificate.
+                <p className="text-lg font-semibold text-foreground mb-6">
+                  Score: {calculateScore().correct}/{calculateScore().total} ({calculateScore().percentage}%)
                 </p>
 
-                <div className="space-y-3 text-left">
-                  {previewSurvey.questions.map((q, idx) => {
-                    const selectedOption = q.options.find(o => o.id === previewAnswers[q.id]);
-                    const correctOption = q.options.find(o => o.isCorrect);
-                    const isCorrect = selectedOption?.isCorrect;
-
-                    return (
-                      <div
-                        key={q.id}
-                        className={`p-3 rounded-lg border ${
-                          isCorrect ? 'border-success/30 bg-success/5' : 'border-destructive/30 bg-destructive/5'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          {isCorrect ? (
-                            <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-                          ) : (
-                            <X className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                          )}
-                          <div>
-                            <p className="font-medium text-sm">Q{idx + 1}: {q.question}</p>
-                            {!isCorrect && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Correct answer: {correctOption?.text}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="flex gap-3 mt-6 justify-center">
+                <div className="flex gap-3 justify-center flex-wrap">
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -545,8 +639,9 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                   >
                     Retake Survey
                   </Button>
-                  <Button disabled>
-                    Get Certificate (Coming Soon)
+                  <Button onClick={() => generateCertificate(previewSurvey.title)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Certificate
                   </Button>
                 </div>
               </div>
