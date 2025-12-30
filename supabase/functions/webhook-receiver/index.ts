@@ -1248,12 +1248,13 @@ serve(async (req) => {
 
     // Check if this is a DH Webflow volunteer form submission
     // Format: { triggerType: 'form_submission', payload: { data: { ... } } }
+    // AUTO-APPROVE: Dubai Holding volunteers are automatically approved and accounts created
     if (payload.triggerType === 'form_submission' && payload.payload?.data) {
       const formData = payload.payload.data;
       
       // Check if it has volunteer form fields
       if (formData['Work Email'] && formData['First Name']) {
-        console.log('Detected DH Webflow volunteer form submission');
+        console.log('Detected DH Webflow volunteer form submission - AUTO APPROVING');
         
         try {
           // Parse eventsjson if it's a string
@@ -1269,14 +1270,96 @@ serve(async (req) => {
             }
           }
 
-          // Create pending volunteer record
+          const volunteerEmail = formData['Work Email'];
+          const firstName = formData['First Name'];
+          const lastName = formData['Last Name'] || '';
+
+          // Generate temp password and create user account immediately
+          const tempPassword = generateTempPassword();
+          
+          const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+            email: volunteerEmail,
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: {
+              name: `${firstName} ${lastName}`.trim(),
+              phone: formData['Phone Number']?.replace(/'/g, '').trim() || '',
+              onboarded_via: 'dh_webhook_auto'
+            }
+          });
+
+          if (createError) {
+            console.error(`Failed to create user ${volunteerEmail}:`, createError);
+            // Still create the pending record so admin can see it, but mark as failed
+            const { data: pendingData } = await supabase
+              .from('pending_volunteers')
+              .insert({
+                webhook_event_id: eventData?.id || null,
+                email: volunteerEmail,
+                first_name: firstName,
+                last_name: lastName,
+                phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
+                gender: formData.Gender || null,
+                is_employee: formData['Dubai Holding Employee'] === 'Yes',
+                employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
+                employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
+                employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
+                external_company: formData['Not Employee - Company'] || null,
+                has_medical_condition: formData['Medical Condition'] === 'Yes',
+                medical_condition_details: formData['Medical Condition Details'] || null,
+                emergency_contact_name: formData['Emergency Contact Name'] || null,
+                emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
+                emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
+                is_fasting: formData['Fasting during event'] === 'Yes',
+                events_list: formData.eventslist || null,
+                events_json: eventsJson,
+                source_data: formData,
+                status: 'pending' // Keep as pending since auto-creation failed
+              })
+              .select()
+              .single();
+
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `Auto-approval failed: ${createError.message}. Volunteer saved for manual approval.`,
+                pending_id: pendingData?.id,
+                email: volunteerEmail
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          if (!userData.user) {
+            return new Response(
+              JSON.stringify({ success: false, error: 'User creation returned no user data' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          // Delete any existing roles first (trigger may have added one)
+          await supabase
+            .from('user_roles')
+            .delete()
+            .eq('user_id', userData.user.id);
+
+          // Assign volunteer role
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .insert({ user_id: userData.user.id, role: 'volunteer' });
+
+          if (roleError) {
+            console.error(`Failed to assign role to ${volunteerEmail}:`, roleError);
+          }
+
+          // Create approved volunteer record with credentials
           const { data: pendingData, error: pendingError } = await supabase
             .from('pending_volunteers')
             .insert({
               webhook_event_id: eventData?.id || null,
-              email: formData['Work Email'],
-              first_name: formData['First Name'],
-              last_name: formData['Last Name'] || '',
+              email: volunteerEmail,
+              first_name: firstName,
+              last_name: lastName,
               phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
               gender: formData.Gender || null,
               is_employee: formData['Dubai Holding Employee'] === 'Yes',
@@ -1293,31 +1376,42 @@ serve(async (req) => {
               events_list: formData.eventslist || null,
               events_json: eventsJson,
               source_data: formData,
-              status: 'pending'
+              status: 'approved', // Auto-approved
+              approved_at: new Date().toISOString(),
+              created_user_id: userData.user.id,
+              temp_password: tempPassword // Store for admin visibility
             })
             .select()
             .single();
 
           if (pendingError) {
-            console.error('Failed to create pending volunteer:', pendingError);
+            console.error('Failed to create volunteer record:', pendingError);
+            // User was created but record wasn't - still a success from webhook perspective
             return new Response(
               JSON.stringify({
-                success: false,
-                error: 'Failed to store volunteer application',
-                details: pendingError.message
+                success: true,
+                message: 'Volunteer account created but record storage failed',
+                email: volunteerEmail,
+                user_id: userData.user.id,
+                temp_password: tempPassword
               }),
-              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
 
-          console.log(`Created pending volunteer record: ${pendingData.id} for ${formData['Work Email']}`);
+          console.log(`Auto-approved volunteer: ${volunteerEmail}, User ID: ${userData.user.id}`);
 
+          // Don't auto-send email - let admin decide when to send
+          // But mark as ready for email
           return new Response(
             JSON.stringify({
               success: true,
-              message: 'Volunteer application received and pending approval',
+              message: 'Volunteer auto-approved and account created',
               pending_id: pendingData.id,
-              email: formData['Work Email']
+              email: volunteerEmail,
+              user_id: userData.user.id,
+              temp_password: tempPassword,
+              email_sent: false // Admin will send manually
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
