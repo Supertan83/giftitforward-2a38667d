@@ -46,7 +46,6 @@ interface Survey {
   title: string;
   description: string;
   questions: SurveyQuestion[];
-  passingScore: number;
   createdAt: Date;
 }
 
@@ -55,7 +54,6 @@ const sampleSurvey: Survey = {
   id: '1',
   title: 'Volunteer Knowledge Check: Your Role in the Circular Economy',
   description: 'Test your understanding of circular economy principles and the Gift It Forward program.',
-  passingScore: 70,
   createdAt: new Date(),
   questions: [
     {
@@ -152,7 +150,6 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
       title: '',
       description: '',
       questions: [],
-      passingScore: 70,
       createdAt: new Date(),
     };
     setEditingSurvey(newSurvey);
@@ -409,10 +406,6 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                           <FileQuestion className="h-4 w-4" />
                           {survey.questions.length} questions
                         </span>
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-4 w-4" />
-                          {survey.passingScore}% passing score
-                        </span>
                       </div>
                     </CardContent>
                   </Card>
@@ -497,25 +490,15 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
 
             {showResults && previewSurvey && (
               <div className="flex-1 overflow-y-auto py-4 text-center">
-                <div className={`w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center ${
-                  calculateScore().percentage >= previewSurvey.passingScore
-                    ? 'bg-success/10'
-                    : 'bg-destructive/10'
-                }`}>
-                  {calculateScore().percentage >= previewSurvey.passingScore ? (
-                    <Check className="w-12 h-12 text-success" />
-                  ) : (
-                    <X className="w-12 h-12 text-destructive" />
-                  )}
+                <div className="w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center bg-success/10">
+                  <Check className="w-12 h-12 text-success" />
                 </div>
-                <h3 className="font-display font-bold text-2xl mb-2">
-                  {calculateScore().percentage >= previewSurvey.passingScore ? 'Congratulations!' : 'Keep Learning!'}
-                </h3>
+                <h3 className="font-display font-bold text-2xl mb-2">Survey Complete!</h3>
                 <p className="text-muted-foreground mb-4">
-                  You scored {calculateScore().correct} out of {calculateScore().total} ({calculateScore().percentage}%)
+                  You answered {calculateScore().correct} out of {calculateScore().total} correctly ({calculateScore().percentage}%)
                 </p>
                 <p className="text-sm text-muted-foreground mb-6">
-                  Passing score: {previewSurvey.passingScore}%
+                  Review your answers below. You can retake the survey or proceed to get your certificate.
                 </p>
 
                 <div className="space-y-3 text-left">
@@ -551,16 +534,21 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                   })}
                 </div>
 
-                <Button
-                  className="mt-6"
-                  onClick={() => {
-                    setShowResults(false);
-                    setPreviewIndex(0);
-                    setPreviewAnswers({});
-                  }}
-                >
-                  Retake Survey
-                </Button>
+                <div className="flex gap-3 mt-6 justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowResults(false);
+                      setPreviewIndex(0);
+                      setPreviewAnswers({});
+                    }}
+                  >
+                    Retake Survey
+                  </Button>
+                  <Button disabled>
+                    Get Certificate (Coming Soon)
+                  </Button>
+                </div>
               </div>
             )}
           </DialogContent>
@@ -615,16 +603,6 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                     onChange={(e) => setEditingSurvey({ ...editingSurvey, description: e.target.value })}
                     placeholder="Enter survey description..."
                     rows={2}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Passing Score (%)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={editingSurvey.passingScore}
-                    onChange={(e) => setEditingSurvey({ ...editingSurvey, passingScore: parseInt(e.target.value) || 0 })}
                   />
                 </div>
               </CardContent>
