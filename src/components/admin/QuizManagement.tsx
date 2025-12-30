@@ -372,8 +372,8 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
       // Add volunteer name in the middle (on the name line area)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(28);
-      doc.setTextColor(51, 51, 51); // Dark gray text
-      doc.text(volunteerName || 'Volunteer Name', pageWidth / 2, 115, { align: 'center' });
+      doc.setTextColor(255, 255, 255); // White text for dark background
+      doc.text(volunteerName || 'Volunteer Name', pageWidth / 2, 100, { align: 'center' });
 
       // Save the PDF
       doc.save(`certificate-of-attendance-${volunteerName.replace(/\s+/g, '-').toLowerCase() || 'volunteer'}.pdf`);
