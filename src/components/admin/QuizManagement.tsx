@@ -352,27 +352,13 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
         reader.readAsDataURL(bgBlob);
       });
       
-      // Add background image (full page)
+      // Add background image (full page) - background already contains logos
       doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
-
-      // Load logos image
-      const logoResponse = await fetch('/images/certificate-logos.png');
-      const logoBlob = await logoResponse.blob();
-      const logoBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(logoBlob);
-      });
-      
-      // Add logos centered at top (adjust dimensions as needed)
-      const logoWidth = 80;
-      const logoHeight = 20;
-      doc.addImage(logoBase64, 'PNG', (pageWidth - logoWidth) / 2, 15, logoWidth, logoHeight);
 
       // Add volunteer name in the middle (on the name line area)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(28);
-      doc.setTextColor(255, 255, 255); // White text for dark background
+      doc.setTextColor(51, 51, 51); // Dark gray text for light background
       doc.text(volunteerName || 'Volunteer Name', pageWidth / 2, 100, { align: 'center' });
 
       // Save the PDF
