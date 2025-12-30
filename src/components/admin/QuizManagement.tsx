@@ -241,7 +241,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     if (!editingSurvey.title.trim()) {
       toast({
         title: 'Validation Error',
-        description: 'Please enter a survey title',
+        description: 'Please enter a quiz title',
         variant: 'destructive',
       });
       return;
@@ -293,16 +293,16 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     setEditingSurvey(null);
     setIsEditing(false);
     toast({
-      title: 'Survey Saved',
-      description: 'Your survey has been saved successfully',
+      title: 'Quiz Saved',
+      description: 'Your quiz has been saved successfully',
     });
   };
 
   const deleteSurvey = (surveyId: string) => {
     setSurveys(surveys.filter(q => q.id !== surveyId));
     toast({
-      title: 'Survey Deleted',
-      description: 'The survey has been removed',
+      title: 'Quiz Deleted',
+      description: 'The quiz has been removed',
     });
   };
 
@@ -389,12 +389,12 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex-1">
-                <h1 className="font-display font-bold text-lg md:text-xl">Survey Management</h1>
-                <p className="text-sm text-muted-foreground">Create and manage volunteer surveys</p>
+                <h1 className="font-display font-bold text-lg md:text-xl">Quiz Management</h1>
+                <p className="text-sm text-muted-foreground">Create and manage volunteer quizzes</p>
               </div>
               <Button onClick={createNewSurvey}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Survey
+                Create Quiz
               </Button>
             </div>
           </div>
@@ -404,11 +404,11 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
           {surveys.length === 0 ? (
             <Card className="p-12 text-center">
               <FileQuestion className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="font-display font-semibold text-lg mb-2">No Surveys Yet</h3>
-              <p className="text-muted-foreground mb-4">Create your first survey to test volunteer knowledge</p>
+              <h3 className="font-display font-semibold text-lg mb-2">No Quizzes Yet</h3>
+              <p className="text-muted-foreground mb-4">Create your first quiz to test volunteer knowledge</p>
               <Button onClick={createNewSurvey}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Your First Survey
+                Create Your First Quiz
               </Button>
             </Card>
           ) : (
