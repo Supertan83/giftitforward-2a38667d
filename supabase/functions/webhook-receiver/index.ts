@@ -1491,8 +1491,11 @@ serve(async (req) => {
         );
       }
 
-      // Generate temp password and create user
+      // Generate temp password and try to create user
       const tempPassword = generateTempPassword();
+      
+      let userId: string;
+      let userAlreadyExists = false;
       
       const { data: userData, error: createError } = await supabase.auth.admin.createUser({
         email: pendingVolunteer.email,
@@ -1506,78 +1509,111 @@ serve(async (req) => {
       });
 
       if (createError) {
-        console.error(`Failed to create user ${pendingVolunteer.email}:`, createError);
-        return new Response(
-          JSON.stringify({ success: false, error: createError.message }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (!userData.user) {
+        // Check if user already exists
+        if (createError.message.includes('already been registered') || createError.code === 'email_exists') {
+          console.log(`User ${pendingVolunteer.email} already exists, linking to existing account`);
+          
+          // Find existing user
+          const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
+          if (listError) {
+            console.error('Failed to list users:', listError);
+            return new Response(
+              JSON.stringify({ success: false, error: 'Failed to find existing user' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          const existingUser = usersData.users.find(u => u.email === pendingVolunteer.email);
+          if (!existingUser) {
+            return new Response(
+              JSON.stringify({ success: false, error: 'User exists but could not be found' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          userId = existingUser.id;
+          userAlreadyExists = true;
+        } else {
+          console.error(`Failed to create user ${pendingVolunteer.email}:`, createError);
+          return new Response(
+            JSON.stringify({ success: false, error: createError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else if (!userData.user) {
         return new Response(
           JSON.stringify({ success: false, error: 'User creation returned no user data' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      } else {
+        userId = userData.user.id;
       }
 
       // Delete any existing roles first (trigger may have added one)
       await supabase
         .from('user_roles')
         .delete()
-        .eq('user_id', userData.user.id);
+        .eq('user_id', userId);
 
       // Assign volunteer role
       const { error: roleError } = await supabase
         .from('user_roles')
-        .insert({ user_id: userData.user.id, role: 'volunteer' });
+        .insert({ user_id: userId, role: 'volunteer' });
 
       if (roleError) {
         console.error(`Failed to assign role to ${pendingVolunteer.email}:`, roleError);
       }
 
       // Update pending volunteer record
+      // If user already exists, we don't have the password, so leave temp_password as null
       await supabase
         .from('pending_volunteers')
         .update({
           status: 'approved',
           approved_by: authUser.id,
           approved_at: new Date().toISOString(),
-          created_user_id: userData.user.id,
-          temp_password: tempPassword
+          created_user_id: userId,
+          temp_password: userAlreadyExists ? null : tempPassword
         })
         .eq('id', pending_id);
 
-      console.log(`Approved volunteer: ${pendingVolunteer.email}`);
+      console.log(`Approved volunteer: ${pendingVolunteer.email}${userAlreadyExists ? ' (linked to existing account)' : ''}`);
 
-      // Send welcome email with login credentials
-      const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
-      const emailResult = await sendWelcomeEmail(
-        pendingVolunteer.email,
-        pendingVolunteer.first_name,
-        tempPassword,
-        loginUrl,
-        pending_id
-      );
+      // Send welcome email with login credentials (only if new user)
+      let emailResult: { success: boolean; error?: string } = { success: false };
+      if (!userAlreadyExists) {
+        const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
+        emailResult = await sendWelcomeEmail(
+          pendingVolunteer.email,
+          pendingVolunteer.first_name,
+          tempPassword,
+          loginUrl,
+          pending_id
+        );
 
-      // Update email tracking fields
-      await supabase
-        .from('pending_volunteers')
-        .update({
-          email_sent: emailResult.success,
-          email_sent_at: emailResult.success ? new Date().toISOString() : null,
-          email_send_count: 1
-        })
-        .eq('id', pending_id);
+        // Update email tracking fields
+        await supabase
+          .from('pending_volunteers')
+          .update({
+            email_sent: emailResult.success,
+            email_sent_at: emailResult.success ? new Date().toISOString() : null,
+            email_send_count: 1
+          })
+          .eq('id', pending_id);
+      }
 
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Volunteer approved and account created',
+          message: userAlreadyExists 
+            ? 'Volunteer approved and linked to existing account (user already had an account)' 
+            : 'Volunteer approved and account created',
           email: pendingVolunteer.email,
-          temp_password: tempPassword,
-          user_id: userData.user.id,
-          email_sent: emailResult.success,
-          email_send_count: 1,
+          temp_password: userAlreadyExists ? null : tempPassword,
+          user_id: userId,
+          user_already_existed: userAlreadyExists,
+          email_sent: userAlreadyExists ? false : emailResult.success,
+          email_send_count: userAlreadyExists ? 0 : 1,
           email_error: emailResult.error || null
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
