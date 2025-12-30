@@ -340,83 +340,101 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const currentDate = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
 
-    // Background color
-    doc.setFillColor(255, 255, 255);
+    // Dark background color (#3D3D3D)
+    doc.setFillColor(61, 61, 61);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
 
-    // Border
-    doc.setDrawColor(218, 41, 28); // DH Red
-    doc.setLineWidth(3);
-    doc.rect(10, 10, pageWidth - 20, pageHeight - 20);
+    // Draw arrow/chevron design elements
+    // Left chevron (darker)
+    doc.setFillColor(51, 51, 51);
+    doc.triangle(
+      0, 0,
+      pageWidth * 0.45, pageHeight * 0.5,
+      0, pageHeight,
+      'F'
+    );
     
-    // Inner border
-    doc.setLineWidth(0.5);
-    doc.rect(15, 15, pageWidth - 30, pageHeight - 30);
+    // Right chevron (darker)
+    doc.setFillColor(45, 45, 45);
+    doc.triangle(
+      pageWidth, 0,
+      pageWidth * 0.55, pageHeight * 0.5,
+      pageWidth, pageHeight,
+      'F'
+    );
 
-    // Title
+    // Center darker area
+    doc.setFillColor(51, 51, 51);
+    doc.triangle(
+      pageWidth * 0.35, 0,
+      pageWidth * 0.65, pageHeight * 0.5,
+      pageWidth * 0.35, pageHeight,
+      'F'
+    );
+
+    // Logos area - Dubai Holding | Gift It Forward
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(36);
-    doc.setTextColor(16, 24, 32); // DH Black
-    doc.text('CERTIFICATE', pageWidth / 2, 50, { align: 'center' });
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.text('DUBAI', pageWidth / 2 - 25, 30, { align: 'center' });
+    doc.setFontSize(8);
+    doc.setTextColor(218, 41, 28); // Red for HOLDING
+    doc.text('HOLDING', pageWidth / 2 - 25, 36, { align: 'center' });
     
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(84, 88, 90); // DH Grey
-    doc.text('OF COMPLETION', pageWidth / 2, 62, { align: 'center' });
-
-    // Decorative line
-    doc.setDrawColor(218, 41, 28);
-    doc.setLineWidth(1);
-    doc.line(pageWidth / 2 - 40, 70, pageWidth / 2 + 40, 70);
-
-    // Main text
-    doc.setFontSize(14);
-    doc.setTextColor(84, 88, 90);
-    doc.text('This is to certify that', pageWidth / 2, 90, { align: 'center' });
-
-    // Volunteer name placeholder
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(16, 24, 32);
-    doc.text('Volunteer Name', pageWidth / 2, 108, { align: 'center' });
-
-    // Survey completion text
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.setTextColor(84, 88, 90);
-    doc.text('has successfully completed the', pageWidth / 2, 125, { align: 'center' });
-
-    // Survey title
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
+    // Separator
+    doc.setDrawColor(100, 100, 100);
+    doc.setLineWidth(0.3);
+    doc.line(pageWidth / 2 - 5, 25, pageWidth / 2 - 5, 40);
+    
+    // Gift It Forward text
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text('GIFT IT', pageWidth / 2 + 20, 30, { align: 'center' });
     doc.setTextColor(218, 41, 28);
-    doc.text(surveyTitle, pageWidth / 2, 140, { align: 'center' });
+    doc.text('FORW', pageWidth / 2 + 12, 36, { align: 'center' });
+    doc.setTextColor(255, 255, 255);
+    doc.text('>>', pageWidth / 2 + 23, 36, { align: 'center' });
+    doc.setTextColor(218, 41, 28);
+    doc.text('RD', pageWidth / 2 + 30, 36, { align: 'center' });
 
-    // Date
+    // CERTIFICATE OF ATTENDANCE - Main title in red
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(42);
+    doc.setTextColor(218, 41, 28); // DH Red
+    doc.text('CERTIFICATE OF ATTENDANCE', pageWidth / 2, 65, { align: 'center' });
+    
+    // PRESENTED TO
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(14);
+    doc.setTextColor(150, 150, 150);
+    doc.text('PRESENTED TO', pageWidth / 2, 80, { align: 'center' });
+
+    // Name line
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.5);
+    doc.line(pageWidth / 2 - 70, 120, pageWidth / 2 + 70, 120);
+
+    // Recognition text
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(12);
-    doc.setTextColor(84, 88, 90);
-    doc.text(`Completed on: ${currentDate}`, pageWidth / 2, 158, { align: 'center' });
+    doc.setTextColor(180, 180, 180);
+    doc.text('In recognition of your time and dedication as a ', pageWidth / 2 - 35, 140, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('Gift It Forward volunteer.', pageWidth / 2 + 55, 140, { align: 'center' });
 
-    // Footer
-    doc.setDrawColor(197, 185, 172); // DH Beige
-    doc.setLineWidth(0.5);
-    doc.line(40, 185, 120, 185);
-    doc.line(pageWidth - 120, 185, pageWidth - 40, 185);
+    // Second line
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 180, 180);
+    doc.text('Your commitment to sustainability and giving back has made a meaningful', pageWidth / 2, 150, { align: 'center' });
+    doc.text('impact, helping spread joy and drive positive change.', pageWidth / 2, 158, { align: 'center' });
 
-    doc.setFontSize(10);
-    doc.setTextColor(84, 88, 90);
-    doc.text('Program Coordinator', 80, 192, { align: 'center' });
-    doc.text('Date of Issue', pageWidth - 80, 192, { align: 'center' });
+    // Thank you line
+    doc.text('Thank you for your invaluable support.', pageWidth / 2, 170, { align: 'center' });
 
     // Save the PDF
-    doc.save(`certificate-${surveyTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+    doc.save(`certificate-of-attendance.pdf`);
     
     toast({
       title: 'Certificate Downloaded',
