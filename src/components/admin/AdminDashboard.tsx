@@ -53,7 +53,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'quiz-management';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -147,8 +147,8 @@ export const AdminDashboard = () => {
     return <PendingVolunteers onBack={() => setCurrentView('dashboard')} />;
   }
 
-  // Show Quiz Management view
-  if (currentView === 'quiz-management') {
+  // Show Survey Management view
+  if (currentView === 'survey-management') {
     return <QuizManagement onBack={() => setCurrentView('dashboard')} />;
   }
 
@@ -432,7 +432,7 @@ export const AdminDashboard = () => {
             transition={{ delay: 1.0 }}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('quiz-management')}
+            onClick={() => setCurrentView('survey-management')}
             className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
           >
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
@@ -440,9 +440,9 @@ export const AdminDashboard = () => {
                 <FileQuestion className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-sm md:text-base">Quiz Builder</h3>
+                <h3 className="font-display font-semibold text-sm md:text-base">Survey Builder</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
-                  Create volunteer knowledge quizzes
+                  Create volunteer knowledge surveys
                 </p>
               </div>
             </div>

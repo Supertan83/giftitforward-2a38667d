@@ -29,29 +29,29 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 
-interface QuizOption {
+interface SurveyOption {
   id: string;
   text: string;
   isCorrect: boolean;
 }
 
-interface QuizQuestion {
+interface SurveyQuestion {
   id: string;
   question: string;
-  options: QuizOption[];
+  options: SurveyOption[];
 }
 
-interface Quiz {
+interface Survey {
   id: string;
   title: string;
   description: string;
-  questions: QuizQuestion[];
+  questions: SurveyQuestion[];
   passingScore: number;
   createdAt: Date;
 }
 
-// Sample quiz data based on the uploaded PDF
-const sampleQuiz: Quiz = {
+// Sample survey data based on the uploaded PDF
+const sampleSurvey: Survey = {
   id: '1',
   title: 'Volunteer Knowledge Check: Your Role in the Circular Economy',
   description: 'Test your understanding of circular economy principles and the Gift It Forward program.',
@@ -131,23 +131,23 @@ const sampleQuiz: Quiz = {
   ],
 };
 
-interface QuizManagementProps {
+interface SurveyManagementProps {
   onBack: () => void;
 }
 
-export const QuizManagement = ({ onBack }: QuizManagementProps) => {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([sampleQuiz]);
-  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
+export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
+  const [surveys, setSurveys] = useState<Survey[]>([sampleSurvey]);
+  const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewQuiz, setPreviewQuiz] = useState<Quiz | null>(null);
+  const [previewSurvey, setPreviewSurvey] = useState<Survey | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({});
   const [showResults, setShowResults] = useState(false);
   const { toast } = useToast();
 
-  const createNewQuiz = () => {
-    const newQuiz: Quiz = {
+  const createNewSurvey = () => {
+    const newSurvey: Survey = {
       id: crypto.randomUUID(),
       title: '',
       description: '',
@@ -155,18 +155,18 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
       passingScore: 70,
       createdAt: new Date(),
     };
-    setEditingQuiz(newQuiz);
+    setEditingSurvey(newSurvey);
     setIsEditing(true);
   };
 
-  const editQuiz = (quiz: Quiz) => {
-    setEditingQuiz({ ...quiz, questions: quiz.questions.map(q => ({ ...q, options: [...q.options] })) });
+  const editSurvey = (survey: Survey) => {
+    setEditingSurvey({ ...survey, questions: survey.questions.map(q => ({ ...q, options: [...q.options] })) });
     setIsEditing(true);
   };
 
   const addQuestion = () => {
-    if (!editingQuiz) return;
-    const newQuestion: QuizQuestion = {
+    if (!editingSurvey) return;
+    const newQuestion: SurveyQuestion = {
       id: crypto.randomUUID(),
       question: '',
       options: [
@@ -176,27 +176,27 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
         { id: crypto.randomUUID(), text: '', isCorrect: false },
       ],
     };
-    setEditingQuiz({
-      ...editingQuiz,
-      questions: [...editingQuiz.questions, newQuestion],
+    setEditingSurvey({
+      ...editingSurvey,
+      questions: [...editingSurvey.questions, newQuestion],
     });
   };
 
-  const updateQuestion = (questionId: string, updates: Partial<QuizQuestion>) => {
-    if (!editingQuiz) return;
-    setEditingQuiz({
-      ...editingQuiz,
-      questions: editingQuiz.questions.map(q =>
+  const updateQuestion = (questionId: string, updates: Partial<SurveyQuestion>) => {
+    if (!editingSurvey) return;
+    setEditingSurvey({
+      ...editingSurvey,
+      questions: editingSurvey.questions.map(q =>
         q.id === questionId ? { ...q, ...updates } : q
       ),
     });
   };
 
-  const updateOption = (questionId: string, optionId: string, updates: Partial<QuizOption>) => {
-    if (!editingQuiz) return;
-    setEditingQuiz({
-      ...editingQuiz,
-      questions: editingQuiz.questions.map(q =>
+  const updateOption = (questionId: string, optionId: string, updates: Partial<SurveyOption>) => {
+    if (!editingSurvey) return;
+    setEditingSurvey({
+      ...editingSurvey,
+      questions: editingSurvey.questions.map(q =>
         q.id === questionId
           ? {
               ...q,
@@ -210,10 +210,10 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
   };
 
   const setCorrectAnswer = (questionId: string, optionId: string) => {
-    if (!editingQuiz) return;
-    setEditingQuiz({
-      ...editingQuiz,
-      questions: editingQuiz.questions.map(q =>
+    if (!editingSurvey) return;
+    setEditingSurvey({
+      ...editingSurvey,
+      questions: editingSurvey.questions.map(q =>
         q.id === questionId
           ? {
               ...q,
@@ -228,26 +228,26 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
   };
 
   const deleteQuestion = (questionId: string) => {
-    if (!editingQuiz) return;
-    setEditingQuiz({
-      ...editingQuiz,
-      questions: editingQuiz.questions.filter(q => q.id !== questionId),
+    if (!editingSurvey) return;
+    setEditingSurvey({
+      ...editingSurvey,
+      questions: editingSurvey.questions.filter(q => q.id !== questionId),
     });
   };
 
-  const saveQuiz = () => {
-    if (!editingQuiz) return;
+  const saveSurvey = () => {
+    if (!editingSurvey) return;
     
-    if (!editingQuiz.title.trim()) {
+    if (!editingSurvey.title.trim()) {
       toast({
         title: 'Validation Error',
-        description: 'Please enter a quiz title',
+        description: 'Please enter a survey title',
         variant: 'destructive',
       });
       return;
     }
 
-    if (editingQuiz.questions.length === 0) {
+    if (editingSurvey.questions.length === 0) {
       toast({
         title: 'Validation Error',
         description: 'Please add at least one question',
@@ -256,7 +256,7 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
       return;
     }
 
-    for (const q of editingQuiz.questions) {
+    for (const q of editingSurvey.questions) {
       if (!q.question.trim()) {
         toast({
           title: 'Validation Error',
@@ -283,31 +283,31 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
       }
     }
 
-    const existingIndex = quizzes.findIndex(q => q.id === editingQuiz.id);
+    const existingIndex = surveys.findIndex(q => q.id === editingSurvey.id);
     if (existingIndex >= 0) {
-      setQuizzes(quizzes.map(q => q.id === editingQuiz.id ? editingQuiz : q));
+      setSurveys(surveys.map(q => q.id === editingSurvey.id ? editingSurvey : q));
     } else {
-      setQuizzes([...quizzes, editingQuiz]);
+      setSurveys([...surveys, editingSurvey]);
     }
 
-    setEditingQuiz(null);
+    setEditingSurvey(null);
     setIsEditing(false);
     toast({
-      title: 'Quiz Saved',
-      description: 'Your quiz has been saved successfully',
+      title: 'Survey Saved',
+      description: 'Your survey has been saved successfully',
     });
   };
 
-  const deleteQuiz = (quizId: string) => {
-    setQuizzes(quizzes.filter(q => q.id !== quizId));
+  const deleteSurvey = (surveyId: string) => {
+    setSurveys(surveys.filter(q => q.id !== surveyId));
     toast({
-      title: 'Quiz Deleted',
-      description: 'The quiz has been removed',
+      title: 'Survey Deleted',
+      description: 'The survey has been removed',
     });
   };
 
-  const openPreview = (quiz: Quiz) => {
-    setPreviewQuiz(quiz);
+  const openPreview = (survey: Survey) => {
+    setPreviewSurvey(survey);
     setPreviewIndex(0);
     setPreviewAnswers({});
     setShowResults(false);
@@ -319,20 +319,20 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
   };
 
   const calculateScore = () => {
-    if (!previewQuiz) return { correct: 0, total: 0, percentage: 0 };
+    if (!previewSurvey) return { correct: 0, total: 0, percentage: 0 };
     let correct = 0;
-    previewQuiz.questions.forEach(q => {
+    previewSurvey.questions.forEach(q => {
       const selectedOption = q.options.find(o => o.id === previewAnswers[q.id]);
       if (selectedOption?.isCorrect) correct++;
     });
     return {
       correct,
-      total: previewQuiz.questions.length,
-      percentage: Math.round((correct / previewQuiz.questions.length) * 100),
+      total: previewSurvey.questions.length,
+      percentage: Math.round((correct / previewSurvey.questions.length) * 100),
     };
   };
 
-  // Quiz List View
+  // Survey List View
   if (!isEditing) {
     return (
       <div className="min-h-screen bg-background">
@@ -343,33 +343,33 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex-1">
-                <h1 className="font-display font-bold text-lg md:text-xl">Quiz Management</h1>
-                <p className="text-sm text-muted-foreground">Create and manage volunteer quizzes</p>
+                <h1 className="font-display font-bold text-lg md:text-xl">Survey Management</h1>
+                <p className="text-sm text-muted-foreground">Create and manage volunteer surveys</p>
               </div>
-              <Button onClick={createNewQuiz}>
+              <Button onClick={createNewSurvey}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Quiz
+                Create Survey
               </Button>
             </div>
           </div>
         </header>
 
         <main className="container max-w-6xl py-6 px-4">
-          {quizzes.length === 0 ? (
+          {surveys.length === 0 ? (
             <Card className="p-12 text-center">
               <FileQuestion className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="font-display font-semibold text-lg mb-2">No Quizzes Yet</h3>
-              <p className="text-muted-foreground mb-4">Create your first quiz to test volunteer knowledge</p>
-              <Button onClick={createNewQuiz}>
+              <h3 className="font-display font-semibold text-lg mb-2">No Surveys Yet</h3>
+              <p className="text-muted-foreground mb-4">Create your first survey to test volunteer knowledge</p>
+              <Button onClick={createNewSurvey}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Your First Quiz
+                Create Your First Survey
               </Button>
             </Card>
           ) : (
             <div className="grid gap-4">
-              {quizzes.map((quiz, index) => (
+              {surveys.map((survey, index) => (
                 <motion.div
-                  key={quiz.id}
+                  key={survey.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
@@ -378,17 +378,17 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                     <CardHeader>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <CardTitle className="text-lg">{quiz.title}</CardTitle>
+                          <CardTitle className="text-lg">{survey.title}</CardTitle>
                           <CardDescription className="mt-1">
-                            {quiz.description || 'No description'}
+                            {survey.description || 'No description'}
                           </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openPreview(quiz)}>
+                          <Button variant="outline" size="sm" onClick={() => openPreview(survey)}>
                             <Eye className="h-4 w-4 mr-1" />
                             Preview
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => editQuiz(quiz)}>
+                          <Button variant="outline" size="sm" onClick={() => editSurvey(survey)}>
                             <Edit2 className="h-4 w-4 mr-1" />
                             Edit
                           </Button>
@@ -396,7 +396,7 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                             variant="outline" 
                             size="sm" 
                             className="text-destructive hover:text-destructive"
-                            onClick={() => deleteQuiz(quiz.id)}
+                            onClick={() => deleteSurvey(survey.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -407,11 +407,11 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <FileQuestion className="h-4 w-4" />
-                          {quiz.questions.length} questions
+                          {survey.questions.length} questions
                         </span>
                         <span className="flex items-center gap-1">
                           <CheckCircle2 className="h-4 w-4" />
-                          {quiz.passingScore}% passing score
+                          {survey.passingScore}% passing score
                         </span>
                       </div>
                     </CardContent>
@@ -426,14 +426,14 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle className="font-display">{previewQuiz?.title}</DialogTitle>
-              <DialogDescription>{previewQuiz?.description}</DialogDescription>
+              <DialogTitle className="font-display">{previewSurvey?.title}</DialogTitle>
+              <DialogDescription>{previewSurvey?.description}</DialogDescription>
             </DialogHeader>
 
-            {previewQuiz && !showResults && (
+            {previewSurvey && !showResults && (
               <div className="flex-1 overflow-y-auto py-4">
                 <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Question {previewIndex + 1} of {previewQuiz.questions.length}</span>
+                  <span>Question {previewIndex + 1} of {previewSurvey.questions.length}</span>
                   <span className="font-medium text-foreground">
                     {Object.keys(previewAnswers).length} answered
                   </span>
@@ -448,15 +448,15 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                     className="space-y-4"
                   >
                     <h3 className="font-semibold text-lg">
-                      {previewQuiz.questions[previewIndex].question}
+                      {previewSurvey.questions[previewIndex].question}
                     </h3>
                     <div className="space-y-2">
-                      {previewQuiz.questions[previewIndex].options.map((option, idx) => (
+                      {previewSurvey.questions[previewIndex].options.map((option, idx) => (
                         <button
                           key={option.id}
-                          onClick={() => handlePreviewAnswer(previewQuiz.questions[previewIndex].id, option.id)}
+                          onClick={() => handlePreviewAnswer(previewSurvey.questions[previewIndex].id, option.id)}
                           className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                            previewAnswers[previewQuiz.questions[previewIndex].id] === option.id
+                            previewAnswers[previewSurvey.questions[previewIndex].id] === option.id
                               ? 'border-primary bg-primary-soft'
                               : 'border-border hover:border-primary/50'
                           }`}
@@ -478,12 +478,12 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Previous
                   </Button>
-                  {previewIndex === previewQuiz.questions.length - 1 ? (
+                  {previewIndex === previewSurvey.questions.length - 1 ? (
                     <Button
                       onClick={() => setShowResults(true)}
-                      disabled={Object.keys(previewAnswers).length < previewQuiz.questions.length}
+                      disabled={Object.keys(previewAnswers).length < previewSurvey.questions.length}
                     >
-                      Submit Quiz
+                      Submit Survey
                     </Button>
                   ) : (
                     <Button onClick={() => setPreviewIndex(previewIndex + 1)}>
@@ -495,31 +495,31 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
               </div>
             )}
 
-            {showResults && previewQuiz && (
+            {showResults && previewSurvey && (
               <div className="flex-1 overflow-y-auto py-4 text-center">
                 <div className={`w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center ${
-                  calculateScore().percentage >= previewQuiz.passingScore
+                  calculateScore().percentage >= previewSurvey.passingScore
                     ? 'bg-success/10'
                     : 'bg-destructive/10'
                 }`}>
-                  {calculateScore().percentage >= previewQuiz.passingScore ? (
+                  {calculateScore().percentage >= previewSurvey.passingScore ? (
                     <Check className="w-12 h-12 text-success" />
                   ) : (
                     <X className="w-12 h-12 text-destructive" />
                   )}
                 </div>
                 <h3 className="font-display font-bold text-2xl mb-2">
-                  {calculateScore().percentage >= previewQuiz.passingScore ? 'Congratulations!' : 'Keep Learning!'}
+                  {calculateScore().percentage >= previewSurvey.passingScore ? 'Congratulations!' : 'Keep Learning!'}
                 </h3>
                 <p className="text-muted-foreground mb-4">
                   You scored {calculateScore().correct} out of {calculateScore().total} ({calculateScore().percentage}%)
                 </p>
                 <p className="text-sm text-muted-foreground mb-6">
-                  Passing score: {previewQuiz.passingScore}%
+                  Passing score: {previewSurvey.passingScore}%
                 </p>
 
                 <div className="space-y-3 text-left">
-                  {previewQuiz.questions.map((q, idx) => {
+                  {previewSurvey.questions.map((q, idx) => {
                     const selectedOption = q.options.find(o => o.id === previewAnswers[q.id]);
                     const correctOption = q.options.find(o => o.isCorrect);
                     const isCorrect = selectedOption?.isCorrect;
@@ -559,7 +559,7 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                     setPreviewAnswers({});
                   }}
                 >
-                  Retake Quiz
+                  Retake Survey
                 </Button>
               </div>
             )}
@@ -569,7 +569,7 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
     );
   }
 
-  // Quiz Editor View
+  // Survey Editor View
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-10">
@@ -580,40 +580,40 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
             </Button>
             <div className="flex-1">
               <h1 className="font-display font-bold text-lg md:text-xl">
-                {editingQuiz?.id && quizzes.find(q => q.id === editingQuiz.id) ? 'Edit Quiz' : 'Create New Quiz'}
+                {editingSurvey?.id && surveys.find(q => q.id === editingSurvey.id) ? 'Edit Survey' : 'Create New Survey'}
               </h1>
             </div>
-            <Button onClick={saveQuiz}>
+            <Button onClick={saveSurvey}>
               <Save className="h-4 w-4 mr-2" />
-              Save Quiz
+              Save Survey
             </Button>
           </div>
         </div>
       </header>
 
       <main className="container max-w-4xl py-6 px-4">
-        {editingQuiz && (
+        {editingSurvey && (
           <div className="space-y-6">
-            {/* Quiz Details */}
+            {/* Survey Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Quiz Details</CardTitle>
+                <CardTitle>Survey Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Quiz Title</Label>
+                  <Label>Survey Title</Label>
                   <Input
-                    value={editingQuiz.title}
-                    onChange={(e) => setEditingQuiz({ ...editingQuiz, title: e.target.value })}
-                    placeholder="Enter quiz title..."
+                    value={editingSurvey.title}
+                    onChange={(e) => setEditingSurvey({ ...editingSurvey, title: e.target.value })}
+                    placeholder="Enter survey title..."
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Description</Label>
                   <Textarea
-                    value={editingQuiz.description}
-                    onChange={(e) => setEditingQuiz({ ...editingQuiz, description: e.target.value })}
-                    placeholder="Enter quiz description..."
+                    value={editingSurvey.description}
+                    onChange={(e) => setEditingSurvey({ ...editingSurvey, description: e.target.value })}
+                    placeholder="Enter survey description..."
                     rows={2}
                   />
                 </div>
@@ -623,8 +623,8 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
                     type="number"
                     min={0}
                     max={100}
-                    value={editingQuiz.passingScore}
-                    onChange={(e) => setEditingQuiz({ ...editingQuiz, passingScore: parseInt(e.target.value) || 0 })}
+                    value={editingSurvey.passingScore}
+                    onChange={(e) => setEditingSurvey({ ...editingSurvey, passingScore: parseInt(e.target.value) || 0 })}
                   />
                 </div>
               </CardContent>
@@ -633,21 +633,21 @@ export const QuizManagement = ({ onBack }: QuizManagementProps) => {
             {/* Questions */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-display font-semibold text-lg">Questions ({editingQuiz.questions.length})</h2>
+                <h2 className="font-display font-semibold text-lg">Questions ({editingSurvey.questions.length})</h2>
                 <Button variant="outline" onClick={addQuestion}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Question
                 </Button>
               </div>
 
-              {editingQuiz.questions.length === 0 ? (
+              {editingSurvey.questions.length === 0 ? (
                 <Card className="p-8 text-center">
                   <FileQuestion className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
                   <p className="text-muted-foreground">No questions yet. Click "Add Question" to get started.</p>
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {editingQuiz.questions.map((question, qIndex) => (
+                  {editingSurvey.questions.map((question, qIndex) => (
                     <motion.div
                       key={question.id}
                       initial={{ opacity: 0, y: 20 }}
