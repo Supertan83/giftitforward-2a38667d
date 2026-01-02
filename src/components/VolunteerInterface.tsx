@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, ShoppingBag, LogOut, User, UserCheck } from 'lucide-react';
+import { LogIn, ShoppingBag, LogOut, User, UserCheck, BarChart3 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { EntranceZone } from '@/components/zones/EntranceZone';
 import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
 import { ExitZone } from '@/components/zones/ExitZone';
 import { VolunteerZone } from '@/components/zones/VolunteerZone';
+import { StatsDashboardZone } from '@/components/zones/StatsDashboardZone';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,13 +19,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Zone = 'entrance' | 'marketplace' | 'exit' | 'volunteers';
+type Zone = 'entrance' | 'marketplace' | 'exit' | 'volunteers' | 'stats';
 
 const zones = [
   { id: 'entrance' as Zone, label: 'Entrance', icon: LogIn, color: 'text-primary' },
   { id: 'marketplace' as Zone, label: 'Marketplace', icon: ShoppingBag, color: 'text-warning' },
   { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
   { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success' },
+  { id: 'stats' as Zone, label: 'Stats', icon: BarChart3, color: 'text-primary' },
 ];
 
 export const VolunteerInterface = () => {
@@ -41,6 +43,8 @@ export const VolunteerInterface = () => {
         return <ExitZone />;
       case 'volunteers':
         return <VolunteerZone />;
+      case 'stats':
+        return <StatsDashboardZone />;
     }
   };
 

@@ -23,6 +23,10 @@ export interface QRCard {
   transactions: Transaction[];
   marketplaceId?: string;
   activatedAt?: string;
+  gender?: string;
+  maritalStatus?: string;
+  childrenCount?: number;
+  nationality?: string;
 }
 
 export interface ItemType {
