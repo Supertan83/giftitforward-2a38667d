@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2 } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers, useCreateUser, useDeleteUser } from '@/hooks/useSupabaseData';
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -45,15 +45,18 @@ const createUserSchema = z.object({
 
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer' } | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'volunteer'>('volunteer');
+  const [editRole, setEditRole] = useState<'admin' | 'volunteer'>('volunteer');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
   const deleteUser = useDeleteUser();
+  const updateUserRole = useUpdateUserRole();
   const { toast } = useToast();
 
   const handleCreate = async () => {
@@ -103,6 +106,30 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     } catch (error) {
       toast({
         title: 'Failed to Delete User',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer' }) => {
+    setEditUser(user);
+    setEditRole(user.role);
+  };
+
+  const handleUpdateRole = async () => {
+    if (!editUser) return;
+    
+    try {
+      await updateUserRole.mutateAsync({ userId: editUser.id, role: editRole });
+      toast({
+        title: 'User Updated',
+        description: `${editUser.email} is now a ${editRole}`,
+      });
+      setEditUser(null);
+    } catch (error) {
+      toast({
+        title: 'Failed to Update User',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -213,6 +240,14 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      onClick={() => handleEditUser({ id: user.id, email: user.email, role: user.role })}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleteConfirmUser({ id: user.id, email: user.email })}
                     >
@@ -307,6 +342,65 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
             <Button onClick={handleCreate} disabled={createUser.isPending}>
               {createUser.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Create User
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Modal */}
+      <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Edit User</DialogTitle>
+            <DialogDescription>
+              Update role for {editUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={editUser?.email || ''}
+                  disabled
+                  className="pl-10 bg-muted"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'volunteer')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="volunteer">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Volunteer
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="admin">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Admin
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => setEditUser(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateRole} disabled={updateUserRole.isPending || editRole === editUser?.role}>
+              {updateUserRole.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </div>
         </DialogContent>
