@@ -25,25 +25,33 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { firstName, lastName, email, certificateBase64 }: SendCertificateRequest = await req.json();
 
-    console.log(`Sending certificate to ${email} for ${firstName} ${lastName}`);
+    // Trim whitespace from names
+    const cleanFirstName = (firstName || '').trim();
+    const cleanLastName = (lastName || '').trim();
+    const cleanEmail = (email || '').trim();
+
+    console.log(`Sending certificate to ${cleanEmail} for ${cleanFirstName} ${cleanLastName}`);
 
     // Validate inputs
-    if (!firstName || !lastName || !email || !certificateBase64) {
+    if (!cleanFirstName || !cleanEmail || !certificateBase64) {
+      console.error("Missing required fields:", { firstName: cleanFirstName, email: cleanEmail, hasCertificate: !!certificateBase64 });
       return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
+        JSON.stringify({ error: "Missing required fields", success: false }),
         {
-          status: 400,
+          status: 200,
           headers: { "Content-Type": "application/json", ...corsHeaders },
         }
       );
     }
 
-    const fullName = `${firstName} ${lastName}`;
+    const fullName = cleanLastName ? `${cleanFirstName} ${cleanLastName}` : cleanFirstName;
     const filename = `certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+
+    console.log(`Attempting to send email to ${cleanEmail} with filename ${filename}`);
 
     const emailResponse = await resend.emails.send({
       from: "GIF Volunteer Training <noreply@mgif.thesurpluss.com>",
-      to: [email],
+      to: [cleanEmail],
       subject: "Your Circular Economy Training Certificate",
       html: `
         <!DOCTYPE html>
@@ -61,7 +69,7 @@ const handler = async (req: Request): Promise<Response> => {
         <body>
           <div class="container">
             <div class="header">
-              <h1 style="color: #DA291C;">Congratulations, ${firstName}!</h1>
+              <h1 style="color: #DA291C;">Congratulations, ${cleanFirstName}!</h1>
             </div>
             <div class="content">
               <p>You've successfully completed the <span class="highlight">Circular Economy Training Module</span>.</p>
@@ -120,10 +128,11 @@ const handler = async (req: Request): Promise<Response> => {
     );
   } catch (error: any) {
     console.error("Error in send-certificate function:", error);
+    // Return 200 with error details to prevent edge function error on frontend
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: error.message || "Unknown error occurred" }),
       {
-        status: 500,
+        status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       }
     );
