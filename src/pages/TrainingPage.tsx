@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { GraduationCap, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import surplussLogo from '@/assets/surpluss-full-logo.svg';
 
 export interface TrainingUserInfo {
@@ -61,16 +61,9 @@ const TrainingPage = () => {
       >
         <Card className="bg-card/95 backdrop-blur border-border/50">
           <CardHeader className="text-center pb-4">
-            <div className="flex justify-center mb-4">
-              <img src={surplussLogo} alt="Surpluss" className="h-10" />
+            <div className="flex justify-center mb-6">
+              <img src={surplussLogo} alt="Surpluss" className="h-16" />
             </div>
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <GraduationCap className="w-8 h-8 text-primary" />
-            </div>
-            <CardTitle className="font-display text-xl">Circular Economy Training</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Complete this training module to learn about your role in the circular economy and receive your certificate.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
