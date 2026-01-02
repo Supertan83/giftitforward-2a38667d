@@ -1,14 +1,21 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, QrCode, Users, Scan, Loader2 } from 'lucide-react';
+import { LogIn, QrCode, Users, Scan, Loader2, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { CardStatusDisplay } from '@/components/CardStatusDisplay';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
 import { BeneficiaryInfoForm, BeneficiaryInfo } from '@/components/BeneficiaryInfoForm';
-import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
+import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { QRCard } from '@/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export const EntranceZone = () => {
   const [showScanner, setShowScanner] = useState(false);
@@ -22,9 +29,14 @@ export const EntranceZone = () => {
   } | null>(null);
   const [lastActivatedCard, setLastActivatedCard] = useState<QRCard | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
 
   const { data: qrCards = [], isLoading } = useQRCards();
   const { activateCard } = useCardOperations();
+  const { data: marketplaces = [], isLoading: isLoadingMarketplaces } = useMarketplaces();
+
+  // Filter to show only upcoming or active marketplaces
+  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
 
   const activeCards = qrCards.filter(c => c.status === 'active').length;
   const readyCards = qrCards.filter(c => c.status === 'ready').length;
@@ -42,7 +54,8 @@ export const EntranceZone = () => {
     try {
       const result = await activateCard.mutateAsync({
         uniqueId: scannedCardId,
-        beneficiaryInfo: info
+        beneficiaryInfo: info,
+        marketplaceId: selectedMarketplaceId || undefined
       });
       
       if (result) {
@@ -72,7 +85,9 @@ export const EntranceZone = () => {
       setIsProcessing(false);
       setScannedCardId('');
     }
-  }, [activateCard, scannedCardId]);
+  }, [activateCard, scannedCardId, selectedMarketplaceId]);
+
+  const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -92,6 +107,56 @@ export const EntranceZone = () => {
         <p className="text-sm text-muted-foreground mt-0.5 md:mt-1">
           Check-in beneficiaries and activate their QR cards
         </p>
+      </motion.div>
+
+      {/* Marketplace Selector */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="mb-4 md:mb-6"
+      >
+        <div className="bg-card rounded-xl border border-border p-3 md:p-4 shadow-card">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Select Marketplace</span>
+          </div>
+          <Select
+            value={selectedMarketplaceId}
+            onValueChange={setSelectedMarketplaceId}
+            disabled={isLoadingMarketplaces}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Choose marketplace..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMarketplaces.map((marketplace) => (
+                <SelectItem key={marketplace.id} value={marketplace.id}>
+                  <div className="flex items-center gap-2">
+                    <span>{marketplace.name}</span>
+                    {marketplace.location && (
+                      <span className="text-muted-foreground text-xs">
+                        ({marketplace.location})
+                      </span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+              {availableMarketplaces.length === 0 && (
+                <SelectItem value="none" disabled>
+                  No marketplaces available
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          {selectedMarketplace && (
+            <p className="text-xs text-muted-foreground mt-2">
+              {selectedMarketplace.event_date 
+                ? `Event date: ${new Date(selectedMarketplace.event_date).toLocaleDateString()}`
+                : 'No date set'}
+            </p>
+          )}
+        </div>
       </motion.div>
 
       {/* Stats */}
