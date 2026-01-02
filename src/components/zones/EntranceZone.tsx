@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, QrCode, Users, Scan, Loader2, MapPin } from 'lucide-react';
+import { LogIn, QrCode, Users, Scan, Loader2, MapPin, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { CardStatusDisplay } from '@/components/CardStatusDisplay';
@@ -38,8 +38,37 @@ export const EntranceZone = () => {
   // Filter to show only upcoming or active marketplaces
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
 
-  const activeCards = qrCards.filter(c => c.status === 'active').length;
-  const readyCards = qrCards.filter(c => c.status === 'ready').length;
+  // Calculate stats - all cards and marketplace-specific
+  const stats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const activeCards = qrCards.filter(c => c.status === 'active').length;
+    const readyCards = qrCards.filter(c => c.status === 'ready').length;
+
+    // Cards activated today for selected marketplace
+    const cardsActivatedTodayForMarketplace = selectedMarketplaceId 
+      ? qrCards.filter(c => {
+          if (c.marketplaceId !== selectedMarketplaceId) return false;
+          if (!c.activatedAt) return false;
+          const activatedDate = new Date(c.activatedAt);
+          activatedDate.setHours(0, 0, 0, 0);
+          return activatedDate.getTime() === today.getTime();
+        }).length
+      : 0;
+
+    // Total cards for selected marketplace
+    const totalForMarketplace = selectedMarketplaceId
+      ? qrCards.filter(c => c.marketplaceId === selectedMarketplaceId).length
+      : 0;
+
+    return {
+      activeCards,
+      readyCards,
+      cardsActivatedTodayForMarketplace,
+      totalForMarketplace,
+    };
+  }, [qrCards, selectedMarketplaceId]);
 
   const handleScan = useCallback((code: string) => {
     setShowScanner(false);
@@ -164,16 +193,40 @@ export const EntranceZone = () => {
         <StatCard
           icon={Users}
           label="Active Cards"
-          value={isLoading ? '-' : activeCards}
+          value={isLoading ? '-' : stats.activeCards}
           variant="success"
         />
         <StatCard
           icon={QrCode}
           label="Cards Ready"
-          value={isLoading ? '-' : readyCards}
+          value={isLoading ? '-' : stats.readyCards}
           variant="default"
         />
       </div>
+
+      {/* Marketplace-specific Stats */}
+      {selectedMarketplaceId && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-2 gap-2 md:gap-3 mb-4 md:mb-6"
+        >
+          <StatCard
+            icon={CalendarCheck}
+            label="Today's Check-ins"
+            value={isLoading ? '-' : stats.cardsActivatedTodayForMarketplace}
+            subValue={selectedMarketplace?.name}
+            variant="primary"
+          />
+          <StatCard
+            icon={MapPin}
+            label="Total for Marketplace"
+            value={isLoading ? '-' : stats.totalForMarketplace}
+            subValue="All time"
+            variant="warning"
+          />
+        </motion.div>
+      )}
 
       {/* Main Action */}
       <motion.div

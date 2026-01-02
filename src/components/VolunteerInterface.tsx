@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, ShoppingBag, LogOut, User } from 'lucide-react';
+import { LogIn, ShoppingBag, LogOut, User, UserCheck } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { EntranceZone } from '@/components/zones/EntranceZone';
 import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
 import { ExitZone } from '@/components/zones/ExitZone';
+import { VolunteerZone } from '@/components/zones/VolunteerZone';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -17,12 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Zone = 'entrance' | 'marketplace' | 'exit';
+type Zone = 'entrance' | 'marketplace' | 'exit' | 'volunteers';
 
 const zones = [
   { id: 'entrance' as Zone, label: 'Entrance', icon: LogIn, color: 'text-primary' },
   { id: 'marketplace' as Zone, label: 'Marketplace', icon: ShoppingBag, color: 'text-warning' },
   { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
+  { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success' },
 ];
 
 export const VolunteerInterface = () => {
@@ -37,6 +39,8 @@ export const VolunteerInterface = () => {
         return <MarketplaceZone />;
       case 'exit':
         return <ExitZone />;
+      case 'volunteers':
+        return <VolunteerZone />;
     }
   };
 
