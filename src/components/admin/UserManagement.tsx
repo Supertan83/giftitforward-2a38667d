@@ -53,7 +53,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [editRole, setEditRole] = useState<'admin' | 'volunteer'>('volunteer');
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>();
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
