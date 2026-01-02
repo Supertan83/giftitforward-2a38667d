@@ -45,13 +45,15 @@ const createUserSchema = z.object({
 
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer' } | null>(null);
+  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer'; first_name: string | null; last_name: string | null } | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'volunteer'>('volunteer');
   const [editRole, setEditRole] = useState<'admin' | 'volunteer'>('volunteer');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>();
 
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
@@ -112,19 +114,26 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     }
   };
 
-  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer' }) => {
+  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer'; first_name: string | null; last_name: string | null }) => {
     setEditUser(user);
     setEditRole(user.role);
+    setEditFirstName(user.first_name || '');
+    setEditLastName(user.last_name || '');
   };
 
   const handleUpdateRole = async () => {
     if (!editUser) return;
     
     try {
-      await updateUserRole.mutateAsync({ userId: editUser.id, role: editRole });
+      await updateUserRole.mutateAsync({ 
+        userId: editUser.id, 
+        role: editRole,
+        firstName: editFirstName.trim() || undefined,
+        lastName: editLastName.trim() || undefined,
+      });
       toast({
         title: 'User Updated',
-        description: `${editUser.email} is now a ${editRole}`,
+        description: `${editFirstName || editUser.email} has been updated`,
       });
       setEditUser(null);
     } catch (error) {
@@ -227,9 +236,13 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium truncate">{user.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Added {new Date(user.created_at).toLocaleDateString()}
+                      <p className="font-medium truncate">
+                        {user.first_name || user.last_name 
+                          ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                          : user.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user.first_name || user.last_name ? user.email : `Added ${new Date(user.created_at).toLocaleDateString()}`}
                       </p>
                     </div>
                   </div>
@@ -241,7 +254,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditUser({ id: user.id, email: user.email, role: user.role })}
+                      onClick={() => handleEditUser({ id: user.id, email: user.email, role: user.role, first_name: user.first_name, last_name: user.last_name })}
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -353,11 +366,34 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Edit User</DialogTitle>
             <DialogDescription>
-              Update role for {editUser?.email}
+              Update information for {editUser?.email}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="editFirstName">First Name</Label>
+                <Input
+                  id="editFirstName"
+                  placeholder="First name"
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editLastName">Last Name</Label>
+                <Input
+                  id="editLastName"
+                  placeholder="Last name"
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Email</Label>
               <div className="relative">
@@ -398,7 +434,10 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
             <Button variant="outline" onClick={() => setEditUser(null)}>
               Cancel
             </Button>
-            <Button onClick={handleUpdateRole} disabled={updateUserRole.isPending || editRole === editUser?.role}>
+            <Button 
+              onClick={handleUpdateRole} 
+              disabled={updateUserRole.isPending}
+            >
               {updateUserRole.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Save Changes
             </Button>

@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     }
 
     // Map roles to users with emails - deduplicate by user_id, prioritize admin role
-    const userMap = new Map<string, { id: string; email: string; role: string; created_at: string }>();
+    const userMap = new Map<string, { id: string; email: string; role: string; created_at: string; first_name: string | null; last_name: string | null }>();
     
     roles?.forEach(role => {
       const authUser = authUsers.find(u => u.id === role.user_id);
@@ -91,7 +91,9 @@ Deno.serve(async (req) => {
           id: role.user_id, // Use user_id as the id, not role.id
           email: authUser?.email || 'Unknown',
           role: role.role,
-          created_at: role.created_at
+          created_at: role.created_at,
+          first_name: authUser?.user_metadata?.first_name || null,
+          last_name: authUser?.user_metadata?.last_name || null,
         });
       }
     });
