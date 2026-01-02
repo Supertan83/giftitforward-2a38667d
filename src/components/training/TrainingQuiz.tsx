@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
 import { Check, X, ChevronLeft, ChevronRight, Award, Download, Loader2, Mail } from 'lucide-react';
@@ -106,6 +106,7 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [certificateSent, setCertificateSent] = useState(false);
+  const [autoEmailAttempted, setAutoEmailAttempted] = useState(false);
   const { toast } = useToast();
 
   const progress = ((currentQuestion + 1) / quizQuestions.length) * 100;
@@ -245,6 +246,14 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     }
   };
 
+  // Auto-send certificate email when results are shown
+  useEffect(() => {
+    if (showResults && !autoEmailAttempted) {
+      setAutoEmailAttempted(true);
+      sendCertificateEmail();
+    }
+  }, [showResults, autoEmailAttempted]);
+
   // Results screen
   if (showResults) {
     return (
@@ -260,9 +269,29 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
           <h2 className="font-display font-bold text-2xl text-white mb-2">
             Training Complete!
           </h2>
-          <p className="text-white/70 mb-8">
+          <p className="text-white/70 mb-4">
             Congratulations, {userInfo.firstName}! You've completed the Circular Economy Training Module.
           </p>
+
+          {/* Email status indicator */}
+          <div className="mb-6 p-3 rounded-lg bg-white/5 border border-white/10">
+            {isSendingEmail ? (
+              <div className="flex items-center justify-center gap-2 text-white/70">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Sending certificate to {userInfo.email}...</span>
+              </div>
+            ) : certificateSent ? (
+              <div className="flex items-center justify-center gap-2 text-success">
+                <Check className="w-4 h-4" />
+                <span>Certificate sent to {userInfo.email}</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-white/50">
+                <Mail className="w-4 h-4" />
+                <span>Certificate will be sent to {userInfo.email}</span>
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-col gap-3">
             <Button
@@ -279,22 +308,17 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
               Download Certificate
             </Button>
 
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={sendCertificateEmail}
-              disabled={isSendingEmail || certificateSent}
-              className="w-full"
-            >
-              {isSendingEmail ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : certificateSent ? (
-                <Check className="w-4 h-4 mr-2" />
-              ) : (
+            {!certificateSent && !isSendingEmail && (
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={sendCertificateEmail}
+                className="w-full"
+              >
                 <Mail className="w-4 h-4 mr-2" />
-              )}
-              {certificateSent ? 'Email Sent!' : `Email to ${userInfo.email}`}
-            </Button>
+                Resend to {userInfo.email}
+              </Button>
+            )}
 
             <Button
               size="lg"

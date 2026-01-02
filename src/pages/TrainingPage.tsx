@@ -1,15 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useNavigate } from 'react-router-dom';
 import TrainingSlideshow from '@/components/training/TrainingSlideshow';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ArrowRight } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 import surplussLogo from '@/assets/surpluss-full-logo.svg';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export interface TrainingUserInfo {
   firstName: string;
@@ -17,40 +15,98 @@ export interface TrainingUserInfo {
   email: string;
 }
 
-const registrationSchema = z.object({
-  firstName: z.string().trim().min(1, 'First name is required').max(50, 'First name must be less than 50 characters'),
-  lastName: z.string().trim().min(1, 'Last name is required').max(50, 'Last name must be less than 50 characters'),
-  email: z.string().trim().email('Please enter a valid email address').max(100, 'Email must be less than 100 characters'),
-});
-
-type RegistrationFormData = z.infer<typeof registrationSchema>;
-
 const TrainingPage = () => {
+  const { user, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [userInfo, setUserInfo] = useState<TrainingUserInfo | null>(null);
+  const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true);
+  const [hasStartedTraining, setHasStartedTraining] = useState(false);
 
-  const form = useForm<RegistrationFormData>({
-    resolver: zodResolver(registrationSchema),
-    defaultValues: {
-      firstName: '',
-      lastName: '',
-      email: '',
-    },
-  });
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth', { state: { redirectTo: '/training' } });
+    }
+  }, [user, authLoading, navigate]);
 
-  const onSubmit = (data: RegistrationFormData) => {
-    setUserInfo({
-      firstName: data.firstName.trim(),
-      lastName: data.lastName.trim(),
-      email: data.email.trim().toLowerCase(),
-    });
-  };
+  // Fetch user info from pending_volunteers
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      if (!user?.email) return;
+      
+      try {
+        // Try to get user info from pending_volunteers
+        const { data: volunteer, error } = await supabase
+          .from('pending_volunteers')
+          .select('first_name, last_name, email')
+          .eq('email', user.email)
+          .maybeSingle();
 
-  // If user has registered, show the training
-  if (userInfo) {
+        if (error) {
+          console.error('Error fetching volunteer info:', error);
+        }
+
+        if (volunteer) {
+          setUserInfo({
+            firstName: volunteer.first_name,
+            lastName: volunteer.last_name,
+            email: volunteer.email,
+          });
+        } else {
+          // Fallback: Use email parts if no volunteer record found
+          const emailName = user.email.split('@')[0];
+          const nameParts = emailName.split(/[._-]/);
+          setUserInfo({
+            firstName: nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'Volunteer',
+            lastName: nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : '',
+            email: user.email,
+          });
+        }
+      } catch (err) {
+        console.error('Error in fetchUserInfo:', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to load your information. Please try again.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingUserInfo(false);
+      }
+    };
+
+    if (user) {
+      fetchUserInfo();
+    }
+  }, [user, toast]);
+
+  // Show loading while auth is being checked
+  if (authLoading || isLoadingUserInfo) {
+    return (
+      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-white/70">Loading...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // If not logged in, don't render anything (redirect will happen)
+  if (!user) {
+    return null;
+  }
+
+  // If user has started training, show the slideshow
+  if (hasStartedTraining && userInfo) {
     return <TrainingSlideshow userInfo={userInfo} />;
   }
 
-  // Registration form
+  // Welcome screen before starting training
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
       <motion.div
@@ -66,58 +122,34 @@ const TrainingPage = () => {
             </div>
             <CardTitle className="font-display text-2xl">GIF Volunteer Training</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="John" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Doe" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email Address</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="john.doe@example.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" size="lg">
-                  Start Training
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </form>
-            </Form>
-            <p className="text-xs text-muted-foreground text-center mt-4">
-              Your certificate will be sent to this email upon completion.
+          <CardContent className="text-center">
+            {userInfo && (
+              <div className="mb-6">
+                <p className="text-lg text-foreground">
+                  Welcome, <span className="font-semibold">{userInfo.firstName} {userInfo.lastName}</span>!
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Logged in as {userInfo.email}
+                </p>
+              </div>
+            )}
+            
+            <p className="text-muted-foreground mb-6">
+              Complete the training module and quiz to receive your Circular Economy certificate.
+            </p>
+            
+            <button
+              onClick={() => setHasStartedTraining(true)}
+              className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+            >
+              Start Training
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            
+            <p className="text-xs text-muted-foreground mt-4">
+              Your certificate will be automatically sent to {userInfo?.email} upon completion.
             </p>
           </CardContent>
         </Card>
