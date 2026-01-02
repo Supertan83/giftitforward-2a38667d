@@ -246,10 +246,29 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     }
   };
 
-  // Auto-send certificate email when results are shown
+  const markTrainingCompleted = async () => {
+    try {
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .update({
+          training_completed: true,
+          training_completed_at: new Date().toISOString(),
+        })
+        .eq('email', userInfo.email);
+
+      if (error) {
+        console.error('Error marking training as completed:', error);
+      }
+    } catch (err) {
+      console.error('Error updating training status:', err);
+    }
+  };
+
+  // Auto-send certificate email and mark training as completed when results are shown
   useEffect(() => {
     if (showResults && !autoEmailAttempted) {
       setAutoEmailAttempted(true);
+      markTrainingCompleted();
       sendCertificateEmail();
     }
   }, [showResults, autoEmailAttempted]);

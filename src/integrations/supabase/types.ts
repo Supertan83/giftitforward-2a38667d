@@ -556,6 +556,8 @@ export type Database = {
           source_data: Json | null
           status: string
           temp_password: string | null
+          training_completed: boolean | null
+          training_completed_at: string | null
           updated_at: string
           webhook_event_id: string | null
         }
@@ -592,6 +594,8 @@ export type Database = {
           source_data?: Json | null
           status?: string
           temp_password?: string | null
+          training_completed?: boolean | null
+          training_completed_at?: string | null
           updated_at?: string
           webhook_event_id?: string | null
         }
@@ -628,6 +632,8 @@ export type Database = {
           source_data?: Json | null
           status?: string
           temp_password?: string | null
+          training_completed?: boolean | null
+          training_completed_at?: string | null
           updated_at?: string
           webhook_event_id?: string | null
         }

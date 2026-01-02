@@ -16,7 +16,8 @@ import {
   Database,
   UserPlus,
   GraduationCap,
-  FileQuestion
+  FileQuestion,
+  Award
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -49,11 +50,12 @@ import { PartnerRegistrations } from '@/components/admin/PartnerRegistrations';
 import { ExternalItemsViewer } from '@/components/admin/ExternalItemsViewer';
 import { PendingVolunteers } from '@/components/admin/PendingVolunteers';
 import { QuizManagement } from '@/components/admin/QuizManagement';
+import { TrainingCompletionViewer } from '@/components/admin/TrainingCompletionViewer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management' | 'training-completion';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -150,6 +152,11 @@ export const AdminDashboard = () => {
   // Show Survey Management view
   if (currentView === 'survey-management') {
     return <QuizManagement onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Training Completion view
+  if (currentView === 'training-completion') {
+    return <TrainingCompletionViewer onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -443,6 +450,28 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-sm md:text-base">Survey Builder</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
                   Create volunteer knowledge surveys
+                </p>
+              </div>
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.1 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('training-completion')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                <Award className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-sm md:text-base">Training Completion</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
+                  View certificate status
                 </p>
               </div>
             </div>
