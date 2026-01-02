@@ -220,25 +220,37 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
 
       const { data, error } = await supabase.functions.invoke('send-certificate', {
         body: {
-          firstName: userInfo.firstName,
-          lastName: userInfo.lastName,
-          email: userInfo.email,
+          firstName: userInfo.firstName?.trim() || '',
+          lastName: userInfo.lastName?.trim() || '',
+          email: userInfo.email?.trim() || '',
           certificateBase64: base64Data,
         },
       });
 
       if (error) throw error;
+      
+      // Check if the response indicates success
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Failed to send certificate email');
+      }
 
       setCertificateSent(true);
       toast({
         title: 'Certificate Sent!',
         description: `Your certificate has been emailed to ${userInfo.email}`,
       });
+      
+      // Update certificate_sent_at in database
+      await supabase
+        .from('pending_volunteers')
+        .update({ certificate_sent_at: new Date().toISOString() })
+        .eq('email', userInfo.email);
+        
     } catch (error: any) {
       console.error('Error sending certificate email:', error);
       toast({
         title: 'Email Failed',
-        description: error.message || 'Failed to send certificate email. Please download instead.',
+        description: error.message || 'Failed to send certificate email. Please download your certificate instead.',
         variant: 'destructive',
       });
     } finally {
