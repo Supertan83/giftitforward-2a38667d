@@ -61,7 +61,13 @@ export const useQRCards = () => {
         status: mapDbStatusToApp(card.status as DbCardStatus),
         creditBalance: card.credit_balance,
         totalItemsCollected: card.total_items_collected,
-        transactions: [] // Transactions are fetched separately if needed
+        transactions: [], // Transactions are fetched separately if needed
+        marketplaceId: card.marketplace_id || undefined,
+        activatedAt: card.activated_at || undefined,
+        gender: card.gender || undefined,
+        maritalStatus: card.marital_status || undefined,
+        childrenCount: card.children_count || undefined,
+        nationality: card.nationality || undefined,
       }));
     }
   });
