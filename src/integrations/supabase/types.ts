@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      archived_card_data: {
+        Row: {
+          activated_at: string | null
+          archived_at: string
+          checked_out_at: string | null
+          children_count: number | null
+          collected_items: Json | null
+          created_at: string
+          credit_balance: number | null
+          gender: string | null
+          id: string
+          marital_status: string | null
+          marketplace_id: string | null
+          nationality: string | null
+          original_card_id: string | null
+          total_items_collected: number | null
+          unique_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          archived_at?: string
+          checked_out_at?: string | null
+          children_count?: number | null
+          collected_items?: Json | null
+          created_at?: string
+          credit_balance?: number | null
+          gender?: string | null
+          id?: string
+          marital_status?: string | null
+          marketplace_id?: string | null
+          nationality?: string | null
+          original_card_id?: string | null
+          total_items_collected?: number | null
+          unique_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          archived_at?: string
+          checked_out_at?: string | null
+          children_count?: number | null
+          collected_items?: Json | null
+          created_at?: string
+          credit_balance?: number | null
+          gender?: string | null
+          id?: string
+          marital_status?: string | null
+          marketplace_id?: string | null
+          nationality?: string | null
+          original_card_id?: string | null
+          total_items_collected?: number | null
+          unique_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "archived_card_data_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_dependents: {
         Row: {
           created_at: string
@@ -652,6 +714,7 @@ export type Database = {
       }
       qr_cards: {
         Row: {
+          activated_at: string | null
           children_count: number | null
           collected_items: Json
           created_at: string
@@ -659,6 +722,7 @@ export type Database = {
           gender: string | null
           id: string
           marital_status: string | null
+          marketplace_id: string | null
           nationality: string | null
           status: Database["public"]["Enums"]["card_status"]
           total_items_collected: number
@@ -666,6 +730,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          activated_at?: string | null
           children_count?: number | null
           collected_items?: Json
           created_at?: string
@@ -673,6 +738,7 @@ export type Database = {
           gender?: string | null
           id?: string
           marital_status?: string | null
+          marketplace_id?: string | null
           nationality?: string | null
           status?: Database["public"]["Enums"]["card_status"]
           total_items_collected?: number
@@ -680,6 +746,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          activated_at?: string | null
           children_count?: number | null
           collected_items?: Json
           created_at?: string
@@ -687,13 +754,22 @@ export type Database = {
           gender?: string | null
           id?: string
           marital_status?: string | null
+          marketplace_id?: string | null
           nationality?: string | null
           status?: Database["public"]["Enums"]["card_status"]
           total_items_collected?: number
           unique_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "qr_cards_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       registration_events: {
         Row: {
@@ -794,6 +870,105 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      volunteer_attendance: {
+        Row: {
+          check_in_time: string
+          check_out_time: string | null
+          created_at: string
+          hours_worked: number | null
+          id: string
+          marketplace_id: string | null
+          volunteer_card_id: string
+        }
+        Insert: {
+          check_in_time?: string
+          check_out_time?: string | null
+          created_at?: string
+          hours_worked?: number | null
+          id?: string
+          marketplace_id?: string | null
+          volunteer_card_id: string
+        }
+        Update: {
+          check_in_time?: string
+          check_out_time?: string | null
+          created_at?: string
+          hours_worked?: number | null
+          id?: string
+          marketplace_id?: string | null
+          volunteer_card_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "volunteer_attendance_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volunteer_attendance_volunteer_card_id_fkey"
+            columns: ["volunteer_card_id"]
+            isOneToOne: false
+            referencedRelation: "volunteer_qr_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      volunteer_qr_cards: {
+        Row: {
+          checked_in_at: string | null
+          checked_out_at: string | null
+          created_at: string
+          id: string
+          marketplace_id: string | null
+          status: string
+          total_hours_worked: number | null
+          unique_id: string
+          updated_at: string
+          volunteer_id: string | null
+        }
+        Insert: {
+          checked_in_at?: string | null
+          checked_out_at?: string | null
+          created_at?: string
+          id?: string
+          marketplace_id?: string | null
+          status?: string
+          total_hours_worked?: number | null
+          unique_id: string
+          updated_at?: string
+          volunteer_id?: string | null
+        }
+        Update: {
+          checked_in_at?: string | null
+          checked_out_at?: string | null
+          created_at?: string
+          id?: string
+          marketplace_id?: string | null
+          status?: string
+          total_hours_worked?: number | null
+          unique_id?: string
+          updated_at?: string
+          volunteer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "volunteer_qr_cards_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volunteer_qr_cards_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "pending_volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_events: {
         Row: {
