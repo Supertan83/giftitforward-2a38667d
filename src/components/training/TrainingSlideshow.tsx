@@ -2,14 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { slides } from './slideData';
 import SlideRenderer from './SlideRenderer';
+import TrainingQuiz from './TrainingQuiz';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import type { TrainingUserInfo } from '@/pages/TrainingPage';
 
-const TrainingSlideshow = () => {
+interface TrainingSlideshowProps {
+  userInfo: TrainingUserInfo;
+}
+
+const TrainingSlideshow = ({ userInfo }: TrainingSlideshowProps) => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [showQuiz, setShowQuiz] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -19,15 +26,12 @@ const TrainingSlideshow = () => {
 
   const handleNext = useCallback(() => {
     if (isLastSlide) {
-      toast({
-        title: "Training Complete!",
-        description: "Congratulations! You've completed the CE Module training.",
-      });
-      navigate('/');
+      // Show quiz instead of navigating away
+      setShowQuiz(true);
     } else {
       setCurrentSlide((prev) => prev + 1);
     }
-  }, [isLastSlide, navigate, toast]);
+  }, [isLastSlide]);
 
   const handlePrevious = useCallback(() => {
     if (!isFirstSlide) {
@@ -36,7 +40,12 @@ const TrainingSlideshow = () => {
   }, [isFirstSlide]);
 
   const handleClose = () => {
-    navigate('/');
+    // Navigate to completion page instead of home
+    navigate('/training/complete');
+  };
+
+  const handleQuizComplete = () => {
+    navigate('/training/complete');
   };
 
   // Keyboard navigation
@@ -56,6 +65,11 @@ const TrainingSlideshow = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNext, handlePrevious]);
+
+  // Show quiz after completing slides
+  if (showQuiz) {
+    return <TrainingQuiz userInfo={userInfo} onComplete={handleQuizComplete} />;
+  }
 
   return (
     <div className="h-screen bg-[#1a1a1a] flex flex-col overflow-hidden">

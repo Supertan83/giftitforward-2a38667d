@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.email-tracker]
 verify_jwt = false
+
+[functions.send-certificate]
+verify_jwt = false
