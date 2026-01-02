@@ -61,7 +61,7 @@ const TrainingPage = () => {
       >
         <Card className="bg-card/95 backdrop-blur border-border/50">
           <CardHeader className="text-center pb-4">
-            <div className="flex justify-center mb-6">
+            <div className="flex justify-center mb-3">
               <img src={surplussLogo} alt="Surpluss" className="h-32" />
             </div>
             <CardTitle className="font-display text-2xl">GIF Volunteer Training</CardTitle>
