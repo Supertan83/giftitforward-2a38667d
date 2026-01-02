@@ -42,7 +42,7 @@ const handler = async (req: Request): Promise<Response> => {
     const filename = `certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
 
     const emailResponse = await resend.emails.send({
-      from: "Surpluss Volunteers <noreply@thesurpluss.com>",
+      from: "GIF Volunteer Training <noreply@mgif.thesurpluss.com>",
       to: [email],
       subject: "Your Circular Economy Training Certificate",
       html: `

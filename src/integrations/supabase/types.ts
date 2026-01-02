@@ -526,6 +526,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          certificate_sent_at: string | null
           created_at: string
           created_user_id: string | null
           email: string
@@ -564,6 +565,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          certificate_sent_at?: string | null
           created_at?: string
           created_user_id?: string | null
           email: string
@@ -602,6 +604,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          certificate_sent_at?: string | null
           created_at?: string
           created_user_id?: string | null
           email?: string
