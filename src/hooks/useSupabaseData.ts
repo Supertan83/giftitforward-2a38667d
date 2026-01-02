@@ -509,6 +509,8 @@ interface UserWithRole {
   email: string;
   role: 'admin' | 'volunteer';
   created_at: string;
+  first_name: string | null;
+  last_name: string | null;
 }
 
 export const useUsers = () => {
@@ -534,11 +536,13 @@ export const useUsers = () => {
         throw new Error(data.error || 'Failed to fetch users');
       }
 
-      return data.users.map((user: { id: string; email: string; role: string; created_at: string }) => ({
+      return data.users.map((user: { id: string; email: string; role: string; created_at: string; first_name: string | null; last_name: string | null }) => ({
         id: user.id,
         email: user.email,
         role: user.role as 'admin' | 'volunteer',
-        created_at: user.created_at
+        created_at: user.created_at,
+        first_name: user.first_name,
+        last_name: user.last_name,
       }));
     }
   });
@@ -582,7 +586,7 @@ export const useUpdateUserRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: 'admin' | 'volunteer' }) => {
+    mutationFn: async ({ userId, role, firstName, lastName }: { userId: string; role: 'admin' | 'volunteer'; firstName?: string; lastName?: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {
@@ -595,7 +599,7 @@ export const useUpdateUserRole = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ userId, role }),
+        body: JSON.stringify({ userId, role, firstName, lastName }),
       });
 
       const data = await response.json();

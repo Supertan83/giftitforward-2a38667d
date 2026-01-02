@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { userId, role } = body;
+    const { userId, role, firstName, lastName } = body;
 
     // Validate inputs
     if (!userId || typeof userId !== 'string') {
@@ -89,12 +89,45 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Validate name fields if provided
+    if (firstName !== undefined && (typeof firstName !== 'string' || firstName.length > 100)) {
+      return new Response(JSON.stringify({ error: 'First name must be a string under 100 characters' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (lastName !== undefined && (typeof lastName !== 'string' || lastName.length > 100)) {
+      return new Response(JSON.stringify({ error: 'Last name must be a string under 100 characters' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Prevent self-demotion from admin
     if (requestingUser.id === userId && role !== 'admin') {
       return new Response(JSON.stringify({ error: 'Cannot remove your own admin privileges' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // Update user metadata (name) if provided
+    if (firstName !== undefined || lastName !== undefined) {
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          first_name: firstName?.trim() || null,
+          last_name: lastName?.trim() || null,
+        }
+      })
+
+      if (updateError) {
+        console.error('User metadata update error:', updateError);
+        return new Response(JSON.stringify({ error: 'Unable to update user information. Please try again.' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     // Update user role - delete existing and insert new
@@ -117,7 +150,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      user: { id: userId, role } 
+      user: { id: userId, role, firstName, lastName } 
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
