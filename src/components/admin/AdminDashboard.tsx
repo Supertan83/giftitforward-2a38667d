@@ -17,7 +17,9 @@ import {
   UserPlus,
   GraduationCap,
   FileQuestion,
-  Award
+  Award,
+  RefreshCw,
+  UserCheck
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -51,11 +53,13 @@ import { ExternalItemsViewer } from '@/components/admin/ExternalItemsViewer';
 import { PendingVolunteers } from '@/components/admin/PendingVolunteers';
 import { QuizManagement } from '@/components/admin/QuizManagement';
 import { TrainingCompletionViewer } from '@/components/admin/TrainingCompletionViewer';
+import { VolunteerQRCodeGenerator } from '@/components/admin/VolunteerQRCodeGenerator';
+import { MarketplaceSyncPanel } from '@/components/admin/MarketplaceSyncPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management' | 'training-completion';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -157,6 +161,16 @@ export const AdminDashboard = () => {
   // Show Training Completion view
   if (currentView === 'training-completion') {
     return <TrainingCompletionViewer onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Volunteer QR Generator view
+  if (currentView === 'volunteer-qr') {
+    return <VolunteerQRCodeGenerator onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Marketplace Sync view
+  if (currentView === 'marketplace-sync') {
+    return <MarketplaceSyncPanel onBack={() => setCurrentView('dashboard')} />;
   }
 
   if (isLoading) {
@@ -472,6 +486,50 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-sm md:text-base">Training Completion</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
                   View certificate status
+                </p>
+              </div>
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('volunteer-qr')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors shrink-0">
+                <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-sm md:text-base">Volunteer QR Cards</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
+                  Track volunteer attendance
+                </p>
+              </div>
+            </div>
+          </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.3 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setCurrentView('marketplace-sync')}
+            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors shrink-0">
+                <RefreshCw className="w-5 h-5 md:w-6 md:h-6 text-rose-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-sm md:text-base">Sync & Reset Cards</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
+                  Archive data between marketplaces
                 </p>
               </div>
             </div>

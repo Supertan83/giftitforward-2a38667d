@@ -17,9 +17,9 @@ export const mockAdmin: User = {
 };
 
 export const mockMarketplaceEvents: MarketplaceEvent[] = [
-  { id: '1', name: 'National Charity School - Dubai', date: 'Jan 15, 2024', location: 'Dubai' },
-  { id: '2', name: 'Community Center - Abu Dhabi', date: 'Jan 22, 2024', location: 'Abu Dhabi' },
-  { id: '3', name: 'Relief Distribution - Sharjah', date: 'Feb 5, 2024', location: 'Sharjah' },
+  { id: '1', name: 'National Charity School - Dubai', date: 'Jan 15, 2024', location: 'Dubai', status: 'completed' },
+  { id: '2', name: 'Community Center - Abu Dhabi', date: 'Jan 22, 2024', location: 'Abu Dhabi', status: 'active' },
+  { id: '3', name: 'Relief Distribution - Sharjah', date: 'Feb 5, 2024', location: 'Sharjah', status: 'upcoming' },
 ];
 
 export const mockQRCards: QRCard[] = [

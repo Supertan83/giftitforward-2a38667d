@@ -150,7 +150,8 @@ export const useCardOperations = () => {
   const activateCard = useMutation({
     mutationFn: async ({ 
       uniqueId, 
-      beneficiaryInfo 
+      beneficiaryInfo,
+      marketplaceId 
     }: { 
       uniqueId: string; 
       beneficiaryInfo?: { 
@@ -158,7 +159,8 @@ export const useCardOperations = () => {
         maritalStatus: string; 
         childrenCount: number; 
         nationality: string; 
-      } 
+      };
+      marketplaceId?: string;
     }) => {
       // Find card
       const { data: card, error: findError } = await supabase
@@ -168,15 +170,24 @@ export const useCardOperations = () => {
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
-      if (card.status === 'active') return card;
+      
+      // BLOCK: If card is already active, prevent re-entry
+      if (card.status === 'active') {
+        throw new SafeError('Card already activated. This beneficiary has already entered the marketplace.');
+      }
 
       // Update card with beneficiary info
       const updateData: Record<string, unknown> = {
         status: 'active' as DbCardStatus,
         credit_balance: 15,
         total_items_collected: 0,
-        collected_items: []
+        collected_items: [],
+        activated_at: new Date().toISOString()
       };
+
+      if (marketplaceId) {
+        updateData.marketplace_id = marketplaceId;
+      }
 
       if (beneficiaryInfo) {
         updateData.gender = beneficiaryInfo.gender;
@@ -727,6 +738,340 @@ export const useBeneficiaryDemographics = () => {
           .sort((a, b) => b.count - a.count),
         totalChildren
       };
+    }
+  });
+};
+
+// Volunteer QR Cards
+export const useVolunteerQRCards = () => {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['volunteer_qr_cards'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('volunteer_qr_cards')
+        .select(`
+          *,
+          pending_volunteers (
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return data || [];
+    }
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('volunteer_qr_cards_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'volunteer_qr_cards' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return query;
+};
+
+// Volunteer Card Operations
+export const useVolunteerCardOperations = () => {
+  const queryClient = useQueryClient();
+
+  const addVolunteerCards = useMutation({
+    mutationFn: async (uniqueIds: string[]) => {
+      const cards = uniqueIds.map(uniqueId => ({
+        unique_id: uniqueId,
+        status: 'inactive'
+      }));
+
+      const { data, error } = await supabase
+        .from('volunteer_qr_cards')
+        .insert(cards)
+        .select();
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return data?.length || 0;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+
+  const checkInVolunteer = useMutation({
+    mutationFn: async ({ uniqueId, marketplaceId }: { uniqueId: string; marketplaceId?: string }) => {
+      const { data: card, error: findError } = await supabase
+        .from('volunteer_qr_cards')
+        .select('*')
+        .ilike('unique_id', uniqueId)
+        .maybeSingle();
+
+      if (findError || !card) throw new SafeError('Volunteer card not found');
+      if (card.status === 'checked_in') throw new SafeError('Volunteer already checked in');
+
+      const now = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from('volunteer_qr_cards')
+        .update({
+          status: 'checked_in',
+          checked_in_at: now,
+          marketplace_id: marketplaceId || null
+        })
+        .eq('id', card.id);
+
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
+
+      // Create attendance record
+      await supabase.from('volunteer_attendance').insert({
+        volunteer_card_id: card.id,
+        marketplace_id: marketplaceId || null,
+        check_in_time: now
+      });
+
+      return { cardId: card.id, checkedInAt: now };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+
+  const checkOutVolunteer = useMutation({
+    mutationFn: async (uniqueId: string) => {
+      const { data: card, error: findError } = await supabase
+        .from('volunteer_qr_cards')
+        .select('*, volunteer_attendance(*)')
+        .ilike('unique_id', uniqueId)
+        .maybeSingle();
+
+      if (findError || !card) throw new SafeError('Volunteer card not found');
+      if (card.status !== 'checked_in') throw new SafeError('Volunteer not checked in');
+
+      const now = new Date();
+      const checkedInAt = new Date(card.checked_in_at);
+      const hoursWorked = (now.getTime() - checkedInAt.getTime()) / (1000 * 60 * 60);
+
+      const { error: updateError } = await supabase
+        .from('volunteer_qr_cards')
+        .update({
+          status: 'checked_out',
+          checked_out_at: now.toISOString(),
+          total_hours_worked: (card.total_hours_worked || 0) + hoursWorked
+        })
+        .eq('id', card.id);
+
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
+
+      // Update attendance record
+      const { data: attendance } = await supabase
+        .from('volunteer_attendance')
+        .select('*')
+        .eq('volunteer_card_id', card.id)
+        .is('check_out_time', null)
+        .order('check_in_time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (attendance) {
+        await supabase
+          .from('volunteer_attendance')
+          .update({
+            check_out_time: now.toISOString(),
+            hours_worked: hoursWorked
+          })
+          .eq('id', attendance.id);
+      }
+
+      return { hoursWorked: hoursWorked.toFixed(2) };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+
+  const linkVolunteerToCard = useMutation({
+    mutationFn: async ({ cardUniqueId, volunteerId }: { cardUniqueId: string; volunteerId: string }) => {
+      const { error } = await supabase
+        .from('volunteer_qr_cards')
+        .update({ volunteer_id: volunteerId })
+        .ilike('unique_id', cardUniqueId);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+
+  const resetVolunteerCard = useMutation({
+    mutationFn: async (uniqueId: string) => {
+      const { error } = await supabase
+        .from('volunteer_qr_cards')
+        .update({
+          status: 'inactive',
+          checked_in_at: null,
+          checked_out_at: null,
+          marketplace_id: null
+        })
+        .ilike('unique_id', uniqueId);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+
+  return {
+    addVolunteerCards,
+    checkInVolunteer,
+    checkOutVolunteer,
+    linkVolunteerToCard,
+    resetVolunteerCard
+  };
+};
+
+// Marketplace Sync and Reset Operations
+export const useMarketplaceSyncOperations = () => {
+  const queryClient = useQueryClient();
+
+  const archiveAndResetCards = useMutation({
+    mutationFn: async (marketplaceId: string) => {
+      // Get all cards associated with this marketplace
+      const { data: cards, error: fetchError } = await supabase
+        .from('qr_cards')
+        .select('*')
+        .eq('marketplace_id', marketplaceId);
+
+      if (fetchError) throw new SafeError(mapDatabaseError(fetchError), fetchError);
+
+      if (!cards || cards.length === 0) {
+        return { archivedCount: 0 };
+      }
+
+      // Archive card data
+      const archiveData = cards.map(card => ({
+        original_card_id: card.id,
+        unique_id: card.unique_id,
+        marketplace_id: marketplaceId,
+        gender: card.gender,
+        marital_status: card.marital_status,
+        nationality: card.nationality,
+        children_count: card.children_count,
+        credit_balance: card.credit_balance,
+        total_items_collected: card.total_items_collected,
+        collected_items: card.collected_items,
+        activated_at: card.activated_at,
+        checked_out_at: card.updated_at
+      }));
+
+      const { error: archiveError } = await supabase
+        .from('archived_card_data')
+        .insert(archiveData);
+
+      if (archiveError) throw new SafeError(mapDatabaseError(archiveError), archiveError);
+
+      // Reset cards for reuse
+      const cardIds = cards.map(c => c.id);
+      const { error: resetError } = await supabase
+        .from('qr_cards')
+        .update({
+          status: 'inactive',
+          credit_balance: 0,
+          total_items_collected: 0,
+          collected_items: [],
+          gender: null,
+          marital_status: null,
+          nationality: null,
+          children_count: 0,
+          marketplace_id: null,
+          activated_at: null
+        })
+        .in('id', cardIds);
+
+      if (resetError) throw new SafeError(mapDatabaseError(resetError), resetError);
+
+      return { archivedCount: cards.length };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+    }
+  });
+
+  const resetAllCardsForMarketplace = useMutation({
+    mutationFn: async () => {
+      // Reset all active cards that have been used (have marketplace_id or activated_at)
+      const { data: cards, error: fetchError } = await supabase
+        .from('qr_cards')
+        .select('id')
+        .or('marketplace_id.not.is.null,activated_at.not.is.null');
+
+      if (fetchError) throw new SafeError(mapDatabaseError(fetchError), fetchError);
+
+      if (!cards || cards.length === 0) {
+        return { resetCount: 0 };
+      }
+
+      const cardIds = cards.map(c => c.id);
+      const { error: resetError } = await supabase
+        .from('qr_cards')
+        .update({
+          status: 'inactive',
+          credit_balance: 0,
+          total_items_collected: 0,
+          collected_items: [],
+          gender: null,
+          marital_status: null,
+          nationality: null,
+          children_count: 0,
+          marketplace_id: null,
+          activated_at: null
+        })
+        .in('id', cardIds);
+
+      if (resetError) throw new SafeError(mapDatabaseError(resetError), resetError);
+
+      return { resetCount: cards.length };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+    }
+  });
+
+  return {
+    archiveAndResetCards,
+    resetAllCardsForMarketplace
+  };
+};
+
+// Archived Card Data
+export const useArchivedCardData = (marketplaceId?: string) => {
+  return useQuery({
+    queryKey: ['archived_card_data', marketplaceId],
+    queryFn: async () => {
+      let query = supabase
+        .from('archived_card_data')
+        .select('*, marketplace_events(name)')
+        .order('archived_at', { ascending: false });
+
+      if (marketplaceId) {
+        query = query.eq('marketplace_id', marketplaceId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return data || [];
     }
   });
 };
