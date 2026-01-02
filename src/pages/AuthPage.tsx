@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
@@ -37,12 +37,20 @@ const AuthPage = () => {
     isLoading
   } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as { redirectTo?: string })?.redirectTo || '/';
 
   useEffect(() => {
-    if (user && userRole) {
-      navigate('/');
+    if (user) {
+      // For training redirect, don't wait for role - just go
+      if (redirectTo === '/training') {
+        navigate(redirectTo);
+      } else if (userRole) {
+        // For other routes, wait for role to be loaded
+        navigate(redirectTo);
+      }
     }
-  }, [user, userRole, navigate]);
+  }, [user, userRole, navigate, redirectTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
