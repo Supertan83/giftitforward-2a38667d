@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.send-certificate]
 verify_jwt = false
+
+[functions.send-survey]
+verify_jwt = false

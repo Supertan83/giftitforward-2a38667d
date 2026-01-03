@@ -892,7 +892,16 @@ export const useVolunteerCardOperations = () => {
     mutationFn: async (uniqueId: string) => {
       const { data: card, error: findError } = await supabase
         .from('volunteer_qr_cards')
-        .select('*, volunteer_attendance(*)')
+        .select(`
+          *,
+          volunteer_attendance(*),
+          pending_volunteers (
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        `)
         .ilike('unique_id', uniqueId)
         .maybeSingle();
 
@@ -934,7 +943,29 @@ export const useVolunteerCardOperations = () => {
           .eq('id', attendance.id);
       }
 
-      return { hoursWorked: hoursWorked.toFixed(2) };
+      // Send survey email if volunteer has email
+      const volunteer = card.pending_volunteers;
+      if (volunteer?.email) {
+        const volunteerName = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.trim();
+        
+        try {
+          await supabase.functions.invoke('send-survey', {
+            body: {
+              volunteerCardId: card.id,
+              volunteerId: volunteer.id,
+              volunteerName: volunteerName || 'Volunteer',
+              volunteerEmail: volunteer.email,
+              marketplaceId: card.marketplace_id,
+            },
+          });
+          console.log('Survey email sent to:', volunteer.email);
+        } catch (surveyError) {
+          // Log but don't fail checkout if survey fails
+          console.error('Failed to send survey email:', surveyError);
+        }
+      }
+
+      return { hoursWorked: hoursWorked.toFixed(2), surveySent: !!volunteer?.email };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });

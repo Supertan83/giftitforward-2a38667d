@@ -74,11 +74,14 @@ export const VolunteerZone = () => {
           subtitle: 'Attendance recorded successfully',
         });
       } else {
-        await checkOutVolunteer.mutateAsync(code);
+        const result = await checkOutVolunteer.mutateAsync(code);
+        const surveySentMessage = result.surveySent 
+          ? 'Survey email sent!' 
+          : 'Hours logged successfully';
         setFeedback({
           type: 'success',
           title: 'Volunteer Checked Out!',
-          subtitle: 'Hours logged successfully',
+          subtitle: surveySentMessage,
         });
       }
     } catch (error) {
