@@ -624,7 +624,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
             </Button>
             <div className="flex-1">
               <h1 className="font-display font-bold text-lg md:text-xl">
-                {editingSurvey?.id && surveys.find(q => q.id === editingSurvey.id) ? 'Edit Survey' : 'Create New Survey'}
+                {editingSurvey?.id && surveys.find(q => q.id === editingSurvey.id) ? 'Edit Quiz' : 'Create New Quiz'}
               </h1>
             </div>
             <Button onClick={saveSurvey}>
