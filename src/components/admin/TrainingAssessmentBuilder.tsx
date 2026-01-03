@@ -31,28 +31,28 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 
-interface SurveyOption {
+interface AssessmentOption {
   id: string;
   text: string;
   isCorrect: boolean;
 }
 
-interface SurveyQuestion {
+interface AssessmentQuestion {
   id: string;
   question: string;
-  options: SurveyOption[];
+  options: AssessmentOption[];
 }
 
-interface Survey {
+interface Assessment {
   id: string;
   title: string;
   description: string;
-  questions: SurveyQuestion[];
+  questions: AssessmentQuestion[];
   createdAt: Date;
 }
 
-// Sample survey data based on the uploaded PDF
-const sampleSurvey: Survey = {
+// Sample assessment data based on the uploaded PDF
+const sampleAssessment: Assessment = {
   id: '1',
   title: 'Volunteer Knowledge Check: Your Role in the Circular Economy',
   description: 'Test your understanding of circular economy principles and the Gift It Forward program.',
@@ -131,42 +131,42 @@ const sampleSurvey: Survey = {
   ],
 };
 
-interface SurveyManagementProps {
+interface TrainingAssessmentBuilderProps {
   onBack: () => void;
 }
 
-export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
-  const [surveys, setSurveys] = useState<Survey[]>([sampleSurvey]);
-  const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
+export const TrainingAssessmentBuilder = ({ onBack }: TrainingAssessmentBuilderProps) => {
+  const [assessments, setAssessments] = useState<Assessment[]>([sampleAssessment]);
+  const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewSurvey, setPreviewSurvey] = useState<Survey | null>(null);
+  const [previewAssessment, setPreviewAssessment] = useState<Assessment | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({});
   const [showResults, setShowResults] = useState(false);
   const [volunteerName, setVolunteerName] = useState('');
   const { toast } = useToast();
 
-  const createNewSurvey = () => {
-    const newSurvey: Survey = {
+  const createNewAssessment = () => {
+    const newAssessment: Assessment = {
       id: crypto.randomUUID(),
       title: '',
       description: '',
       questions: [],
       createdAt: new Date(),
     };
-    setEditingSurvey(newSurvey);
+    setEditingAssessment(newAssessment);
     setIsEditing(true);
   };
 
-  const editSurvey = (survey: Survey) => {
-    setEditingSurvey({ ...survey, questions: survey.questions.map(q => ({ ...q, options: [...q.options] })) });
+  const editAssessment = (assessment: Assessment) => {
+    setEditingAssessment({ ...assessment, questions: assessment.questions.map(q => ({ ...q, options: [...q.options] })) });
     setIsEditing(true);
   };
 
   const addQuestion = () => {
-    if (!editingSurvey) return;
-    const newQuestion: SurveyQuestion = {
+    if (!editingAssessment) return;
+    const newQuestion: AssessmentQuestion = {
       id: crypto.randomUUID(),
       question: '',
       options: [
@@ -176,27 +176,27 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
         { id: crypto.randomUUID(), text: '', isCorrect: false },
       ],
     };
-    setEditingSurvey({
-      ...editingSurvey,
-      questions: [...editingSurvey.questions, newQuestion],
+    setEditingAssessment({
+      ...editingAssessment,
+      questions: [...editingAssessment.questions, newQuestion],
     });
   };
 
-  const updateQuestion = (questionId: string, updates: Partial<SurveyQuestion>) => {
-    if (!editingSurvey) return;
-    setEditingSurvey({
-      ...editingSurvey,
-      questions: editingSurvey.questions.map(q =>
+  const updateQuestion = (questionId: string, updates: Partial<AssessmentQuestion>) => {
+    if (!editingAssessment) return;
+    setEditingAssessment({
+      ...editingAssessment,
+      questions: editingAssessment.questions.map(q =>
         q.id === questionId ? { ...q, ...updates } : q
       ),
     });
   };
 
-  const updateOption = (questionId: string, optionId: string, updates: Partial<SurveyOption>) => {
-    if (!editingSurvey) return;
-    setEditingSurvey({
-      ...editingSurvey,
-      questions: editingSurvey.questions.map(q =>
+  const updateOption = (questionId: string, optionId: string, updates: Partial<AssessmentOption>) => {
+    if (!editingAssessment) return;
+    setEditingAssessment({
+      ...editingAssessment,
+      questions: editingAssessment.questions.map(q =>
         q.id === questionId
           ? {
               ...q,
@@ -210,10 +210,10 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
   };
 
   const setCorrectAnswer = (questionId: string, optionId: string) => {
-    if (!editingSurvey) return;
-    setEditingSurvey({
-      ...editingSurvey,
-      questions: editingSurvey.questions.map(q =>
+    if (!editingAssessment) return;
+    setEditingAssessment({
+      ...editingAssessment,
+      questions: editingAssessment.questions.map(q =>
         q.id === questionId
           ? {
               ...q,
@@ -228,26 +228,26 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
   };
 
   const deleteQuestion = (questionId: string) => {
-    if (!editingSurvey) return;
-    setEditingSurvey({
-      ...editingSurvey,
-      questions: editingSurvey.questions.filter(q => q.id !== questionId),
+    if (!editingAssessment) return;
+    setEditingAssessment({
+      ...editingAssessment,
+      questions: editingAssessment.questions.filter(q => q.id !== questionId),
     });
   };
 
-  const saveSurvey = () => {
-    if (!editingSurvey) return;
+  const saveAssessment = () => {
+    if (!editingAssessment) return;
     
-    if (!editingSurvey.title.trim()) {
+    if (!editingAssessment.title.trim()) {
       toast({
         title: 'Validation Error',
-        description: 'Please enter a quiz title',
+        description: 'Please enter an assessment title',
         variant: 'destructive',
       });
       return;
     }
 
-    if (editingSurvey.questions.length === 0) {
+    if (editingAssessment.questions.length === 0) {
       toast({
         title: 'Validation Error',
         description: 'Please add at least one question',
@@ -256,7 +256,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
       return;
     }
 
-    for (const q of editingSurvey.questions) {
+    for (const q of editingAssessment.questions) {
       if (!q.question.trim()) {
         toast({
           title: 'Validation Error',
@@ -283,31 +283,31 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
       }
     }
 
-    const existingIndex = surveys.findIndex(q => q.id === editingSurvey.id);
+    const existingIndex = assessments.findIndex(q => q.id === editingAssessment.id);
     if (existingIndex >= 0) {
-      setSurveys(surveys.map(q => q.id === editingSurvey.id ? editingSurvey : q));
+      setAssessments(assessments.map(q => q.id === editingAssessment.id ? editingAssessment : q));
     } else {
-      setSurveys([...surveys, editingSurvey]);
+      setAssessments([...assessments, editingAssessment]);
     }
 
-    setEditingSurvey(null);
+    setEditingAssessment(null);
     setIsEditing(false);
     toast({
-      title: 'Quiz Saved',
-      description: 'Your quiz has been saved successfully',
+      title: 'Assessment Saved',
+      description: 'Your assessment has been saved successfully',
     });
   };
 
-  const deleteSurvey = (surveyId: string) => {
-    setSurveys(surveys.filter(q => q.id !== surveyId));
+  const deleteAssessment = (assessmentId: string) => {
+    setAssessments(assessments.filter(q => q.id !== assessmentId));
     toast({
-      title: 'Quiz Deleted',
-      description: 'The quiz has been removed',
+      title: 'Assessment Deleted',
+      description: 'The assessment has been removed',
     });
   };
 
-  const openPreview = (survey: Survey) => {
-    setPreviewSurvey(survey);
+  const openPreview = (assessment: Assessment) => {
+    setPreviewAssessment(assessment);
     setPreviewIndex(0);
     setPreviewAnswers({});
     setShowResults(false);
@@ -319,16 +319,16 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
   };
 
   const calculateScore = () => {
-    if (!previewSurvey) return { correct: 0, total: 0, percentage: 0 };
+    if (!previewAssessment) return { correct: 0, total: 0, percentage: 0 };
     let correct = 0;
-    previewSurvey.questions.forEach(q => {
+    previewAssessment.questions.forEach(q => {
       const selectedOption = q.options.find(o => o.id === previewAnswers[q.id]);
       if (selectedOption?.isCorrect) correct++;
     });
     return {
       correct,
-      total: previewSurvey.questions.length,
-      percentage: Math.round((correct / previewSurvey.questions.length) * 100),
+      total: previewAssessment.questions.length,
+      percentage: Math.round((correct / previewAssessment.questions.length) * 100),
     };
   };
 
@@ -378,7 +378,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     }
   };
 
-  // Survey List View
+  // Assessment List View
   if (!isEditing) {
     return (
       <div className="min-h-screen bg-background">
@@ -389,33 +389,33 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex-1">
-                <h1 className="font-display font-bold text-lg md:text-xl">Quiz Management</h1>
-                <p className="text-sm text-muted-foreground">Create and manage volunteer quizzes</p>
+                <h1 className="font-display font-bold text-lg md:text-xl">Training Assessments</h1>
+                <p className="text-sm text-muted-foreground">Create and manage training knowledge assessments</p>
               </div>
-              <Button onClick={createNewSurvey}>
+              <Button onClick={createNewAssessment}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Quiz
+                Create Assessment
               </Button>
             </div>
           </div>
         </header>
 
         <main className="container max-w-6xl py-6 px-4">
-          {surveys.length === 0 ? (
+          {assessments.length === 0 ? (
             <Card className="p-12 text-center">
               <FileQuestion className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="font-display font-semibold text-lg mb-2">No Quizzes Yet</h3>
-              <p className="text-muted-foreground mb-4">Create your first quiz to test volunteer knowledge</p>
-              <Button onClick={createNewSurvey}>
+              <h3 className="font-display font-semibold text-lg mb-2">No Assessments Yet</h3>
+              <p className="text-muted-foreground mb-4">Create your first assessment to test volunteer knowledge</p>
+              <Button onClick={createNewAssessment}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Your First Quiz
+                Create Your First Assessment
               </Button>
             </Card>
           ) : (
             <div className="grid gap-4">
-              {surveys.map((survey, index) => (
+              {assessments.map((assessment, index) => (
                 <motion.div
-                  key={survey.id}
+                  key={assessment.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
@@ -424,17 +424,17 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                     <CardHeader>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <CardTitle className="text-lg">{survey.title}</CardTitle>
+                          <CardTitle className="text-lg">{assessment.title}</CardTitle>
                           <CardDescription className="mt-1">
-                            {survey.description || 'No description'}
+                            {assessment.description || 'No description'}
                           </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openPreview(survey)}>
+                          <Button variant="outline" size="sm" onClick={() => openPreview(assessment)}>
                             <Eye className="h-4 w-4 mr-1" />
                             Preview
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => editSurvey(survey)}>
+                          <Button variant="outline" size="sm" onClick={() => editAssessment(assessment)}>
                             <Edit2 className="h-4 w-4 mr-1" />
                             Edit
                           </Button>
@@ -442,7 +442,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                             variant="outline" 
                             size="sm" 
                             className="text-destructive hover:text-destructive"
-                            onClick={() => deleteSurvey(survey.id)}
+                            onClick={() => deleteAssessment(assessment.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -453,7 +453,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <FileQuestion className="h-4 w-4" />
-                          {survey.questions.length} questions
+                          {assessment.questions.length} questions
                         </span>
                       </div>
                     </CardContent>
@@ -468,14 +468,14 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle className="font-display">{previewSurvey?.title}</DialogTitle>
-              <DialogDescription>{previewSurvey?.description}</DialogDescription>
+              <DialogTitle className="font-display">{previewAssessment?.title}</DialogTitle>
+              <DialogDescription>{previewAssessment?.description}</DialogDescription>
             </DialogHeader>
 
-            {previewSurvey && !showResults && (
+            {previewAssessment && !showResults && (
               <div className="flex-1 overflow-y-auto py-4">
                 <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Question {previewIndex + 1} of {previewSurvey.questions.length}</span>
+                  <span>Question {previewIndex + 1} of {previewAssessment.questions.length}</span>
                   <span className="font-medium text-foreground">
                     {Object.keys(previewAnswers).length} answered
                   </span>
@@ -490,11 +490,11 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                     className="space-y-4"
                   >
                     <h3 className="font-semibold text-lg">
-                      {previewSurvey.questions[previewIndex].question}
+                      {previewAssessment.questions[previewIndex].question}
                     </h3>
                     <div className="space-y-2">
-                      {previewSurvey.questions[previewIndex].options.map((option, idx) => {
-                        const currentQuestionId = previewSurvey.questions[previewIndex].id;
+                      {previewAssessment.questions[previewIndex].options.map((option, idx) => {
+                        const currentQuestionId = previewAssessment.questions[previewIndex].id;
                         const hasAnswered = previewAnswers[currentQuestionId] !== undefined;
                         const isSelected = previewAnswers[currentQuestionId] === option.id;
                         const isCorrect = option.isCorrect;
@@ -547,12 +547,12 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Previous
                   </Button>
-                  {previewIndex === previewSurvey.questions.length - 1 ? (
+                  {previewIndex === previewAssessment.questions.length - 1 ? (
                     <Button
                       onClick={() => setShowResults(true)}
-                      disabled={Object.keys(previewAnswers).length < previewSurvey.questions.length}
+                      disabled={Object.keys(previewAnswers).length < previewAssessment.questions.length}
                     >
-                      Submit Survey
+                      Submit Assessment
                     </Button>
                   ) : (
                     <Button onClick={() => setPreviewIndex(previewIndex + 1)}>
@@ -564,12 +564,12 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
               </div>
             )}
 
-            {showResults && previewSurvey && (
+            {showResults && previewAssessment && (
               <div className="flex-1 overflow-y-auto py-4 text-center">
                 <div className="w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center bg-success/10">
                   <Award className="w-12 h-12 text-success" />
                 </div>
-                <h3 className="font-display font-bold text-2xl mb-2">Survey Complete!</h3>
+                <h3 className="font-display font-bold text-2xl mb-2">Assessment Complete!</h3>
                 <p className="text-muted-foreground mb-6">
                   Enter your name to download your certificate.
                 </p>
@@ -595,7 +595,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                       setVolunteerName('');
                     }}
                   >
-                    Retake Survey
+                    Retake Assessment
                   </Button>
                   <Button 
                     onClick={() => generateCertificate(volunteerName)}
@@ -613,7 +613,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
     );
   }
 
-  // Survey Editor View
+  // Assessment Editor View
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-10">
@@ -624,40 +624,40 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
             </Button>
             <div className="flex-1">
               <h1 className="font-display font-bold text-lg md:text-xl">
-                {editingSurvey?.id && surveys.find(q => q.id === editingSurvey.id) ? 'Edit Quiz' : 'Create New Quiz'}
+                {editingAssessment?.id && assessments.find(q => q.id === editingAssessment.id) ? 'Edit Assessment' : 'Create New Assessment'}
               </h1>
             </div>
-            <Button onClick={saveSurvey}>
+            <Button onClick={saveAssessment}>
               <Save className="h-4 w-4 mr-2" />
-              Save Survey
+              Save Assessment
             </Button>
           </div>
         </div>
       </header>
 
       <main className="container max-w-4xl py-6 px-4">
-        {editingSurvey && (
+        {editingAssessment && (
           <div className="space-y-6">
-            {/* Survey Details */}
+            {/* Assessment Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Quiz Details</CardTitle>
+                <CardTitle>Assessment Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Quiz Title</Label>
+                  <Label>Assessment Title</Label>
                   <Input
-                    value={editingSurvey.title}
-                    onChange={(e) => setEditingSurvey({ ...editingSurvey, title: e.target.value })}
-                    placeholder="Enter quiz title..."
+                    value={editingAssessment.title}
+                    onChange={(e) => setEditingAssessment({ ...editingAssessment, title: e.target.value })}
+                    placeholder="Enter assessment title..."
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Description</Label>
                   <Textarea
-                    value={editingSurvey.description}
-                    onChange={(e) => setEditingSurvey({ ...editingSurvey, description: e.target.value })}
-                    placeholder="Enter quiz description..."
+                    value={editingAssessment.description}
+                    onChange={(e) => setEditingAssessment({ ...editingAssessment, description: e.target.value })}
+                    placeholder="Enter assessment description..."
                     rows={2}
                   />
                 </div>
@@ -667,21 +667,21 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
             {/* Questions */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-display font-semibold text-lg">Questions ({editingSurvey.questions.length})</h2>
+                <h2 className="font-display font-semibold text-lg">Questions ({editingAssessment.questions.length})</h2>
                 <Button variant="outline" onClick={addQuestion}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Question
                 </Button>
               </div>
 
-              {editingSurvey.questions.length === 0 ? (
+              {editingAssessment.questions.length === 0 ? (
                 <Card className="p-8 text-center">
                   <FileQuestion className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
                   <p className="text-muted-foreground">No questions yet. Click "Add Question" to get started.</p>
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {editingSurvey.questions.map((question, qIndex) => (
+                  {editingAssessment.questions.map((question, qIndex) => (
                     <motion.div
                       key={question.id}
                       initial={{ opacity: 0, y: 20 }}
