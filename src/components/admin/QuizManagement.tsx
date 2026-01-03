@@ -657,7 +657,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
                   <Textarea
                     value={editingSurvey.description}
                     onChange={(e) => setEditingSurvey({ ...editingSurvey, description: e.target.value })}
-                    placeholder="Enter survey description..."
+                    placeholder="Enter quiz description..."
                     rows={2}
                   />
                 </div>
