@@ -19,14 +19,14 @@ import { WebhookEventsViewer } from '@/components/admin/WebhookEventsViewer';
 import { PartnerRegistrations } from '@/components/admin/PartnerRegistrations';
 import { ExternalItemsViewer } from '@/components/admin/ExternalItemsViewer';
 import { PendingVolunteers } from '@/components/admin/PendingVolunteers';
-import { QuizManagement } from '@/components/admin/QuizManagement';
+import { TrainingAssessmentBuilder } from '@/components/admin/TrainingAssessmentBuilder';
 import { TrainingCompletionViewer } from '@/components/admin/TrainingCompletionViewer';
 import { VolunteerQRCodeGenerator } from '@/components/admin/VolunteerQRCodeGenerator';
 import { MarketplaceSyncPanel } from '@/components/admin/MarketplaceSyncPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync';
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [showAllocationModal, setShowAllocationModal] = useState(false);
@@ -125,9 +125,9 @@ export const AdminDashboard = () => {
     return <PendingVolunteers onBack={() => setCurrentView('dashboard')} />;
   }
 
-  // Show Survey Management view
-  if (currentView === 'survey-management') {
-    return <QuizManagement onBack={() => setCurrentView('dashboard')} />;
+  // Show Training Assessment Builder view
+  if (currentView === 'training-assessments') {
+    return <TrainingAssessmentBuilder onBack={() => setCurrentView('dashboard')} />;
   }
 
   // Show Training Completion view
@@ -448,15 +448,15 @@ export const AdminDashboard = () => {
           scale: 1.01
         }} whileTap={{
           scale: 0.99
-        }} onClick={() => setCurrentView('survey-management')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+        }} onClick={() => setCurrentView('training-assessments')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors shrink-0">
                 <FileQuestion className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-sm md:text-base">Quiz Builder</h3>
+                <h3 className="font-display font-semibold text-sm md:text-base">Training Assessments</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
-                  Create volunteer knowledge surveys
+                  Create training knowledge assessments
                 </p>
               </div>
             </div>
