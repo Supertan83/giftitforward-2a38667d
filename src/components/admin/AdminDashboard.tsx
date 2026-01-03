@@ -1,45 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Package, 
-  BarChart3, 
-  QrCode,
-  ArrowRight,
-  Building,
-  Calendar,
-  TrendingUp,
-  Loader2,
-  Users,
-  Store,
-  Webhook,
-  ClipboardList,
-  Database,
-  UserPlus,
-  GraduationCap,
-  FileQuestion,
-  Award,
-  RefreshCw,
-  UserCheck
-} from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
 import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
@@ -58,43 +26,47 @@ import { MarketplaceSyncPanel } from '@/components/admin/MarketplaceSyncPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
-
 type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'survey-management' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync';
-
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [allocationQuantity, setAllocationQuantity] = useState('');
-
   const navigate = useNavigate();
-  const { signOut } = useAuth();
-  const { data: itemTypes = [], isLoading } = useItemTypes();
-  const { data: marketplaces = [] } = useMarketplaces();
-  const { allocateItems } = useInventoryOperations();
-  const { toast } = useToast();
-
+  const {
+    signOut
+  } = useAuth();
+  const {
+    data: itemTypes = [],
+    isLoading
+  } = useItemTypes();
+  const {
+    data: marketplaces = []
+  } = useMarketplaces();
+  const {
+    allocateItems
+  } = useInventoryOperations();
+  const {
+    toast
+  } = useToast();
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
   const totalAllocated = itemTypes.reduce((sum, item) => sum + item.allocatedToMarketplace, 0);
   const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
-
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
-  const availableToAllocate = selectedItem 
-    ? selectedItem.totalStock - selectedItem.allocatedToMarketplace 
-    : 0;
-
+  const availableToAllocate = selectedItem ? selectedItem.totalStock - selectedItem.allocatedToMarketplace : 0;
   const handleAllocate = async () => {
     if (!selectedItemId || !selectedEventId || !allocationQuantity) return;
-
     const quantity = parseInt(allocationQuantity);
     if (isNaN(quantity) || quantity <= 0) return;
-
     try {
-      await allocateItems.mutateAsync({ itemId: selectedItemId, quantity });
+      await allocateItems.mutateAsync({
+        itemId: selectedItemId,
+        quantity
+      });
       toast({
         title: 'Items Allocated Successfully',
-        description: `${quantity} ${selectedItem?.name} allocated to marketplace`,
+        description: `${quantity} ${selectedItem?.name} allocated to marketplace`
       });
       setShowAllocationModal(false);
       setAllocationQuantity('');
@@ -103,7 +75,7 @@ export const AdminDashboard = () => {
       toast({
         title: 'Allocation Failed',
         description: error instanceof Error ? error.message : 'Not enough stock available',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     }
   };
@@ -172,17 +144,12 @@ export const AdminDashboard = () => {
   if (currentView === 'marketplace-sync') {
     return <MarketplaceSyncPanel onBack={() => setCurrentView('dashboard')} />;
   }
-
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+    return <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen bg-background">
+  return <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="container max-w-6xl py-3 md:py-4 px-4">
@@ -204,38 +171,24 @@ export const AdminDashboard = () => {
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
-          <StatCard
-            icon={Package}
-            label="Total Inventory"
-            value={totalStock.toLocaleString()}
-            subValue="items in warehouse"
-          />
-          <StatCard
-            icon={Building}
-            label="Allocated to Events"
-            value={totalAllocated.toLocaleString()}
-            subValue={totalStock > 0 ? `${Math.round((totalAllocated / totalStock) * 100)}% of inventory` : '0% of inventory'}
-            variant="primary"
-          />
-          <StatCard
-            icon={BarChart3}
-            label="Total Distributed"
-            value={totalDistributed.toLocaleString()}
-            subValue={totalAllocated > 0 ? `${Math.round((totalDistributed / totalAllocated) * 100)}% of allocated` : '0% of allocated'}
-            variant="success"
-          />
+          <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in warehouse" />
+          <StatCard icon={Building} label="Allocated to Events" value={totalAllocated.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAllocated / totalStock * 100)}% of inventory` : '0% of inventory'} variant="primary" />
+          <StatCard icon={BarChart3} label="Total Distributed" value={totalDistributed.toLocaleString()} subValue={totalAllocated > 0 ? `${Math.round(totalDistributed / totalAllocated * 100)}% of allocated` : '0% of allocated'} variant="success" />
         </div>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('qr-generator')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('qr-generator')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary-soft flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
                 <QrCode className="w-5 h-5 md:w-6 md:h-6 text-primary" />
@@ -249,15 +202,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('inventory')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.1
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('inventory')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors shrink-0">
                 <Package className="w-5 h-5 md:w-6 md:h-6 text-accent-foreground" />
@@ -271,15 +228,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('statistics')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.2
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('statistics')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
                 <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
@@ -293,15 +254,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('users')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.3
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('users')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors shrink-0">
                 <Users className="w-5 h-5 md:w-6 md:h-6 text-violet-500" />
@@ -315,15 +280,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('marketplaces')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.4
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('marketplaces')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors shrink-0">
                 <Store className="w-5 h-5 md:w-6 md:h-6 text-amber-500" />
@@ -337,15 +306,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('webhooks')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.5
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('webhooks')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors shrink-0">
                 <Webhook className="w-5 h-5 md:w-6 md:h-6 text-cyan-500" />
@@ -359,15 +332,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('partner-registrations')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.6
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('partner-registrations')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-pink-500/10 flex items-center justify-center group-hover:bg-pink-500/20 transition-colors shrink-0">
                 <ClipboardList className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
@@ -381,15 +358,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('external-items')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.7
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('external-items')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors shrink-0">
                 <Database className="w-5 h-5 md:w-6 md:h-6 text-teal-500" />
@@ -403,15 +384,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('pending-volunteers')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.8
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('pending-volunteers')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors shrink-0">
                 <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-orange-500" />
@@ -425,15 +410,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => navigate('/training')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.9
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => navigate('/training')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors shrink-0">
                 <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
@@ -447,21 +436,25 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.0 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('survey-management')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 1.0
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('survey-management')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors shrink-0">
                 <FileQuestion className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-sm md:text-base">Survey Builder</h3>
+                <h3 className="font-display font-semibold text-sm md:text-base">Quiz Builder</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
                   Create volunteer knowledge surveys
                 </p>
@@ -469,15 +462,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.1 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('training-completion')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 1.1
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('training-completion')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
                 <Award className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
@@ -491,15 +488,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.2 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('volunteer-qr')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 1.2
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('volunteer-qr')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors shrink-0">
                 <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />
@@ -513,15 +514,19 @@ export const AdminDashboard = () => {
             </div>
           </motion.button>
 
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.3 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setCurrentView('marketplace-sync')}
-            className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group"
-          >
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 1.3
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('marketplace-sync')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
             <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors shrink-0">
                 <RefreshCw className="w-5 h-5 md:w-6 md:h-6 text-rose-500" />
@@ -547,26 +552,23 @@ export const AdminDashboard = () => {
             </div>
           </div>
 
-          {itemTypes.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+          {itemTypes.length === 0 ? <div className="text-center py-12 text-muted-foreground">
               <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>No item types configured yet.</p>
               <p className="text-sm">Add item types to start managing inventory.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-              {itemTypes.map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
+            </div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
+              {itemTypes.map((item, index) => <motion.div key={item.id} initial={{
+            opacity: 0,
+            y: 20
+          }} animate={{
+            opacity: 1,
+            y: 0
+          }} transition={{
+            delay: index * 0.05
+          }}>
                   <ItemCard item={item} showStats />
-                </motion.div>
-              ))}
-            </div>
-          )}
+                </motion.div>)}
+            </div>}
         </div>
       </main>
 
@@ -587,30 +589,18 @@ export const AdminDashboard = () => {
             <div className="space-y-2">
               <Label>Select Item Type</Label>
               <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {itemTypes.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedItemId(item.id)}
-                    className={`p-3 rounded-lg border-2 text-left transition-all ${
-                      selectedItemId === item.id
-                        ? 'border-primary bg-primary-soft'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
+                {itemTypes.map(item => <button key={item.id} onClick={() => setSelectedItemId(item.id)} className={`p-3 rounded-lg border-2 text-left transition-all ${selectedItemId === item.id ? 'border-primary bg-primary-soft' : 'border-border hover:border-primary/50'}`}>
                     <span className="text-xl mr-2">{item.icon}</span>
                     <span className="text-sm font-medium">{item.name}</span>
-                  </button>
-                ))}
+                  </button>)}
               </div>
             </div>
 
-            {selectedItem && (
-              <div className="p-3 bg-muted rounded-lg text-sm">
+            {selectedItem && <div className="p-3 bg-muted rounded-lg text-sm">
                 <p className="text-muted-foreground">
                   Available: <span className="font-semibold text-foreground">{availableToAllocate.toLocaleString()}</span> of {selectedItem.totalStock.toLocaleString()}
                 </p>
-              </div>
-            )}
+              </div>}
 
             {/* Event Selection */}
             <div className="space-y-2">
@@ -620,14 +610,12 @@ export const AdminDashboard = () => {
                   <SelectValue placeholder="Choose an event..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {marketplaces.map((event) => (
-                    <SelectItem key={event.id} value={event.id}>
+                  {marketplaces.map(event => <SelectItem key={event.id} value={event.id}>
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
                         {event.name}
                       </div>
-                    </SelectItem>
-                  ))}
+                    </SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -635,18 +623,10 @@ export const AdminDashboard = () => {
             {/* Quantity Input */}
             <div className="space-y-2">
               <Label>Quantity to Allocate</Label>
-              <Input
-                type="number"
-                placeholder="Enter quantity..."
-                value={allocationQuantity}
-                onChange={(e) => setAllocationQuantity(e.target.value)}
-                max={availableToAllocate}
-              />
-              {availableToAllocate > 0 && (
-                <p className="text-xs text-muted-foreground">
+              <Input type="number" placeholder="Enter quantity..." value={allocationQuantity} onChange={e => setAllocationQuantity(e.target.value)} max={availableToAllocate} />
+              {availableToAllocate > 0 && <p className="text-xs text-muted-foreground">
                   Maximum: {availableToAllocate.toLocaleString()} items
-                </p>
-              )}
+                </p>}
             </div>
           </div>
 
@@ -654,10 +634,7 @@ export const AdminDashboard = () => {
             <Button variant="outline" onClick={() => setShowAllocationModal(false)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleAllocate}
-              disabled={!selectedItemId || !selectedEventId || !allocationQuantity || allocateItems.isPending}
-            >
+            <Button onClick={handleAllocate} disabled={!selectedItemId || !selectedEventId || !allocationQuantity || allocateItems.isPending}>
               {allocateItems.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Confirm Allocation
               <ArrowRight className="w-4 h-4" />
@@ -665,6 +642,5 @@ export const AdminDashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </div>;
 };
