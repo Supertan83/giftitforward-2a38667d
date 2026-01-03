@@ -924,6 +924,8 @@ export type Database = {
           id: string
           marketplace_id: string | null
           status: string
+          survey_completed_at: string | null
+          survey_sent_at: string | null
           total_hours_worked: number | null
           unique_id: string
           updated_at: string
@@ -936,6 +938,8 @@ export type Database = {
           id?: string
           marketplace_id?: string | null
           status?: string
+          survey_completed_at?: string | null
+          survey_sent_at?: string | null
           total_hours_worked?: number | null
           unique_id: string
           updated_at?: string
@@ -948,6 +952,8 @@ export type Database = {
           id?: string
           marketplace_id?: string | null
           status?: string
+          survey_completed_at?: string | null
+          survey_sent_at?: string | null
           total_hours_worked?: number | null
           unique_id?: string
           updated_at?: string
@@ -963,6 +969,79 @@ export type Database = {
           },
           {
             foreignKeyName: "volunteer_qr_cards_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "pending_volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      volunteer_surveys: {
+        Row: {
+          certificate_sent_at: string | null
+          completed_at: string | null
+          created_at: string
+          experience_word: string | null
+          id: string
+          improvement_suggestions: string | null
+          marketplace_id: string | null
+          survey_token: string
+          updated_at: string
+          volunteer_card_id: string | null
+          volunteer_email: string
+          volunteer_id: string | null
+          volunteer_name: string
+          would_volunteer_again: boolean | null
+        }
+        Insert: {
+          certificate_sent_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          experience_word?: string | null
+          id?: string
+          improvement_suggestions?: string | null
+          marketplace_id?: string | null
+          survey_token: string
+          updated_at?: string
+          volunteer_card_id?: string | null
+          volunteer_email: string
+          volunteer_id?: string | null
+          volunteer_name: string
+          would_volunteer_again?: boolean | null
+        }
+        Update: {
+          certificate_sent_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          experience_word?: string | null
+          id?: string
+          improvement_suggestions?: string | null
+          marketplace_id?: string | null
+          survey_token?: string
+          updated_at?: string
+          volunteer_card_id?: string | null
+          volunteer_email?: string
+          volunteer_id?: string | null
+          volunteer_name?: string
+          would_volunteer_again?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "volunteer_surveys_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volunteer_surveys_volunteer_card_id_fkey"
+            columns: ["volunteer_card_id"]
+            isOneToOne: false
+            referencedRelation: "volunteer_qr_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volunteer_surveys_volunteer_id_fkey"
             columns: ["volunteer_id"]
             isOneToOne: false
             referencedRelation: "pending_volunteers"
