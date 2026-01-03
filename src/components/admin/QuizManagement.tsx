@@ -645,11 +645,11 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Survey Title</Label>
+                  <Label>Quiz Title</Label>
                   <Input
                     value={editingSurvey.title}
                     onChange={(e) => setEditingSurvey({ ...editingSurvey, title: e.target.value })}
-                    placeholder="Enter survey title..."
+                    placeholder="Enter quiz title..."
                   />
                 </div>
                 <div className="space-y-2">
