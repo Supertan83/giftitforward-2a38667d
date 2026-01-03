@@ -641,7 +641,7 @@ export const QuizManagement = ({ onBack }: SurveyManagementProps) => {
             {/* Survey Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Survey Details</CardTitle>
+                <CardTitle>Quiz Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
