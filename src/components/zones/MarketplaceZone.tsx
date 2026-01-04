@@ -32,7 +32,7 @@ export const MarketplaceZone = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
-  const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
+  const { data: allocations = [], isLoading: loadingAllocations, refetch: refetchAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
   const { distributeItemSimple, returnItemSimple } = useCardOperations();
   const { incrementDistributed, decrementDistributed } = useAllocationOperations();
 
@@ -87,6 +87,9 @@ export const MarketplaceZone = () => {
         // Increment distributed count in allocation
         await incrementDistributed.mutateAsync(availableAllocation.id);
 
+        // Refetch to update UI immediately
+        await refetchAllocations();
+
         setFeedback({
           type: 'success',
           title: 'Item Distributed!',
@@ -106,6 +109,9 @@ export const MarketplaceZone = () => {
           await decrementDistributed.mutateAsync(allocationWithDistributed.id);
         }
 
+        // Refetch to update UI immediately
+        await refetchAllocations();
+
         setFeedback({
           type: 'success',
           title: 'Item Returned!',
@@ -123,7 +129,7 @@ export const MarketplaceZone = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedMarketplaceId, mode, allocations, totalAvailable, distributeItemSimple, returnItemSimple, incrementDistributed, decrementDistributed]);
+  }, [selectedMarketplaceId, mode, allocations, totalAvailable, distributeItemSimple, returnItemSimple, incrementDistributed, decrementDistributed, refetchAllocations]);
 
   const isLoading = loadingMarketplaces || loadingAllocations;
 
