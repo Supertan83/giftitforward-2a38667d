@@ -10,22 +10,34 @@ const corsHeaders = {
 // Initialize Resend for sending welcome emails
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
-// Helper function to send welcome email to approved volunteer with tracking pixel
-async function sendWelcomeEmail(
+// Generate unique volunteer QR card ID
+function generateVolunteerQRId(): string {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `VOL-${timestamp}-${random}`;
+}
+
+// Helper function to send welcome email to approved volunteer with QR code and training link
+async function sendWelcomeEmailWithQR(
   email: string,
   firstName: string,
   tempPassword: string,
   loginUrl: string,
+  trainingUrl: string,
+  qrCardId: string,
   pendingId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pendingId}`;
     
+    // Generate QR code URL using a public QR code API
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCardId)}`;
+    
     const { error } = await resend.emails.send({
-      from: "Surpluss Volunteers <noreply@thesurpluss.com>",
+      from: "Surpluss Volunteers <noreply@mgif.thesurpluss.com>",
       to: [email],
-      subject: "Welcome to Surpluss - Your Volunteer Account is Ready!",
+      subject: "Welcome to GIF - Your Volunteer Account & QR Card",
       html: `
         <!DOCTYPE html>
         <html>
@@ -35,16 +47,34 @@ async function sendWelcomeEmail(
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Surpluss!</h1>
+            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Gift It Forward!</h1>
           </div>
           
           <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
             <p style="font-size: 18px; margin-top: 0;">Hi ${firstName},</p>
             
-            <p>Great news! Your volunteer application has been approved. You can now log in to the Surpluss Volunteer Portal.</p>
+            <p>Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:</p>
             
+            <!-- QR Code Section -->
+            <div style="background: white; border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
+              <h3 style="margin-top: 0; color: #059669;">🎫 Your Volunteer QR Card</h3>
+              <p style="color: #6b7280; font-size: 14px; margin-bottom: 15px;">Present this QR code when checking in at marketplace events</p>
+              <img src="${qrCodeUrl}" alt="Your Volunteer QR Code" style="width: 180px; height: 180px; margin: 0 auto; display: block;" />
+              <p style="font-family: monospace; font-size: 14px; margin-top: 10px; color: #374151; background: #f3f4f6; padding: 8px; border-radius: 6px;">${qrCardId}</p>
+            </div>
+            
+            <!-- Training Module Section -->
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; margin: 25px 0;">
+              <h3 style="margin-top: 0; color: #b45309;">📚 Required: Complete Training Module</h3>
+              <p style="margin-bottom: 15px; color: #92400e;">Before your first volunteer session, please complete our training module to earn your Training Certificate.</p>
+              <div style="text-align: center;">
+                <a href="${trainingUrl}" style="display: inline-block; background: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600;">Start Training</a>
+              </div>
+            </div>
+            
+            <!-- Login Credentials -->
             <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 25px 0;">
-              <h3 style="margin-top: 0; color: #059669;">Your Login Credentials</h3>
+              <h3 style="margin-top: 0; color: #059669;">🔐 Your Login Credentials</h3>
               <p style="margin: 8px 0;"><strong>Email:</strong> ${email}</p>
               <p style="margin: 8px 0;"><strong>Temporary Password:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${tempPassword}</code></p>
             </div>
@@ -59,7 +89,7 @@ async function sendWelcomeEmail(
             
             <p style="color: #6b7280; font-size: 14px; margin-bottom: 0;">
               Thank you for joining our volunteer community!<br>
-              <strong>The Surpluss Team</strong>
+              <strong>The GIF (Gift It Forward) Team</strong>
             </p>
           </div>
           <!-- Email open tracking pixel -->
@@ -70,16 +100,28 @@ async function sendWelcomeEmail(
     });
 
     if (error) {
-      console.error("Failed to send welcome email:", error);
+      console.error("Failed to send welcome email with QR:", error);
       return { success: false, error: error.message };
     }
 
-    console.log(`Welcome email sent successfully to ${email}`);
+    console.log(`Welcome email with QR sent successfully to ${email}`);
     return { success: true };
   } catch (err) {
-    console.error("Error sending welcome email:", err);
+    console.error("Error sending welcome email with QR:", err);
     return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
+}
+
+// Legacy helper function for backwards compatibility
+async function sendWelcomeEmail(
+  email: string,
+  firstName: string,
+  tempPassword: string,
+  loginUrl: string,
+  pendingId: string
+): Promise<{ success: boolean; error?: string }> {
+  // Call new function without QR
+  return sendWelcomeEmailWithQR(email, firstName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId);
 }
 
 interface VolunteerData {
@@ -1401,17 +1443,67 @@ serve(async (req) => {
 
           console.log(`Auto-approved volunteer: ${volunteerEmail}, User ID: ${userData.user.id}`);
 
-          // Don't auto-send email - let admin decide when to send
-          // But mark as ready for email
+          // Generate QR card for the volunteer
+          const qrCardId = generateVolunteerQRId();
+          console.log(`Creating volunteer QR card: ${qrCardId}`);
+          
+          const { data: qrCardData, error: qrCardError } = await supabase
+            .from('volunteer_qr_cards')
+            .insert({
+              unique_id: qrCardId,
+              volunteer_id: pendingData.id,
+              status: 'inactive'
+            })
+            .select()
+            .single();
+
+          if (qrCardError) {
+            console.error('Failed to create volunteer QR card:', qrCardError);
+          } else {
+            console.log(`Volunteer QR card created: ${qrCardId}, Card DB ID: ${qrCardData.id}`);
+          }
+
+          // Determine app URL for email links
+          const appUrl = 'https://gif.thesurpluss.com';
+          const loginUrl = `${appUrl}/auth`;
+          const trainingUrl = `${appUrl}/training`;
+
+          // Send welcome email with QR code and training link
+          const emailResult = await sendWelcomeEmailWithQR(
+            volunteerEmail,
+            firstName,
+            tempPassword,
+            loginUrl,
+            trainingUrl,
+            qrCardId,
+            pendingData.id
+          );
+
+          // Update pending volunteer with email status
+          if (emailResult.success) {
+            await supabase
+              .from('pending_volunteers')
+              .update({
+                email_sent: true,
+                email_sent_at: new Date().toISOString(),
+                email_send_count: 1
+              })
+              .eq('id', pendingData.id);
+          }
+
+          console.log(`Email sent: ${emailResult.success}, Error: ${emailResult.error || 'none'}`);
+
           return new Response(
             JSON.stringify({
               success: true,
-              message: 'Volunteer auto-approved and account created',
+              message: 'Volunteer auto-approved, QR card created, and email sent',
               pending_id: pendingData.id,
               email: volunteerEmail,
               user_id: userData.user.id,
+              qr_card_id: qrCardId,
               temp_password: tempPassword,
-              email_sent: false // Admin will send manually
+              email_sent: emailResult.success,
+              email_error: emailResult.error || null
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
