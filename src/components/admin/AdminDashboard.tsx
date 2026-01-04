@@ -37,6 +37,8 @@ export const AdminDashboard = () => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [allocationQuantity, setAllocationQuantity] = useState('');
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingStock, setEditingStock] = useState('');
   const navigate = useNavigate();
   const {
     signOut
@@ -53,11 +55,39 @@ export const AdminDashboard = () => {
     isLoading: allocationsLoading
   } = useMarketplaceAllocations();
   const {
-    allocateItems
+    allocateItems,
+    updateItemStock
   } = useInventoryOperations();
   const {
     toast
   } = useToast();
+  
+  const handleSaveStock = async (itemId: string) => {
+    const newStock = parseInt(editingStock);
+    if (isNaN(newStock) || newStock < 0) {
+      toast({
+        title: 'Invalid Value',
+        description: 'Please enter a valid positive number',
+        variant: 'destructive'
+      });
+      return;
+    }
+    try {
+      await updateItemStock.mutateAsync({ id: itemId, totalStock: newStock });
+      toast({
+        title: 'Stock Updated',
+        description: `Warehouse stock updated to ${newStock.toLocaleString()}`
+      });
+      setEditingItemId(null);
+      setEditingStock('');
+    } catch (error) {
+      toast({
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update stock',
+        variant: 'destructive'
+      });
+    }
+  };
   
   // Calculate stats from marketplace allocations (where distribution actually happens)
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
@@ -305,6 +335,7 @@ export const AdminDashboard = () => {
                   const itemAllocated = itemAllocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
                   const itemDistributed = itemAllocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
                   const unallocated = item.totalStock - itemAllocated;
+                  const isEditing = editingItemId === item.id;
                   return (
                     <tr key={item.id} className="border-b border-border/50 hover:bg-muted/50">
                       <td className="py-2 px-3">
@@ -313,7 +344,56 @@ export const AdminDashboard = () => {
                           <span className="font-medium">{item.name}</span>
                         </div>
                       </td>
-                      <td className="text-right py-2 px-3 font-medium">{item.totalStock.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3">
+                        {isEditing ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              value={editingStock}
+                              onChange={(e) => setEditingStock(e.target.value)}
+                              className="w-24 h-7 text-right text-sm"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveStock(item.id);
+                                if (e.key === 'Escape') {
+                                  setEditingItemId(null);
+                                  setEditingStock('');
+                                }
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleSaveStock(item.id)}
+                              disabled={updateItemStock.isPending}
+                            >
+                              ✓
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              onClick={() => {
+                                setEditingItemId(null);
+                                setEditingStock('');
+                              }}
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingItemId(item.id);
+                              setEditingStock(item.totalStock.toString());
+                            }}
+                            className="font-medium hover:text-primary hover:underline cursor-pointer"
+                          >
+                            {item.totalStock.toLocaleString()}
+                          </button>
+                        )}
+                      </td>
                       <td className="text-right py-2 px-3 text-primary">{itemAllocated.toLocaleString()}</td>
                       <td className="text-right py-2 px-3 text-emerald-600">{itemDistributed.toLocaleString()}</td>
                       <td className="text-right py-2 px-3 text-muted-foreground">{unallocated.toLocaleString()}</td>
