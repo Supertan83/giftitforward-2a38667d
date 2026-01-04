@@ -189,60 +189,32 @@ export const useAllocationOperations = () => {
     }
   });
 
-  // Increment distributed count when item is given out (by allocation ID)
+  // Increment distributed count when item is given out (by allocation ID) using RPC
   const incrementDistributed = useMutation({
     mutationFn: async (allocationId: string) => {
-      const { data: allocation, error: findError } = await supabase
-        .from('marketplace_item_allocations')
-        .select('*')
-        .eq('id', allocationId)
-        .single();
-
-      if (findError) throw new SafeError(mapDatabaseError(findError), findError);
-
-      if (allocation.distributed_quantity >= allocation.allocated_quantity) {
-        throw new SafeError('Item allocation exhausted for this marketplace');
-      }
-
-      const { error } = await supabase
-        .from('marketplace_item_allocations')
-        .update({ 
-          distributed_quantity: allocation.distributed_quantity + 1 
-        })
-        .eq('id', allocationId);
+      const { data, error } = await supabase
+        .rpc('increment_marketplace_allocation_distributed', {
+          _allocation_id: allocationId
+        });
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
-      return true;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
     }
   });
 
-  // Decrement distributed count when item is returned (by allocation ID)
+  // Decrement distributed count when item is returned (by allocation ID) using RPC
   const decrementDistributed = useMutation({
     mutationFn: async (allocationId: string) => {
-      const { data: allocation, error: findError } = await supabase
-        .from('marketplace_item_allocations')
-        .select('*')
-        .eq('id', allocationId)
-        .single();
-
-      if (findError) throw new SafeError(mapDatabaseError(findError), findError);
-      
-      if (allocation.distributed_quantity <= 0) {
-        return false;
-      }
-
-      const { error } = await supabase
-        .from('marketplace_item_allocations')
-        .update({ 
-          distributed_quantity: allocation.distributed_quantity - 1 
-        })
-        .eq('id', allocationId);
+      const { data, error } = await supabase
+        .rpc('decrement_marketplace_allocation_distributed', {
+          _allocation_id: allocationId
+        });
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
-      return true;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
