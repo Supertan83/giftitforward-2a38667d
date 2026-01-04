@@ -181,10 +181,10 @@ export const useCardOperations = () => {
         throw new SafeError('Card already activated. This beneficiary has already entered the marketplace.');
       }
 
-      // Update card with beneficiary info
+      // Update card with beneficiary info - start with 0 items collected (credit_balance = 0)
       const updateData: Record<string, unknown> = {
         status: 'active' as DbCardStatus,
-        credit_balance: 15,
+        credit_balance: 0, // Start with 0 items, max is 15
         total_items_collected: 0,
         collected_items: [],
         activated_at: new Date().toISOString()
@@ -214,7 +214,7 @@ export const useCardOperations = () => {
       await supabase.from('transactions').insert({
         card_id: card.id,
         type: 'CheckIn' as DbTransactionType,
-        credit_change: 15
+        credit_change: 0
       });
 
       return updated;
@@ -235,7 +235,7 @@ export const useCardOperations = () => {
 
       if (findError || !card) throw new SafeError('Card not found');
       if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
-      if (card.credit_balance <= 0) throw new SafeError('LIMIT REACHED (0/15). No more items allowed.');
+      if (card.credit_balance >= 15) throw new SafeError('LIMIT REACHED (15/15). Maximum items already collected.');
 
       // Check item availability from global stock
       const { data: item, error: itemError } = await supabase
@@ -269,11 +269,11 @@ export const useCardOperations = () => {
         }
       }
 
-      // Update card
+      // Update card - ADD to credit_balance (items collected count)
       const { error: updateError } = await supabase
         .from('qr_cards')
         .update({
-          credit_balance: card.credit_balance - 1,
+          credit_balance: card.credit_balance + 1,
           total_items_collected: card.total_items_collected + 1
         })
         .eq('id', card.id);
@@ -291,10 +291,10 @@ export const useCardOperations = () => {
         card_id: card.id,
         type: 'Distribution' as DbTransactionType,
         item_type: itemName,
-        credit_change: -1
+        credit_change: 1
       });
 
-      return { creditBalance: card.credit_balance - 1, itemName };
+      return { creditBalance: card.credit_balance + 1, itemName };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
@@ -313,9 +313,9 @@ export const useCardOperations = () => {
 
       if (findError || !card) throw new SafeError('Card not found');
       if (card.status !== 'active') throw new SafeError('Card is not active');
-      if (card.total_items_collected <= 0) throw new SafeError('No items to return');
+      if (card.credit_balance <= 0) throw new SafeError('No items to return');
 
-      const newBalance = Math.min(card.credit_balance + 1, 15);
+      const newBalance = Math.max(card.credit_balance - 1, 0);
 
       // Update marketplace allocation if card has marketplace_id
       if (card.marketplace_id) {
@@ -362,7 +362,7 @@ export const useCardOperations = () => {
         card_id: card.id,
         type: 'Return' as DbTransactionType,
         item_type: itemName,
-        credit_change: 1
+        credit_change: -1
       });
 
       return { creditBalance: newBalance, itemName };
@@ -423,13 +423,13 @@ export const useCardOperations = () => {
 
       if (findError || !card) throw new SafeError('Card not found');
       if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
-      if (card.credit_balance <= 0) throw new SafeError('LIMIT REACHED (0/15). No more items allowed.');
+      if (card.credit_balance >= 15) throw new SafeError('LIMIT REACHED (15/15). Maximum items already collected.');
 
-      // Update card
+      // Update card - ADD to credit_balance (items collected count)
       const { error: updateError } = await supabase
         .from('qr_cards')
         .update({
-          credit_balance: card.credit_balance - 1,
+          credit_balance: card.credit_balance + 1,
           total_items_collected: card.total_items_collected + 1,
           marketplace_id: marketplaceId
         })
@@ -442,10 +442,10 @@ export const useCardOperations = () => {
         card_id: card.id,
         type: 'Distribution' as DbTransactionType,
         item_type: 'Item',
-        credit_change: -1
+        credit_change: 1
       });
 
-      return { creditBalance: card.credit_balance - 1 };
+      return { creditBalance: card.credit_balance + 1 };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
@@ -464,9 +464,9 @@ export const useCardOperations = () => {
 
       if (findError || !card) throw new SafeError('Card not found');
       if (card.status !== 'active') throw new SafeError('Card is not active');
-      if (card.total_items_collected <= 0) throw new SafeError('No items to return');
+      if (card.credit_balance <= 0) throw new SafeError('No items to return');
 
-      const newBalance = Math.min(card.credit_balance + 1, 15);
+      const newBalance = Math.max(card.credit_balance - 1, 0);
 
       const { error: updateError } = await supabase
         .from('qr_cards')
@@ -482,7 +482,7 @@ export const useCardOperations = () => {
         card_id: card.id,
         type: 'Return' as DbTransactionType,
         item_type: 'Item',
-        credit_change: 1
+        credit_change: -1
       });
 
       return { creditBalance: newBalance };

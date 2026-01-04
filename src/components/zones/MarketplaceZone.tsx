@@ -90,7 +90,7 @@ export const MarketplaceZone = () => {
         setFeedback({
           type: 'success',
           title: 'Item Distributed!',
-          subtitle: `1 item given. Remaining credit: ${result.creditBalance}/15`,
+          subtitle: `Items collected: ${result.creditBalance}/15`,
           credits: result.creditBalance,
         });
       } else {
@@ -112,7 +112,7 @@ export const MarketplaceZone = () => {
         setFeedback({
           type: 'success',
           title: 'Item Returned!',
-          subtitle: `1 item returned. Credit restored: ${result.creditBalance}/15`,
+          subtitle: `Items collected: ${result.creditBalance}/15`,
           credits: result.creditBalance,
         });
       }
