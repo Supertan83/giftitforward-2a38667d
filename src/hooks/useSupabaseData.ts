@@ -648,7 +648,7 @@ export const useInventoryOperations = () => {
 interface UserWithRole {
   id: string;
   email: string;
-  role: 'admin' | 'volunteer';
+  role: 'admin' | 'volunteer' | 'employee';
   created_at: string;
   first_name: string | null;
   last_name: string | null;
@@ -680,7 +680,7 @@ export const useUsers = () => {
       return data.users.map((user: { id: string; email: string; role: string; created_at: string; first_name: string | null; last_name: string | null }) => ({
         id: user.id,
         email: user.email,
-        role: user.role as 'admin' | 'volunteer',
+        role: user.role as 'admin' | 'volunteer' | 'employee',
         created_at: user.created_at,
         first_name: user.first_name,
         last_name: user.last_name,
@@ -693,7 +693,7 @@ export const useCreateUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ email, password, role }: { email: string; password: string; role: 'admin' | 'volunteer' }) => {
+    mutationFn: async ({ email, password, role }: { email: string; password: string; role: 'admin' | 'volunteer' | 'employee' }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {
@@ -727,7 +727,7 @@ export const useUpdateUserRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, role, firstName, lastName }: { userId: string; role: 'admin' | 'volunteer'; firstName?: string; lastName?: string }) => {
+    mutationFn: async ({ userId, role, firstName, lastName }: { userId: string; role: 'admin' | 'volunteer' | 'employee'; firstName?: string; lastName?: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {

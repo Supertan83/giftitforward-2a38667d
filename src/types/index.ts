@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'volunteer';
+export type UserRole = 'admin' | 'volunteer' | 'employee';
 
 export type CardStatus = 'ready' | 'active' | 'checked_out';
 
