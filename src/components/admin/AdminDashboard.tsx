@@ -28,6 +28,7 @@ import { AllocationManagement } from '@/components/admin/AllocationManagement';
 import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
 type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards';
 export const AdminDashboard = () => {
@@ -48,13 +49,20 @@ export const AdminDashboard = () => {
     data: marketplaces = []
   } = useMarketplaces();
   const {
+    data: allocations = [],
+    isLoading: allocationsLoading
+  } = useMarketplaceAllocations();
+  const {
     allocateItems
   } = useInventoryOperations();
   const {
     toast
   } = useToast();
+  
+  // Calculate stats from marketplace allocations (where distribution actually happens)
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
-  const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
+  const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.allocatedQuantity, 0);
+  const totalDistributed = allocations.reduce((sum, alloc) => sum + alloc.distributedQuantity, 0);
   const totalAvailable = totalStock - totalDistributed;
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
   const handleAllocate = async () => {
@@ -161,7 +169,7 @@ export const AdminDashboard = () => {
   if (currentView === 'volunteer-qr-cards') {
     return <VolunteerQRCardsViewer onBack={() => setCurrentView('dashboard')} />;
   }
-  if (isLoading) {
+  if (isLoading || allocationsLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>;
@@ -188,9 +196,9 @@ export const AdminDashboard = () => {
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
-          <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in stock" />
-          <StatCard icon={Building} label="Available" value={totalAvailable.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAvailable / totalStock * 100)}% remaining` : '0% remaining'} variant="primary" />
-          <StatCard icon={BarChart3} label="Total Distributed" value={totalDistributed.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalDistributed / totalStock * 100)}% of total` : '0% of total'} variant="success" />
+          <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in warehouse" />
+          <StatCard icon={Building} label="Allocated" value={totalAllocated.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAllocated / totalStock * 100)}% of inventory` : '0% of inventory'} variant="primary" />
+          <StatCard icon={BarChart3} label="Distributed" value={totalDistributed.toLocaleString()} subValue={totalAllocated > 0 ? `${Math.round(totalDistributed / totalAllocated * 100)}% of allocated` : '0% of allocated'} variant="success" />
         </div>
 
         {/* Quick Actions */}
