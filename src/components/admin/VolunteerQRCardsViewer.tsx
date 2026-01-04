@@ -1,12 +1,14 @@
-import { useState, useMemo } from 'react';
-import { ArrowLeft, QrCode, Users, Search, Loader2, User, Clock, MapPin, Plus, UserPlus } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { ArrowLeft, QrCode, Users, Search, Loader2, User, Clock, MapPin, Plus, UserPlus, Printer } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { QRCodeSVG } from 'qrcode.react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -101,6 +103,10 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
   const [selectedVolunteerId, setSelectedVolunteerId] = useState<string | null>(null);
   const [newFamilyMemberName, setNewFamilyMemberName] = useState('');
   const [newFamilyMemberType, setNewFamilyMemberType] = useState<'adult' | 'children'>('adult');
+  const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [cardsToPrint, setCardsToPrint] = useState<VolunteerQRCard[]>([]);
+  const printRef = useRef<HTMLDivElement>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -233,6 +239,107 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
     return { total, volunteers, familyCards, checkedIn };
   }, [qrCards]);
 
+  // Selection handlers
+  const toggleSelectCard = (cardId: string) => {
+    setSelectedCardIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) {
+        next.delete(cardId);
+      } else {
+        next.add(cardId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCardIds.size === filteredCards.length) {
+      setSelectedCardIds(new Set());
+    } else {
+      setSelectedCardIds(new Set(filteredCards.map(c => c.id)));
+    }
+  };
+
+  // Print handlers
+  const handlePrintSingle = (card: VolunteerQRCard) => {
+    setCardsToPrint([card]);
+    setShowPrintDialog(true);
+  };
+
+  const handlePrintSelected = () => {
+    const cards = filteredCards.filter(c => selectedCardIds.has(c.id));
+    if (cards.length === 0) {
+      toast({
+        title: 'No Cards Selected',
+        description: 'Please select at least one card to print.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCardsToPrint(cards);
+    setShowPrintDialog(true);
+  };
+
+  const executePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Print Failed',
+        description: 'Please allow popups to print QR codes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Volunteer QR Cards</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; }
+            .print-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+            .qr-card { 
+              border: 2px solid #e5e7eb; 
+              border-radius: 12px; 
+              padding: 16px; 
+              text-align: center;
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            .qr-code { margin: 0 auto 12px; }
+            .card-id { font-family: monospace; font-size: 11px; color: #6b7280; margin-bottom: 4px; word-break: break-all; }
+            .volunteer-name { font-weight: 600; font-size: 14px; color: #111827; }
+            .card-type { font-size: 11px; color: #6b7280; margin-top: 4px; }
+            @media print {
+              .print-grid { grid-template-columns: repeat(3, 1fr); }
+              .qr-card { border: 1px solid #000; }
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+
+    setShowPrintDialog(false);
+    setCardsToPrint([]);
+    setSelectedCardIds(new Set());
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -332,6 +439,15 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
               <SelectItem value="checked_out">Checked Out</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            onClick={handlePrintSelected}
+            disabled={selectedCardIds.size === 0}
+            className="gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Print Selected ({selectedCardIds.size})
+          </Button>
         </div>
 
         {/* Table */}
@@ -350,6 +466,12 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={filteredCards.length > 0 && selectedCardIds.size === filteredCards.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>QR Card ID</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Volunteer</TableHead>
@@ -363,10 +485,15 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
                 <TableBody>
                   {filteredCards.map((card) => {
                     const isFamily = isFamilyCard(card.unique_id);
-                    const dependents = card.volunteer ? extractUniqueDependents(card.volunteer.events_json) : [];
                     
                     return (
                       <TableRow key={card.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedCardIds.has(card.id)}
+                            onCheckedChange={() => toggleSelectCard(card.id)}
+                          />
+                        </TableCell>
                         <TableCell>
                           <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
                             {card.unique_id}
@@ -420,7 +547,15 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
                         <TableCell className="text-sm text-muted-foreground">
                           {formatDate(card.created_at)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePrintSingle(card)}
+                            className="gap-1"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </Button>
                           {!isFamily && card.volunteer_id && (
                             <Button
                               variant="ghost"
@@ -429,7 +564,6 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
                               className="gap-1"
                             >
                               <UserPlus className="w-4 h-4" />
-                              <span className="hidden sm:inline">Add Family</span>
                             </Button>
                           )}
                         </TableCell>
@@ -492,6 +626,58 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
                 <Plus className="w-4 h-4 mr-2" />
               )}
               Add & Create QR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={showPrintDialog} onOpenChange={setShowPrintDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Print QR Cards</DialogTitle>
+            <DialogDescription>
+              Preview of {cardsToPrint.length} QR card{cardsToPrint.length !== 1 ? 's' : ''} to print
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div ref={printRef} className="print-grid grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
+            {cardsToPrint.map((card) => {
+              const isFamily = isFamilyCard(card.unique_id);
+              return (
+                <div key={card.id} className="qr-card border-2 border-border rounded-xl p-4 text-center bg-card">
+                  <div className="qr-code flex justify-center mb-3">
+                    <QRCodeSVG
+                      value={card.unique_id}
+                      size={120}
+                      level="H"
+                      includeMargin={false}
+                    />
+                  </div>
+                  <p className="card-id text-xs font-mono text-muted-foreground mb-1 break-all">
+                    {card.unique_id}
+                  </p>
+                  <p className="volunteer-name font-semibold text-sm">
+                    {card.volunteer 
+                      ? `${card.volunteer.first_name} ${card.volunteer.last_name}`
+                      : 'Unassigned'
+                    }
+                  </p>
+                  <p className="card-type text-xs text-muted-foreground mt-1">
+                    {isFamily ? 'Family Member' : 'Volunteer'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPrintDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={executePrint} className="gap-2">
+              <Printer className="w-4 h-4" />
+              Print
             </Button>
           </DialogFooter>
         </DialogContent>
