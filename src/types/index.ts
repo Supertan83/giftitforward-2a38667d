@@ -37,6 +37,16 @@ export interface ItemType {
   distributed: number;
 }
 
+export interface MarketplaceItemAllocation {
+  id: string;
+  marketplaceId: string;
+  itemTypeId: string;
+  itemName?: string;
+  itemIcon?: string;
+  allocatedQuantity: number;
+  distributedQuantity: number;
+}
+
 export interface Transaction {
   id: string;
   cardId: string;
