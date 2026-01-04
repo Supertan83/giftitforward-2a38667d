@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Plus } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
 import { StatisticsDashboard } from '@/components/admin/StatisticsDashboard';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { MarketplaceManagement } from '@/components/admin/MarketplaceManagement';
+import { InventoryManagement } from '@/components/admin/InventoryManagement';
 import { WebhookEventsViewer } from '@/components/admin/WebhookEventsViewer';
 import { PartnerRegistrations } from '@/components/admin/PartnerRegistrations';
 import { ExternalItemsViewer } from '@/components/admin/ExternalItemsViewer';
@@ -30,7 +31,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards';
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [showAllocationModal, setShowAllocationModal] = useState(false);
@@ -44,8 +45,6 @@ export const AdminDashboard = () => {
   const [fullEditItem, setFullEditItem] = useState<{ id: string; name: string; icon: string; totalStock: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteInput, setDeleteInput] = useState('');
-  const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', icon: '📦', totalStock: '' });
   const navigate = useNavigate();
   const {
     signOut
@@ -65,8 +64,7 @@ export const AdminDashboard = () => {
     allocateItems,
     updateItemStock,
     updateItemType,
-    deleteItemType,
-    addItemType
+    deleteItemType
   } = useInventoryOperations();
   const {
     updateAllocationQuantities
@@ -193,45 +191,6 @@ export const AdminDashboard = () => {
     }
   };
 
-  const handleAddItem = async () => {
-    const stock = parseInt(newItem.totalStock);
-    if (!newItem.name.trim()) {
-      toast({
-        title: 'Invalid Name',
-        description: 'Please enter an item name',
-        variant: 'destructive'
-      });
-      return;
-    }
-    if (isNaN(stock) || stock < 0) {
-      toast({
-        title: 'Invalid Stock',
-        description: 'Please enter a valid positive number',
-        variant: 'destructive'
-      });
-      return;
-    }
-    try {
-      await addItemType.mutateAsync({
-        name: newItem.name.trim(),
-        icon: newItem.icon || '📦',
-        totalStock: stock
-      });
-      toast({
-        title: 'Item Added',
-        description: `${newItem.name} has been added successfully`
-      });
-      setShowAddItem(false);
-      setNewItem({ name: '', icon: '📦', totalStock: '' });
-    } catch (error) {
-      toast({
-        title: 'Add Failed',
-        description: error instanceof Error ? error.message : 'Failed to add item',
-        variant: 'destructive'
-      });
-    }
-  };
-
   // Calculate stats from marketplace allocations (where distribution actually happens)
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
   const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.allocatedQuantity, 0);
@@ -298,6 +257,11 @@ export const AdminDashboard = () => {
   // Show Marketplace Management view
   if (currentView === 'marketplaces') {
     return <MarketplaceManagement onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Inventory Management view
+  if (currentView === 'inventory') {
+    return <InventoryManagement onBack={() => setCurrentView('dashboard')} />;
   }
 
   // Show Webhook Events view
@@ -556,9 +520,8 @@ export const AdminDashboard = () => {
               <Package className="w-5 h-5 text-primary" />
               Item Stock Overview
             </h2>
-            <Button variant="outline" size="sm" onClick={() => setShowAddItem(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              Add New Item
+            <Button variant="outline" size="sm" onClick={() => setCurrentView('inventory')}>
+              Manage Inventory
             </Button>
           </div>
           <div className="overflow-x-auto">
@@ -755,53 +718,6 @@ export const AdminDashboard = () => {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Add New Item Dialog */}
-        <Dialog open={showAddItem} onOpenChange={setShowAddItem}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Item</DialogTitle>
-              <DialogDescription>Create a new inventory item.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-icon">Icon (emoji)</Label>
-                <Input
-                  id="new-icon"
-                  value={newItem.icon}
-                  onChange={(e) => setNewItem({ ...newItem, icon: e.target.value })}
-                  placeholder="📦"
-                  className="w-20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-name">Name</Label>
-                <Input
-                  id="new-name"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  placeholder="Item name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-stock">Initial Warehouse Stock</Label>
-                <Input
-                  id="new-stock"
-                  type="number"
-                  value={newItem.totalStock}
-                  onChange={(e) => setNewItem({ ...newItem, totalStock: e.target.value })}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddItem(false)}>Cancel</Button>
-              <Button onClick={handleAddItem} disabled={addItemType.isPending}>
-                {addItemType.isPending ? 'Adding...' : 'Add Item'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
@@ -824,6 +740,32 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-sm md:text-base">Generate QR Cards</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
                   Create and print new beneficiary cards
+                </p>
+              </div>
+            </div>
+          </motion.button>
+
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 0.1
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('inventory')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+            <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors shrink-0">
+                <Package className="w-5 h-5 md:w-6 md:h-6 text-accent-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-sm md:text-base">Manage Inventory</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
+                  Add and manage item types
                 </p>
               </div>
             </div>
