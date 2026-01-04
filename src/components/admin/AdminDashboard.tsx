@@ -605,34 +605,7 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Inventory Section */}
-        <div className="bg-card rounded-xl md:rounded-2xl border border-border p-4 md:p-6 shadow-card">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
-            <div>
-              <h2 className="font-display font-bold text-lg md:text-xl">Inventory Overview</h2>
-              <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
-                Current stock levels and distribution status
-              </p>
-            </div>
-          </div>
-
-          {itemTypes.length === 0 ? <div className="text-center py-12 text-muted-foreground">
-              <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No item types configured yet.</p>
-              <p className="text-sm">Add item types to start managing inventory.</p>
-            </div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-              {itemTypes.map((item, index) => <motion.div key={item.id} initial={{
-            opacity: 0,
-            y: 20
-          }} animate={{
-            opacity: 1,
-            y: 0
-          }} transition={{
-            delay: index * 0.05
-          }}>
-                  <ItemCard item={item} showStats />
-                </motion.div>)}
-            </div>}
-        </div>
+        
       </main>
 
       {/* Allocation Modal */}
