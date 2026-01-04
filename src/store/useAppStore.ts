@@ -220,14 +220,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (itemIndex === -1) return false;
     
     const item = itemTypes[itemIndex];
-    const availableStock = item.totalStock - item.allocatedToMarketplace;
+    const availableStock = item.totalStock - item.distributed;
     
     if (quantity > availableStock) return false;
     
+    // Just update stock directly (no allocation concept)
     const updatedItems = [...itemTypes];
     updatedItems[itemIndex] = {
       ...item,
-      allocatedToMarketplace: item.allocatedToMarketplace + quantity,
+      totalStock: item.totalStock + quantity,
     };
     
     set({ itemTypes: updatedItems });

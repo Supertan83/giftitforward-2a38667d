@@ -108,7 +108,6 @@ export const useItemTypes = () => {
         name: item.name,
         icon: item.icon,
         totalStock: item.total_stock,
-        allocatedToMarketplace: item.allocated_to_marketplace,
         distributed: item.distributed
       }));
     }
@@ -238,6 +237,16 @@ export const useCardOperations = () => {
       if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
       if (card.credit_balance <= 0) throw new SafeError('LIMIT REACHED (0/15). No more items allowed.');
 
+      // Check item availability
+      const { data: item, error: itemError } = await supabase
+        .from('item_types')
+        .select('total_stock, distributed')
+        .eq('id', itemId)
+        .single();
+      
+      if (itemError || !item) throw new SafeError('Item not found');
+      if (item.distributed >= item.total_stock) throw new SafeError('Item out of stock');
+
       // Update card
       const { error: updateError } = await supabase
         .from('qr_cards')
@@ -249,19 +258,11 @@ export const useCardOperations = () => {
 
       if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
-      // Update item distributed count
-      const { data: item } = await supabase
+      // Update item distributed count (deduct 1 from available)
+      await supabase
         .from('item_types')
-        .select('distributed')
-        .eq('id', itemId)
-        .single();
-      
-      if (item) {
-        await supabase
-          .from('item_types')
-          .update({ distributed: item.distributed + 1 })
-          .eq('id', itemId);
-      }
+        .update({ distributed: item.distributed + 1 })
+        .eq('id', itemId);
 
       // Create transaction
       await supabase.from('transactions').insert({
@@ -303,6 +304,20 @@ export const useCardOperations = () => {
 
       if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
+      // Return item back to stock (decrease distributed count)
+      const { data: item } = await supabase
+        .from('item_types')
+        .select('distributed')
+        .eq('id', itemId)
+        .single();
+      
+      if (item && item.distributed > 0) {
+        await supabase
+          .from('item_types')
+          .update({ distributed: item.distributed - 1 })
+          .eq('id', itemId);
+      }
+
       await supabase.from('transactions').insert({
         card_id: card.id,
         type: 'Return' as DbTransactionType,
@@ -314,6 +329,7 @@ export const useCardOperations = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['item_types'] });
     }
   });
 

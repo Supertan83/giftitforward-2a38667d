@@ -27,7 +27,8 @@ export const MarketplaceZone = () => {
   const { distributeItem, returnItem } = useCardOperations();
 
   const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
-  const totalAllocated = itemTypes.reduce((sum, item) => sum + item.allocatedToMarketplace, 0);
+  const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
+  const totalAvailable = totalStock - totalDistributed;
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
@@ -112,13 +113,13 @@ export const MarketplaceZone = () => {
           icon={Package}
           label="Distributed"
           value={isLoading ? '-' : totalDistributed.toLocaleString()}
-          subValue={`of ${totalAllocated.toLocaleString()}`}
+          subValue={`of ${totalStock.toLocaleString()} total`}
           variant="success"
         />
         <StatCard
           icon={ShoppingBag}
-          label="Item Types"
-          value={isLoading ? '-' : itemTypes.length}
+          label="Available"
+          value={isLoading ? '-' : totalAvailable.toLocaleString()}
           variant="default"
         />
       </div>

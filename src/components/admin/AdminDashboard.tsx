@@ -51,10 +51,9 @@ export const AdminDashboard = () => {
     toast
   } = useToast();
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
-  const totalAllocated = itemTypes.reduce((sum, item) => sum + item.allocatedToMarketplace, 0);
   const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
+  const totalAvailable = totalStock - totalDistributed;
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
-  const availableToAllocate = selectedItem ? selectedItem.totalStock - selectedItem.allocatedToMarketplace : 0;
   const handleAllocate = async () => {
     if (!selectedItemId || !selectedEventId || !allocationQuantity) return;
     const quantity = parseInt(allocationQuantity);
@@ -171,9 +170,9 @@ export const AdminDashboard = () => {
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
-          <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in warehouse" />
-          <StatCard icon={Building} label="Allocated to Events" value={totalAllocated.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAllocated / totalStock * 100)}% of inventory` : '0% of inventory'} variant="primary" />
-          <StatCard icon={BarChart3} label="Total Distributed" value={totalDistributed.toLocaleString()} subValue={totalAllocated > 0 ? `${Math.round(totalDistributed / totalAllocated * 100)}% of allocated` : '0% of allocated'} variant="success" />
+          <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in stock" />
+          <StatCard icon={Building} label="Available" value={totalAvailable.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAvailable / totalStock * 100)}% remaining` : '0% remaining'} variant="primary" />
+          <StatCard icon={BarChart3} label="Total Distributed" value={totalDistributed.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalDistributed / totalStock * 100)}% of total` : '0% of total'} variant="success" />
         </div>
 
         {/* Quick Actions */}
@@ -598,7 +597,7 @@ export const AdminDashboard = () => {
 
             {selectedItem && <div className="p-3 bg-muted rounded-lg text-sm">
                 <p className="text-muted-foreground">
-                  Available: <span className="font-semibold text-foreground">{availableToAllocate.toLocaleString()}</span> of {selectedItem.totalStock.toLocaleString()}
+                  Available: <span className="font-semibold text-foreground">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</span> of {selectedItem.totalStock.toLocaleString()}
                 </p>
               </div>}
 
@@ -622,11 +621,11 @@ export const AdminDashboard = () => {
 
             {/* Quantity Input */}
             <div className="space-y-2">
-              <Label>Quantity to Allocate</Label>
-              <Input type="number" placeholder="Enter quantity..." value={allocationQuantity} onChange={e => setAllocationQuantity(e.target.value)} max={availableToAllocate} />
-              {availableToAllocate > 0 && <p className="text-xs text-muted-foreground">
-                  Maximum: {availableToAllocate.toLocaleString()} items
-                </p>}
+              <Label>Quantity to Add to Stock</Label>
+              <Input type="number" placeholder="Enter quantity..." value={allocationQuantity} onChange={e => setAllocationQuantity(e.target.value)} min={1} />
+              <p className="text-xs text-muted-foreground">
+                This will add items to the total stock
+              </p>
             </div>
           </div>
 
