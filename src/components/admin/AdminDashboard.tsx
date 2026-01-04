@@ -63,7 +63,24 @@ export const AdminDashboard = () => {
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
   const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.allocatedQuantity, 0);
   const totalDistributed = allocations.reduce((sum, alloc) => sum + alloc.distributedQuantity, 0);
-  const totalAvailable = totalStock - totalDistributed;
+  const totalRemaining = totalAllocated - totalDistributed;
+  
+  // Group allocations by marketplace for breakdown
+  const marketplaceStats = marketplaces.map(mp => {
+    const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
+    const allocated = mpAllocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
+    const distributed = mpAllocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
+    return {
+      id: mp.id,
+      name: mp.name,
+      location: mp.location,
+      status: mp.status,
+      allocated,
+      distributed,
+      remaining: allocated - distributed,
+    };
+  }).filter(mp => mp.allocated > 0 || mp.distributed > 0);
+  
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
   const handleAllocate = async () => {
     if (!selectedItemId || !selectedEventId || !allocationQuantity) return;
@@ -195,11 +212,119 @@ export const AdminDashboard = () => {
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
           <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in warehouse" />
           <StatCard icon={Building} label="Allocated" value={totalAllocated.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAllocated / totalStock * 100)}% of inventory` : '0% of inventory'} variant="primary" />
           <StatCard icon={BarChart3} label="Distributed" value={totalDistributed.toLocaleString()} subValue={totalAllocated > 0 ? `${Math.round(totalDistributed / totalAllocated * 100)}% of allocated` : '0% of allocated'} variant="success" />
+          <StatCard icon={TrendingUp} label="Remaining" value={totalRemaining.toLocaleString()} subValue="items to distribute" variant="warning" />
         </div>
+
+        {/* Per-Marketplace Breakdown */}
+        {marketplaceStats.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-card rounded-xl border border-border p-4 md:p-6 mb-6 md:mb-8"
+          >
+            <h2 className="font-display font-semibold text-base md:text-lg mb-4 flex items-center gap-2">
+              <Store className="w-5 h-5 text-primary" />
+              Distribution by Marketplace
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Marketplace</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Allocated</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Distributed</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Remaining</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Progress</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketplaceStats.map(mp => (
+                    <tr key={mp.id} className="border-b border-border/50 hover:bg-muted/50">
+                      <td className="py-2 px-3">
+                        <div className="font-medium">{mp.name}</div>
+                        <div className="text-xs text-muted-foreground">{mp.location}</div>
+                      </td>
+                      <td className="text-right py-2 px-3">{mp.allocated.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3 text-emerald-600">{mp.distributed.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3">{mp.remaining.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-primary rounded-full transition-all"
+                              style={{ width: `${mp.allocated > 0 ? (mp.distributed / mp.allocated) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-10">
+                            {mp.allocated > 0 ? Math.round((mp.distributed / mp.allocated) * 100) : 0}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Item Stock Overview */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-card rounded-xl border border-border p-4 md:p-6 mb-6 md:mb-8"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display font-semibold text-base md:text-lg flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" />
+              Item Stock Overview
+            </h2>
+            <Button variant="outline" size="sm" onClick={() => setCurrentView('inventory')}>
+              Manage Inventory
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">Item</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Warehouse Stock</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Allocated</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Distributed</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Unallocated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemTypes.map(item => {
+                  const itemAllocations = allocations.filter(a => a.itemTypeId === item.id);
+                  const itemAllocated = itemAllocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
+                  const itemDistributed = itemAllocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
+                  const unallocated = item.totalStock - itemAllocated;
+                  return (
+                    <tr key={item.id} className="border-b border-border/50 hover:bg-muted/50">
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="font-medium">{item.name}</span>
+                        </div>
+                      </td>
+                      <td className="text-right py-2 px-3 font-medium">{item.totalStock.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3 text-primary">{itemAllocated.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3 text-emerald-600">{itemDistributed.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3 text-muted-foreground">{unallocated.toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
