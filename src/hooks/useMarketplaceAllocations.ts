@@ -221,12 +221,41 @@ export const useAllocationOperations = () => {
     }
   });
 
+  // Direct update of allocated and distributed quantities
+  const updateAllocationQuantities = useMutation({
+    mutationFn: async ({ 
+      allocationId, 
+      allocatedQuantity,
+      distributedQuantity
+    }: { 
+      allocationId: string; 
+      allocatedQuantity?: number;
+      distributedQuantity?: number;
+    }) => {
+      const updateData: Record<string, number> = {};
+      if (allocatedQuantity !== undefined) updateData.allocated_quantity = allocatedQuantity;
+      if (distributedQuantity !== undefined) updateData.distributed_quantity = distributedQuantity;
+      
+      const { error } = await supabase
+        .from('marketplace_item_allocations')
+        .update(updateData)
+        .eq('id', allocationId);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
+    }
+  });
+
   return {
     allocateToMarketplace,
     updateAllocation,
     deleteAllocation,
     incrementDistributed,
     decrementDistributed,
+    updateAllocationQuantities,
   };
 };
 

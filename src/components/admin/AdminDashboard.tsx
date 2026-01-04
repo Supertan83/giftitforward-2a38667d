@@ -28,7 +28,7 @@ import { AllocationManagement } from '@/components/admin/AllocationManagement';
 import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
-import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
+import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
 type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards';
 export const AdminDashboard = () => {
@@ -39,6 +39,8 @@ export const AdminDashboard = () => {
   const [allocationQuantity, setAllocationQuantity] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingStock, setEditingStock] = useState('');
+  const [editingAllocation, setEditingAllocation] = useState<{ id: string; field: 'allocated' | 'distributed'; value: string } | null>(null);
+  const [expandedMarketplace, setExpandedMarketplace] = useState<string | null>(null);
   const navigate = useNavigate();
   const {
     signOut
@@ -58,6 +60,9 @@ export const AdminDashboard = () => {
     allocateItems,
     updateItemStock
   } = useInventoryOperations();
+  const {
+    updateAllocationQuantities
+  } = useAllocationOperations();
   const {
     toast
   } = useToast();
@@ -84,6 +89,38 @@ export const AdminDashboard = () => {
       toast({
         title: 'Update Failed',
         description: error instanceof Error ? error.message : 'Failed to update stock',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleSaveAllocation = async () => {
+    if (!editingAllocation) return;
+    const newValue = parseInt(editingAllocation.value);
+    if (isNaN(newValue) || newValue < 0) {
+      toast({
+        title: 'Invalid Value',
+        description: 'Please enter a valid positive number',
+        variant: 'destructive'
+      });
+      return;
+    }
+    try {
+      await updateAllocationQuantities.mutateAsync({
+        allocationId: editingAllocation.id,
+        ...(editingAllocation.field === 'allocated' 
+          ? { allocatedQuantity: newValue }
+          : { distributedQuantity: newValue })
+      });
+      toast({
+        title: 'Allocation Updated',
+        description: `${editingAllocation.field === 'allocated' ? 'Allocated' : 'Distributed'} quantity updated to ${newValue.toLocaleString()}`
+      });
+      setEditingAllocation(null);
+    } catch (error) {
+      toast({
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update allocation',
         variant: 'destructive'
       });
     }
@@ -259,6 +296,7 @@ export const AdminDashboard = () => {
             <h2 className="font-display font-semibold text-base md:text-lg mb-4 flex items-center gap-2">
               <Store className="w-5 h-5 text-primary" />
               Distribution by Marketplace
+              <span className="text-xs text-muted-foreground font-normal">(click row to expand)</span>
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -272,30 +310,133 @@ export const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {marketplaceStats.map(mp => (
-                    <tr key={mp.id} className="border-b border-border/50 hover:bg-muted/50">
-                      <td className="py-2 px-3">
-                        <div className="font-medium">{mp.name}</div>
-                        <div className="text-xs text-muted-foreground">{mp.location}</div>
-                      </td>
-                      <td className="text-right py-2 px-3">{mp.allocated.toLocaleString()}</td>
-                      <td className="text-right py-2 px-3 text-emerald-600">{mp.distributed.toLocaleString()}</td>
-                      <td className="text-right py-2 px-3">{mp.remaining.toLocaleString()}</td>
-                      <td className="text-right py-2 px-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-primary rounded-full transition-all"
-                              style={{ width: `${mp.allocated > 0 ? (mp.distributed / mp.allocated) * 100 : 0}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground w-10">
-                            {mp.allocated > 0 ? Math.round((mp.distributed / mp.allocated) * 100) : 0}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {marketplaceStats.map(mp => {
+                    const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
+                    const isExpanded = expandedMarketplace === mp.id;
+                    return (
+                      <>
+                        <tr 
+                          key={mp.id} 
+                          className="border-b border-border/50 hover:bg-muted/50 cursor-pointer"
+                          onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}
+                        >
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
+                              <div>
+                                <div className="font-medium">{mp.name}</div>
+                                <div className="text-xs text-muted-foreground">{mp.location}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="text-right py-2 px-3">{mp.allocated.toLocaleString()}</td>
+                          <td className="text-right py-2 px-3 text-emerald-600">{mp.distributed.toLocaleString()}</td>
+                          <td className="text-right py-2 px-3">{mp.remaining.toLocaleString()}</td>
+                          <td className="text-right py-2 px-3">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary rounded-full transition-all"
+                                  style={{ width: `${mp.allocated > 0 ? (mp.distributed / mp.allocated) * 100 : 0}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground w-10">
+                                {mp.allocated > 0 ? Math.round((mp.distributed / mp.allocated) * 100) : 0}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && mpAllocations.map(alloc => (
+                          <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
+                            <td className="py-2 px-3 pl-10">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <span>{alloc.itemIcon || '📦'}</span>
+                                <span>{alloc.itemName || 'Unknown Item'}</span>
+                              </div>
+                            </td>
+                            <td className="text-right py-2 px-3">
+                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Input
+                                    type="number"
+                                    value={editingAllocation.value}
+                                    onChange={(e) => setEditingAllocation({ ...editingAllocation, value: e.target.value })}
+                                    className="w-20 h-7 text-right text-sm"
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation();
+                                      if (e.key === 'Enter') handleSaveAllocation();
+                                      if (e.key === 'Escape') setEditingAllocation(null);
+                                    }}
+                                  />
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); handleSaveAllocation(); }}>✓</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditingAllocation(null); }}>✕</Button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingAllocation({ id: alloc.id, field: 'allocated', value: alloc.allocatedQuantity.toString() });
+                                  }}
+                                  className="hover:text-primary hover:underline cursor-pointer"
+                                >
+                                  {alloc.allocatedQuantity.toLocaleString()}
+                                </button>
+                              )}
+                            </td>
+                            <td className="text-right py-2 px-3">
+                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Input
+                                    type="number"
+                                    value={editingAllocation.value}
+                                    onChange={(e) => setEditingAllocation({ ...editingAllocation, value: e.target.value })}
+                                    className="w-20 h-7 text-right text-sm"
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation();
+                                      if (e.key === 'Enter') handleSaveAllocation();
+                                      if (e.key === 'Escape') setEditingAllocation(null);
+                                    }}
+                                  />
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); handleSaveAllocation(); }}>✓</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditingAllocation(null); }}>✕</Button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingAllocation({ id: alloc.id, field: 'distributed', value: alloc.distributedQuantity.toString() });
+                                  }}
+                                  className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
+                                >
+                                  {alloc.distributedQuantity.toLocaleString()}
+                                </button>
+                              )}
+                            </td>
+                            <td className="text-right py-2 px-3 text-muted-foreground">
+                              {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()}
+                            </td>
+                            <td className="text-right py-2 px-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-emerald-500 rounded-full transition-all"
+                                    style={{ width: `${alloc.allocatedQuantity > 0 ? (alloc.distributedQuantity / alloc.allocatedQuantity) * 100 : 0}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-muted-foreground w-10">
+                                  {alloc.allocatedQuantity > 0 ? Math.round((alloc.distributedQuantity / alloc.allocatedQuantity) * 100) : 0}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
