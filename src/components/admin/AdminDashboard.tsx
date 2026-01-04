@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { ItemCard } from '@/components/ItemCard';
 import { StatCard } from '@/components/StatCard';
 import { QRCodeGenerator } from '@/components/admin/QRCodeGenerator';
@@ -41,6 +42,9 @@ export const AdminDashboard = () => {
   const [editingStock, setEditingStock] = useState('');
   const [editingAllocation, setEditingAllocation] = useState<{ id: string; field: 'allocated' | 'distributed'; value: string } | null>(null);
   const [expandedMarketplace, setExpandedMarketplace] = useState<string | null>(null);
+  const [fullEditItem, setFullEditItem] = useState<{ id: string; name: string; icon: string; totalStock: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleteInput, setDeleteInput] = useState('');
   const navigate = useNavigate();
   const {
     signOut
@@ -58,7 +62,9 @@ export const AdminDashboard = () => {
   } = useMarketplaceAllocations();
   const {
     allocateItems,
-    updateItemStock
+    updateItemStock,
+    updateItemType,
+    deleteItemType
   } = useInventoryOperations();
   const {
     updateAllocationQuantities
@@ -125,7 +131,66 @@ export const AdminDashboard = () => {
       });
     }
   };
-  
+
+  const handleSaveFullEdit = async () => {
+    if (!fullEditItem) return;
+    const newStock = parseInt(fullEditItem.totalStock);
+    if (isNaN(newStock) || newStock < 0) {
+      toast({
+        title: 'Invalid Value',
+        description: 'Please enter a valid positive number for stock',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!fullEditItem.name.trim()) {
+      toast({
+        title: 'Invalid Name',
+        description: 'Please enter a valid item name',
+        variant: 'destructive'
+      });
+      return;
+    }
+    try {
+      await updateItemType.mutateAsync({
+        id: fullEditItem.id,
+        name: fullEditItem.name.trim(),
+        icon: fullEditItem.icon || '📦',
+        totalStock: newStock
+      });
+      toast({
+        title: 'Item Updated',
+        description: `${fullEditItem.name} has been updated successfully`
+      });
+      setFullEditItem(null);
+    } catch (error) {
+      toast({
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update item',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (!deleteConfirm || deleteInput.toLowerCase() !== 'delete') return;
+    try {
+      await deleteItemType.mutateAsync(deleteConfirm.id);
+      toast({
+        title: 'Item Deleted',
+        description: `${deleteConfirm.name} has been deleted`
+      });
+      setDeleteConfirm(null);
+      setDeleteInput('');
+    } catch (error) {
+      toast({
+        title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Failed to delete item',
+        variant: 'destructive'
+      });
+    }
+  };
+
   // Calculate stats from marketplace allocations (where distribution actually happens)
   const totalStock = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
   const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.allocatedQuantity, 0);
@@ -468,6 +533,7 @@ export const AdminDashboard = () => {
                   <th className="text-right py-2 px-3 font-medium text-muted-foreground">Allocated</th>
                   <th className="text-right py-2 px-3 font-medium text-muted-foreground">Distributed</th>
                   <th className="text-right py-2 px-3 font-medium text-muted-foreground">Unallocated</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -538,6 +604,31 @@ export const AdminDashboard = () => {
                       <td className="text-right py-2 px-3 text-primary">{itemAllocated.toLocaleString()}</td>
                       <td className="text-right py-2 px-3 text-emerald-600">{itemDistributed.toLocaleString()}</td>
                       <td className="text-right py-2 px-3 text-muted-foreground">{unallocated.toLocaleString()}</td>
+                      <td className="text-right py-2 px-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setFullEditItem({
+                              id: item.id,
+                              name: item.name,
+                              icon: item.icon,
+                              totalStock: item.totalStock.toString()
+                            })}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteConfirm({ id: item.id, name: item.name })}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -545,6 +636,87 @@ export const AdminDashboard = () => {
             </table>
           </div>
         </motion.div>
+
+        {/* Edit Item Dialog */}
+        <Dialog open={!!fullEditItem} onOpenChange={(open) => !open && setFullEditItem(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Item</DialogTitle>
+              <DialogDescription>Update item details below.</DialogDescription>
+            </DialogHeader>
+            {fullEditItem && (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-icon">Icon (emoji)</Label>
+                  <Input
+                    id="edit-icon"
+                    value={fullEditItem.icon}
+                    onChange={(e) => setFullEditItem({ ...fullEditItem, icon: e.target.value })}
+                    placeholder="📦"
+                    className="w-20"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Name</Label>
+                  <Input
+                    id="edit-name"
+                    value={fullEditItem.name}
+                    onChange={(e) => setFullEditItem({ ...fullEditItem, name: e.target.value })}
+                    placeholder="Item name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-stock">Warehouse Stock</Label>
+                  <Input
+                    id="edit-stock"
+                    type="number"
+                    value={fullEditItem.totalStock}
+                    onChange={(e) => setFullEditItem({ ...fullEditItem, totalStock: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setFullEditItem(null)}>Cancel</Button>
+              <Button onClick={handleSaveFullEdit} disabled={updateItemType.isPending}>
+                {updateItemType.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) { setDeleteConfirm(null); setDeleteInput(''); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{deleteConfirm?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the item and all its data.
+                <br /><br />
+                Type <strong>delete</strong> to confirm:
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Input
+              value={deleteInput}
+              onChange={(e) => setDeleteInput(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className="mt-2"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setDeleteConfirm(null); setDeleteInput(''); }}>
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteItem}
+                disabled={deleteInput.toLowerCase() !== 'delete' || deleteItemType.isPending}
+              >
+                {deleteItemType.isPending ? 'Deleting...' : 'Delete Item'}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
 
         {/* Quick Actions */}

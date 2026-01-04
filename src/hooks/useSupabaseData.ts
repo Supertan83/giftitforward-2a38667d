@@ -641,7 +641,22 @@ export const useInventoryOperations = () => {
     }
   });
 
-  return { allocateItems, addItemType, deleteItemType, updateItemStock };
+  const updateItemType = useMutation({
+    mutationFn: async ({ id, name, icon, totalStock }: { id: string; name: string; icon: string; totalStock: number }) => {
+      const { error } = await supabase
+        .from('item_types')
+        .update({ name, icon, total_stock: totalStock })
+        .eq('id', id);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['item_types'] });
+    }
+  });
+
+  return { allocateItems, addItemType, deleteItemType, updateItemStock, updateItemType };
 };
 
 // Users Management
