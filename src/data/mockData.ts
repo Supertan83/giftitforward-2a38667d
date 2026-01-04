@@ -32,12 +32,12 @@ export const mockQRCards: QRCard[] = [
 ];
 
 export const mockItemTypes: ItemType[] = [
-  { id: '1', name: 'Duvet', icon: '🛏️', totalStock: 1000, allocatedToMarketplace: 400, distributed: 127 },
-  { id: '2', name: 'Chinaware', icon: '🍽️', totalStock: 3500, allocatedToMarketplace: 3000, distributed: 892 },
-  { id: '3', name: 'Kitchen Items', icon: '🍳', totalStock: 2000, allocatedToMarketplace: 1500, distributed: 456 },
-  { id: '4', name: 'Toys', icon: '🧸', totalStock: 12000, allocatedToMarketplace: 10000, distributed: 3421 },
-  { id: '5', name: 'Men Clothing', icon: '👔', totalStock: 6000, allocatedToMarketplace: 5000, distributed: 1876 },
-  { id: '6', name: 'Women Clothing', icon: '👗', totalStock: 5000, allocatedToMarketplace: 4000, distributed: 1543 },
-  { id: '7', name: 'Kettles', icon: '☕', totalStock: 1500, allocatedToMarketplace: 1000, distributed: 234 },
-  { id: '8', name: 'Blankets', icon: '🧣', totalStock: 2500, allocatedToMarketplace: 2000, distributed: 678 },
+  { id: '1', name: 'Duvet', icon: '🛏️', totalStock: 1000, distributed: 127 },
+  { id: '2', name: 'Chinaware', icon: '🍽️', totalStock: 3500, distributed: 892 },
+  { id: '3', name: 'Kitchen Items', icon: '🍳', totalStock: 2000, distributed: 456 },
+  { id: '4', name: 'Toys', icon: '🧸', totalStock: 12000, distributed: 3421 },
+  { id: '5', name: 'Men Clothing', icon: '👔', totalStock: 6000, distributed: 1876 },
+  { id: '6', name: 'Women Clothing', icon: '👗', totalStock: 5000, distributed: 1543 },
+  { id: '7', name: 'Kettles', icon: '☕', totalStock: 1500, distributed: 234 },
+  { id: '8', name: 'Blankets', icon: '🧣', totalStock: 2500, distributed: 678 },
 ];

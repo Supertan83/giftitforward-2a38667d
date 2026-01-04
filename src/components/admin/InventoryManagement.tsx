@@ -146,8 +146,8 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
   };
 
   const totalItems = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
-  const totalAllocated = itemTypes.reduce((sum, item) => sum + item.allocatedToMarketplace, 0);
   const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
+  const totalAvailable = totalItems - totalDistributed;
 
   return (
     <div className="min-h-screen bg-background">
@@ -191,8 +191,8 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
                 <Package className="w-5 h-5 text-accent-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalAllocated.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Allocated</p>
+                <p className="text-2xl font-bold">{totalAvailable.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Available</p>
               </div>
             </div>
           </div>
@@ -246,7 +246,7 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
                       <p className="font-medium truncate">{item.name}</p>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span>Stock: {item.totalStock.toLocaleString()}</span>
-                        <span>Allocated: {item.allocatedToMarketplace.toLocaleString()}</span>
+                        <span>Available: {(item.totalStock - item.distributed).toLocaleString()}</span>
                         <span>Distributed: {item.distributed.toLocaleString()}</span>
                       </div>
                     </div>

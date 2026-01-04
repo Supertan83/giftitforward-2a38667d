@@ -10,7 +10,7 @@ interface ItemCardProps {
 }
 
 export const ItemCard = ({ item, isSelected, onClick, showStats = false }: ItemCardProps) => {
-  const available = item.allocatedToMarketplace - item.distributed;
+  const available = item.totalStock - item.distributed;
   
   return (
     <motion.button
