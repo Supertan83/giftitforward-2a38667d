@@ -411,6 +411,88 @@ export const useCardOperations = () => {
     }
   });
 
+  // Simplified distribute - quantity only, no item type selection
+  const distributeItemSimple = useMutation({
+    mutationFn: async ({ uniqueId, marketplaceId }: { uniqueId: string; marketplaceId: string }) => {
+      // Find card
+      const { data: card, error: findError } = await supabase
+        .from('qr_cards')
+        .select('*')
+        .ilike('unique_id', uniqueId)
+        .maybeSingle();
+
+      if (findError || !card) throw new SafeError('Card not found');
+      if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
+      if (card.credit_balance <= 0) throw new SafeError('LIMIT REACHED (0/15). No more items allowed.');
+
+      // Update card
+      const { error: updateError } = await supabase
+        .from('qr_cards')
+        .update({
+          credit_balance: card.credit_balance - 1,
+          total_items_collected: card.total_items_collected + 1,
+          marketplace_id: marketplaceId
+        })
+        .eq('id', card.id);
+
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
+
+      // Create transaction
+      await supabase.from('transactions').insert({
+        card_id: card.id,
+        type: 'Distribution' as DbTransactionType,
+        item_type: 'Item',
+        credit_change: -1
+      });
+
+      return { creditBalance: card.credit_balance - 1 };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
+    }
+  });
+
+  // Simplified return - quantity only, no item type selection
+  const returnItemSimple = useMutation({
+    mutationFn: async ({ uniqueId, marketplaceId }: { uniqueId: string; marketplaceId: string }) => {
+      const { data: card, error: findError } = await supabase
+        .from('qr_cards')
+        .select('*')
+        .ilike('unique_id', uniqueId)
+        .maybeSingle();
+
+      if (findError || !card) throw new SafeError('Card not found');
+      if (card.status !== 'active') throw new SafeError('Card is not active');
+      if (card.total_items_collected <= 0) throw new SafeError('No items to return');
+
+      const newBalance = Math.min(card.credit_balance + 1, 15);
+
+      const { error: updateError } = await supabase
+        .from('qr_cards')
+        .update({
+          credit_balance: newBalance,
+          total_items_collected: card.total_items_collected - 1
+        })
+        .eq('id', card.id);
+
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
+
+      await supabase.from('transactions').insert({
+        card_id: card.id,
+        type: 'Return' as DbTransactionType,
+        item_type: 'Item',
+        credit_change: 1
+      });
+
+      return { creditBalance: newBalance };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
+    }
+  });
+
   const addCards = useMutation({
     mutationFn: async (uniqueIds: string[]) => {
       const cards = uniqueIds.map(uniqueId => ({
@@ -469,6 +551,8 @@ export const useCardOperations = () => {
     activateCard,
     distributeItem,
     returnItem,
+    distributeItemSimple,
+    returnItemSimple,
     checkoutCard,
     addCards,
     unregisterCard

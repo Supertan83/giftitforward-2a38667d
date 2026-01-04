@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Package, Plus, Loader2, Trash2, Edit2 } from 'lucide-react';
+import { ArrowLeft, Package, Loader2, Edit2, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,104 +13,27 @@ import {
 } from '@/components/ui/dialog';
 import { useItemTypes, useInventoryOperations } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
-import { z } from 'zod';
 
 interface InventoryManagementProps {
   onBack: () => void;
 }
 
-const AVAILABLE_ICONS = [
-  { icon: '🛏️', name: 'Bed/Duvet' },
-  { icon: '🍳', name: 'Kitchen' },
-  { icon: '🧥', name: 'Clothing' },
-  { icon: '🧴', name: 'Hygiene' },
-  { icon: '🧸', name: 'Toys' },
-  { icon: '📚', name: 'Books' },
-  { icon: '🎒', name: 'Bags' },
-  { icon: '👟', name: 'Shoes' },
-  { icon: '🧹', name: 'Cleaning' },
-  { icon: '💊', name: 'Medical' },
-  { icon: '🔧', name: 'Tools' },
-  { icon: '📦', name: 'General' },
-];
-
-const createItemSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  icon: z.string().min(1, 'Please select an icon'),
-  totalStock: z.number().min(0, 'Stock must be 0 or greater'),
-});
-
 export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<{ id: string; name: string; totalStock: number } | null>(null);
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState('📦');
-  const [totalStock, setTotalStock] = useState('');
   const [editStock, setEditStock] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: itemTypes = [], isLoading } = useItemTypes();
-  const { addItemType, deleteItemType, updateItemStock } = useInventoryOperations();
+  const { updateItemStock, addItemType } = useInventoryOperations();
   const { toast } = useToast();
 
-  const handleCreate = async () => {
-    setErrors({});
-    
-    const stockNum = parseInt(totalStock) || 0;
-    const result = createItemSchema.safeParse({ name, icon, totalStock: stockNum });
-    
-    if (!result.success) {
-      const fieldErrors: Record<string, string> = {};
-      result.error.errors.forEach((err) => {
-        if (err.path[0]) {
-          fieldErrors[err.path[0] as string] = err.message;
-        }
-      });
-      setErrors(fieldErrors);
-      return;
-    }
+  // We use a single "warehouse" item type for simplified inventory
+  const warehouseItem = itemTypes.find(item => item.name === 'Warehouse Stock');
+  
+  const totalStock = warehouseItem?.totalStock || 0;
+  const totalDistributed = warehouseItem?.distributed || 0;
+  const totalAvailable = totalStock - totalDistributed;
 
-    try {
-      await addItemType.mutateAsync({ name, icon, totalStock: stockNum });
-      toast({
-        title: 'Item Type Created',
-        description: `${name} has been added to inventory`,
-      });
-      setShowCreateModal(false);
-      setName('');
-      setIcon('📦');
-      setTotalStock('');
-    } catch (error) {
-      toast({
-        title: 'Failed to Create Item',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleDelete = async (id: string, itemName: string) => {
-    if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return;
-    
-    try {
-      await deleteItemType.mutateAsync(id);
-      toast({
-        title: 'Item Deleted',
-        description: `${itemName} has been removed`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to Delete',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleEditStock = async () => {
-    if (!editingItem) return;
-    
+  const handleUpdateStock = async () => {
     const stockNum = parseInt(editStock) || 0;
     if (stockNum < 0) {
       toast({
@@ -122,13 +45,21 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
     }
 
     try {
-      await updateItemStock.mutateAsync({ id: editingItem.id, totalStock: stockNum });
+      if (warehouseItem) {
+        await updateItemStock.mutateAsync({ id: warehouseItem.id, totalStock: stockNum });
+      } else {
+        // Create the warehouse stock item if it doesn't exist
+        await addItemType.mutateAsync({ 
+          name: 'Warehouse Stock', 
+          icon: '📦', 
+          totalStock: stockNum 
+        });
+      }
       toast({
         title: 'Stock Updated',
-        description: `${editingItem.name} stock updated to ${stockNum}`,
+        description: `Warehouse stock updated to ${stockNum.toLocaleString()}`,
       });
       setShowEditModal(false);
-      setEditingItem(null);
       setEditStock('');
     } catch (error) {
       toast({
@@ -139,15 +70,10 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
     }
   };
 
-  const openEditModal = (item: { id: string; name: string; totalStock: number }) => {
-    setEditingItem(item);
-    setEditStock(item.totalStock.toString());
+  const openEditModal = () => {
+    setEditStock(totalStock.toString());
     setShowEditModal(true);
   };
-
-  const totalItems = itemTypes.reduce((sum, item) => sum + item.totalStock, 0);
-  const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
-  const totalAvailable = totalItems - totalDistributed;
 
   return (
     <div className="min-h-screen bg-background">
@@ -159,207 +85,79 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex-1 min-w-0">
-              <h1 className="font-display font-bold text-base md:text-lg truncate">Inventory Management</h1>
-              <p className="text-xs md:text-sm text-muted-foreground">Manage item types and stock</p>
+              <h1 className="font-display font-bold text-base md:text-lg truncate">Warehouse Inventory</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">Manage total warehouse stock</p>
             </div>
-            <Button onClick={() => setShowCreateModal(true)} size="sm" className="shrink-0">
-              <Plus className="w-4 h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Add Item</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
           </div>
         </div>
       </header>
 
-      <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
-          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
-                <Package className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalItems.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Stock</p>
-              </div>
-            </div>
+      <main className="container max-w-6xl py-6 md:py-8 px-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent-soft flex items-center justify-center">
-                <Package className="w-5 h-5 text-accent-foreground" />
+        ) : (
+          <>
+            {/* Main Warehouse Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card rounded-2xl border border-border shadow-card overflow-hidden mb-6"
+            >
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 text-center">
+                <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
+                  <Warehouse className="w-10 h-10 text-primary" />
+                </div>
+                <h2 className="text-lg font-medium text-muted-foreground mb-2">Total Warehouse Stock</h2>
+                <p className="text-5xl font-bold text-foreground mb-4">
+                  {totalStock.toLocaleString()}
+                </p>
+                <Button onClick={openEditModal} variant="outline" size="lg">
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Update Stock
+                </Button>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{totalAvailable.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Available</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <Package className="w-5 h-5 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalDistributed.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Distributed</p>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Items List */}
-        <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
-          <div className="p-4 md:p-6 border-b border-border">
-            <h2 className="font-display font-bold text-lg">Item Types</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {itemTypes.length} item types
-            </p>
-          </div>
+              <div className="grid grid-cols-2 divide-x divide-border">
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto mb-2">
+                    <Package className="w-6 h-6 text-accent-foreground" />
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{totalAvailable.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">Available</p>
+                </div>
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
+                    <Package className="w-6 h-6 text-emerald-500" />
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{totalDistributed.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">Distributed</p>
+                </div>
+              </div>
+            </motion.div>
 
-          {isLoading ? (
-            <div className="p-8 text-center">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+            {/* Info Card */}
+            <div className="bg-muted/50 rounded-xl p-4 border border-border">
+              <h3 className="font-medium text-sm mb-2">How it works</h3>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Set your total warehouse stock above</li>
+                <li>• Allocate quantities to marketplaces in Allocation Management</li>
+                <li>• Volunteers distribute items by scanning beneficiary QR codes</li>
+                <li>• Reports show breakdown by marketplace and demographics</li>
+              </ul>
             </div>
-          ) : itemTypes.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No item types yet</p>
-              <p className="text-sm">Create your first item type to get started</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {itemTypes.map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="p-4 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-primary-soft flex items-center justify-center shrink-0 text-xl">
-                      {item.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{item.name}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>Stock: {item.totalStock.toLocaleString()}</span>
-                        <span>Available: {(item.totalStock - item.distributed).toLocaleString()}</span>
-                        <span>Distributed: {item.distributed.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => openEditModal({ id: item.id, name: item.name, totalStock: item.totalStock })}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(item.id, item.name)}
-                      disabled={deleteItemType.isPending}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </div>
+          </>
+        )}
       </main>
-
-      {/* Create Item Modal */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl">Add Item Type</DialogTitle>
-            <DialogDescription>
-              Create a new item type for distribution
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Item Name *</Label>
-              <Input
-                id="name"
-                placeholder="e.g., Duvets, Kitchen Items"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              {errors.name && (
-                <p className="text-sm text-destructive">{errors.name}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Icon</Label>
-              <div className="grid grid-cols-6 gap-2">
-                {AVAILABLE_ICONS.map((item) => (
-                  <button
-                    key={item.icon}
-                    type="button"
-                    onClick={() => setIcon(item.icon)}
-                    className={`p-2 rounded-lg border-2 text-2xl transition-all ${
-                      icon === item.icon
-                        ? 'border-primary bg-primary-soft'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    title={item.name}
-                  >
-                    {item.icon}
-                  </button>
-                ))}
-              </div>
-              {errors.icon && (
-                <p className="text-sm text-destructive">{errors.icon}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="totalStock">Initial Stock</Label>
-              <Input
-                id="totalStock"
-                type="number"
-                placeholder="0"
-                value={totalStock}
-                onChange={(e) => setTotalStock(e.target.value)}
-                min="0"
-              />
-              {errors.totalStock && (
-                <p className="text-sm text-destructive">{errors.totalStock}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={addItemType.isPending}>
-              {addItemType.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Item
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Stock Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display text-xl">Update Stock</DialogTitle>
+            <DialogTitle className="font-display text-xl">Update Warehouse Stock</DialogTitle>
             <DialogDescription>
-              Update the total stock for {editingItem?.name}
+              Set the total number of items in your warehouse
             </DialogDescription>
           </DialogHeader>
 
@@ -372,7 +170,11 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
                 value={editStock}
                 onChange={(e) => setEditStock(e.target.value)}
                 min="0"
+                placeholder="Enter total stock quantity"
               />
+              <p className="text-xs text-muted-foreground">
+                This is the total number of items available for allocation to marketplaces
+              </p>
             </div>
           </div>
 
@@ -380,8 +182,13 @@ export const InventoryManagement = ({ onBack }: InventoryManagementProps) => {
             <Button variant="outline" onClick={() => setShowEditModal(false)}>
               Cancel
             </Button>
-            <Button onClick={handleEditStock} disabled={updateItemStock.isPending}>
-              {updateItemStock.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button 
+              onClick={handleUpdateStock} 
+              disabled={updateItemStock.isPending || addItemType.isPending}
+            >
+              {(updateItemStock.isPending || addItemType.isPending) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Update Stock
             </Button>
           </div>
