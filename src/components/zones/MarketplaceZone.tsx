@@ -94,20 +94,17 @@ export const MarketplaceZone = () => {
           credits: result.creditBalance,
         });
       } else {
-        // Find first allocation with distributed items to return to
-        const allocationWithDistributed = allocations.find(a => a.distributedQuantity > 0);
-        
-        if (!allocationWithDistributed) {
-          throw new Error('No items to return');
-        }
-
+        // Return item from card first, then update allocation
         const result = await returnItemSimple.mutateAsync({
           uniqueId: code,
           marketplaceId: selectedMarketplaceId
         });
 
-        // Decrement distributed count in allocation
-        await decrementDistributed.mutateAsync(allocationWithDistributed.id);
+        // Find allocation to decrement (if any has distributed items)
+        const allocationWithDistributed = allocations.find(a => a.distributedQuantity > 0);
+        if (allocationWithDistributed) {
+          await decrementDistributed.mutateAsync(allocationWithDistributed.id);
+        }
 
         setFeedback({
           type: 'success',
