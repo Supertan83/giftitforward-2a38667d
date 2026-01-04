@@ -17,7 +17,46 @@ function generateVolunteerQRId(): string {
   return `VOL-${timestamp}-${random}`;
 }
 
-// Helper function to send welcome email to approved volunteer with QR code and training link
+// Generate unique family member QR card ID
+function generateFamilyQRId(volunteerQRId: string, index: number): string {
+  const random = Math.random().toString(36).substring(2, 4).toUpperCase();
+  return `${volunteerQRId}-F${index}${random}`;
+}
+
+// Interface for family member QR data
+interface FamilyMemberQR {
+  name: string;
+  type: string; // 'adult' or 'children'
+  gender: string | null;
+  qrCardId: string;
+}
+
+// Extract unique dependents from events_json
+function extractUniqueDependents(eventsJson: unknown): Array<{ name: string; type: string; gender: string | null }> {
+  if (!eventsJson || !Array.isArray(eventsJson)) return [];
+  
+  const dependentsMap = new Map<string, { name: string; type: string; gender: string | null }>();
+  
+  for (const event of eventsJson) {
+    if (event.dependents && Array.isArray(event.dependents)) {
+      for (const dep of event.dependents) {
+        // Use name as unique key to avoid duplicates
+        const key = dep.name?.toLowerCase()?.trim();
+        if (key && !dependentsMap.has(key)) {
+          dependentsMap.set(key, {
+            name: dep.name,
+            type: dep.type || 'adult',
+            gender: dep.gender || null
+          });
+        }
+      }
+    }
+  }
+  
+  return Array.from(dependentsMap.values());
+}
+
+// Helper function to send welcome email to approved volunteer with QR codes (including family members)
 async function sendWelcomeEmailWithQR(
   email: string,
   firstName: string,
@@ -25,7 +64,8 @@ async function sendWelcomeEmailWithQR(
   loginUrl: string,
   trainingUrl: string,
   qrCardId: string,
-  pendingId: string
+  pendingId: string,
+  familyQRs: FamilyMemberQR[] = []
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -34,10 +74,37 @@ async function sendWelcomeEmailWithQR(
     // Generate QR code URL using a public QR code API
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCardId)}`;
     
+    // Generate family member QR sections
+    const familyQRSections = familyQRs.map(fam => {
+      const famQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(fam.qrCardId)}`;
+      const typeLabel = fam.type === 'children' ? 'Child' : 'Adult';
+      return `
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; flex: 1; min-width: 140px;">
+          <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151;">${fam.name}</p>
+          <p style="font-size: 12px; color: #6b7280; margin: 0 0 10px 0;">${typeLabel}${fam.gender ? ` • ${fam.gender}` : ''}</p>
+          <img src="${famQrUrl}" alt="QR Code for ${fam.name}" style="width: 120px; height: 120px; margin: 0 auto; display: block;" />
+          <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280; word-break: break-all;">${fam.qrCardId}</p>
+        </div>
+      `;
+    }).join('');
+    
+    const familySection = familyQRs.length > 0 ? `
+      <!-- Family Member QR Codes -->
+      <div style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 20px; margin: 25px 0;">
+        <h3 style="margin-top: 0; color: #166534;">👨‍👩‍👧‍👦 Family Member QR Cards (${familyQRs.length})</h3>
+        <p style="color: #15803d; font-size: 14px; margin-bottom: 15px;">These QR codes are for your registered family members. Each person should present their own QR code at the marketplace.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center;">
+          ${familyQRSections}
+        </div>
+      </div>
+    ` : '';
+    
     const { error } = await resend.emails.send({
       from: "Surpluss Volunteers <noreply@mgif.thesurpluss.com>",
       to: [email],
-      subject: "Welcome to GIF - Your Volunteer Account & QR Card",
+      subject: familyQRs.length > 0 
+        ? `Welcome to GIF - Your Volunteer QR Cards (${1 + familyQRs.length} total)`
+        : "Welcome to GIF - Your Volunteer Account & QR Card",
       html: `
         <!DOCTYPE html>
         <html>
@@ -55,13 +122,15 @@ async function sendWelcomeEmailWithQR(
             
             <p>Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:</p>
             
-            <!-- QR Code Section -->
+            <!-- Your QR Code Section -->
             <div style="background: white; border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
               <h3 style="margin-top: 0; color: #059669;">🎫 Your Volunteer QR Card</h3>
               <p style="color: #6b7280; font-size: 14px; margin-bottom: 15px;">Present this QR code when checking in at marketplace events</p>
               <img src="${qrCodeUrl}" alt="Your Volunteer QR Code" style="width: 180px; height: 180px; margin: 0 auto; display: block;" />
               <p style="font-family: monospace; font-size: 14px; margin-top: 10px; color: #374151; background: #f3f4f6; padding: 8px; border-radius: 6px;">${qrCardId}</p>
             </div>
+            
+            ${familySection}
             
             <!-- Training Module Section -->
             <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; margin: 25px 0;">
@@ -104,7 +173,7 @@ async function sendWelcomeEmailWithQR(
       return { success: false, error: error.message };
     }
 
-    console.log(`Welcome email with QR sent successfully to ${email}`);
+    console.log(`Welcome email with QR sent successfully to ${email} (${1 + familyQRs.length} QR codes)`);
     return { success: true };
   } catch (err) {
     console.error("Error sending welcome email with QR:", err);
@@ -121,7 +190,7 @@ async function sendWelcomeEmail(
   pendingId: string
 ): Promise<{ success: boolean; error?: string }> {
   // Call new function without QR
-  return sendWelcomeEmailWithQR(email, firstName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId);
+  return sendWelcomeEmailWithQR(email, firstName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId, []);
 }
 
 interface VolunteerData {
@@ -1463,12 +1532,44 @@ serve(async (req) => {
             console.log(`Volunteer QR card created: ${qrCardId}, Card DB ID: ${qrCardData.id}`);
           }
 
+          // Extract unique dependents and create family member QR cards
+          const dependents = extractUniqueDependents(eventsJson);
+          const familyQRs: FamilyMemberQR[] = [];
+          
+          for (let i = 0; i < dependents.length; i++) {
+            const dep = dependents[i];
+            const familyQrCardId = generateFamilyQRId(qrCardId, i + 1);
+            
+            // Create QR card for family member (linked to same volunteer)
+            const { error: famQrError } = await supabase
+              .from('volunteer_qr_cards')
+              .insert({
+                unique_id: familyQrCardId,
+                volunteer_id: pendingData.id,
+                status: 'inactive'
+              });
+            
+            if (famQrError) {
+              console.error(`Failed to create family QR card for ${dep.name}:`, famQrError);
+            } else {
+              console.log(`Family QR card created: ${familyQrCardId} for ${dep.name}`);
+              familyQRs.push({
+                name: dep.name,
+                type: dep.type,
+                gender: dep.gender,
+                qrCardId: familyQrCardId
+              });
+            }
+          }
+
+          console.log(`Created ${familyQRs.length} family member QR cards`);
+
           // Determine app URL for email links
           const appUrl = 'https://gif.thesurpluss.com';
           const loginUrl = `${appUrl}/auth`;
           const trainingUrl = `${appUrl}/training`;
 
-          // Send welcome email with QR code and training link
+          // Send welcome email with all QR codes (volunteer + family members)
           const emailResult = await sendWelcomeEmailWithQR(
             volunteerEmail,
             firstName,
@@ -1476,7 +1577,8 @@ serve(async (req) => {
             loginUrl,
             trainingUrl,
             qrCardId,
-            pendingData.id
+            pendingData.id,
+            familyQRs
           );
 
           // Update pending volunteer with email status
@@ -1496,11 +1598,12 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({
               success: true,
-              message: 'Volunteer auto-approved, QR card created, and email sent',
+              message: `Volunteer auto-approved, QR cards created (${1 + familyQRs.length} total), and email sent`,
               pending_id: pendingData.id,
               email: volunteerEmail,
               user_id: userData.user.id,
               qr_card_id: qrCardId,
+              family_qr_count: familyQRs.length,
               temp_password: tempPassword,
               email_sent: emailResult.success,
               email_error: emailResult.error || null
@@ -1671,16 +1774,70 @@ serve(async (req) => {
 
       console.log(`Approved volunteer: ${pendingVolunteer.email}${userAlreadyExists ? ' (linked to existing account)' : ''}`);
 
-      // Send welcome email with login credentials (only if new user)
+      // Generate QR card for the volunteer
+      const qrCardId = generateVolunteerQRId();
+      console.log(`Creating volunteer QR card for manual approval: ${qrCardId}`);
+      
+      const { error: qrCardError } = await supabase
+        .from('volunteer_qr_cards')
+        .insert({
+          unique_id: qrCardId,
+          volunteer_id: pending_id,
+          status: 'inactive'
+        });
+
+      if (qrCardError) {
+        console.error('Failed to create volunteer QR card:', qrCardError);
+      }
+
+      // Extract unique dependents and create family member QR cards
+      const dependents = extractUniqueDependents(pendingVolunteer.events_json);
+      const familyQRs: FamilyMemberQR[] = [];
+      
+      for (let i = 0; i < dependents.length; i++) {
+        const dep = dependents[i];
+        const familyQrCardId = generateFamilyQRId(qrCardId, i + 1);
+        
+        // Create QR card for family member (linked to same volunteer)
+        const { error: famQrError } = await supabase
+          .from('volunteer_qr_cards')
+          .insert({
+            unique_id: familyQrCardId,
+            volunteer_id: pending_id,
+            status: 'inactive'
+          });
+        
+        if (famQrError) {
+          console.error(`Failed to create family QR card for ${dep.name}:`, famQrError);
+        } else {
+          console.log(`Family QR card created: ${familyQrCardId} for ${dep.name}`);
+          familyQRs.push({
+            name: dep.name,
+            type: dep.type,
+            gender: dep.gender,
+            qrCardId: familyQrCardId
+          });
+        }
+      }
+
+      console.log(`Created ${familyQRs.length} family member QR cards for manual approval`);
+
+      // Send welcome email with login credentials and QR codes (only if new user)
       let emailResult: { success: boolean; error?: string } = { success: false };
       if (!userAlreadyExists) {
-        const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
-        emailResult = await sendWelcomeEmail(
+        const appUrl = 'https://gif.thesurpluss.com';
+        const loginUrl = `${appUrl}/auth`;
+        const trainingUrl = `${appUrl}/training`;
+        
+        emailResult = await sendWelcomeEmailWithQR(
           pendingVolunteer.email,
           pendingVolunteer.first_name,
           tempPassword,
           loginUrl,
-          pending_id
+          trainingUrl,
+          qrCardId,
+          pending_id,
+          familyQRs
         );
 
         // Update email tracking fields
@@ -1699,10 +1856,12 @@ serve(async (req) => {
           success: true,
           message: userAlreadyExists 
             ? 'Volunteer approved and linked to existing account (user already had an account)' 
-            : 'Volunteer approved and account created',
+            : 'Volunteer approved, QR cards created, and account created',
           email: pendingVolunteer.email,
           temp_password: userAlreadyExists ? null : tempPassword,
           user_id: userId,
+          qr_card_id: qrCardId,
+          family_qr_count: familyQRs.length,
           user_already_existed: userAlreadyExists,
           email_sent: userAlreadyExists ? false : emailResult.success,
           email_send_count: userAlreadyExists ? 0 : 1,
@@ -1861,14 +2020,44 @@ serve(async (req) => {
         );
       }
 
-      // Send welcome email
-      const loginUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://surpluss.lovable.app';
-      const emailResult = await sendWelcomeEmail(
+      // Fetch volunteer's QR cards
+      const { data: qrCards } = await supabase
+        .from('volunteer_qr_cards')
+        .select('unique_id')
+        .eq('volunteer_id', pending_id)
+        .order('created_at', { ascending: true });
+
+      const allQrIds = qrCards?.map(c => c.unique_id) || [];
+      const volunteerQrId = allQrIds[0] || 'N/A';
+      
+      // Build family QR list (all except the first one which is the volunteer's own)
+      const familyQRs: FamilyMemberQR[] = [];
+      const dependents = extractUniqueDependents(volunteer.events_json);
+      
+      for (let i = 1; i < allQrIds.length && i <= dependents.length; i++) {
+        const dep = dependents[i - 1];
+        familyQRs.push({
+          name: dep.name,
+          type: dep.type,
+          gender: dep.gender,
+          qrCardId: allQrIds[i]
+        });
+      }
+
+      // Send welcome email with QR codes
+      const appUrl = 'https://gif.thesurpluss.com';
+      const loginUrl = `${appUrl}/auth`;
+      const trainingUrl = `${appUrl}/training`;
+      
+      const emailResult = await sendWelcomeEmailWithQR(
         volunteer.email,
         volunteer.first_name,
         volunteer.temp_password,
         loginUrl,
-        pending_id
+        trainingUrl,
+        volunteerQrId,
+        pending_id,
+        familyQRs
       );
 
       // Update email tracking fields
