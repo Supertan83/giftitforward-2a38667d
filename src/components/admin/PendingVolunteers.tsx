@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -80,6 +80,36 @@ const formatEventName = (slug: string): string => {
   return name.split(' ').map(word => 
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
+};
+
+// Extract unique dependents from events_json
+interface Dependent {
+  name: string;
+  type: string;
+  gender?: string;
+}
+
+const extractUniqueDependents = (eventsJson: unknown): Dependent[] => {
+  if (!eventsJson || !Array.isArray(eventsJson)) return [];
+  
+  const dependentsMap = new Map<string, Dependent>();
+  
+  for (const event of eventsJson) {
+    if (event.dependents && Array.isArray(event.dependents)) {
+      for (const dep of event.dependents) {
+        const key = dep.name?.toLowerCase()?.trim();
+        if (key && !dependentsMap.has(key)) {
+          dependentsMap.set(key, {
+            name: dep.name,
+            type: dep.type || 'adult',
+            gender: dep.gender || undefined
+          });
+        }
+      }
+    }
+  }
+  
+  return Array.from(dependentsMap.values());
 };
 
 export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
@@ -432,6 +462,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Company</TableHead>
+                        <TableHead>Family</TableHead>
                         <TableHead>Events</TableHead>
                         <TableHead>Submitted</TableHead>
                         <TableHead>Status</TableHead>
@@ -467,6 +498,23 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               <span className="text-sm text-muted-foreground">
                                 {volunteer.is_employee ? 'Dubai Holding' : (volunteer.external_company || 'Not specified')}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const deps = extractUniqueDependents(volunteer.events_json);
+                                if (deps.length === 0) {
+                                  return <span className="text-sm text-muted-foreground">—</span>;
+                                }
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                                    <span className="text-sm font-medium">{deps.length}</span>
+                                    <span className="text-xs text-muted-foreground hidden lg:inline">
+                                      ({deps.slice(0, 2).map(d => d.name).join(', ')}{deps.length > 2 ? '...' : ''})
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <span className="text-sm text-muted-foreground">
