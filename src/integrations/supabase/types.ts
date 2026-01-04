@@ -1165,6 +1165,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      decrement_marketplace_allocation_distributed: {
+        Args: { _allocation_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1175,6 +1179,10 @@ export type Database = {
       increment_item_distributed: {
         Args: { item_id: string }
         Returns: undefined
+      }
+      increment_marketplace_allocation_distributed: {
+        Args: { _allocation_id: string }
+        Returns: number
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
     }
