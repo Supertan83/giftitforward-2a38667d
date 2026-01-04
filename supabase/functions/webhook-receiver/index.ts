@@ -1951,6 +1951,113 @@ serve(async (req) => {
       );
     }
 
+    // Add family member to an existing volunteer (admin action)
+    if (payload.action === 'add_family_member') {
+      // Verify authentication
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { volunteer_id, family_member } = payload;
+      if (!volunteer_id || !family_member?.name) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'volunteer_id and family_member.name are required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Get volunteer's existing QR cards to find the parent QR ID
+      const { data: existingCards, error: cardsError } = await supabase
+        .from('volunteer_qr_cards')
+        .select('unique_id')
+        .eq('volunteer_id', volunteer_id)
+        .order('created_at', { ascending: true });
+
+      if (cardsError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to fetch volunteer cards' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Find the parent QR (first one without -F pattern)
+      const parentCard = existingCards?.find(c => !/-F\d+[A-Z0-9]+$/.test(c.unique_id));
+      if (!parentCard) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'No parent volunteer QR card found' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Count existing family cards to get next index
+      const familyCardCount = existingCards?.filter(c => /-F\d+[A-Z0-9]+$/.test(c.unique_id)).length || 0;
+      
+      // Generate new family QR ID
+      const familyQrCardId = generateFamilyQRId(parentCard.unique_id, familyCardCount + 1);
+
+      // Create the family member QR card
+      const { error: createError } = await supabase
+        .from('volunteer_qr_cards')
+        .insert({
+          unique_id: familyQrCardId,
+          volunteer_id: volunteer_id,
+          status: 'inactive'
+        });
+
+      if (createError) {
+        console.error('Failed to create family QR card:', createError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to create QR card: ' + createError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Created family QR card ${familyQrCardId} for ${family_member.name} (volunteer ${volunteer_id})`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Family member QR card created',
+          qr_card_id: familyQrCardId,
+          family_member_name: family_member.name,
+          family_member_type: family_member.type || 'adult'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check for resend_email action
     if (payload.action === 'resend_email') {
       // Verify authentication
