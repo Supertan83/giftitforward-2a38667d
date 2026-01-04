@@ -189,28 +189,16 @@ export const useAllocationOperations = () => {
     }
   });
 
-  // Increment distributed count when item is given out
+  // Increment distributed count when item is given out (by allocation ID)
   const incrementDistributed = useMutation({
-    mutationFn: async ({ 
-      marketplaceId, 
-      itemTypeId 
-    }: { 
-      marketplaceId: string; 
-      itemTypeId: string 
-    }) => {
+    mutationFn: async (allocationId: string) => {
       const { data: allocation, error: findError } = await supabase
         .from('marketplace_item_allocations')
         .select('*')
-        .eq('marketplace_id', marketplaceId)
-        .eq('item_type_id', itemTypeId)
-        .maybeSingle();
+        .eq('id', allocationId)
+        .single();
 
       if (findError) throw new SafeError(mapDatabaseError(findError), findError);
-      
-      if (!allocation) {
-        // No allocation for this marketplace, skip
-        return false;
-      }
 
       if (allocation.distributed_quantity >= allocation.allocated_quantity) {
         throw new SafeError('Item allocation exhausted for this marketplace');
@@ -221,7 +209,7 @@ export const useAllocationOperations = () => {
         .update({ 
           distributed_quantity: allocation.distributed_quantity + 1 
         })
-        .eq('id', allocation.id);
+        .eq('id', allocationId);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
@@ -231,25 +219,18 @@ export const useAllocationOperations = () => {
     }
   });
 
-  // Decrement distributed count when item is returned
+  // Decrement distributed count when item is returned (by allocation ID)
   const decrementDistributed = useMutation({
-    mutationFn: async ({ 
-      marketplaceId, 
-      itemTypeId 
-    }: { 
-      marketplaceId: string; 
-      itemTypeId: string 
-    }) => {
+    mutationFn: async (allocationId: string) => {
       const { data: allocation, error: findError } = await supabase
         .from('marketplace_item_allocations')
         .select('*')
-        .eq('marketplace_id', marketplaceId)
-        .eq('item_type_id', itemTypeId)
-        .maybeSingle();
+        .eq('id', allocationId)
+        .single();
 
       if (findError) throw new SafeError(mapDatabaseError(findError), findError);
       
-      if (!allocation || allocation.distributed_quantity <= 0) {
+      if (allocation.distributed_quantity <= 0) {
         return false;
       }
 
@@ -258,7 +239,7 @@ export const useAllocationOperations = () => {
         .update({ 
           distributed_quantity: allocation.distributed_quantity - 1 
         })
-        .eq('id', allocation.id);
+        .eq('id', allocationId);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
