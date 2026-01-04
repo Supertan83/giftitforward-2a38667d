@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, ShoppingBag, LogOut, User } from 'lucide-react';
+import { User, UserCheck, BarChart3, LogOut } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
-import { EntranceZone } from '@/components/zones/EntranceZone';
-import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
-import { ExitZone } from '@/components/zones/ExitZone';
+import { VolunteerZone } from '@/components/zones/VolunteerZone';
+import { StatsDashboardZone } from '@/components/zones/StatsDashboardZone';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -17,26 +16,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Zone = 'entrance' | 'marketplace' | 'exit';
+type Zone = 'volunteers' | 'stats';
 
 const zones = [
-  { id: 'entrance' as Zone, label: 'Entrance', icon: LogIn, color: 'text-primary' },
-  { id: 'marketplace' as Zone, label: 'Marketplace', icon: ShoppingBag, color: 'text-warning' },
-  { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
+  { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success' },
+  { id: 'stats' as Zone, label: 'Stats', icon: BarChart3, color: 'text-primary' },
 ];
 
-export const VolunteerInterface = () => {
-  const [activeZone, setActiveZone] = useState<Zone>('entrance');
+export const EmployeeDashboard = () => {
+  const [activeZone, setActiveZone] = useState<Zone>('volunteers');
   const { user, signOut } = useAuth();
 
   const renderZone = () => {
     switch (activeZone) {
-      case 'entrance':
-        return <EntranceZone />;
-      case 'marketplace':
-        return <MarketplaceZone />;
-      case 'exit':
-        return <ExitZone />;
+      case 'volunteers':
+        return <VolunteerZone />;
+      case 'stats':
+        return <StatsDashboardZone />;
     }
   };
 
@@ -49,7 +45,7 @@ export const VolunteerInterface = () => {
             <BrandLogo size="sm" />
             <div>
               <h1 className="font-display font-bold text-sm">GIF (Gift it Forward)</h1>
-              <p className="text-xs text-muted-foreground">Volunteer Mode</p>
+              <p className="text-xs text-muted-foreground">Employee Mode</p>
             </div>
           </div>
           
@@ -62,7 +58,7 @@ export const VolunteerInterface = () => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
                 <div>
-                  <p className="font-medium">Volunteer</p>
+                  <p className="font-medium">Employee</p>
                   <p className="text-xs text-muted-foreground">{user?.email}</p>
                 </div>
               </DropdownMenuLabel>
@@ -99,7 +95,7 @@ export const VolunteerInterface = () => {
               >
                 {isActive && (
                   <motion.div
-                    layoutId="activeTab"
+                    layoutId="employeeActiveTab"
                     className="absolute top-0 left-2 right-2 h-0.5 bg-current rounded-full"
                   />
                 )}

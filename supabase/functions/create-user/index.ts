@@ -15,8 +15,8 @@ const isValidPassword = (password: string): boolean => {
   return typeof password === 'string' && password.length >= 8 && password.length <= 128;
 };
 
-const isValidRole = (role: string): role is 'admin' | 'volunteer' => {
-  return role === 'admin' || role === 'volunteer';
+const isValidRole = (role: string): role is 'admin' | 'volunteer' | 'employee' => {
+  return role === 'admin' || role === 'volunteer' || role === 'employee';
 };
 
 Deno.serve(async (req) => {

@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const isValidRole = (role: string): role is 'admin' | 'volunteer' => {
-  return role === 'admin' || role === 'volunteer';
+const isValidRole = (role: string): role is 'admin' | 'volunteer' | 'employee' => {
+  return role === 'admin' || role === 'volunteer' || role === 'employee';
 };
 
 Deno.serve(async (req) => {

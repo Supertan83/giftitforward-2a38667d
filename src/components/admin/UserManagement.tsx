@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,17 +40,17 @@ interface UserManagementProps {
 const createUserSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['admin', 'volunteer'], { required_error: 'Please select a role' }),
+  role: z.enum(['admin', 'volunteer', 'employee'], { required_error: 'Please select a role' }),
 });
 
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer'; first_name: string | null; last_name: string | null } | null>(null);
+  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null } | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'volunteer'>('volunteer');
-  const [editRole, setEditRole] = useState<'admin' | 'volunteer'>('volunteer');
+  const [role, setRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
+  const [editRole, setEditRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -114,7 +114,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     }
   };
 
-  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer'; first_name: string | null; last_name: string | null }) => {
+  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null }) => {
     setEditUser(user);
     setEditRole(user.role);
     setEditFirstName(user.first_name || '');
@@ -147,6 +147,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
   const adminCount = users.filter(u => u.role === 'admin').length;
   const volunteerCount = users.filter(u => u.role === 'volunteer').length;
+  const employeeCount = users.filter(u => u.role === 'employee').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,7 +173,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
           <div className="bg-card rounded-xl border border-border p-4 shadow-card">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
@@ -181,6 +182,17 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
               <div>
                 <p className="text-2xl font-bold">{adminCount}</p>
                 <p className="text-sm text-muted-foreground">Admins</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                <Briefcase className="w-5 h-5 text-warning" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{employeeCount}</p>
+                <p className="text-sm text-muted-foreground">Employees</p>
               </div>
             </div>
           </div>
@@ -227,10 +239,12 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                      user.role === 'admin' ? 'bg-primary-soft' : 'bg-muted'
+                      user.role === 'admin' ? 'bg-primary-soft' : user.role === 'employee' ? 'bg-warning/10' : 'bg-muted'
                     }`}>
                       {user.role === 'admin' ? (
                         <Shield className="w-5 h-5 text-primary" />
+                      ) : user.role === 'employee' ? (
+                        <Briefcase className="w-5 h-5 text-warning" />
                       ) : (
                         <User className="w-5 h-5 text-muted-foreground" />
                       )}
@@ -247,7 +261,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                    <Badge variant={user.role === 'admin' ? 'default' : user.role === 'employee' ? 'outline' : 'secondary'}>
                       {user.role}
                     </Badge>
                     <Button
@@ -323,7 +337,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as 'admin' | 'volunteer')}>
+              <Select value={role} onValueChange={(v) => setRole(v as 'admin' | 'volunteer' | 'employee')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -332,6 +346,12 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4" />
                       Volunteer
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="employee">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Employee
                     </div>
                   </SelectItem>
                   <SelectItem value="admin">
@@ -408,7 +428,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'volunteer')}>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'volunteer' | 'employee')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -417,6 +437,12 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4" />
                       Volunteer
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="employee">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Employee
                     </div>
                   </SelectItem>
                   <SelectItem value="admin">

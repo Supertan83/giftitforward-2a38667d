@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { VolunteerInterface } from '@/components/VolunteerInterface';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
+import { EmployeeDashboard } from '@/components/EmployeeDashboard';
 import { Loader2 } from 'lucide-react';
 
 const Index = () => {
@@ -39,6 +40,10 @@ const Index = () => {
 
   if (userRole === 'admin') {
     return <AdminDashboard />;
+  }
+
+  if (userRole === 'employee') {
+    return <EmployeeDashboard />;
   }
 
   return <VolunteerInterface />;
