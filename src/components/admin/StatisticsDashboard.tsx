@@ -11,11 +11,14 @@ import {
   User,
   Heart,
   Baby,
-  Globe
+  Globe,
+  UserCheck,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useQRCards, useItemTypes, useBeneficiaryDemographics } from '@/hooks/useSupabaseData';
+import { useQRCards, useItemTypes, useBeneficiaryDemographics, useVolunteerQRCards } from '@/hooks/useSupabaseData';
+import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import {
   BarChart,
   Bar,
@@ -29,6 +32,7 @@ import {
   Cell,
   Legend
 } from 'recharts';
+import { Progress } from '@/components/ui/progress';
 
 interface StatisticsDashboardProps {
   onBack: () => void;
@@ -46,8 +50,10 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
   const { data: qrCards = [], isLoading: cardsLoading } = useQRCards();
   const { data: itemTypes = [], isLoading: itemsLoading } = useItemTypes();
   const { data: demographics, isLoading: demographicsLoading } = useBeneficiaryDemographics();
+  const { data: volunteerCards = [], isLoading: volunteersLoading } = useVolunteerQRCards();
+  const { data: allocations = [], isLoading: allocationsLoading } = useMarketplaceAllocations();
 
-  const isLoading = cardsLoading || itemsLoading || demographicsLoading;
+  const isLoading = cardsLoading || itemsLoading || demographicsLoading || volunteersLoading || allocationsLoading;
 
   const stats = useMemo(() => {
     const activeCards = qrCards.filter(c => c.status === 'active').length;
@@ -55,7 +61,8 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
     // Count cards that have been used (not in 'ready' status)
     const beneficiariesServed = qrCards.filter(c => c.status !== 'ready').length;
     
-    const totalDistributed = itemTypes.reduce((sum, item) => sum + item.distributed, 0);
+    // Use marketplace allocations for accurate distributed count
+    const totalDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
     
     return {
       activeCards,
@@ -63,18 +70,33 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
       totalDistributed,
       totalCards: qrCards.length
     };
-  }, [qrCards, itemTypes]);
+  }, [qrCards, allocations]);
+
+  // Volunteer statistics
+  const volunteerStats = useMemo(() => {
+    const checkedIn = volunteerCards.filter(v => v.status === 'checked_in');
+    const checkedOut = volunteerCards.filter(v => v.status === 'checked_out');
+    const totalHoursWorked = volunteerCards.reduce((sum, v) => sum + (v.total_hours_worked || 0), 0);
+
+    return {
+      totalVolunteers: volunteerCards.length,
+      currentlyActive: checkedIn.length,
+      checkedOut: checkedOut.length,
+      totalHoursWorked: Math.round(totalHoursWorked * 10) / 10,
+    };
+  }, [volunteerCards]);
 
   const categoryData = useMemo(() => {
-    return itemTypes
-      .filter(item => item.distributed > 0)
-      .map(item => ({
-        name: item.name,
-        value: item.distributed,
-        icon: item.icon
+    // Use allocations for distributed item data
+    return allocations
+      .filter(alloc => alloc.distributedQuantity > 0)
+      .map(alloc => ({
+        name: alloc.itemName || 'Unknown',
+        value: alloc.distributedQuantity,
+        icon: alloc.itemIcon || '📦'
       }))
       .sort((a, b) => b.value - a.value);
-  }, [itemTypes]);
+  }, [allocations]);
 
   const genderData = useMemo(() => {
     if (!demographics) return [];
@@ -122,10 +144,10 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
       color: 'text-amber-500'
     },
     {
-      title: 'Total Cards',
-      value: stats.totalCards,
-      icon: Activity,
-      color: 'text-blue-500'
+      title: 'Active Volunteers',
+      value: volunteerStats.currentlyActive,
+      icon: UserCheck,
+      color: 'text-success'
     },
     {
       title: 'Total Children',
@@ -453,11 +475,62 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
           </motion.div>
         </div>
 
+        {/* Volunteer Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+        >
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <UserCheck className="h-5 w-5 text-success" />
+                Volunteer Statistics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{volunteerStats.currentlyActive}</p>
+                  <p className="text-xs text-muted-foreground">Currently Active</p>
+                </div>
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-foreground">{volunteerStats.totalVolunteers}</p>
+                  <p className="text-xs text-muted-foreground">Total Volunteers</p>
+                </div>
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-amber-500">{volunteerStats.totalHoursWorked}</p>
+                  <p className="text-xs text-muted-foreground">Hours Worked</p>
+                </div>
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-muted-foreground">{volunteerStats.checkedOut}</p>
+                  <p className="text-xs text-muted-foreground">Checked Out</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Active vs Total</span>
+                  <span className="font-medium">
+                    {volunteerStats.currentlyActive} / {volunteerStats.totalVolunteers}
+                  </span>
+                </div>
+                <Progress 
+                  value={volunteerStats.totalVolunteers > 0 
+                    ? (volunteerStats.currentlyActive / volunteerStats.totalVolunteers) * 100 
+                    : 0
+                  } 
+                  className="h-2"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* Info Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.9 }}
         >
           <Card className="bg-card border-border">
             <CardContent className="p-6 text-center">

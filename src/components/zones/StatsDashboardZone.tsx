@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { useQRCards, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -22,8 +23,11 @@ export const StatsDashboardZone = () => {
   const { data: qrCards = [], isLoading: isLoadingCards } = useQRCards();
   const { data: volunteerCards = [], isLoading: isLoadingVolunteers } = useVolunteerQRCards();
   const { data: marketplaces = [], isLoading: isLoadingMarketplaces } = useMarketplaces();
+  const { data: allocations = [], isLoading: isLoadingAllocations } = useMarketplaceAllocations(
+    selectedMarketplaceId === 'all' ? undefined : selectedMarketplaceId
+  );
 
-  const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces;
+  const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
   // Filter marketplaces for selector
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
@@ -50,8 +54,8 @@ export const StatsDashboardZone = () => {
       return activatedDate.getTime() === today.getTime();
     }).length;
 
-    // Total items distributed
-    const totalItemsDistributed = allProcessedCards.reduce((sum, c) => sum + (c.totalItemsCollected || 0), 0);
+    // Total items distributed from marketplace allocations (accurate count)
+    const totalItemsDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
 
     // Average items per beneficiary
     const avgItemsPerBeneficiary = allProcessedCards.length > 0 
@@ -82,7 +86,7 @@ export const StatsDashboardZone = () => {
       genderBreakdown,
       totalChildren,
     };
-  }, [qrCards, selectedMarketplaceId]);
+  }, [qrCards, selectedMarketplaceId, allocations]);
 
   // Calculate volunteer statistics
   const volunteerStats = useMemo(() => {
