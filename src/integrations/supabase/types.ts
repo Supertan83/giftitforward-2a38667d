@@ -486,6 +486,51 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_item_allocations: {
+        Row: {
+          allocated_quantity: number
+          created_at: string
+          distributed_quantity: number
+          id: string
+          item_type_id: string
+          marketplace_id: string
+          updated_at: string
+        }
+        Insert: {
+          allocated_quantity?: number
+          created_at?: string
+          distributed_quantity?: number
+          id?: string
+          item_type_id: string
+          marketplace_id: string
+          updated_at?: string
+        }
+        Update: {
+          allocated_quantity?: number
+          created_at?: string
+          distributed_quantity?: number
+          id?: string
+          item_type_id?: string
+          marketplace_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_item_allocations_item_type_id_fkey"
+            columns: ["item_type_id"]
+            isOneToOne: false
+            referencedRelation: "item_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_item_allocations_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_registrations: {
         Row: {
           created_at: string

@@ -237,7 +237,7 @@ export const useCardOperations = () => {
       if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
       if (card.credit_balance <= 0) throw new SafeError('LIMIT REACHED (0/15). No more items allowed.');
 
-      // Check item availability
+      // Check item availability from global stock
       const { data: item, error: itemError } = await supabase
         .from('item_types')
         .select('total_stock, distributed')
@@ -246,6 +246,28 @@ export const useCardOperations = () => {
       
       if (itemError || !item) throw new SafeError('Item not found');
       if (item.distributed >= item.total_stock) throw new SafeError('Item out of stock');
+
+      // Check marketplace allocation if card has marketplace_id
+      if (card.marketplace_id) {
+        const { data: allocation } = await supabase
+          .from('marketplace_item_allocations')
+          .select('*')
+          .eq('marketplace_id', card.marketplace_id)
+          .eq('item_type_id', itemId)
+          .maybeSingle();
+
+        if (allocation) {
+          if (allocation.distributed_quantity >= allocation.allocated_quantity) {
+            throw new SafeError('Item allocation exhausted for this marketplace');
+          }
+
+          // Update marketplace allocation
+          await supabase
+            .from('marketplace_item_allocations')
+            .update({ distributed_quantity: allocation.distributed_quantity + 1 })
+            .eq('id', allocation.id);
+        }
+      }
 
       // Update card
       const { error: updateError } = await supabase
@@ -258,7 +280,7 @@ export const useCardOperations = () => {
 
       if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
-      // Update item distributed count (deduct 1 from available)
+      // Update global item distributed count
       await supabase
         .from('item_types')
         .update({ distributed: item.distributed + 1 })
@@ -277,6 +299,7 @@ export const useCardOperations = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
       queryClient.invalidateQueries({ queryKey: ['item_types'] });
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
     }
   });
 
@@ -294,6 +317,23 @@ export const useCardOperations = () => {
 
       const newBalance = Math.min(card.credit_balance + 1, 15);
 
+      // Update marketplace allocation if card has marketplace_id
+      if (card.marketplace_id) {
+        const { data: allocation } = await supabase
+          .from('marketplace_item_allocations')
+          .select('*')
+          .eq('marketplace_id', card.marketplace_id)
+          .eq('item_type_id', itemId)
+          .maybeSingle();
+
+        if (allocation && allocation.distributed_quantity > 0) {
+          await supabase
+            .from('marketplace_item_allocations')
+            .update({ distributed_quantity: allocation.distributed_quantity - 1 })
+            .eq('id', allocation.id);
+        }
+      }
+
       const { error: updateError } = await supabase
         .from('qr_cards')
         .update({
@@ -304,7 +344,7 @@ export const useCardOperations = () => {
 
       if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
 
-      // Return item back to stock (decrease distributed count)
+      // Return item back to global stock (decrease distributed count)
       const { data: item } = await supabase
         .from('item_types')
         .select('distributed')
@@ -330,6 +370,7 @@ export const useCardOperations = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
       queryClient.invalidateQueries({ queryKey: ['item_types'] });
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
     }
   });
 
