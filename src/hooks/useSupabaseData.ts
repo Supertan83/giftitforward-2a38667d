@@ -893,6 +893,32 @@ export const useDeleteMarketplace = () => {
   });
 };
 
+export const useUpdateMarketplace = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (marketplace: { 
+      id: string;
+      name: string; 
+      location: string | null; 
+      event_date: string | null; 
+      status: 'upcoming' | 'active' | 'completed';
+    }) => {
+      const { id, ...updates } = marketplace;
+      const { error } = await supabase
+        .from('marketplace_events')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace_events'] });
+    }
+  });
+};
+
 // Beneficiary Demographics
 interface DemographicsData {
   genderBreakdown: { gender: string; count: number }[];
