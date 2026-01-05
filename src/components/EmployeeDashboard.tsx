@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, UserCheck, BarChart3, LogOut } from 'lucide-react';
+import { User, UserCheck, BarChart3, LogOut, Unlock } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { VolunteerZone } from '@/components/zones/VolunteerZone';
 import { StatsDashboardZone } from '@/components/zones/StatsDashboardZone';
+import { UnblockCardsZone } from '@/components/zones/UnblockCardsZone';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -16,10 +17,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Zone = 'volunteers' | 'stats';
+type Zone = 'volunteers' | 'unblock' | 'stats';
 
 const zones = [
   { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success' },
+  { id: 'unblock' as Zone, label: 'Unblock', icon: Unlock, color: 'text-warning' },
   { id: 'stats' as Zone, label: 'Stats', icon: BarChart3, color: 'text-primary' },
 ];
 
@@ -31,6 +33,8 @@ export const EmployeeDashboard = () => {
     switch (activeZone) {
       case 'volunteers':
         return <VolunteerZone />;
+      case 'unblock':
+        return <UnblockCardsZone />;
       case 'stats':
         return <StatsDashboardZone />;
     }

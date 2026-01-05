@@ -411,6 +411,65 @@ export const useCardOperations = () => {
     }
   });
 
+  // Unblock card - reset to inactive and clear marketplace association
+  const unblockCard = useMutation({
+    mutationFn: async (uniqueId: string) => {
+      const { data: card, error: findError } = await supabase
+        .from('qr_cards')
+        .select('*')
+        .ilike('unique_id', uniqueId)
+        .maybeSingle();
+
+      if (findError || !card) throw new SafeError('Card not found');
+      
+      // Only allow unblocking cards that are checked_out or active (blocked)
+      if (card.status === 'inactive' && !card.marketplace_id) {
+        throw new SafeError('Card is already unblocked and ready to use');
+      }
+
+      const { error: updateError } = await supabase
+        .from('qr_cards')
+        .update({
+          status: 'inactive' as DbCardStatus,
+          credit_balance: 0,
+          total_items_collected: 0,
+          collected_items: [],
+          marketplace_id: null,
+          activated_at: null
+        })
+        .eq('id', card.id);
+
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
+
+      return { uniqueId: card.unique_id };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+    }
+  });
+
+  // Get blocked cards (cards used today or previously that need unblocking)
+  const getBlockedCards = async (): Promise<QRCard[]> => {
+    const { data, error } = await supabase
+      .from('qr_cards')
+      .select('*')
+      .or('status.eq.checked_out,status.eq.active,marketplace_id.not.is.null')
+      .order('activated_at', { ascending: false });
+
+    if (error) throw new SafeError(mapDatabaseError(error), error);
+
+    return (data || []).map(card => ({
+      id: card.id,
+      uniqueId: card.unique_id,
+      status: mapDbStatusToApp(card.status as DbCardStatus),
+      creditBalance: card.credit_balance,
+      totalItemsCollected: card.total_items_collected,
+      transactions: [],
+      marketplaceId: card.marketplace_id || undefined,
+      activatedAt: card.activated_at || undefined,
+    }));
+  };
+
   // Simplified distribute - quantity only, no item type selection
   const distributeItemSimple = useMutation({
     mutationFn: async ({ uniqueId, marketplaceId }: { uniqueId: string; marketplaceId: string }) => {
@@ -554,6 +613,8 @@ export const useCardOperations = () => {
     distributeItemSimple,
     returnItemSimple,
     checkoutCard,
+    unblockCard,
+    getBlockedCards,
     addCards,
     unregisterCard
   };
