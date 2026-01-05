@@ -349,6 +349,7 @@ interface VolunteerResult {
   email: string;
   status: 'created' | 'failed';
   temp_password?: string;
+  qr_card_id?: string;
   error?: string;
 }
 
@@ -895,7 +896,8 @@ serve(async (req) => {
             results.push({
               email: volunteer.email,
               status: 'created',
-              temp_password: tempPassword
+              temp_password: tempPassword,
+              qr_card_id: volunteerQRId
             });
             console.log(`Successfully created volunteer and sent email: ${volunteer.email}`);
           } else {
@@ -903,6 +905,7 @@ serve(async (req) => {
               email: volunteer.email,
               status: 'created',
               temp_password: tempPassword,
+              qr_card_id: volunteerQRId,
               error: 'User created but email failed: ' + emailResult.error
             });
             console.log(`Created volunteer but email failed: ${volunteer.email} - ${emailResult.error}`);

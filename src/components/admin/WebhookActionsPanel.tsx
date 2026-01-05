@@ -9,7 +9,11 @@ import {
   Plus,
   Trash2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Mail,
+  QrCode,
+  Copy,
+  Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface VolunteerInput {
   email: string;
@@ -31,6 +36,7 @@ interface CreateResult {
   email: string;
   status: 'created' | 'failed';
   temp_password?: string;
+  qr_card_id?: string;
   error?: string;
 }
 
@@ -64,6 +70,8 @@ export const WebhookActionsPanel = () => {
   const [volunteers, setVolunteers] = useState<VolunteerInput[]>([{ email: '', name: '', phone: '' }]);
   const [createLoading, setCreateLoading] = useState(false);
   const [createResults, setCreateResults] = useState<CreateResult[] | null>(null);
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   
   // Check status state
   const [checkEmails, setCheckEmails] = useState('');
@@ -137,6 +145,56 @@ export const WebhookActionsPanel = () => {
     } finally {
       setCreateLoading(false);
     }
+  };
+
+  const handleResendEmail = async (email: string) => {
+    setResendingEmail(email);
+    
+    try {
+      // Get the pending volunteer record
+      const { data: volunteer, error: fetchError } = await supabase
+        .from('pending_volunteers')
+        .select('id, first_name, temp_password')
+        .eq('email', email)
+        .single();
+
+      if (fetchError || !volunteer) {
+        throw new Error('Volunteer not found');
+      }
+
+      const { error } = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'resend_email',
+          pending_id: volunteer.id,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Email Sent',
+        description: `Welcome email resent to ${email}`,
+      });
+    } catch (error) {
+      console.error('Resend error:', error);
+      toast({
+        title: 'Failed to resend email',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setResendingEmail(null);
+    }
+  };
+
+  const copyToClipboard = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldId);
+    setTimeout(() => setCopiedField(null), 2000);
+    toast({
+      title: 'Copied!',
+      description: 'Copied to clipboard',
+    });
   };
 
   const handleCheckStatus = async () => {
@@ -314,25 +372,25 @@ export const WebhookActionsPanel = () => {
               </div>
 
               {createResults && (
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-4">
                   <Label>Results</Label>
-                  <div className="bg-muted rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                  <div className="space-y-4">
                     {createResults.map((result, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="font-mono">{result.email}</span>
-                        <div className="flex items-center gap-2">
+                      <div 
+                        key={i} 
+                        className={`rounded-lg border p-4 ${
+                          result.status === 'created' 
+                            ? 'bg-emerald-500/5 border-emerald-500/20' 
+                            : 'bg-destructive/5 border-destructive/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="font-mono text-sm font-medium">{result.email}</span>
                           {result.status === 'created' ? (
-                            <>
-                              <Badge variant="default" className="bg-emerald-500">
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Created
-                              </Badge>
-                              {result.temp_password && (
-                                <code className="text-xs bg-background px-2 py-0.5 rounded">
-                                  {result.temp_password}
-                                </code>
-                              )}
-                            </>
+                            <Badge variant="default" className="bg-emerald-500">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Created
+                            </Badge>
                           ) : (
                             <Badge variant="destructive">
                               <XCircle className="w-3 h-3 mr-1" />
@@ -340,6 +398,74 @@ export const WebhookActionsPanel = () => {
                             </Badge>
                           )}
                         </div>
+                        
+                        {result.status === 'created' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* QR Code */}
+                            {result.qr_card_id && (
+                              <div className="flex flex-col items-center bg-white rounded-lg p-3 border">
+                                <QRCodeSVG 
+                                  value={result.qr_card_id} 
+                                  size={100}
+                                  level="M"
+                                />
+                                <div className="flex items-center gap-1 mt-2">
+                                  <code className="text-xs text-muted-foreground">{result.qr_card_id}</code>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => copyToClipboard(result.qr_card_id!, `qr-${i}`)}
+                                  >
+                                    {copiedField === `qr-${i}` ? (
+                                      <Check className="w-3 h-3 text-emerald-500" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Credentials */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between bg-muted rounded px-2 py-1.5">
+                                <span className="text-xs text-muted-foreground">Password:</span>
+                                <div className="flex items-center gap-1">
+                                  <code className="text-xs font-mono">{result.temp_password}</code>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => copyToClipboard(result.temp_password!, `pwd-${i}`)}
+                                  >
+                                    {copiedField === `pwd-${i}` ? (
+                                      <Check className="w-3 h-3 text-emerald-500" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              {/* Resend Email Button */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => handleResendEmail(result.email)}
+                                disabled={resendingEmail === result.email}
+                              >
+                                {resendingEmail === result.email ? (
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Mail className="w-3 h-3 mr-1" />
+                                )}
+                                Resend Welcome Email
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
