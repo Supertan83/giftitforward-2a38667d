@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Heart, Baby, Globe, Check, X } from 'lucide-react';
+import { User, Globe, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -20,8 +20,6 @@ import {
 
 export interface BeneficiaryInfo {
   gender: string;
-  maritalStatus: string;
-  childrenCount: number;
   nationality: string;
 }
 
@@ -54,25 +52,19 @@ export const BeneficiaryInfoForm = ({
   cardId
 }: BeneficiaryInfoFormProps) => {
   const [gender, setGender] = useState<string>('');
-  const [maritalStatus, setMaritalStatus] = useState<string>('');
-  const [childrenCount, setChildrenCount] = useState<number>(0);
   const [nationality, setNationality] = useState<string>('');
 
   const handleSubmit = () => {
     onSubmit({
       gender,
-      maritalStatus,
-      childrenCount,
       nationality
     });
     // Reset form
     setGender('');
-    setMaritalStatus('');
-    setChildrenCount(0);
     setNationality('');
   };
 
-  const isValid = gender && maritalStatus && nationality;
+  const isValid = gender && nationality;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -105,41 +97,6 @@ export const BeneficiaryInfoForm = ({
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Marital Status */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Heart className="w-4 h-4" />
-              Marital Status *
-            </Label>
-            <Select value={maritalStatus} onValueChange={setMaritalStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select marital status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="single">Single</SelectItem>
-                <SelectItem value="married">Married</SelectItem>
-                <SelectItem value="divorced">Divorced</SelectItem>
-                <SelectItem value="widowed">Widowed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Number of Children */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Baby className="w-4 h-4" />
-              Number of Children
-            </Label>
-            <Input
-              type="number"
-              min={0}
-              max={20}
-              value={childrenCount}
-              onChange={(e) => setChildrenCount(Math.max(0, parseInt(e.target.value) || 0))}
-              placeholder="0"
-            />
           </div>
 
           {/* Nationality */}
