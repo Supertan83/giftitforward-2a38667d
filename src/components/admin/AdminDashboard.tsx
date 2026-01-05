@@ -40,10 +40,22 @@ export const AdminDashboard = () => {
   const [allocationQuantity, setAllocationQuantity] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingStock, setEditingStock] = useState('');
-  const [editingAllocation, setEditingAllocation] = useState<{ id: string; field: 'allocated' | 'distributed'; value: string } | null>(null);
+  const [editingAllocation, setEditingAllocation] = useState<{
+    id: string;
+    field: 'allocated' | 'distributed';
+    value: string;
+  } | null>(null);
   const [expandedMarketplace, setExpandedMarketplace] = useState<string | null>(null);
-  const [fullEditItem, setFullEditItem] = useState<{ id: string; name: string; icon: string; totalStock: string } | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [fullEditItem, setFullEditItem] = useState<{
+    id: string;
+    name: string;
+    icon: string;
+    totalStock: string;
+  } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [deleteInput, setDeleteInput] = useState('');
   const navigate = useNavigate();
   const {
@@ -72,7 +84,6 @@ export const AdminDashboard = () => {
   const {
     toast
   } = useToast();
-  
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
     if (isNaN(newStock) || newStock < 0) {
@@ -84,7 +95,10 @@ export const AdminDashboard = () => {
       return;
     }
     try {
-      await updateItemStock.mutateAsync({ id: itemId, totalStock: newStock });
+      await updateItemStock.mutateAsync({
+        id: itemId,
+        totalStock: newStock
+      });
       toast({
         title: 'Stock Updated',
         description: `Warehouse stock updated to ${newStock.toLocaleString()}`
@@ -99,7 +113,6 @@ export const AdminDashboard = () => {
       });
     }
   };
-
   const handleSaveAllocation = async () => {
     if (!editingAllocation) return;
     const newValue = parseInt(editingAllocation.value);
@@ -114,9 +127,11 @@ export const AdminDashboard = () => {
     try {
       await updateAllocationQuantities.mutateAsync({
         allocationId: editingAllocation.id,
-        ...(editingAllocation.field === 'allocated' 
-          ? { allocatedQuantity: newValue }
-          : { distributedQuantity: newValue })
+        ...(editingAllocation.field === 'allocated' ? {
+          allocatedQuantity: newValue
+        } : {
+          distributedQuantity: newValue
+        })
       });
       toast({
         title: 'Allocation Updated',
@@ -131,7 +146,6 @@ export const AdminDashboard = () => {
       });
     }
   };
-
   const handleSaveFullEdit = async () => {
     if (!fullEditItem) return;
     const newStock = parseInt(fullEditItem.totalStock);
@@ -171,7 +185,6 @@ export const AdminDashboard = () => {
       });
     }
   };
-
   const handleDeleteItem = async () => {
     if (!deleteConfirm || deleteInput.toLowerCase() !== 'delete') return;
     try {
@@ -196,7 +209,7 @@ export const AdminDashboard = () => {
   const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.allocatedQuantity, 0);
   const totalDistributed = allocations.reduce((sum, alloc) => sum + alloc.distributedQuantity, 0);
   const totalRemaining = totalAllocated - totalDistributed;
-  
+
   // Group allocations by marketplace for breakdown
   const marketplaceStats = marketplaces.map(mp => {
     const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
@@ -209,10 +222,9 @@ export const AdminDashboard = () => {
       status: mp.status,
       allocated,
       distributed,
-      remaining: allocated - distributed,
+      remaining: allocated - distributed
     };
   }).filter(mp => mp.allocated > 0 || mp.distributed > 0);
-  
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
   const handleAllocate = async () => {
     if (!selectedItemId || !selectedEventId || !allocationQuantity) return;
@@ -352,12 +364,13 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Per-Marketplace Breakdown */}
-        {marketplaceStats.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card rounded-xl border border-border p-4 md:p-6 mb-6 md:mb-8"
-          >
+        {marketplaceStats.length > 0 && <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} className="bg-card rounded-xl border border-border p-4 md:p-6 mb-6 md:mb-8">
             <h2 className="font-display font-semibold text-base md:text-lg mb-4 flex items-center gap-2">
               <Store className="w-5 h-5 text-primary" />
               Distribution by Marketplace
@@ -376,15 +389,10 @@ export const AdminDashboard = () => {
                 </thead>
                 <tbody>
                   {marketplaceStats.map(mp => {
-                    const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
-                    const isExpanded = expandedMarketplace === mp.id;
-                    return (
-                      <>
-                        <tr 
-                          key={mp.id} 
-                          className="border-b border-border/50 hover:bg-muted/50 cursor-pointer"
-                          onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}
-                        >
+                const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
+                const isExpanded = expandedMarketplace === mp.id;
+                return <>
+                        <tr key={mp.id} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer" onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}>
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-2">
                               <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
@@ -400,19 +408,17 @@ export const AdminDashboard = () => {
                           <td className="text-right py-2 px-3">
                             <div className="flex items-center justify-end gap-2">
                               <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-primary rounded-full transition-all"
-                                  style={{ width: `${mp.allocated > 0 ? (mp.distributed / mp.allocated) * 100 : 0}%` }}
-                                />
+                                <div className="h-full bg-primary rounded-full transition-all" style={{
+                            width: `${mp.allocated > 0 ? mp.distributed / mp.allocated * 100 : 0}%`
+                          }} />
                               </div>
                               <span className="text-xs text-muted-foreground w-10">
-                                {mp.allocated > 0 ? Math.round((mp.distributed / mp.allocated) * 100) : 0}%
+                                {mp.allocated > 0 ? Math.round(mp.distributed / mp.allocated * 100) : 0}%
                               </span>
                             </div>
                           </td>
                         </tr>
-                        {isExpanded && mpAllocations.map(alloc => (
-                          <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
+                        {isExpanded && mpAllocations.map(alloc => <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
                             <td className="py-2 px-3 pl-10">
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <span>{alloc.itemIcon || '📦'}</span>
@@ -420,66 +426,62 @@ export const AdminDashboard = () => {
                               </div>
                             </td>
                             <td className="text-right py-2 px-3">
-                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <Input
-                                    type="number"
-                                    value={editingAllocation.value}
-                                    onChange={(e) => setEditingAllocation({ ...editingAllocation, value: e.target.value })}
-                                    className="w-20 h-7 text-right text-sm"
-                                    autoFocus
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => {
-                                      e.stopPropagation();
-                                      if (e.key === 'Enter') handleSaveAllocation();
-                                      if (e.key === 'Escape') setEditingAllocation(null);
-                                    }}
-                                  />
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); handleSaveAllocation(); }}>✓</Button>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditingAllocation(null); }}>✕</Button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingAllocation({ id: alloc.id, field: 'allocated', value: alloc.allocatedQuantity.toString() });
-                                  }}
-                                  className="hover:text-primary hover:underline cursor-pointer"
-                                >
+                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? <div className="flex items-center justify-end gap-1">
+                                  <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
+                          ...editingAllocation,
+                          value: e.target.value
+                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') handleSaveAllocation();
+                          if (e.key === 'Escape') setEditingAllocation(null);
+                        }} />
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                          e.stopPropagation();
+                          handleSaveAllocation();
+                        }}>✓</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                          e.stopPropagation();
+                          setEditingAllocation(null);
+                        }}>✕</Button>
+                                </div> : <button onClick={e => {
+                        e.stopPropagation();
+                        setEditingAllocation({
+                          id: alloc.id,
+                          field: 'allocated',
+                          value: alloc.allocatedQuantity.toString()
+                        });
+                      }} className="hover:text-primary hover:underline cursor-pointer">
                                   {alloc.allocatedQuantity.toLocaleString()}
-                                </button>
-                              )}
+                                </button>}
                             </td>
                             <td className="text-right py-2 px-3">
-                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <Input
-                                    type="number"
-                                    value={editingAllocation.value}
-                                    onChange={(e) => setEditingAllocation({ ...editingAllocation, value: e.target.value })}
-                                    className="w-20 h-7 text-right text-sm"
-                                    autoFocus
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => {
-                                      e.stopPropagation();
-                                      if (e.key === 'Enter') handleSaveAllocation();
-                                      if (e.key === 'Escape') setEditingAllocation(null);
-                                    }}
-                                  />
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); handleSaveAllocation(); }}>✓</Button>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditingAllocation(null); }}>✕</Button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingAllocation({ id: alloc.id, field: 'distributed', value: alloc.distributedQuantity.toString() });
-                                  }}
-                                  className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
-                                >
+                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? <div className="flex items-center justify-end gap-1">
+                                  <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
+                          ...editingAllocation,
+                          value: e.target.value
+                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') handleSaveAllocation();
+                          if (e.key === 'Escape') setEditingAllocation(null);
+                        }} />
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                          e.stopPropagation();
+                          handleSaveAllocation();
+                        }}>✓</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                          e.stopPropagation();
+                          setEditingAllocation(null);
+                        }}>✕</Button>
+                                </div> : <button onClick={e => {
+                        e.stopPropagation();
+                        setEditingAllocation({
+                          id: alloc.id,
+                          field: 'distributed',
+                          value: alloc.distributedQuantity.toString()
+                        });
+                      }} className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
                                   {alloc.distributedQuantity.toLocaleString()}
-                                </button>
-                              )}
+                                </button>}
                             </td>
                             <td className="text-right py-2 px-3 text-muted-foreground">
                               {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()}
@@ -487,196 +489,56 @@ export const AdminDashboard = () => {
                             <td className="text-right py-2 px-3">
                               <div className="flex items-center justify-end gap-2">
                                 <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-emerald-500 rounded-full transition-all"
-                                    style={{ width: `${alloc.allocatedQuantity > 0 ? (alloc.distributedQuantity / alloc.allocatedQuantity) * 100 : 0}%` }}
-                                  />
+                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{
+                            width: `${alloc.allocatedQuantity > 0 ? alloc.distributedQuantity / alloc.allocatedQuantity * 100 : 0}%`
+                          }} />
                                 </div>
                                 <span className="text-xs text-muted-foreground w-10">
-                                  {alloc.allocatedQuantity > 0 ? Math.round((alloc.distributedQuantity / alloc.allocatedQuantity) * 100) : 0}%
+                                  {alloc.allocatedQuantity > 0 ? Math.round(alloc.distributedQuantity / alloc.allocatedQuantity * 100) : 0}%
                                 </span>
                               </div>
                             </td>
-                          </tr>
-                        ))}
-                      </>
-                    );
-                  })}
+                          </tr>)}
+                      </>;
+              })}
                 </tbody>
               </table>
             </div>
-          </motion.div>
-        )}
+          </motion.div>}
 
         {/* Item Stock Overview */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card rounded-xl border border-border p-4 md:p-6 mb-6 md:mb-8"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-semibold text-base md:text-lg flex items-center gap-2">
-              <Package className="w-5 h-5 text-primary" />
-              Item Stock Overview
-            </h2>
-            <Button variant="outline" size="sm" onClick={() => setCurrentView('inventory')}>
-              Manage Inventory
-            </Button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-3 font-medium text-muted-foreground">Item</th>
-                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Warehouse Stock</th>
-                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Allocated</th>
-                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Distributed</th>
-                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Unallocated</th>
-                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itemTypes.map(item => {
-                  const itemAllocations = allocations.filter(a => a.itemTypeId === item.id);
-                  const itemAllocated = itemAllocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
-                  const itemDistributed = itemAllocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
-                  const unallocated = item.totalStock - itemAllocated;
-                  const isEditing = editingItemId === item.id;
-                  return (
-                    <tr key={item.id} className="border-b border-border/50 hover:bg-muted/50">
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{item.icon}</span>
-                          <span className="font-medium">{item.name}</span>
-                        </div>
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        {isEditing ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <Input
-                              type="number"
-                              value={editingStock}
-                              onChange={(e) => setEditingStock(e.target.value)}
-                              className="w-24 h-7 text-right text-sm"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveStock(item.id);
-                                if (e.key === 'Escape') {
-                                  setEditingItemId(null);
-                                  setEditingStock('');
-                                }
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0"
-                              onClick={() => handleSaveStock(item.id)}
-                              disabled={updateItemStock.isPending}
-                            >
-                              ✓
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0"
-                              onClick={() => {
-                                setEditingItemId(null);
-                                setEditingStock('');
-                              }}
-                            >
-                              ✕
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditingItemId(item.id);
-                              setEditingStock(item.totalStock.toString());
-                            }}
-                            className="font-medium hover:text-primary hover:underline cursor-pointer"
-                          >
-                            {item.totalStock.toLocaleString()}
-                          </button>
-                        )}
-                      </td>
-                      <td className="text-right py-2 px-3 text-primary">{itemAllocated.toLocaleString()}</td>
-                      <td className="text-right py-2 px-3 text-emerald-600">{itemDistributed.toLocaleString()}</td>
-                      <td className="text-right py-2 px-3 text-muted-foreground">{unallocated.toLocaleString()}</td>
-                      <td className="text-right py-2 px-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            onClick={() => setFullEditItem({
-                              id: item.id,
-                              name: item.name,
-                              icon: item.icon,
-                              totalStock: item.totalStock.toString()
-                            })}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteConfirm({ id: item.id, name: item.name })}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
+        
 
         {/* Edit Item Dialog */}
-        <Dialog open={!!fullEditItem} onOpenChange={(open) => !open && setFullEditItem(null)}>
+        <Dialog open={!!fullEditItem} onOpenChange={open => !open && setFullEditItem(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Item</DialogTitle>
               <DialogDescription>Update item details below.</DialogDescription>
             </DialogHeader>
-            {fullEditItem && (
-              <div className="space-y-4 py-4">
+            {fullEditItem && <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-icon">Icon (emoji)</Label>
-                  <Input
-                    id="edit-icon"
-                    value={fullEditItem.icon}
-                    onChange={(e) => setFullEditItem({ ...fullEditItem, icon: e.target.value })}
-                    placeholder="📦"
-                    className="w-20"
-                  />
+                  <Input id="edit-icon" value={fullEditItem.icon} onChange={e => setFullEditItem({
+                ...fullEditItem,
+                icon: e.target.value
+              })} placeholder="📦" className="w-20" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-name">Name</Label>
-                  <Input
-                    id="edit-name"
-                    value={fullEditItem.name}
-                    onChange={(e) => setFullEditItem({ ...fullEditItem, name: e.target.value })}
-                    placeholder="Item name"
-                  />
+                  <Input id="edit-name" value={fullEditItem.name} onChange={e => setFullEditItem({
+                ...fullEditItem,
+                name: e.target.value
+              })} placeholder="Item name" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-stock">Warehouse Stock</Label>
-                  <Input
-                    id="edit-stock"
-                    type="number"
-                    value={fullEditItem.totalStock}
-                    onChange={(e) => setFullEditItem({ ...fullEditItem, totalStock: e.target.value })}
-                    placeholder="0"
-                  />
+                  <Input id="edit-stock" type="number" value={fullEditItem.totalStock} onChange={e => setFullEditItem({
+                ...fullEditItem,
+                totalStock: e.target.value
+              })} placeholder="0" />
                 </div>
-              </div>
-            )}
+              </div>}
             <DialogFooter>
               <Button variant="outline" onClick={() => setFullEditItem(null)}>Cancel</Button>
               <Button onClick={handleSaveFullEdit} disabled={updateItemType.isPending}>
@@ -687,7 +549,12 @@ export const AdminDashboard = () => {
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) { setDeleteConfirm(null); setDeleteInput(''); } }}>
+        <AlertDialog open={!!deleteConfirm} onOpenChange={open => {
+        if (!open) {
+          setDeleteConfirm(null);
+          setDeleteInput('');
+        }
+      }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete "{deleteConfirm?.name}"?</AlertDialogTitle>
@@ -697,21 +564,15 @@ export const AdminDashboard = () => {
                 Type <strong>delete</strong> to confirm:
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <Input
-              value={deleteInput}
-              onChange={(e) => setDeleteInput(e.target.value)}
-              placeholder="Type 'delete' to confirm"
-              className="mt-2"
-            />
+            <Input value={deleteInput} onChange={e => setDeleteInput(e.target.value)} placeholder="Type 'delete' to confirm" className="mt-2" />
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setDeleteConfirm(null); setDeleteInput(''); }}>
+              <AlertDialogCancel onClick={() => {
+              setDeleteConfirm(null);
+              setDeleteInput('');
+            }}>
                 Cancel
               </AlertDialogCancel>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteItem}
-                disabled={deleteInput.toLowerCase() !== 'delete' || deleteItemType.isPending}
-              >
+              <Button variant="destructive" onClick={handleDeleteItem} disabled={deleteInput.toLowerCase() !== 'delete' || deleteItemType.isPending}>
                 {deleteItemType.isPending ? 'Deleting...' : 'Delete Item'}
               </Button>
             </AlertDialogFooter>
