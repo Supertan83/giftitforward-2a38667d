@@ -865,9 +865,9 @@ serve(async (req) => {
           }
 
           // Send welcome email with QR code
-          const baseUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://zrzlzggixuogpxberdxt.lovable.app';
-          const loginUrl = baseUrl;
-          const trainingUrl = `${baseUrl}/training`;
+          const appUrl = 'https://gif.thesurpluss.com';
+          const loginUrl = `${appUrl}/auth`;
+          const trainingUrl = `${appUrl}/training`;
 
           const emailResult = await sendWelcomeEmailWithQR(
             volunteer.email,
