@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2 } from 'lucide-react';
+import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace } from '@/hooks/useSupabaseData';
+import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace, useUpdateMarketplace } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -36,6 +36,8 @@ const createMarketplaceSchema = z.object({
 
 export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMarketplace, setEditingMarketplace] = useState<{ id: string; name: string; location: string; eventDate: string; status: 'upcoming' | 'active' | 'completed' } | null>(null);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -45,7 +47,64 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const { data: marketplaces = [], isLoading } = useMarketplaces();
   const createMarketplace = useCreateMarketplace();
   const deleteMarketplace = useDeleteMarketplace();
+  const updateMarketplace = useUpdateMarketplace();
   const { toast } = useToast();
+
+  const handleEdit = (marketplace: { id: string; name: string; location: string | null; event_date: string | null; status: string }) => {
+    setEditingMarketplace({
+      id: marketplace.id,
+      name: marketplace.name,
+      location: marketplace.location || '',
+      eventDate: marketplace.event_date || '',
+      status: marketplace.status as 'upcoming' | 'active' | 'completed',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingMarketplace) return;
+    
+    setErrors({});
+    const result = createMarketplaceSchema.safeParse({ 
+      name: editingMarketplace.name, 
+      location: editingMarketplace.location || undefined, 
+      event_date: editingMarketplace.eventDate || undefined, 
+      status: editingMarketplace.status 
+    });
+    
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    try {
+      await updateMarketplace.mutateAsync({
+        id: editingMarketplace.id,
+        name: editingMarketplace.name,
+        location: editingMarketplace.location || null,
+        event_date: editingMarketplace.eventDate || null,
+        status: editingMarketplace.status,
+      });
+      toast({
+        title: 'Marketplace Updated',
+        description: `${editingMarketplace.name} has been updated`,
+      });
+      setShowEditModal(false);
+      setEditingMarketplace(null);
+    } catch (error) {
+      toast({
+        title: 'Failed to Update Marketplace',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleCreate = async () => {
     setErrors({});
@@ -242,6 +301,14 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      onClick={() => handleEdit(marketplace)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={() => handleDelete(marketplace.id, marketplace.name)}
                       disabled={deleteMarketplace.isPending}
@@ -326,6 +393,86 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             <Button onClick={handleCreate} disabled={createMarketplace.isPending}>
               {createMarketplace.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Create Event
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Marketplace Modal */}
+      <Dialog open={showEditModal} onOpenChange={(open) => { setShowEditModal(open); if (!open) setEditingMarketplace(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Edit Marketplace Event</DialogTitle>
+            <DialogDescription>
+              Update event details
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingMarketplace && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Event Name *</Label>
+                <Input
+                  id="edit-name"
+                  placeholder="e.g., Community Center Distribution"
+                  value={editingMarketplace.name}
+                  onChange={(e) => setEditingMarketplace({ ...editingMarketplace, name: e.target.value })}
+                />
+                {errors.name && (
+                  <p className="text-sm text-destructive">{errors.name}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-location">Location</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="edit-location"
+                    placeholder="e.g., 123 Main Street"
+                    value={editingMarketplace.location}
+                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, location: e.target.value })}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-event_date">Event Date</Label>
+                <Input
+                  id="edit-event_date"
+                  type="date"
+                  value={editingMarketplace.eventDate}
+                  onChange={(e) => setEditingMarketplace({ ...editingMarketplace, eventDate: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select 
+                  value={editingMarketplace.status} 
+                  onValueChange={(v) => setEditingMarketplace({ ...editingMarketplace, status: v as 'upcoming' | 'active' | 'completed' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="upcoming">Upcoming</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => { setShowEditModal(false); setEditingMarketplace(null); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={updateMarketplace.isPending}>
+              {updateMarketplace.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </div>
         </DialogContent>
