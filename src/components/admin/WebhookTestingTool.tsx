@@ -40,7 +40,7 @@ export const WebhookTestingTool = () => {
   const [sourceIdentifier, setSourceIdentifier] = useState('test_source');
   const [apiKey, setApiKey] = useState('');
   const [isApiKeySaved, setIsApiKeySaved] = useState(false);
-  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status'>('check_status');
+  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status' | 'allocation_created'>('check_status');
   const [customPayload, setCustomPayload] = useState('{\n  "action": "create_volunteer",\n  "volunteers": [\n    {\n      "email": "test@example.com",\n      "name": "Test User"\n    }\n  ]\n}');
   const [isLoading, setIsLoading] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
@@ -95,6 +95,28 @@ export const WebhookTestingTool = () => {
         return {
           action: 'check_volunteer_status',
           emails: ['test@example.com']
+        };
+      case 'allocation_created':
+        return {
+          event: 'allocation_created',
+          data: {
+            marketplace_event_id: 123,
+            marketplace_event_title: 'National Charity School',
+            allocated_materials: [
+              {
+                donation_metadata_id: 1,
+                material_id: 101,
+                material_title: 'Winter Jackets',
+                donation_tag_id: 5,
+                donation_tag_name: 'Clothing',
+                donation_tag_subcategory_id: 12,
+                donation_tag_subcategory_name: "Mens' clothes",
+                amount: 500
+              }
+            ],
+            total_amount: 500,
+            allocated_at: new Date().toISOString()
+          }
         };
       case 'custom':
         try {
@@ -337,6 +359,7 @@ export const WebhookTestingTool = () => {
                 <SelectContent>
                   <SelectItem value="create_volunteer">Create Volunteer</SelectItem>
                   <SelectItem value="check_status">Check Status</SelectItem>
+                  <SelectItem value="allocation_created">Allocation Created</SelectItem>
                   <SelectItem value="custom">Custom Payload</SelectItem>
                 </SelectContent>
               </Select>
