@@ -161,8 +161,8 @@ export const useCardOperations = () => {
       uniqueId: string; 
       beneficiaryInfo?: { 
         gender: string; 
-        maritalStatus: string; 
-        childrenCount: number; 
+        maritalStatus?: string; 
+        childrenCount?: number; 
         nationality: string; 
       };
       marketplaceId?: string;
@@ -196,9 +196,9 @@ export const useCardOperations = () => {
 
       if (beneficiaryInfo) {
         updateData.gender = beneficiaryInfo.gender;
-        updateData.marital_status = beneficiaryInfo.maritalStatus;
-        updateData.children_count = beneficiaryInfo.childrenCount;
         updateData.nationality = beneficiaryInfo.nationality;
+        if (beneficiaryInfo.maritalStatus) updateData.marital_status = beneficiaryInfo.maritalStatus;
+        if (beneficiaryInfo.childrenCount !== undefined) updateData.children_count = beneficiaryInfo.childrenCount;
       }
 
       const { data: updated, error: updateError } = await supabase
