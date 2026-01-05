@@ -470,6 +470,50 @@ export const useCardOperations = () => {
     }));
   };
 
+  // Bulk unblock all cards from previous days
+  const bulkUnblockPreviousDays = useMutation({
+    mutationFn: async () => {
+      // Get start of today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayISOString = today.toISOString();
+
+      // Find cards activated before today with marketplace_id
+      const { data: blockedCards, error: fetchError } = await supabase
+        .from('qr_cards')
+        .select('id, unique_id')
+        .not('marketplace_id', 'is', null)
+        .lt('activated_at', todayISOString);
+
+      if (fetchError) throw new SafeError(mapDatabaseError(fetchError), fetchError);
+
+      if (!blockedCards || blockedCards.length === 0) {
+        return { unblocked: 0 };
+      }
+
+      const cardIds = blockedCards.map(card => card.id);
+
+      const { error: updateError } = await supabase
+        .from('qr_cards')
+        .update({
+          status: 'inactive' as DbCardStatus,
+          credit_balance: 0,
+          total_items_collected: 0,
+          collected_items: [],
+          marketplace_id: null,
+          activated_at: null,
+        })
+        .in('id', cardIds);
+
+      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
+
+      return { unblocked: blockedCards.length };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+    }
+  });
+
   // Simplified distribute - quantity only, no item type selection
   const distributeItemSimple = useMutation({
     mutationFn: async ({ uniqueId, marketplaceId }: { uniqueId: string; marketplaceId: string }) => {
@@ -614,6 +658,7 @@ export const useCardOperations = () => {
     returnItemSimple,
     checkoutCard,
     unblockCard,
+    bulkUnblockPreviousDays,
     getBlockedCards,
     addCards,
     unregisterCard

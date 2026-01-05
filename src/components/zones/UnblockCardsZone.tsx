@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Unlock, QrCode, Calendar, Users, CheckCircle, Clock } from 'lucide-react';
+import { Unlock, QrCode, Calendar, Users, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
@@ -14,6 +14,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export const UnblockCardsZone = () => {
   const [showScanner, setShowScanner] = useState(false);
@@ -23,7 +34,7 @@ export const UnblockCardsZone = () => {
 
   const { data: cards = [] } = useQRCards();
   const { data: marketplaces = [] } = useMarketplaces();
-  const { unblockCard } = useCardOperations();
+  const { unblockCard, bulkUnblockPreviousDays } = useCardOperations();
 
   // Get blocked cards (active, checked_out, or with marketplace_id)
   const blockedCards = useMemo(() => {
@@ -99,6 +110,26 @@ export const UnblockCardsZone = () => {
     }
   };
 
+  const handleBulkUnblock = async () => {
+    setIsProcessing(true);
+    try {
+      const result = await bulkUnblockPreviousDays.mutateAsync();
+      setFeedback({ 
+        type: 'success', 
+        title: 'Bulk Unblock Complete!', 
+        subtitle: `${result.unblocked} cards from previous days unblocked` 
+      });
+    } catch (error) {
+      setFeedback({ 
+        type: 'error', 
+        title: 'Bulk Unblock Failed',
+        subtitle: error instanceof Error ? error.message : 'Failed to unblock cards' 
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
@@ -112,7 +143,7 @@ export const UnblockCardsZone = () => {
         </div>
         <h2 className="text-xl font-display font-bold">Unblock QR Cards</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Reset cards for reuse at future events
+          Reset cards for reuse • Auto-unblocks at midnight
         </p>
       </motion.div>
 
@@ -155,21 +186,68 @@ export const UnblockCardsZone = () => {
         </motion.div>
       </div>
 
-      {/* Scan Button */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1 }}
-      >
-        <Button
-          onClick={() => setShowScanner(true)}
-          className="w-full h-16 text-lg font-semibold bg-warning hover:bg-warning/90"
-          disabled={isProcessing}
+      {/* Action Buttons */}
+      <div className="flex gap-2">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="flex-1"
         >
-          <QrCode className="w-6 h-6 mr-2" />
-          Scan to Unblock
-        </Button>
-      </motion.div>
+          <Button
+            onClick={() => setShowScanner(true)}
+            className="w-full h-14 text-base font-semibold bg-warning hover:bg-warning/90"
+            disabled={isProcessing}
+          >
+            <QrCode className="w-5 h-5 mr-2" />
+            Scan to Unblock
+          </Button>
+        </motion.div>
+
+        {stats.previous > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.15 }}
+          >
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="h-14 px-4 border-success text-success hover:bg-success/10"
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Calendar className="w-5 h-5 mr-1" />
+                      Bulk ({stats.previous})
+                    </>
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unblock All Previous Day Cards</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will unblock {stats.previous} cards from previous days, 
+                    making them available for reuse at future events.
+                    <br /><br />
+                    Cards used today will not be affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleBulkUnblock} className="bg-success hover:bg-success/90">
+                    Unblock {stats.previous} Cards
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </motion.div>
+        )}
+      </div>
 
       {/* Filter */}
       <div className="flex items-center gap-2">
