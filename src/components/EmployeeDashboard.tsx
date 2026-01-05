@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { User, UserCheck, BarChart3, LogOut, Unlock } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -6,8 +6,11 @@ import { VolunteerZone } from '@/components/zones/VolunteerZone';
 import { StatsDashboardZone } from '@/components/zones/StatsDashboardZone';
 import { UnblockCardsZone } from '@/components/zones/UnblockCardsZone';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQRCards } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { isToday, parseISO } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,15 +22,26 @@ import {
 
 type Zone = 'volunteers' | 'unblock' | 'stats';
 
-const zones = [
-  { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success' },
-  { id: 'unblock' as Zone, label: 'Unblock', icon: Unlock, color: 'text-warning' },
-  { id: 'stats' as Zone, label: 'Stats', icon: BarChart3, color: 'text-primary' },
-];
-
 export const EmployeeDashboard = () => {
   const [activeZone, setActiveZone] = useState<Zone>('volunteers');
   const { user, signOut } = useAuth();
+  const { data: cards = [] } = useQRCards();
+
+  // Count previous day blocked cards for badge
+  const previousDayBlockedCount = useMemo(() => {
+    return cards.filter(card => {
+      const isBlocked = card.status === 'active' || card.status === 'checked_out' || card.marketplaceId;
+      if (!isBlocked) return false;
+      if (!card.activatedAt) return true; // No activation date means it's old
+      return !isToday(parseISO(card.activatedAt));
+    }).length;
+  }, [cards]);
+
+  const zones = [
+    { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success', badge: 0 },
+    { id: 'unblock' as Zone, label: 'Unblock', icon: Unlock, color: 'text-warning', badge: previousDayBlockedCount },
+    { id: 'stats' as Zone, label: 'Stats', icon: BarChart3, color: 'text-primary', badge: 0 },
+  ];
 
   const renderZone = () => {
     switch (activeZone) {
@@ -103,7 +117,17 @@ export const EmployeeDashboard = () => {
                     className="absolute top-0 left-2 right-2 h-0.5 bg-current rounded-full"
                   />
                 )}
-                <Icon className={cn('w-5 h-5', isActive && 'scale-110')} />
+                <div className="relative">
+                  <Icon className={cn('w-5 h-5', isActive && 'scale-110')} />
+                  {zone.badge > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-2 -right-3 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center"
+                    >
+                      {zone.badge > 99 ? '99+' : zone.badge}
+                    </Badge>
+                  )}
+                </div>
                 <span className={cn(
                   'text-xs font-medium',
                   isActive && 'font-semibold'
