@@ -428,6 +428,7 @@ export type Database = {
           allocated_to_marketplace: number
           created_at: string
           distributed: number
+          external_material_id: number | null
           icon: string
           id: string
           name: string
@@ -438,6 +439,7 @@ export type Database = {
           allocated_to_marketplace?: number
           created_at?: string
           distributed?: number
+          external_material_id?: number | null
           icon?: string
           id?: string
           name: string
@@ -448,6 +450,7 @@ export type Database = {
           allocated_to_marketplace?: number
           created_at?: string
           distributed?: number
+          external_material_id?: number | null
           icon?: string
           id?: string
           name?: string
@@ -460,6 +463,7 @@ export type Database = {
         Row: {
           created_at: string
           event_date: string | null
+          external_id: number | null
           id: string
           location: string | null
           name: string
@@ -469,6 +473,7 @@ export type Database = {
         Insert: {
           created_at?: string
           event_date?: string | null
+          external_id?: number | null
           id?: string
           location?: string | null
           name: string
@@ -478,6 +483,7 @@ export type Database = {
         Update: {
           created_at?: string
           event_date?: string | null
+          external_id?: number | null
           id?: string
           location?: string | null
           name?: string

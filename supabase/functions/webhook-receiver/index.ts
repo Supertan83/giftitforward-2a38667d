@@ -724,6 +724,270 @@ serve(async (req) => {
       );
     }
 
+    // Handle allocation_created event from external companies
+    if (payload.event === 'allocation_created' && payload.data?.allocated_materials) {
+      console.log('Detected allocation_created event');
+      
+      const allocationData = payload.data;
+      const externalMarketplaceId = allocationData.marketplace_event_id;
+      const marketplaceTitle = allocationData.marketplace_event_title;
+      const allocatedMaterials = allocationData.allocated_materials || [];
+      
+      const results = {
+        marketplace_matched: false,
+        marketplace_id: null as string | null,
+        marketplace_created: false,
+        materials_processed: 0,
+        materials_failed: 0,
+        allocations_created: 0,
+        allocations_updated: 0,
+        details: [] as Array<{ material_id: number; material_title: string; status: string; allocation_id?: string; error?: string }>
+      };
+
+      // Try to find existing marketplace by external_id first, then by title
+      let marketplace = null;
+      
+      // First try by external_id
+      const { data: marketplaceByExtId } = await supabase
+        .from('marketplace_events')
+        .select('id, name, external_id')
+        .eq('external_id', externalMarketplaceId)
+        .single();
+      
+      if (marketplaceByExtId) {
+        marketplace = marketplaceByExtId;
+        results.marketplace_matched = true;
+        results.marketplace_id = marketplace.id;
+        console.log(`Found marketplace by external_id: ${marketplace.name} (${marketplace.id})`);
+      } else {
+        // Try to find by title (fuzzy match)
+        const { data: marketplaceByTitle } = await supabase
+          .from('marketplace_events')
+          .select('id, name, external_id')
+          .ilike('name', `%${marketplaceTitle}%`)
+          .limit(1)
+          .single();
+        
+        if (marketplaceByTitle) {
+          marketplace = marketplaceByTitle;
+          results.marketplace_matched = true;
+          results.marketplace_id = marketplace.id;
+          
+          // Update the external_id for future matching
+          await supabase
+            .from('marketplace_events')
+            .update({ external_id: externalMarketplaceId })
+            .eq('id', marketplace.id);
+          
+          console.log(`Found marketplace by title: ${marketplace.name} (${marketplace.id}), linked external_id: ${externalMarketplaceId}`);
+        } else {
+          // Create new marketplace event
+          const { data: newMarketplace, error: createError } = await supabase
+            .from('marketplace_events')
+            .insert({
+              name: marketplaceTitle,
+              external_id: externalMarketplaceId,
+              status: 'upcoming',
+              event_date: allocationData.allocated_at ? new Date(allocationData.allocated_at).toISOString().split('T')[0] : null
+            })
+            .select('id, name')
+            .single();
+          
+          if (createError) {
+            console.error('Failed to create marketplace:', createError);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `Failed to create marketplace: ${createError.message}`,
+                results
+              }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          marketplace = newMarketplace;
+          results.marketplace_matched = true;
+          results.marketplace_id = marketplace.id;
+          results.marketplace_created = true;
+          console.log(`Created new marketplace: ${marketplace.name} (${marketplace.id})`);
+        }
+      }
+
+      // Process each allocated material
+      for (const material of allocatedMaterials) {
+        try {
+          const materialId = material.material_id;
+          const materialTitle = material.material_title;
+          const amount = material.amount || 0;
+          
+          // Try to find existing item_type by external_material_id first, then by name
+          let itemType = null;
+          
+          const { data: itemByExtId } = await supabase
+            .from('item_types')
+            .select('id, name, external_material_id')
+            .eq('external_material_id', materialId)
+            .single();
+          
+          if (itemByExtId) {
+            itemType = itemByExtId;
+            console.log(`Found item by external_material_id: ${itemType.name} (${itemType.id})`);
+          } else {
+            // Try to find by name
+            const { data: itemByName } = await supabase
+              .from('item_types')
+              .select('id, name, external_material_id')
+              .ilike('name', materialTitle)
+              .limit(1)
+              .single();
+            
+            if (itemByName) {
+              itemType = itemByName;
+              
+              // Update the external_material_id for future matching
+              await supabase
+                .from('item_types')
+                .update({ external_material_id: materialId })
+                .eq('id', itemType.id);
+              
+              console.log(`Found item by name: ${itemType.name} (${itemType.id}), linked external_material_id: ${materialId}`);
+            } else {
+              // Create new item type
+              const { data: newItem, error: createItemError } = await supabase
+                .from('item_types')
+                .insert({
+                  name: materialTitle,
+                  external_material_id: materialId,
+                  icon: 'Package',
+                  total_stock: amount // Set initial stock to allocated amount
+                })
+                .select('id, name')
+                .single();
+              
+              if (createItemError) {
+                console.error(`Failed to create item type ${materialTitle}:`, createItemError);
+                results.materials_failed++;
+                results.details.push({
+                  material_id: materialId,
+                  material_title: materialTitle,
+                  status: 'failed',
+                  error: `Failed to create item type: ${createItemError.message}`
+                });
+                continue;
+              }
+              
+              itemType = newItem;
+              console.log(`Created new item type: ${itemType.name} (${itemType.id})`);
+            }
+          }
+
+          // Check for existing allocation
+          const { data: existingAllocation } = await supabase
+            .from('marketplace_item_allocations')
+            .select('id, allocated_quantity')
+            .eq('marketplace_id', marketplace.id)
+            .eq('item_type_id', itemType.id)
+            .single();
+          
+          if (existingAllocation) {
+            // Update existing allocation - add to the allocated quantity
+            const newQuantity = existingAllocation.allocated_quantity + amount;
+            const { error: updateError } = await supabase
+              .from('marketplace_item_allocations')
+              .update({ 
+                allocated_quantity: newQuantity,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingAllocation.id);
+            
+            if (updateError) {
+              console.error(`Failed to update allocation:`, updateError);
+              results.materials_failed++;
+              results.details.push({
+                material_id: materialId,
+                material_title: materialTitle,
+                status: 'failed',
+                error: `Failed to update allocation: ${updateError.message}`
+              });
+              continue;
+            }
+            
+            results.allocations_updated++;
+            results.materials_processed++;
+            results.details.push({
+              material_id: materialId,
+              material_title: materialTitle,
+              status: 'updated',
+              allocation_id: existingAllocation.id
+            });
+            console.log(`Updated allocation for ${materialTitle}: +${amount} (total: ${newQuantity})`);
+          } else {
+            // Create new allocation
+            const { data: newAllocation, error: createAllocError } = await supabase
+              .from('marketplace_item_allocations')
+              .insert({
+                marketplace_id: marketplace.id,
+                item_type_id: itemType.id,
+                allocated_quantity: amount,
+                distributed_quantity: 0
+              })
+              .select('id')
+              .single();
+            
+            if (createAllocError) {
+              console.error(`Failed to create allocation:`, createAllocError);
+              results.materials_failed++;
+              results.details.push({
+                material_id: materialId,
+                material_title: materialTitle,
+                status: 'failed',
+                error: `Failed to create allocation: ${createAllocError.message}`
+              });
+              continue;
+            }
+            
+            results.allocations_created++;
+            results.materials_processed++;
+            results.details.push({
+              material_id: materialId,
+              material_title: materialTitle,
+              status: 'created',
+              allocation_id: newAllocation.id
+            });
+            console.log(`Created allocation for ${materialTitle}: ${amount} units`);
+          }
+        } catch (err) {
+          console.error(`Error processing material ${material.material_id}:`, err);
+          results.materials_failed++;
+          results.details.push({
+            material_id: material.material_id,
+            material_title: material.material_title,
+            status: 'failed',
+            error: err instanceof Error ? err.message : 'Unknown error'
+          });
+        }
+      }
+
+      // Mark webhook event as processed
+      if (eventData?.id) {
+        await supabase
+          .from('webhook_events')
+          .update({ processed: true })
+          .eq('id', eventData.id);
+      }
+
+      console.log(`Allocation processing complete: ${results.materials_processed} materials, ${results.allocations_created} created, ${results.allocations_updated} updated`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Allocation processed',
+          results
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check if this is a volunteer creation request
     if (payload.action === 'create_volunteer') {
       // Check if user is authenticated as admin (for internal calls from admin panel)
