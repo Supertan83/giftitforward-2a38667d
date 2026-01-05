@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   XCircle,
   Mail,
-  QrCode,
   Copy,
   Check
 } from 'lucide-react';
@@ -25,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeSVG } from 'qrcode.react';
+import { EmailPreviewDialog } from './EmailPreviewDialog';
 
 interface VolunteerInput {
   email: string;
@@ -356,11 +356,15 @@ export const WebhookActionsPanel = () => {
                 </div>
               ))}
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="outline" size="sm" onClick={addVolunteerRow}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add Row
                 </Button>
+                <EmailPreviewDialog 
+                  volunteerName={volunteers[0]?.name || 'Volunteer'} 
+                  volunteerEmail={volunteers[0]?.email || 'volunteer@example.com'}
+                />
                 <Button onClick={handleCreateVolunteers} disabled={createLoading}>
                   {createLoading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
