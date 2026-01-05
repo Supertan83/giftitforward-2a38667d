@@ -12,7 +12,8 @@ import {
   XCircle,
   Mail,
   Copy,
-  Check
+  Check,
+  Settings2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,8 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { QRCodeSVG } from 'qrcode.react';
@@ -73,6 +76,12 @@ export const WebhookActionsPanel = () => {
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   
+  // Email customization state
+  const [emailCustomOpen, setEmailCustomOpen] = useState(false);
+  const [customSubject, setCustomSubject] = useState('');
+  const [customGreeting, setCustomGreeting] = useState('');
+  const [customMessage, setCustomMessage] = useState('');
+  
   // Check status state
   const [checkEmails, setCheckEmails] = useState('');
   const [checkLoading, setCheckLoading] = useState(false);
@@ -117,6 +126,13 @@ export const WebhookActionsPanel = () => {
     setCreateResults(null);
 
     try {
+      // Build email customization if any values are set
+      const emailCustomization = (customSubject.trim() || customGreeting.trim() || customMessage.trim()) ? {
+        subject: customSubject.trim() || undefined,
+        greeting: customGreeting.trim() || undefined,
+        message: customMessage.trim() || undefined,
+      } : undefined;
+
       const { data, error } = await supabase.functions.invoke('webhook-receiver', {
         body: {
           action: 'create_volunteer',
@@ -125,6 +141,7 @@ export const WebhookActionsPanel = () => {
             name: v.name.trim() || undefined,
             phone: v.phone.trim() || undefined,
           })),
+          email_customization: emailCustomization,
         },
       });
 
@@ -356,6 +373,56 @@ export const WebhookActionsPanel = () => {
                 </div>
               ))}
 
+              {/* Email Customization Collapsible */}
+              <Collapsible open={emailCustomOpen} onOpenChange={setEmailCustomOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between mb-2">
+                    <span className="flex items-center gap-2">
+                      <Settings2 className="w-4 h-4" />
+                      Customize Email Content
+                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      {emailCustomOpen ? 'Hide' : 'Show'}
+                    </Badge>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-3 mb-4 p-4 bg-muted/50 rounded-lg">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="customSubject" className="text-xs">Custom Subject Line</Label>
+                    <Input
+                      id="customSubject"
+                      placeholder="e.g., Welcome to Gift It Forward - Your Account is Ready!"
+                      value={customSubject}
+                      onChange={(e) => setCustomSubject(e.target.value)}
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">Leave blank for default subject</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="customGreeting" className="text-xs">Custom Greeting</Label>
+                    <Input
+                      id="customGreeting"
+                      placeholder="e.g., Welcome aboard!"
+                      value={customGreeting}
+                      onChange={(e) => setCustomGreeting(e.target.value)}
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">Appears after "Hi [Name],"</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="customMessage" className="text-xs">Additional Message</Label>
+                    <Textarea
+                      id="customMessage"
+                      placeholder="Add a personalized message that will appear in the email..."
+                      value={customMessage}
+                      onChange={(e) => setCustomMessage(e.target.value)}
+                      className="text-sm min-h-[80px]"
+                    />
+                    <p className="text-xs text-muted-foreground">This message will appear after the greeting</p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
               <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="outline" size="sm" onClick={addVolunteerRow}>
                   <Plus className="w-4 h-4 mr-1" />
@@ -364,6 +431,9 @@ export const WebhookActionsPanel = () => {
                 <EmailPreviewDialog 
                   volunteerName={volunteers[0]?.name || 'Volunteer'} 
                   volunteerEmail={volunteers[0]?.email || 'volunteer@example.com'}
+                  customSubject={customSubject}
+                  customGreeting={customGreeting}
+                  customMessage={customMessage}
                 />
                 <Button onClick={handleCreateVolunteers} disabled={createLoading}>
                   {createLoading ? (

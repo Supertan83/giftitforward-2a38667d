@@ -7,13 +7,19 @@ interface EmailPreviewDialogProps {
   volunteerEmail: string;
   tempPassword?: string;
   qrCardId?: string;
+  customSubject?: string;
+  customGreeting?: string;
+  customMessage?: string;
 }
 
 export const EmailPreviewDialog = ({ 
   volunteerName, 
   volunteerEmail, 
   tempPassword = 'Abc123!@#xyz',
-  qrCardId = 'VOL-PREVIEW-1234'
+  qrCardId = 'VOL-PREVIEW-1234',
+  customSubject,
+  customGreeting,
+  customMessage
 }: EmailPreviewDialogProps) => {
   const appUrl = 'https://gif.thesurpluss.com';
   const loginUrl = `${appUrl}/auth`;
@@ -21,6 +27,8 @@ export const EmailPreviewDialog = ({
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrCardId)}`;
   
   const firstName = volunteerName.split(' ')[0] || 'Volunteer';
+  
+  const emailSubject = customSubject || "Welcome to GIF - Your Volunteer Account & QR Card";
 
   return (
     <Dialog>
@@ -33,6 +41,7 @@ export const EmailPreviewDialog = ({
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Welcome Email Preview</DialogTitle>
+          <p className="text-sm text-muted-foreground">Subject: {emailSubject}</p>
         </DialogHeader>
         
         {/* Email Preview Container */}
@@ -49,8 +58,19 @@ export const EmailPreviewDialog = ({
           <div className="p-6 bg-gray-50 space-y-6">
             <p className="text-lg m-0">Hi {firstName},</p>
             
+            {customGreeting && (
+              <p className="text-gray-800 font-medium">{customGreeting}</p>
+            )}
+            
+            {customMessage && (
+              <p className="text-gray-700 whitespace-pre-wrap">{customMessage}</p>
+            )}
+            
             <p className="text-gray-700">
-              Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:
+              {!customGreeting && !customMessage 
+                ? "Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:"
+                : "Here's everything you need to get started:"
+              }
             </p>
             
             {/* QR Code Section */}
