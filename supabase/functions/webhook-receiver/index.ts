@@ -695,8 +695,35 @@ serve(async (req) => {
 
     // Check if this is a volunteer creation request
     if (payload.action === 'create_volunteer') {
-      // Validate API key for protected actions
-      if (!webhookApiKey || providedApiKey !== webhookApiKey) {
+      // Check if user is authenticated as admin (for internal calls from admin panel)
+      const authHeader = req.headers.get('authorization');
+      let isAuthenticatedAdmin = false;
+      
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const supabaseAnonUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+        const anonClient = createClient(supabaseAnonUrl, supabaseAnonKey);
+        
+        const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
+        
+        if (!authError && user) {
+          // Check if user has admin role
+          const { data: roleData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (roleData?.role === 'admin') {
+            isAuthenticatedAdmin = true;
+            console.log('Authenticated admin user:', user.email);
+          }
+        }
+      }
+      
+      // Validate API key for protected actions (skip if authenticated admin)
+      if (!isAuthenticatedAdmin && (!webhookApiKey || providedApiKey !== webhookApiKey)) {
         console.error('Invalid or missing API key for create_volunteer action');
         return new Response(
           JSON.stringify({ 
