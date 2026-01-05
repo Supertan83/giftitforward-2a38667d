@@ -804,7 +804,12 @@ serve(async (req) => {
             continue;
           }
 
-          // Assign volunteer role
+          // Assign volunteer role (use delete-then-insert to handle trigger conflicts)
+          await supabase
+            .from('user_roles')
+            .delete()
+            .eq('user_id', userData.user.id);
+            
           const { error: roleError } = await supabase
             .from('user_roles')
             .insert({
@@ -814,23 +819,96 @@ serve(async (req) => {
 
           if (roleError) {
             console.error(`Failed to assign role to ${volunteer.email}:`, roleError);
-            // User was created but role assignment failed - still report as created with warning
-            results.push({
+          }
+
+          // Generate volunteer QR card
+          const volunteerQRId = generateVolunteerQRId();
+          
+          // Create entry in pending_volunteers to track
+          const firstName = volunteer.name?.split(' ')[0] || 'Volunteer';
+          const lastName = volunteer.name?.split(' ').slice(1).join(' ') || '';
+          
+          const { data: pendingData, error: pendingError } = await supabase
+            .from('pending_volunteers')
+            .insert({
               email: volunteer.email,
-              status: 'created',
+              first_name: firstName,
+              last_name: lastName,
+              phone_number: volunteer.phone || null,
+              status: 'approved',
+              approved_at: new Date().toISOString(),
+              created_user_id: userData.user.id,
               temp_password: tempPassword,
-              error: 'User created but role assignment failed: ' + roleError.message
+              source_data: { created_via: 'admin_webhook_action' }
+            })
+            .select('id')
+            .single();
+
+          if (pendingError) {
+            console.error(`Failed to create pending_volunteers record:`, pendingError);
+          }
+
+          const pendingId = pendingData?.id || userData.user.id;
+
+          // Create volunteer QR card
+          const { error: qrError } = await supabase
+            .from('volunteer_qr_cards')
+            .insert({
+              unique_id: volunteerQRId,
+              volunteer_id: pendingId,
+              status: 'inactive'
             });
-          } else {
+
+          if (qrError) {
+            console.error(`Failed to create volunteer QR card:`, qrError);
+          }
+
+          // Send welcome email with QR code
+          const baseUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || 'https://zrzlzggixuogpxberdxt.lovable.app';
+          const loginUrl = baseUrl;
+          const trainingUrl = `${baseUrl}/training`;
+
+          const emailResult = await sendWelcomeEmailWithQR(
+            volunteer.email,
+            firstName,
+            tempPassword,
+            loginUrl,
+            trainingUrl,
+            volunteerQRId,
+            pendingId,
+            [] // No family members for manual creation
+          );
+
+          if (emailResult.success) {
+            // Update email sent status
+            if (pendingData?.id) {
+              await supabase
+                .from('pending_volunteers')
+                .update({
+                  email_sent: true,
+                  email_sent_at: new Date().toISOString(),
+                  email_send_count: 1
+                })
+                .eq('id', pendingData.id);
+            }
+            
             results.push({
               email: volunteer.email,
               status: 'created',
               temp_password: tempPassword
             });
+            console.log(`Successfully created volunteer and sent email: ${volunteer.email}`);
+          } else {
+            results.push({
+              email: volunteer.email,
+              status: 'created',
+              temp_password: tempPassword,
+              error: 'User created but email failed: ' + emailResult.error
+            });
+            console.log(`Created volunteer but email failed: ${volunteer.email} - ${emailResult.error}`);
           }
 
           createdCount++;
-          console.log(`Successfully created volunteer: ${volunteer.email}`);
 
         } catch (err) {
           console.error(`Unexpected error creating ${volunteer.email}:`, err);
