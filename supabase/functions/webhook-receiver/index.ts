@@ -56,6 +56,13 @@ function extractUniqueDependents(eventsJson: unknown): Array<{ name: string; typ
   return Array.from(dependentsMap.values());
 }
 
+// Email customization options
+interface EmailCustomization {
+  subject?: string;
+  greeting?: string;
+  message?: string;
+}
+
 // Helper function to send welcome email to approved volunteer with QR codes (including family members)
 async function sendWelcomeEmailWithQR(
   email: string,
@@ -65,7 +72,8 @@ async function sendWelcomeEmailWithQR(
   trainingUrl: string,
   qrCardId: string,
   pendingId: string,
-  familyQRs: FamilyMemberQR[] = []
+  familyQRs: FamilyMemberQR[] = [],
+  customization?: EmailCustomization
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -99,12 +107,30 @@ async function sendWelcomeEmailWithQR(
       </div>
     ` : '';
     
+    // Build email subject
+    const emailSubject = customization?.subject || (familyQRs.length > 0 
+      ? `Welcome to GIF - Your Volunteer QR Cards (${1 + familyQRs.length} total)`
+      : "Welcome to GIF - Your Volunteer Account & QR Card");
+    
+    // Build custom greeting section
+    const customGreetingSection = customization?.greeting 
+      ? `<p style="font-weight: 500; margin-bottom: 10px;">${customization.greeting}</p>`
+      : '';
+    
+    // Build custom message section
+    const customMessageSection = customization?.message 
+      ? `<p style="margin-bottom: 10px; white-space: pre-wrap;">${customization.message}</p>`
+      : '';
+    
+    // Build intro text based on whether custom content exists
+    const introText = (customization?.greeting || customization?.message)
+      ? "Here's everything you need to get started:"
+      : "Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:";
+    
     const { error } = await resend.emails.send({
       from: "Surpluss Volunteers <noreply@mgif.thesurpluss.com>",
       to: [email],
-      subject: familyQRs.length > 0 
-        ? `Welcome to GIF - Your Volunteer QR Cards (${1 + familyQRs.length} total)`
-        : "Welcome to GIF - Your Volunteer Account & QR Card",
+      subject: emailSubject,
       html: `
         <!DOCTYPE html>
         <html>
@@ -120,7 +146,10 @@ async function sendWelcomeEmailWithQR(
           <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
             <p style="font-size: 18px; margin-top: 0;">Hi ${firstName},</p>
             
-            <p>Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:</p>
+            ${customGreetingSection}
+            ${customMessageSection}
+            
+            <p>${introText}</p>
             
             <!-- Your QR Code Section -->
             <div style="background: white; border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
@@ -202,6 +231,7 @@ interface VolunteerData {
 interface CreateVolunteerPayload {
   action: 'create_volunteer';
   volunteers: VolunteerData[];
+  email_customization?: EmailCustomization;
 }
 
 interface CheckVolunteerPayload {
@@ -877,7 +907,8 @@ serve(async (req) => {
             trainingUrl,
             volunteerQRId,
             pendingId,
-            [] // No family members for manual creation
+            [], // No family members for manual creation
+            volunteerPayload.email_customization // Pass custom email content
           );
 
           if (emailResult.success) {
