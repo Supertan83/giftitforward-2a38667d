@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -53,6 +54,8 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [totalRecords, setTotalRecords] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
   const [isLoadingSynced, setIsLoadingSynced] = useState(true);
+  const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
   const { toast } = useToast();
 
   // Load already-synced allocation IDs from database on mount and when environment changes
@@ -89,6 +92,39 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
       title: 'Tracking Cleared',
       description: 'You can now re-sync all allocations'
     });
+  };
+
+  const clearSyncHistory = async () => {
+    setIsClearingHistory(true);
+    try {
+      const { error } = await supabase
+        .from('surpluss_allocation_sync')
+        .delete()
+        .eq('environment', environment);
+
+      if (error) throw error;
+
+      // Reset local state
+      setSyncedAllocationIds(new Set());
+      setSyncResults([]);
+      setSkippedCount(0);
+      setAllocations([]);
+
+      toast({
+        title: 'Sync History Cleared',
+        description: `All sync records for ${environment} environment have been deleted. You can now re-sync allocations.`
+      });
+    } catch (error) {
+      console.error('Error clearing sync history:', error);
+      toast({
+        title: 'Clear Failed',
+        description: error instanceof Error ? error.message : 'Failed to clear sync history',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsClearingHistory(false);
+      setShowClearHistoryDialog(false);
+    }
   };
 
   const fetchAllocations = async () => {
@@ -282,12 +318,23 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
               </div>
               <p className="text-sm text-muted-foreground">Fetch and sync allocations from Surpluss API</p>
             </div>
-            {syncedAllocationIds.size > 0 && (
-              <Button variant="outline" size="sm" onClick={clearSyncedTracking}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Clear Synced
+            <div className="flex gap-2">
+              {syncedAllocationIds.size > 0 && (
+                <Button variant="outline" size="sm" onClick={clearSyncedTracking}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Clear Session
+                </Button>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowClearHistoryDialog(true)}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear History
               </Button>
-            )}
+            </div>
           </div>
         </div>
       </header>
@@ -575,6 +622,39 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
           </Card>
         )}
       </main>
+
+      {/* Clear Sync History Confirmation Dialog */}
+      <AlertDialog open={showClearHistoryDialog} onOpenChange={setShowClearHistoryDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Sync History</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all sync tracking records for the <strong>{environment}</strong> environment. 
+              This means all allocations from this environment can be re-synced, which may create duplicate data if not managed carefully.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearingHistory}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={clearSyncHistory}
+              disabled={isClearingHistory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isClearingHistory ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Clearing...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear History
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
