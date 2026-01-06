@@ -20,6 +20,7 @@ export interface MarketplaceReport {
     location: string | null;
     eventDate: string | null;
     status: string;
+    outreachPartner: string | null;
   };
   beneficiaries: {
     total: number;
@@ -36,10 +37,12 @@ export interface MarketplaceReport {
       itemId: string;
       itemName: string;
       itemIcon: string;
+      category: string | null;
       allocated: number;
       distributed: number;
       remaining: number;
     }>;
+    byCategory: Record<string, { allocated: number; distributed: number; remaining: number }>;
   };
   volunteers?: {
     total: number;
@@ -320,7 +323,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         .from('marketplace_item_allocations')
         .select(`
           *,
-          item_types (id, name, icon)
+          item_types (id, name, icon, category)
         `)
         .eq('marketplace_id', marketplaceId);
 
@@ -328,10 +331,23 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         itemId: alloc.item_type_id,
         itemName: alloc.item_types?.name || 'Unknown',
         itemIcon: alloc.item_types?.icon || '📦',
+        category: alloc.item_types?.category || null,
         allocated: alloc.allocated_quantity,
         distributed: alloc.distributed_quantity,
         remaining: alloc.allocated_quantity - alloc.distributed_quantity,
       }));
+
+      // Calculate by category
+      const byCategory: Record<string, { allocated: number; distributed: number; remaining: number }> = {};
+      itemsByType.forEach(item => {
+        const cat = item.category || 'Uncategorized';
+        if (!byCategory[cat]) {
+          byCategory[cat] = { allocated: 0, distributed: 0, remaining: 0 };
+        }
+        byCategory[cat].allocated += item.allocated;
+        byCategory[cat].distributed += item.distributed;
+        byCategory[cat].remaining += item.remaining;
+      });
 
       const totalAllocated = itemsByType.reduce((sum, item) => sum + item.allocated, 0);
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
@@ -352,6 +368,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           location: marketplace.location,
           eventDate: marketplace.event_date,
           status: marketplace.status,
+          outreachPartner: marketplace.outreach_partner,
         },
         beneficiaries: {
           total: allBeneficiaries.length,
@@ -365,6 +382,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           totalDistributed,
           totalRemaining: totalAllocated - totalDistributed,
           byItemType: itemsByType,
+          byCategory,
         },
         volunteers: {
           total: totalVolunteers,

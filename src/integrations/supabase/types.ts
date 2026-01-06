@@ -426,6 +426,7 @@ export type Database = {
       item_types: {
         Row: {
           allocated_to_marketplace: number
+          category: string | null
           created_at: string
           distributed: number
           external_material_id: number | null
@@ -437,6 +438,7 @@ export type Database = {
         }
         Insert: {
           allocated_to_marketplace?: number
+          category?: string | null
           created_at?: string
           distributed?: number
           external_material_id?: number | null
@@ -448,6 +450,7 @@ export type Database = {
         }
         Update: {
           allocated_to_marketplace?: number
+          category?: string | null
           created_at?: string
           distributed?: number
           external_material_id?: number | null
@@ -467,6 +470,7 @@ export type Database = {
           id: string
           location: string | null
           name: string
+          outreach_partner: string | null
           status: string
           updated_at: string
         }
@@ -477,6 +481,7 @@ export type Database = {
           id?: string
           location?: string | null
           name: string
+          outreach_partner?: string | null
           status?: string
           updated_at?: string
         }
@@ -487,6 +492,7 @@ export type Database = {
           id?: string
           location?: string | null
           name?: string
+          outreach_partner?: string | null
           status?: string
           updated_at?: string
         }
