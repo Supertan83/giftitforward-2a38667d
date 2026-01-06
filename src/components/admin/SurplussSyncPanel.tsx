@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud, Trash2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -46,6 +47,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [allocations, setAllocations] = useState<SurplussAllocation[]>([]);
+  const [allFetchedAllocations, setAllFetchedAllocations] = useState<SurplussAllocation[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [isSyncing, setSyncing] = useState(false);
   const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
@@ -56,7 +58,11 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [isLoadingSynced, setIsLoadingSynced] = useState(true);
   const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
   const [isClearingHistory, setIsClearingHistory] = useState(false);
+  const [showAlreadySynced, setShowAlreadySynced] = useState(false);
   const { toast } = useToast();
+
+  // Compute displayed allocations based on toggle
+  const displayedAllocations = showAlreadySynced ? allFetchedAllocations : allocations;
 
   // Load already-synced allocation IDs from database on mount and when environment changes
   useEffect(() => {
@@ -109,6 +115,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
       setSyncResults([]);
       setSkippedCount(0);
       setAllocations([]);
+      setAllFetchedAllocations([]);
 
       toast({
         title: 'Sync History Cleared',
@@ -150,6 +157,9 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
       }
 
       const fetchedAllocations: SurplussAllocation[] = data.data || [];
+      
+      // Store all fetched allocations for "show already synced" toggle
+      setAllFetchedAllocations(fetchedAllocations);
       
       // Filter out already synced allocations
       const newAllocations = fetchedAllocations.filter(
@@ -450,13 +460,37 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
         </Card>
 
         {/* Results Table */}
-        {allocations.length > 0 && (
+        {(allocations.length > 0 || (showAlreadySynced && allFetchedAllocations.length > 0)) && (
           <Card>
             <CardHeader>
-              <CardTitle>Fetched Allocations ({allocations.length})</CardTitle>
-              <CardDescription>
-                Preview from {environment} environment. Click sync to import into database.
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    Fetched Allocations ({displayedAllocations.length})
+                    {skippedCount > 0 && !showAlreadySynced && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-300 dark:border-amber-700">
+                        {skippedCount} already synced
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Preview from {environment} environment. Click sync to import into database.
+                  </CardDescription>
+                </div>
+                {allFetchedAllocations.length > allocations.length && (
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="show-synced" className="text-sm text-muted-foreground flex items-center gap-1.5 cursor-pointer">
+                      {showAlreadySynced ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      Show Synced
+                    </Label>
+                    <Switch
+                      id="show-synced"
+                      checked={showAlreadySynced}
+                      onCheckedChange={setShowAlreadySynced}
+                    />
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="border rounded-lg overflow-hidden">
@@ -473,12 +507,16 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allocations.map((allocation) => {
+                    {displayedAllocations.map((allocation) => {
                       const syncStatus = getSyncStatus(allocation.id);
+                      const isAlreadySynced = syncedAllocationIds.has(allocation.id);
                       const totalAmount = allocation.allocated_materials?.reduce((sum, m) => sum + m.amount, 0) || 0;
                       
                       return (
-                        <TableRow key={allocation.id}>
+                        <TableRow 
+                          key={allocation.id}
+                          className={isAlreadySynced && showAlreadySynced ? 'bg-muted/50 opacity-75' : ''}
+                        >
                           <TableCell className="font-medium">
                             {allocation.marketplace_event_title}
                           </TableCell>
@@ -504,7 +542,12 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                             {allocation.allocated_at ? new Date(allocation.allocated_at).toLocaleDateString() : '-'}
                           </TableCell>
                           <TableCell>
-                            {syncStatus ? (
+                            {isAlreadySynced && showAlreadySynced ? (
+                              <Badge variant="secondary" className="bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                <Check className="w-3 h-3 mr-1" />
+                                Already Synced
+                              </Badge>
+                            ) : syncStatus ? (
                               syncStatus.status === 'success' ? (
                                 <Badge variant="default" className="bg-emerald-500">
                                   <Check className="w-3 h-3 mr-1" />
@@ -522,18 +565,24 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => syncSingleAllocation(allocation)}
-                              disabled={isSyncing}
-                            >
-                              {isSyncing ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                'Sync'
-                              )}
-                            </Button>
+                            {isAlreadySynced && showAlreadySynced ? (
+                              <Button size="sm" variant="ghost" disabled className="opacity-50">
+                                Synced
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => syncSingleAllocation(allocation)}
+                                disabled={isSyncing}
+                              >
+                                {isSyncing ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  'Sync'
+                                )}
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -546,7 +595,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
               {totalRecords > 50 && (
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">
-                    Showing {allocations.length} of {totalRecords} records
+                    Showing {displayedAllocations.length} of {totalRecords} records
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -573,7 +622,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
         )}
 
         {/* Empty State */}
-        {!isFetching && allocations.length === 0 && (
+        {!isFetching && allocations.length === 0 && allFetchedAllocations.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
