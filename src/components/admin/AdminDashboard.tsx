@@ -529,7 +529,6 @@ export const AdminDashboard = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-2 px-3 font-medium">Icon</th>
                         <th className="text-left py-2 px-3 font-medium">Name</th>
                         <th className="text-left py-2 px-3 font-medium">Category</th>
                         <th className="text-right py-2 px-3 font-medium">Warehouse Stock</th>
@@ -539,7 +538,6 @@ export const AdminDashboard = () => {
                     <tbody>
                       {itemTypes.map(item => (
                         <tr key={item.id} className="border-b hover:bg-muted/50">
-                          <td className="py-2 px-3 text-xl">{item.icon}</td>
                           <td className="py-2 px-3 font-medium">{item.name}</td>
                           <td className="py-2 px-3">
                             {item.category ? (
@@ -598,13 +596,6 @@ export const AdminDashboard = () => {
               <DialogDescription>Update item details below.</DialogDescription>
             </DialogHeader>
             {fullEditItem && <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-icon">Icon (emoji)</Label>
-                  <Input id="edit-icon" value={fullEditItem.icon} onChange={e => setFullEditItem({
-                ...fullEditItem,
-                icon: e.target.value
-              })} placeholder="📦" className="w-20" />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-name">Name</Label>
                   <Input id="edit-name" value={fullEditItem.name} onChange={e => setFullEditItem({
@@ -994,7 +985,6 @@ export const AdminDashboard = () => {
               <Label>Select Item Type</Label>
               <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                 {itemTypes.map(item => <button key={item.id} onClick={() => setSelectedItemId(item.id)} className={`p-3 rounded-lg border-2 text-left transition-all ${selectedItemId === item.id ? 'border-primary bg-primary-soft' : 'border-border hover:border-primary/50'}`}>
-                    <span className="text-xl mr-2">{item.icon}</span>
                     <span className="text-sm font-medium">{item.name}</span>
                   </button>)}
               </div>
