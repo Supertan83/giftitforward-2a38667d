@@ -108,7 +108,8 @@ export const useItemTypes = () => {
         name: item.name,
         icon: item.icon,
         totalStock: item.total_stock,
-        distributed: item.distributed
+        distributed: item.distributed,
+        category: item.category || null
       }));
     }
   });
@@ -698,7 +699,7 @@ export const useInventoryOperations = () => {
   });
 
   const addItemType = useMutation({
-    mutationFn: async (item: { name: string; icon: string; totalStock: number }) => {
+    mutationFn: async (item: { name: string; icon: string; totalStock: number; category?: string }) => {
       const { error } = await supabase
         .from('item_types')
         .insert({
@@ -706,7 +707,8 @@ export const useInventoryOperations = () => {
           icon: item.icon,
           total_stock: item.totalStock,
           allocated_to_marketplace: 0,
-          distributed: 0
+          distributed: 0,
+          category: item.category || null
         });
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
@@ -748,10 +750,10 @@ export const useInventoryOperations = () => {
   });
 
   const updateItemType = useMutation({
-    mutationFn: async ({ id, name, icon, totalStock }: { id: string; name: string; icon: string; totalStock: number }) => {
+    mutationFn: async ({ id, name, icon, totalStock, category }: { id: string; name: string; icon: string; totalStock: number; category?: string | null }) => {
       const { error } = await supabase
         .from('item_types')
-        .update({ name, icon, total_stock: totalStock })
+        .update({ name, icon, total_stock: totalStock, category: category || null })
         .eq('id', id);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);

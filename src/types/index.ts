@@ -35,6 +35,7 @@ export interface ItemType {
   icon: string;
   totalStock: number;
   distributed: number;
+  category?: string | null;
 }
 
 export interface MarketplaceItemAllocation {
