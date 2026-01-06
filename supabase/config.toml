@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.sync-surpluss-allocations]
 verify_jwt = false
+
+[functions.report-surpluss-distribution]
+verify_jwt = false
