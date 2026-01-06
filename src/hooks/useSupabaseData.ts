@@ -768,13 +768,14 @@ export const useInventoryOperations = () => {
 };
 
 // Users Management
-interface UserWithRole {
+export interface UserWithRole {
   id: string;
   email: string;
   role: 'admin' | 'volunteer' | 'employee';
   created_at: string;
   first_name: string | null;
   last_name: string | null;
+  qr_codes: string[];
 }
 
 export const useUsers = () => {
@@ -800,13 +801,22 @@ export const useUsers = () => {
         throw new Error(data.error || 'Failed to fetch users');
       }
 
-      return data.users.map((user: { id: string; email: string; role: string; created_at: string; first_name: string | null; last_name: string | null }) => ({
+      return data.users.map((user: { 
+        id: string; 
+        email: string; 
+        role: string; 
+        created_at: string; 
+        first_name: string | null; 
+        last_name: string | null;
+        qr_codes?: string[];
+      }) => ({
         id: user.id,
         email: user.email,
         role: user.role as 'admin' | 'volunteer' | 'employee',
         created_at: user.created_at,
         first_name: user.first_name,
         last_name: user.last_name,
+        qr_codes: user.qr_codes || [],
       }));
     }
   });

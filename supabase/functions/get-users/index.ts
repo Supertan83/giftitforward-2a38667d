@@ -78,12 +78,41 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Get all volunteer QR cards to map to users
+    const { data: volunteerCards, error: cardsError } = await supabaseAdmin
+      .from('volunteer_qr_cards')
+      .select('unique_id, volunteer_id')
+      .not('volunteer_id', 'is', null)
+
+    if (cardsError) {
+      console.error('Error fetching volunteer cards:', cardsError);
+    }
+
+    // Create a map of user_id to QR codes (a user can have multiple family member cards)
+    const userQRCards = new Map<string, string[]>();
+    volunteerCards?.forEach(card => {
+      if (card.volunteer_id) {
+        const existing = userQRCards.get(card.volunteer_id) || [];
+        existing.push(card.unique_id);
+        userQRCards.set(card.volunteer_id, existing);
+      }
+    });
+
     // Map roles to users with emails - deduplicate by user_id, prioritize admin role
-    const userMap = new Map<string, { id: string; email: string; role: string; created_at: string; first_name: string | null; last_name: string | null }>();
+    const userMap = new Map<string, { 
+      id: string; 
+      email: string; 
+      role: string; 
+      created_at: string; 
+      first_name: string | null; 
+      last_name: string | null;
+      qr_codes: string[];
+    }>();
     
     roles?.forEach(role => {
       const authUser = authUsers.find(u => u.id === role.user_id);
       const existing = userMap.get(role.user_id);
+      const qrCodes = userQRCards.get(role.user_id) || [];
       
       // If user not in map, or if this role is 'admin' (higher priority), add/update
       if (!existing || role.role === 'admin') {
@@ -94,6 +123,7 @@ Deno.serve(async (req) => {
           created_at: role.created_at,
           first_name: authUser?.user_metadata?.first_name || null,
           last_name: authUser?.user_metadata?.last_name || null,
+          qr_codes: qrCodes,
         });
       }
     });

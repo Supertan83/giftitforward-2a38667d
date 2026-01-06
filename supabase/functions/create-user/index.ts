@@ -19,6 +19,13 @@ const isValidRole = (role: string): role is 'admin' | 'volunteer' | 'employee' =
   return role === 'admin' || role === 'volunteer' || role === 'employee';
 };
 
+// Generate a unique volunteer QR code ID
+const generateVolunteerQRCode = (): string => {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `VOL-${timestamp}-${random}`;
+};
+
 Deno.serve(async (req) => {
 
   if (req.method === 'OPTIONS') {
@@ -76,7 +83,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, password, role } = body;
+    const { email, password, role, firstName, lastName } = body;
 
     // Comprehensive input validation
     if (!email || typeof email !== 'string') {
@@ -121,11 +128,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create user
+    // Create user with metadata
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password,
       email_confirm: true,
+      user_metadata: {
+        first_name: firstName?.trim() || null,
+        last_name: lastName?.trim() || null,
+      }
     })
 
     if (createError) {
@@ -164,8 +175,33 @@ Deno.serve(async (req) => {
       })
     }
 
+    // If volunteer role, create a volunteer QR card linked to this user
+    let volunteerQRCode: string | null = null;
+    if (role === 'volunteer') {
+      volunteerQRCode = generateVolunteerQRCode();
+      
+      const { error: qrError } = await supabaseAdmin
+        .from('volunteer_qr_cards')
+        .insert({
+          unique_id: volunteerQRCode,
+          volunteer_id: newUser.user.id,
+          status: 'inactive'
+        });
+
+      if (qrError) {
+        console.error('QR card creation error:', qrError);
+        // Don't fail the whole operation, just log the error
+        volunteerQRCode = null;
+      }
+    }
+
     return new Response(JSON.stringify({ 
-      user: { id: newUser.user.id, email: newUser.user.email, role } 
+      user: { 
+        id: newUser.user.id, 
+        email: newUser.user.email, 
+        role,
+        qr_code: volunteerQRCode
+      } 
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
