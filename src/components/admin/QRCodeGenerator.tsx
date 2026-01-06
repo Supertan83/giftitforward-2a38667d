@@ -15,8 +15,8 @@ import {
   Loader2,
   Database,
   XCircle,
-  CheckSquare,
-  Square
+  Eye,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CSVImport } from '@/components/admin/CSVImport';
 import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
@@ -78,7 +84,11 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [isUnregistering, setIsUnregistering] = useState(false);
+  const [previewCard, setPreviewCard] = useState<string | null>(null);
+  const [cardsToPreview, setCardsToPreview] = useState<string[]>([]);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const previewPrintRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const { data: qrCards = [] } = useQRCards();
@@ -153,6 +163,86 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     } else {
       setSelectedCards(new Set(qrCards.map(c => c.uniqueId)));
     }
+  };
+
+  const handlePreviewCard = (uniqueId: string) => {
+    setCardsToPreview([uniqueId]);
+    setShowPreviewDialog(true);
+  };
+
+  const handlePreviewSelected = () => {
+    if (selectedCards.size === 0) return;
+    setCardsToPreview(Array.from(selectedCards));
+    setShowPreviewDialog(true);
+  };
+
+  const handlePrintPreview = () => {
+    // Create a print-specific window for the preview cards
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Print blocked',
+        description: 'Please allow popups for printing',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const cardsHtml = cardsToPreview.map(uniqueId => `
+      <div style="
+        background: white;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        width: ${cardSize === 'small' ? '120px' : cardSize === 'medium' ? '160px' : '200px'};
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        break-inside: avoid;
+      ">
+        <div style="background: white; padding: 8px; border-radius: 8px; margin-bottom: 8px;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=${sizeConfig[cardSize].qr}x${sizeConfig[cardSize].qr}&data=${encodeURIComponent(uniqueId)}&ecc=H" 
+               alt="QR Code" 
+               style="width: ${sizeConfig[cardSize].qr}px; height: ${sizeConfig[cardSize].qr}px;" />
+        </div>
+        <p style="font-family: monospace; font-size: 11px; font-weight: 600; text-align: center; word-break: break-all; margin: 0;">
+          ${uniqueId}
+        </p>
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; width: 100%; text-align: center;">
+          <p style="font-size: 9px; color: #6b7280; font-weight: 500; margin: 0;">GIF (GIFT IT FORWARD)</p>
+          <p style="font-size: 7px; color: #9ca3af; margin: 2px 0 0 0;">15 Item Credits</p>
+        </div>
+      </div>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print QR Cards</title>
+          <style>
+            @page { margin: 0.5cm; }
+            body { 
+              margin: 0; 
+              padding: 20px;
+              display: grid;
+              grid-template-columns: repeat(auto-fill, minmax(${cardSize === 'small' ? '130px' : cardSize === 'medium' ? '170px' : '210px'}, 1fr));
+              gap: 16px;
+            }
+          </style>
+        </head>
+        <body>
+          ${cardsHtml}
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); }
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const sizeConfig = {
@@ -416,21 +506,32 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     <div className="text-xs md:text-sm">
                       <p className="font-medium">Registered Cards ({qrCards.length})</p>
                       <p className="text-muted-foreground">
-                        View and unregister QR cards from the system.
+                        View, preview, and manage QR cards in the system.
                       </p>
                     </div>
                   </div>
-                  {selectedCards.size > 0 && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowBulkConfirm(true)}
-                      className="shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Unregister ({selectedCards.size})
-                    </Button>
-                  )}
+                  <div className="flex gap-2 shrink-0">
+                    {selectedCards.size > 0 && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handlePreviewSelected}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Preview ({selectedCards.size})
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setShowBulkConfirm(true)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Unregister
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 
                 {qrCards.length === 0 ? (
@@ -453,7 +554,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                           <th className="text-left p-2 md:p-3 font-medium">Card ID</th>
                           <th className="text-left p-2 md:p-3 font-medium">Status</th>
                           <th className="text-left p-2 md:p-3 font-medium">Credits</th>
-                          <th className="text-right p-2 md:p-3 font-medium">Action</th>
+                          <th className="text-right p-2 md:p-3 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -482,16 +583,27 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                             </td>
                             <td className="p-2 md:p-3">{card.creditBalance}/15</td>
                             <td className="p-2 md:p-3 text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setCardToUnregister(card.uniqueId)}
-                                disabled={isUnregistering}
-                                className="text-danger hover:text-danger hover:bg-danger/10"
-                              >
-                                <XCircle className="w-4 h-4" />
-                                <span className="hidden sm:inline ml-1">Unregister</span>
-                              </Button>
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handlePreviewCard(card.uniqueId)}
+                                  className="text-primary hover:text-primary hover:bg-primary/10"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  <span className="hidden sm:inline ml-1">Preview</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setCardToUnregister(card.uniqueId)}
+                                  disabled={isUnregistering}
+                                  className="text-danger hover:text-danger hover:bg-danger/10"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                  <span className="hidden sm:inline ml-1">Remove</span>
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -619,6 +731,55 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* QR Preview Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>QR Code Preview ({cardsToPreview.length} card{cardsToPreview.length !== 1 ? 's' : ''})</span>
+              <Button size="sm" onClick={handlePrintPreview}>
+                <Printer className="w-4 h-4 mr-2" />
+                Print
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div ref={previewPrintRef} className={cn('grid gap-4 py-4', sizeConfig[cardSize].cols)}>
+            {cardsToPreview.map((uniqueId) => (
+              <div
+                key={uniqueId}
+                className={cn(
+                  'relative bg-card rounded-xl border-2 border-border p-4',
+                  sizeConfig[cardSize].card
+                )}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-2 rounded-lg mb-2">
+                    <QRCodeSVG
+                      value={uniqueId}
+                      size={sizeConfig[cardSize].qr}
+                      level="H"
+                      includeMargin={false}
+                    />
+                  </div>
+                  <p className="font-mono text-xs font-semibold text-center break-all">
+                    {uniqueId}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-border w-full text-center">
+                    <p className="text-[10px] text-muted-foreground font-medium">
+                      GIF (GIFT IT FORWARD)
+                    </p>
+                    <p className="text-[8px] text-muted-foreground">
+                      15 Item Credits
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Bulk Unregister Confirmation */}
       <AlertDialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
