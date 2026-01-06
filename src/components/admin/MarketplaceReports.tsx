@@ -12,7 +12,9 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Building2,
+  Tags
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -191,6 +193,42 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
               </div>
             ) : report ? (
               <>
+                {/* Marketplace Info Header */}
+                <div className="bg-card rounded-xl border border-border p-4 md:p-6 shadow-card mb-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="font-display font-bold text-xl">{report.marketplace.name}</h2>
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
+                        {report.marketplace.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            {report.marketplace.location}
+                          </span>
+                        )}
+                        {report.marketplace.eventDate && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(report.marketplace.eventDate).toLocaleDateString()}
+                          </span>
+                        )}
+                        {report.marketplace.outreachPartner && (
+                          <span className="flex items-center gap-1 text-primary font-medium">
+                            <Building2 className="w-4 h-4" />
+                            {report.marketplace.outreachPartner}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-sm px-3 py-1 rounded-full self-start ${
+                      report.marketplace.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' :
+                      report.marketplace.status === 'active' ? 'bg-blue-500/10 text-blue-600' :
+                      'bg-amber-500/10 text-amber-600'
+                    }`}>
+                      {report.marketplace.status}
+                    </span>
+                  </div>
+                </div>
+
                 {/* Header Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                   <div className="bg-card rounded-xl border border-border p-4 shadow-card">
@@ -372,6 +410,34 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
                         </div>
                       </div>
 
+                      {/* Category Summary */}
+                      {Object.keys(report.items.byCategory).length > 0 && (
+                        <div className="mb-6">
+                          <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                            <Tags className="w-4 h-4" />
+                            By Category
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {Object.entries(report.items.byCategory).map(([category, data]) => (
+                              <div key={category} className="bg-muted/30 rounded-lg p-3">
+                                <p className="font-medium text-sm mb-2">{category}</p>
+                                <div className="flex items-center gap-2 text-xs">
+                                  <span className="text-muted-foreground">Allocated: <span className="font-semibold text-foreground">{data.allocated}</span></span>
+                                  <span className="text-emerald-600">Distributed: {data.distributed}</span>
+                                  <span className="text-amber-600">Left: {data.remaining}</span>
+                                </div>
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+                                  <div 
+                                    className="h-full bg-emerald-500 rounded-full transition-all"
+                                    style={{ width: `${data.allocated > 0 ? (data.distributed / data.allocated) * 100 : 0}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Item Type Breakdown */}
                       {report.items.byItemType.length > 0 ? (
                         <>
@@ -381,7 +447,14 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
                               <div key={item.itemId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                                 <span className="text-2xl">{item.itemIcon}</span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-medium">{item.itemName}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium">{item.itemName}</p>
+                                    {item.category && (
+                                      <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                                        {item.category}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-2 mt-1">
                                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                       <div 
