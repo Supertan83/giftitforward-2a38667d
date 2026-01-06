@@ -53,6 +53,7 @@ export const AdminDashboard = () => {
     name: string;
     icon: string;
     totalStock: string;
+    category: string;
   } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
@@ -172,7 +173,8 @@ export const AdminDashboard = () => {
         id: fullEditItem.id,
         name: fullEditItem.name.trim(),
         icon: fullEditItem.icon || '📦',
-        totalStock: newStock
+        totalStock: newStock,
+        category: fullEditItem.category || null
       });
       toast({
         title: 'Item Updated',
@@ -537,6 +539,29 @@ export const AdminDashboard = () => {
                 ...fullEditItem,
                 name: e.target.value
               })} placeholder="Item name" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select value={fullEditItem.category} onValueChange={value => setFullEditItem({
+                    ...fullEditItem,
+                    category: value
+                  })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Clothing">Clothing</SelectItem>
+                      <SelectItem value="Electronics">Electronics</SelectItem>
+                      <SelectItem value="Food">Food</SelectItem>
+                      <SelectItem value="Furniture">Furniture</SelectItem>
+                      <SelectItem value="Household">Household</SelectItem>
+                      <SelectItem value="Personal Care">Personal Care</SelectItem>
+                      <SelectItem value="Toys">Toys</SelectItem>
+                      <SelectItem value="Books">Books</SelectItem>
+                      <SelectItem value="Sports">Sports</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-stock">Warehouse Stock</Label>
