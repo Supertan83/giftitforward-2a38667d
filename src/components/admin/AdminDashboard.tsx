@@ -26,13 +26,14 @@ import { TrainingCompletionViewer } from '@/components/admin/TrainingCompletionV
 import { VolunteerQRCodeGenerator } from '@/components/admin/VolunteerQRCodeGenerator';
 import { MarketplaceSyncPanel } from '@/components/admin/MarketplaceSyncPanel';
 import { MarketplaceReports } from '@/components/admin/MarketplaceReports';
+import { SurplussSyncPanel } from '@/components/admin/SurplussSyncPanel';
 import { AllocationManagement } from '@/components/admin/AllocationManagement';
 import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync';
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [showAllocationModal, setShowAllocationModal] = useState(false);
@@ -330,6 +331,11 @@ export const AdminDashboard = () => {
   // Show Volunteer QR Cards view
   if (currentView === 'volunteer-qr-cards') {
     return <VolunteerQRCardsViewer onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Surpluss Sync view
+  if (currentView === 'surpluss-sync') {
+    return <SurplussSyncPanel onBack={() => setCurrentView('dashboard')} />;
   }
   if (isLoading || allocationsLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
@@ -1034,6 +1040,32 @@ export const AdminDashboard = () => {
                 <h3 className="font-display font-semibold text-sm md:text-base">Marketplace Reports</h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
                   Detailed insights per marketplace
+                </p>
+              </div>
+            </div>
+          </motion.button>
+
+          <motion.button initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          delay: 1.5
+        }} whileHover={{
+          scale: 1.01
+        }} whileTap={{
+          scale: 0.99
+        }} onClick={() => setCurrentView('surpluss-sync')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+            <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors shrink-0">
+                <Database className="w-5 h-5 md:w-6 md:h-6 text-cyan-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-sm md:text-base">Surpluss Sync</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">
+                  Fetch & sync allocations from Surpluss API
                 </p>
               </div>
             </div>

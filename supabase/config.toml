@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.auto-unblock-cards]
 verify_jwt = false
+
+[functions.fetch-surpluss-allocations]
+verify_jwt = false
+
+[functions.sync-surpluss-allocations]
+verify_jwt = false
