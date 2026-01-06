@@ -54,6 +54,16 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [skippedCount, setSkippedCount] = useState(0);
   const { toast } = useToast();
 
+  const clearSyncedTracking = () => {
+    setSyncedAllocationIds(new Set());
+    setSyncResults([]);
+    setSkippedCount(0);
+    toast({
+      title: 'Tracking Cleared',
+      description: 'You can now re-sync all allocations'
+    });
+  };
+
   const fetchAllocations = async () => {
     setIsFetching(true);
     setSkippedCount(0);
@@ -234,10 +244,23 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
             <Button variant="ghost" size="icon" onClick={onBack}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div>
-              <h1 className="font-display font-bold text-lg">Surpluss Sync</h1>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="font-display font-bold text-lg">Surpluss Sync</h1>
+                {syncedAllocationIds.size > 0 && (
+                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    {syncedAllocationIds.size} synced
+                  </Badge>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">Fetch and sync allocations from Surpluss API</p>
             </div>
+            {syncedAllocationIds.size > 0 && (
+              <Button variant="outline" size="sm" onClick={clearSyncedTracking}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Clear Synced
+              </Button>
+            )}
           </div>
         </div>
       </header>
