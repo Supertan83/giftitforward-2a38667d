@@ -452,10 +452,7 @@ export const AdminDashboard = () => {
                               {isExpanded && mpAllocations.map(alloc => (
                                 <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
                                   <td className="py-2 px-3 pl-10">
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                      <span>{alloc.itemIcon || '📦'}</span>
-                                      <span>{alloc.itemName || 'Unknown Item'}</span>
-                                    </div>
+                                    <span className="text-muted-foreground">{alloc.itemName || 'Unknown Item'}</span>
                                   </td>
                                   <td className="text-right py-2 px-3">
                                     {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? (
@@ -585,7 +582,6 @@ export const AdminDashboard = () => {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b">
-                            <th className="text-left py-2 px-3 font-medium">Icon</th>
                             <th className="text-left py-2 px-3 font-medium">Name</th>
                             <th className="text-left py-2 px-3 font-medium">Category</th>
                             <th className="text-right py-2 px-3 font-medium">Warehouse Stock</th>
@@ -595,7 +591,6 @@ export const AdminDashboard = () => {
                         <tbody>
                           {itemTypes.map(item => (
                             <tr key={item.id} className="border-b hover:bg-muted/50">
-                              <td className="py-2 px-3 text-xl">{item.icon}</td>
                               <td className="py-2 px-3 font-medium">{item.name}</td>
                               <td className="py-2 px-3">
                                 {item.category ? (
@@ -656,13 +651,6 @@ export const AdminDashboard = () => {
               <DialogDescription>Update item details below.</DialogDescription>
             </DialogHeader>
             {fullEditItem && <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-icon">Icon (emoji)</Label>
-                  <Input id="edit-icon" value={fullEditItem.icon} onChange={e => setFullEditItem({
-                ...fullEditItem,
-                icon: e.target.value
-              })} placeholder="📦" className="w-20" />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-name">Name</Label>
                   <Input id="edit-name" value={fullEditItem.name} onChange={e => setFullEditItem({
