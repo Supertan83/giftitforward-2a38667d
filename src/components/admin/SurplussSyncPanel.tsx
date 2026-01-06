@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,7 +52,34 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
+  const [isLoadingSynced, setIsLoadingSynced] = useState(true);
   const { toast } = useToast();
+
+  // Load already-synced allocation IDs from database on mount and when environment changes
+  useEffect(() => {
+    const loadSyncedAllocations = async () => {
+      setIsLoadingSynced(true);
+      try {
+        const { data, error } = await supabase
+          .from('surpluss_allocation_sync')
+          .select('allocation_id')
+          .eq('environment', environment);
+
+        if (error) {
+          console.error('Error loading synced allocations:', error);
+        } else {
+          const ids = new Set((data || []).map(r => r.allocation_id));
+          setSyncedAllocationIds(ids);
+        }
+      } catch (err) {
+        console.error('Error loading synced allocations:', err);
+      } finally {
+        setIsLoadingSynced(false);
+      }
+    };
+
+    loadSyncedAllocations();
+  }, [environment]);
 
   const clearSyncedTracking = () => {
     setSyncedAllocationIds(new Set());
@@ -130,7 +157,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     
     try {
       const { data, error } = await supabase.functions.invoke('sync-surpluss-allocations', {
-        body: { allocations }
+        body: { allocations, environment }
       });
 
       if (error) throw error;
@@ -176,7 +203,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     
     try {
       const { data, error } = await supabase.functions.invoke('sync-surpluss-allocations', {
-        body: { allocations: [allocation] }
+        body: { allocations: [allocation], environment }
       });
 
       if (error) throw error;

@@ -872,6 +872,39 @@ export type Database = {
           },
         ]
       }
+      surpluss_allocation_sync: {
+        Row: {
+          allocation_id: number
+          created_at: string
+          environment: string
+          id: string
+          marketplace_external_id: number | null
+          synced_at: string
+          synced_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          allocation_id: number
+          created_at?: string
+          environment?: string
+          id?: string
+          marketplace_external_id?: number | null
+          synced_at?: string
+          synced_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          allocation_id?: number
+          created_at?: string
+          environment?: string
+          id?: string
+          marketplace_external_id?: number | null
+          synced_at?: string
+          synced_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           card_id: string
