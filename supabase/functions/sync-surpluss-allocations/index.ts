@@ -20,6 +20,11 @@ interface SurplussAllocation {
   allocated_materials: AllocatedMaterial[];
 }
 
+interface SyncRequestPayload {
+  allocations: SurplussAllocation[];
+  environment?: string;
+}
+
 interface SyncResult {
   allocation_id: number;
   marketplace_title: string;
@@ -43,7 +48,8 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { allocations }: { allocations: SurplussAllocation[] } = await req.json();
+    const payload: SyncRequestPayload = await req.json();
+    const { allocations, environment = 'unknown' } = payload;
 
     if (!allocations || !Array.isArray(allocations)) {
       return new Response(
@@ -52,14 +58,44 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing ${allocations.length} allocations from Surpluss`);
+    // Check which allocations have already been synced
+    const allocationIds = allocations.map(a => a.id);
+    const { data: alreadySynced } = await supabase
+      .from('surpluss_allocation_sync')
+      .select('allocation_id')
+      .eq('environment', environment)
+      .in('allocation_id', allocationIds);
+
+    const syncedSet = new Set((alreadySynced || []).map(r => r.allocation_id));
+    const newAllocations = allocations.filter(a => !syncedSet.has(a.id));
+
+    if (newAllocations.length === 0) {
+      console.log('All allocations have already been synced');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          summary: {
+            total_processed: 0,
+            allocations_created: 0,
+            allocations_updated: 0,
+            failed: 0,
+            skipped: allocations.length
+          },
+          results: [],
+          message: 'All allocations have already been synced'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Processing ${newAllocations.length} new allocations (${syncedSet.size} already synced)`);
 
     const results: SyncResult[] = [];
     let totalCreated = 0;
     let totalUpdated = 0;
     let totalFailed = 0;
 
-    for (const allocation of allocations) {
+    for (const allocation of newAllocations) {
       const result: SyncResult = {
         allocation_id: allocation.id,
         marketplace_title: allocation.marketplace_event_title,
@@ -235,6 +271,15 @@ serve(async (req) => {
           result.materials_processed = (result.materials_processed || 0) + 1;
         }
 
+        // Record the allocation as synced
+        await supabase
+          .from('surpluss_allocation_sync')
+          .insert({
+            allocation_id: allocation.id,
+            environment,
+            marketplace_external_id: externalMarketplaceId
+          });
+
         results.push(result);
 
       } catch (error) {
@@ -252,10 +297,11 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         summary: {
-          total_processed: allocations.length,
+          total_processed: newAllocations.length,
           allocations_created: totalCreated,
           allocations_updated: totalUpdated,
-          failed: totalFailed
+          failed: totalFailed,
+          skipped: syncedSet.size
         },
         results
       }),
