@@ -21,6 +21,7 @@ interface DistributionReport {
   allocated_total: number;
   api_response_status: number | null;
   api_response_body: any;
+  request_payload: any;
   reported_at: string;
   created_at: string;
 }
@@ -236,8 +237,18 @@ export const DistributionReportsViewer = () => {
               </div>
             </div>
             <div>
+              <Label className="text-muted-foreground">Request Payload (Sent to API)</Label>
+              <ScrollArea className="h-48 mt-2">
+                <pre className="text-xs bg-muted p-3 rounded-lg overflow-auto">
+                  {selectedReport?.request_payload 
+                    ? JSON.stringify(selectedReport.request_payload, null, 2)
+                    : '(No request payload recorded)'}
+                </pre>
+              </ScrollArea>
+            </div>
+            <div>
               <Label className="text-muted-foreground">API Response</Label>
-              <ScrollArea className="h-60 mt-2">
+              <ScrollArea className="h-48 mt-2">
                 <pre className="text-xs bg-muted p-3 rounded-lg overflow-auto">
                   {JSON.stringify(selectedReport?.api_response_body, null, 2)}
                 </pre>
