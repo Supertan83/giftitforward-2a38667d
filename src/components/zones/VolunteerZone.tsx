@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCheck, QrCode, Clock, Scan, Loader2, MapPin, UserX, Users } from 'lucide-react';
+import { UserCheck, QrCode, Clock, Scan, Loader2, MapPin, UserX, Users, LogIn, ShoppingBag, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
@@ -16,8 +16,24 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 type ActionMode = 'check-in' | 'check-out';
+type VolunteerZoneType = 'entrance' | 'marketplace' | 'exit';
+
+const zoneOptions: { value: VolunteerZoneType; label: string; icon: React.ElementType }[] = [
+  { value: 'entrance', label: 'Entrance', icon: LogIn },
+  { value: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+  { value: 'exit', label: 'Exit', icon: LogOut },
+];
 
 export const VolunteerZone = () => {
   const [showScanner, setShowScanner] = useState(false);
@@ -29,6 +45,11 @@ export const VolunteerZone = () => {
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
+  
+  // Zone assignment dialog state
+  const [showZoneDialog, setShowZoneDialog] = useState(false);
+  const [scannedCode, setScannedCode] = useState<string>('');
+  const [selectedZone, setSelectedZone] = useState<VolunteerZoneType>('entrance');
 
   const { data: volunteerCards = [], isLoading } = useVolunteerQRCards();
   const { checkInVolunteer, checkOutVolunteer } = useVolunteerCardOperations();
@@ -58,42 +79,71 @@ export const VolunteerZone = () => {
       .slice(0, 5);
   }, [volunteerCards, selectedMarketplaceId]);
 
-  const handleScan = useCallback(async (code: string) => {
+  const handleScan = useCallback((code: string) => {
     setShowScanner(false);
+    
+    if (actionMode === 'check-in') {
+      // Show zone assignment dialog for check-in
+      setScannedCode(code);
+      setShowZoneDialog(true);
+    } else {
+      // Direct check-out
+      processCheckOut(code);
+    }
+  }, [actionMode]);
+
+  const processCheckIn = useCallback(async () => {
+    setShowZoneDialog(false);
     setIsProcessing(true);
     
     try {
-      if (actionMode === 'check-in') {
-        await checkInVolunteer.mutateAsync({
-          uniqueId: code,
-          marketplaceId: selectedMarketplaceId || undefined
-        });
-        setFeedback({
-          type: 'success',
-          title: 'Volunteer Checked In!',
-          subtitle: 'Attendance recorded successfully',
-        });
-      } else {
-        const result = await checkOutVolunteer.mutateAsync(code);
-        const surveySentMessage = result.surveySent 
-          ? 'Survey email sent!' 
-          : 'Hours logged successfully';
-        setFeedback({
-          type: 'success',
-          title: 'Volunteer Checked Out!',
-          subtitle: surveySentMessage,
-        });
-      }
+      await checkInVolunteer.mutateAsync({
+        uniqueId: scannedCode,
+        marketplaceId: selectedMarketplaceId || undefined,
+        assignedZone: selectedZone
+      });
+      
+      const zoneLabel = zoneOptions.find(z => z.value === selectedZone)?.label || selectedZone;
+      setFeedback({
+        type: 'success',
+        title: 'Volunteer Checked In!',
+        subtitle: `Assigned to ${zoneLabel}`,
+      });
     } catch (error) {
       setFeedback({
         type: 'error',
-        title: actionMode === 'check-in' ? 'Check-In Failed' : 'Check-Out Failed',
+        title: 'Check-In Failed',
+        subtitle: error instanceof Error ? error.message : 'Please try again',
+      });
+    } finally {
+      setIsProcessing(false);
+      setScannedCode('');
+    }
+  }, [checkInVolunteer, scannedCode, selectedMarketplaceId, selectedZone]);
+
+  const processCheckOut = useCallback(async (code: string) => {
+    setIsProcessing(true);
+    
+    try {
+      const result = await checkOutVolunteer.mutateAsync(code);
+      const surveySentMessage = result.surveySent 
+        ? 'Survey email sent!' 
+        : 'Hours logged successfully';
+      setFeedback({
+        type: 'success',
+        title: 'Volunteer Checked Out!',
+        subtitle: surveySentMessage,
+      });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        title: 'Check-Out Failed',
         subtitle: error instanceof Error ? error.message : 'Please try again',
       });
     } finally {
       setIsProcessing(false);
     }
-  }, [actionMode, checkInVolunteer, checkOutVolunteer, selectedMarketplaceId]);
+  }, [checkOutVolunteer]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -301,6 +351,60 @@ export const VolunteerZone = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Zone Assignment Dialog */}
+      <Dialog open={showZoneDialog} onOpenChange={setShowZoneDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Volunteer Zone</DialogTitle>
+            <DialogDescription>
+              Select which zone this volunteer will work in today.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Scanned Card</Label>
+              <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                <QrCode className="w-4 h-4 text-muted-foreground" />
+                <span className="font-mono text-sm">{scannedCode}</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Assign to Zone</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {zoneOptions.map((zone) => {
+                  const Icon = zone.icon;
+                  const isSelected = selectedZone === zone.value;
+                  return (
+                    <Button
+                      key={zone.value}
+                      variant={isSelected ? 'default' : 'outline'}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                      onClick={() => setSelectedZone(zone.value)}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="text-xs">{zone.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowZoneDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={processCheckIn} disabled={isProcessing}>
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <UserCheck className="w-4 h-4 mr-2" />
+              )}
+              Confirm Check-In
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Scanner Modal */}
       <QRScanner

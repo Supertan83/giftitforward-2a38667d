@@ -1144,7 +1144,11 @@ export const useVolunteerCardOperations = () => {
   });
 
   const checkInVolunteer = useMutation({
-    mutationFn: async ({ uniqueId, marketplaceId }: { uniqueId: string; marketplaceId?: string }) => {
+    mutationFn: async ({ uniqueId, marketplaceId, assignedZone }: { 
+      uniqueId: string; 
+      marketplaceId?: string;
+      assignedZone?: 'entrance' | 'marketplace' | 'exit';
+    }) => {
       const { data: card, error: findError } = await supabase
         .from('volunteer_qr_cards')
         .select('*')
@@ -1161,7 +1165,8 @@ export const useVolunteerCardOperations = () => {
         .update({
           status: 'checked_in',
           checked_in_at: now,
-          marketplace_id: marketplaceId || null
+          marketplace_id: marketplaceId || null,
+          assigned_zone: assignedZone || null
         })
         .eq('id', card.id);
 
@@ -1174,7 +1179,7 @@ export const useVolunteerCardOperations = () => {
         check_in_time: now
       });
 
-      return { cardId: card.id, checkedInAt: now };
+      return { cardId: card.id, checkedInAt: now, assignedZone };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
