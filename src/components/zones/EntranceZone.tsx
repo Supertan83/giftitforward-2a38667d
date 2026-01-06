@@ -9,15 +9,11 @@ import { StatCard } from '@/components/StatCard';
 import { BeneficiaryInfoForm, BeneficiaryInfo } from '@/components/BeneficiaryInfoForm';
 import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { QRCard } from '@/types';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+interface EntranceZoneProps {
+  selectedMarketplaceId: string;
+}
 
-export const EntranceZone = () => {
+export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
   const [showScanner, setShowScanner] = useState(false);
   const [showBeneficiaryForm, setShowBeneficiaryForm] = useState(false);
   const [scannedCardId, setScannedCardId] = useState<string>('');
@@ -29,14 +25,13 @@ export const EntranceZone = () => {
   } | null>(null);
   const [lastActivatedCard, setLastActivatedCard] = useState<QRCard | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
 
   const { data: qrCards = [], isLoading } = useQRCards();
   const { activateCard } = useCardOperations();
-  const { data: marketplaces = [], isLoading: isLoadingMarketplaces } = useMarketplaces();
+  const { data: marketplaces = [] } = useMarketplaces();
 
-  // Filter to show only upcoming or active marketplaces
-  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
+  // Get selected marketplace details
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
   // Calculate stats - all cards and marketplace-specific
   const stats = useMemo(() => {
@@ -116,8 +111,6 @@ export const EntranceZone = () => {
     }
   }, [activateCard, scannedCardId, selectedMarketplaceId]);
 
-  const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
-
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
       {/* Header */}
@@ -136,56 +129,6 @@ export const EntranceZone = () => {
         <p className="text-sm text-muted-foreground mt-0.5 md:mt-1">
           Check-in beneficiaries and activate their QR cards
         </p>
-      </motion.div>
-
-      {/* Marketplace Selector */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="mb-4 md:mb-6"
-      >
-        <div className="bg-card rounded-xl border border-border p-3 md:p-4 shadow-card">
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Select Marketplace</span>
-          </div>
-          <Select
-            value={selectedMarketplaceId}
-            onValueChange={setSelectedMarketplaceId}
-            disabled={isLoadingMarketplaces}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Choose marketplace..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableMarketplaces.map((marketplace) => (
-                <SelectItem key={marketplace.id} value={marketplace.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{marketplace.name}</span>
-                    {marketplace.location && (
-                      <span className="text-muted-foreground text-xs">
-                        ({marketplace.location})
-                      </span>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-              {availableMarketplaces.length === 0 && (
-                <SelectItem value="none" disabled>
-                  No marketplaces available
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-          {selectedMarketplace && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {selectedMarketplace.event_date 
-                ? `Event date: ${new Date(selectedMarketplace.event_date).toLocaleDateString()}`
-                : 'No date set'}
-            </p>
-          )}
-        </div>
       </motion.div>
 
       {/* Stats */}

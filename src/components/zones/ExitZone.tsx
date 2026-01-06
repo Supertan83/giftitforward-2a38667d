@@ -7,7 +7,11 @@ import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
 import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
 
-export const ExitZone = () => {
+interface ExitZoneProps {
+  selectedMarketplaceId: string;
+}
+
+export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
   const [showScanner, setShowScanner] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'warning';
@@ -23,8 +27,12 @@ export const ExitZone = () => {
   const { data: qrCards = [], isLoading } = useQRCards();
   const { checkoutCard, findCardByUniqueId } = useCardOperations();
 
-  const checkedOutToday = qrCards.filter(c => c.status === 'checked_out').length;
-  const activeCards = qrCards.filter(c => c.status === 'active').length;
+  // Filter stats by marketplace if selected
+  const filteredCards = selectedMarketplaceId 
+    ? qrCards.filter(c => c.marketplaceId === selectedMarketplaceId)
+    : qrCards;
+  const checkedOutToday = filteredCards.filter(c => c.status === 'checked_out').length;
+  const activeCards = filteredCards.filter(c => c.status === 'active').length;
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
