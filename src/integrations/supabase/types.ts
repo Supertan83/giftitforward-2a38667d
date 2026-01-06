@@ -905,6 +905,48 @@ export type Database = {
         }
         Relationships: []
       }
+      surpluss_distribution_reports: {
+        Row: {
+          allocated_total: number
+          allocation_id: number
+          api_response_body: Json | null
+          api_response_status: number | null
+          created_at: string
+          distributed_total: number
+          environment: string
+          id: string
+          marketplace_external_id: number | null
+          reported_at: string
+          updated_at: string
+        }
+        Insert: {
+          allocated_total?: number
+          allocation_id: number
+          api_response_body?: Json | null
+          api_response_status?: number | null
+          created_at?: string
+          distributed_total?: number
+          environment?: string
+          id?: string
+          marketplace_external_id?: number | null
+          reported_at?: string
+          updated_at?: string
+        }
+        Update: {
+          allocated_total?: number
+          allocation_id?: number
+          api_response_body?: Json | null
+          api_response_status?: number | null
+          created_at?: string
+          distributed_total?: number
+          environment?: string
+          id?: string
+          marketplace_external_id?: number | null
+          reported_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           card_id: string
