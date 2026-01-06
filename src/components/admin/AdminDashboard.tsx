@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -61,6 +61,7 @@ export const AdminDashboard = () => {
     name: string;
   } | null>(null);
   const [deleteInput, setDeleteInput] = useState('');
+  const [expandedSection, setExpandedSection] = useState<'volunteer' | 'beneficiary' | 'admin' | null>(null);
   const navigate = useNavigate();
   const {
     signOut
@@ -684,222 +685,291 @@ export const AdminDashboard = () => {
 
 
         {/* Volunteer Apps Section */}
-        <div className="mb-6 md:mb-8">
-          <h2 className="text-lg font-display font-semibold mb-3 text-muted-foreground">Volunteer Apps</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('pending-volunteers')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors shrink-0">
-                  <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-orange-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Pending Volunteers</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Approve volunteer applications</p>
-                </div>
+        <div className="mb-4 md:mb-6">
+          <button 
+            onClick={() => setExpandedSection(expandedSection === 'volunteer' ? null : 'volunteer')}
+            className="w-full flex items-center justify-between p-3 md:p-4 bg-card rounded-xl border border-border hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                <UserPlus className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
               </div>
-            </motion.button>
+              <h2 className="text-base md:text-lg font-display font-semibold">Volunteer Apps</h2>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">5</span>
+            </div>
+            {expandedSection === 'volunteer' ? (
+              <ChevronDown className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+          </button>
+          {expandedSection === 'volunteer' && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }} 
+              animate={{ opacity: 1, height: 'auto' }} 
+              exit={{ opacity: 0, height: 0 }}
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mt-3"
+            >
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('pending-volunteers')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors shrink-0">
+                    <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-orange-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Pending Volunteers</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Approve volunteer applications</p>
+                  </div>
+                </div>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('volunteer-qr-cards')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors shrink-0">
-                  <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('volunteer-qr-cards')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors shrink-0">
+                    <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Volunteer QR Cards</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View all volunteer & family QR cards</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Volunteer QR Cards</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View all volunteer & family QR cards</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('training-completion')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
-                  <Award className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('training-completion')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                    <Award className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Training Completion</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View certificate status</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Training Completion</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View certificate status</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => navigate('/training')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors shrink-0">
-                  <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => navigate('/training')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors shrink-0">
+                    <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Training Module</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Preview & edit CE training slides</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Training Module</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Preview & edit CE training slides</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('training-assessments')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors shrink-0">
-                  <FileQuestion className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('training-assessments')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors shrink-0">
+                    <FileQuestion className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Training Assessments</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Create training knowledge assessments</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Training Assessments</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Create training knowledge assessments</p>
-                </div>
-              </div>
-            </motion.button>
-          </div>
+              </motion.button>
+            </motion.div>
+          )}
         </div>
 
         {/* Beneficiary Apps Section */}
-        <div className="mb-6 md:mb-8">
-          <h2 className="text-lg font-display font-semibold mb-3 text-muted-foreground">Beneficiary Apps</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 md:gap-4">
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('qr-generator')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary-soft flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
-                  <QrCode className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Generate QR Cards</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Create and print new beneficiary cards</p>
-                </div>
+        <div className="mb-4 md:mb-6">
+          <button 
+            onClick={() => setExpandedSection(expandedSection === 'beneficiary' ? null : 'beneficiary')}
+            className="w-full flex items-center justify-between p-3 md:p-4 bg-card rounded-xl border border-border hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-primary-soft flex items-center justify-center">
+                <QrCode className="w-4 h-4 md:w-5 md:h-5 text-primary" />
               </div>
-            </motion.button>
+              <h2 className="text-base md:text-lg font-display font-semibold">Beneficiary Apps</h2>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">6</span>
+            </div>
+            {expandedSection === 'beneficiary' ? (
+              <ChevronDown className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+          </button>
+          {expandedSection === 'beneficiary' && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }} 
+              animate={{ opacity: 1, height: 'auto' }} 
+              exit={{ opacity: 0, height: 0 }}
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mt-3"
+            >
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('qr-generator')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary-soft flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
+                    <QrCode className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Generate QR Cards</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Create and print new beneficiary cards</p>
+                  </div>
+                </div>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('partner-registrations')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-pink-500/10 flex items-center justify-center group-hover:bg-pink-500/20 transition-colors shrink-0">
-                  <ClipboardList className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('partner-registrations')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-pink-500/10 flex items-center justify-center group-hover:bg-pink-500/20 transition-colors shrink-0">
+                    <ClipboardList className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Dubai Holdings</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View event registrations & dependents</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Dubai Holdings</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View event registrations & dependents</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('marketplaces')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors shrink-0">
-                  <Store className="w-5 h-5 md:w-6 md:h-6 text-amber-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('marketplaces')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors shrink-0">
+                    <Store className="w-5 h-5 md:w-6 md:h-6 text-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Marketplaces</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Manage distribution events</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Marketplaces</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Manage distribution events</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('marketplace-reports')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors shrink-0">
-                  <PieChart className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('marketplace-reports')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors shrink-0">
+                    <PieChart className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Marketplace Reports</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Detailed insights per marketplace</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Marketplace Reports</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Detailed insights per marketplace</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('marketplace-sync')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors shrink-0">
-                  <RefreshCw className="w-5 h-5 md:w-6 md:h-6 text-rose-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('marketplace-sync')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors shrink-0">
+                    <RefreshCw className="w-5 h-5 md:w-6 md:h-6 text-rose-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Sync & Reset Cards</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Archive data between marketplaces</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Sync & Reset Cards</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Archive data between marketplaces</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={async () => {
-              toast({ title: 'Running auto-unblock...', description: 'Unblocking cards from previous days' });
-              try {
-                const { data, error } = await supabase.functions.invoke('auto-unblock-cards');
-                if (error) throw error;
-                toast({ title: 'Auto-Unblock Complete', description: `${data?.unblocked || 0} cards unblocked successfully` });
-              } catch (error) {
-                toast({ title: 'Unblock Failed', description: error instanceof Error ? error.message : 'Failed to run auto-unblock', variant: 'destructive' });
-              }
-            }} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-warning/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-warning/10 flex items-center justify-center group-hover:bg-warning/20 transition-colors shrink-0">
-                  <Unlock className="w-5 h-5 md:w-6 md:h-6 text-warning" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={async () => {
+                toast({ title: 'Running auto-unblock...', description: 'Unblocking cards from previous days' });
+                try {
+                  const { data, error } = await supabase.functions.invoke('auto-unblock-cards');
+                  if (error) throw error;
+                  toast({ title: 'Auto-Unblock Complete', description: `${data?.unblocked || 0} cards unblocked successfully` });
+                } catch (error) {
+                  toast({ title: 'Unblock Failed', description: error instanceof Error ? error.message : 'Failed to run auto-unblock', variant: 'destructive' });
+                }
+              }} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-warning/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-warning/10 flex items-center justify-center group-hover:bg-warning/20 transition-colors shrink-0">
+                    <Unlock className="w-5 h-5 md:w-6 md:h-6 text-warning" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Auto-Unblock Cards</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Reset all previous day beneficiary cards</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Auto-Unblock Cards</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Reset all previous day beneficiary cards</p>
-                </div>
-              </div>
-            </motion.button>
-          </div>
+              </motion.button>
+            </motion.div>
+          )}
         </div>
 
         {/* Admin Apps Section */}
-        <div className="mb-6 md:mb-8">
-          <h2 className="text-lg font-display font-semibold mb-3 text-muted-foreground">Admin Apps</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('inventory')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors shrink-0">
-                  <Package className="w-5 h-5 md:w-6 md:h-6 text-accent-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Manage Inventory</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Add and manage item types</p>
-                </div>
+        <div className="mb-4 md:mb-6">
+          <button 
+            onClick={() => setExpandedSection(expandedSection === 'admin' ? null : 'admin')}
+            className="w-full flex items-center justify-between p-3 md:p-4 bg-card rounded-xl border border-border hover:border-primary/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Users className="w-4 h-4 md:w-5 md:h-5 text-violet-500" />
               </div>
-            </motion.button>
+              <h2 className="text-base md:text-lg font-display font-semibold">Admin Apps</h2>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">5</span>
+            </div>
+            {expandedSection === 'admin' ? (
+              <ChevronDown className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+          </button>
+          {expandedSection === 'admin' && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }} 
+              animate={{ opacity: 1, height: 'auto' }} 
+              exit={{ opacity: 0, height: 0 }}
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mt-3"
+            >
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('inventory')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors shrink-0">
+                    <Package className="w-5 h-5 md:w-6 md:h-6 text-accent-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Manage Inventory</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Add and manage item types</p>
+                  </div>
+                </div>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('allocations')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors shrink-0">
-                  <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-teal-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('allocations')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors shrink-0">
+                    <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-teal-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Allocate Items</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Assign inventory to marketplaces</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Allocate Items</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Assign inventory to marketplaces</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('statistics')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
-                  <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('statistics')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                    <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Live Statistics</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View real-time distribution analytics</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Live Statistics</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View real-time distribution analytics</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('users')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors shrink-0">
-                  <Users className="w-5 h-5 md:w-6 md:h-6 text-violet-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('users')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors shrink-0">
+                    <Users className="w-5 h-5 md:w-6 md:h-6 text-violet-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Manage Users</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Create and manage volunteer accounts</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Manage Users</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">Create and manage volunteer accounts</p>
-                </div>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('webhooks')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
-              <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors shrink-0">
-                  <Webhook className="w-5 h-5 md:w-6 md:h-6 text-cyan-500" />
+              <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setCurrentView('webhooks')} className="bg-card rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-card text-left hover:border-primary/50 transition-colors group">
+                <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left gap-2 md:gap-3">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors shrink-0">
+                    <Webhook className="w-5 h-5 md:w-6 md:h-6 text-cyan-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display font-semibold text-sm md:text-base">Webhook Events</h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View incoming webhook logs</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-sm md:text-base">Webhook Events</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 hidden md:block">View incoming webhook logs</p>
-                </div>
-              </div>
-            </motion.button>
-          </div>
+              </motion.button>
+            </motion.div>
+          )}
         </div>
 
         {/* Inventory Section */}
