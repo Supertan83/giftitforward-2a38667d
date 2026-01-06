@@ -6,7 +6,6 @@ import { QRScanner } from '@/components/QRScanner';
 import { CardStatusDisplay } from '@/components/CardStatusDisplay';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { BeneficiaryInfoForm, BeneficiaryInfo } from '@/components/BeneficiaryInfoForm';
 import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { QRCard } from '@/types';
 interface EntranceZoneProps {
@@ -15,8 +14,6 @@ interface EntranceZoneProps {
 
 export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
   const [showScanner, setShowScanner] = useState(false);
-  const [showBeneficiaryForm, setShowBeneficiaryForm] = useState(false);
-  const [scannedCardId, setScannedCardId] = useState<string>('');
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'warning';
     title: string;
@@ -65,20 +62,14 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
     };
   }, [qrCards, selectedMarketplaceId]);
 
-  const handleScan = useCallback((code: string) => {
+  const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
-    setScannedCardId(code);
-    setShowBeneficiaryForm(true);
-  }, []);
-
-  const handleBeneficiarySubmit = useCallback(async (info: BeneficiaryInfo) => {
-    setShowBeneficiaryForm(false);
     setIsProcessing(true);
     
     try {
       const result = await activateCard.mutateAsync({
-        uniqueId: scannedCardId,
-        beneficiaryInfo: info,
+        uniqueId: code,
+        beneficiaryInfo: {},
         marketplaceId: selectedMarketplaceId || undefined
       });
       
@@ -107,9 +98,8 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
       });
     } finally {
       setIsProcessing(false);
-      setScannedCardId('');
     }
-  }, [activateCard, scannedCardId, selectedMarketplaceId]);
+  }, [activateCard, selectedMarketplaceId]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -228,17 +218,6 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
         onClose={() => setShowScanner(false)}
         onScan={handleScan}
         title="Activate QR Card"
-      />
-
-      {/* Beneficiary Info Form */}
-      <BeneficiaryInfoForm
-        isOpen={showBeneficiaryForm}
-        onClose={() => {
-          setShowBeneficiaryForm(false);
-          setScannedCardId('');
-        }}
-        onSubmit={handleBeneficiarySubmit}
-        cardId={scannedCardId}
       />
 
       {/* Feedback Overlay */}
