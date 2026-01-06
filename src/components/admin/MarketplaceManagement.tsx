@@ -288,7 +288,13 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium truncate">{marketplace.name}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {marketplace.outreach_partner && (
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {marketplace.outreach_partner}
+                          </span>
+                        )}
                         {marketplace.location && (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
