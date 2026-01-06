@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,16 +32,18 @@ const createMarketplaceSchema = z.object({
   location: z.string().max(200).optional(),
   event_date: z.string().optional(),
   status: z.enum(['upcoming', 'active', 'completed']),
+  outreach_partner: z.string().max(200).optional(),
 });
 
 export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingMarketplace, setEditingMarketplace] = useState<{ id: string; name: string; location: string; eventDate: string; status: 'upcoming' | 'active' | 'completed' } | null>(null);
+  const [editingMarketplace, setEditingMarketplace] = useState<{ id: string; name: string; location: string; eventDate: string; status: 'upcoming' | 'active' | 'completed'; outreachPartner: string } | null>(null);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [status, setStatus] = useState<'upcoming' | 'active' | 'completed'>('upcoming');
+  const [outreachPartner, setOutreachPartner] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: marketplaces = [], isLoading } = useMarketplaces();
@@ -50,13 +52,14 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const updateMarketplace = useUpdateMarketplace();
   const { toast } = useToast();
 
-  const handleEdit = (marketplace: { id: string; name: string; location: string | null; event_date: string | null; status: string }) => {
+  const handleEdit = (marketplace: { id: string; name: string; location: string | null; event_date: string | null; status: string; outreach_partner: string | null }) => {
     setEditingMarketplace({
       id: marketplace.id,
       name: marketplace.name,
       location: marketplace.location || '',
       eventDate: marketplace.event_date || '',
       status: marketplace.status as 'upcoming' | 'active' | 'completed',
+      outreachPartner: marketplace.outreach_partner || '',
     });
     setShowEditModal(true);
   };
@@ -69,7 +72,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       name: editingMarketplace.name, 
       location: editingMarketplace.location || undefined, 
       event_date: editingMarketplace.eventDate || undefined, 
-      status: editingMarketplace.status 
+      status: editingMarketplace.status,
+      outreach_partner: editingMarketplace.outreachPartner || undefined
     });
     
     if (!result.success) {
@@ -90,6 +94,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         location: editingMarketplace.location || null,
         event_date: editingMarketplace.eventDate || null,
         status: editingMarketplace.status,
+        outreach_partner: editingMarketplace.outreachPartner || null,
       });
       toast({
         title: 'Marketplace Updated',
@@ -113,7 +118,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       name, 
       location: location || undefined, 
       event_date: eventDate || undefined, 
-      status 
+      status,
+      outreach_partner: outreachPartner || undefined
     });
     
     if (!result.success) {
@@ -133,6 +139,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         location: location || null,
         event_date: eventDate || null,
         status,
+        outreach_partner: outreachPartner || null,
       });
       toast({
         title: 'Marketplace Created',
@@ -143,6 +150,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       setLocation('');
       setEventDate('');
       setStatus('upcoming');
+      setOutreachPartner('');
     } catch (error) {
       toast({
         title: 'Failed to Create Marketplace',
@@ -372,6 +380,20 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="outreach_partner">Outreach Partner</Label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="outreach_partner"
+                  placeholder="e.g., Partner Organization Name"
+                  value={outreachPartner}
+                  onChange={(e) => setOutreachPartner(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>Status</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger>
@@ -445,6 +467,20 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   value={editingMarketplace.eventDate}
                   onChange={(e) => setEditingMarketplace({ ...editingMarketplace, eventDate: e.target.value })}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-outreach_partner">Outreach Partner</Label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="edit-outreach_partner"
+                    placeholder="e.g., Partner Organization Name"
+                    value={editingMarketplace.outreachPartner}
+                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, outreachPartner: e.target.value })}
+                    className="pl-10"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
