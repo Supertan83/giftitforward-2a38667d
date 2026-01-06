@@ -78,23 +78,56 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get all volunteer QR cards to map to users
+    // Get all volunteer QR cards to map to users (including assignment info)
     const { data: volunteerCards, error: cardsError } = await supabaseAdmin
       .from('volunteer_qr_cards')
-      .select('unique_id, volunteer_id')
+      .select('unique_id, volunteer_id, assigned_zone, marketplace_id, status')
       .not('volunteer_id', 'is', null)
 
     if (cardsError) {
       console.error('Error fetching volunteer cards:', cardsError);
     }
 
-    // Create a map of user_id to QR codes (a user can have multiple family member cards)
-    const userQRCards = new Map<string, string[]>();
+    // Get pending_volunteers to map to auth users
+    const { data: pendingVolunteers, error: pvError } = await supabaseAdmin
+      .from('pending_volunteers')
+      .select('id, created_user_id')
+      .not('created_user_id', 'is', null)
+
+    if (pvError) {
+      console.error('Error fetching pending volunteers:', pvError);
+    }
+
+    // Create a map of pending_volunteer_id to auth_user_id
+    const pvToAuthUser = new Map<string, string>();
+    pendingVolunteers?.forEach(pv => {
+      if (pv.created_user_id) {
+        pvToAuthUser.set(pv.id, pv.created_user_id);
+      }
+    });
+
+    // Create a map of auth_user_id to QR card info
+    interface QRCardInfo {
+      unique_id: string;
+      assigned_zone: string | null;
+      marketplace_id: string | null;
+      status: string;
+    }
+    const userQRCards = new Map<string, QRCardInfo[]>();
     volunteerCards?.forEach(card => {
       if (card.volunteer_id) {
-        const existing = userQRCards.get(card.volunteer_id) || [];
-        existing.push(card.unique_id);
-        userQRCards.set(card.volunteer_id, existing);
+        // Get the auth user id from pending_volunteers
+        const authUserId = pvToAuthUser.get(card.volunteer_id);
+        if (authUserId) {
+          const existing = userQRCards.get(authUserId) || [];
+          existing.push({
+            unique_id: card.unique_id,
+            assigned_zone: card.assigned_zone,
+            marketplace_id: card.marketplace_id,
+            status: card.status,
+          });
+          userQRCards.set(authUserId, existing);
+        }
       }
     });
 
@@ -107,12 +140,27 @@ Deno.serve(async (req) => {
       first_name: string | null; 
       last_name: string | null;
       qr_codes: string[];
+      pending_volunteer_id: string | null;
+      assigned_zone: string | null;
+      marketplace_id: string | null;
+      volunteer_status: string | null;
     }>();
+
+    // Create reverse map: auth_user_id to pending_volunteer_id
+    const authUserToPV = new Map<string, string>();
+    pendingVolunteers?.forEach(pv => {
+      if (pv.created_user_id) {
+        authUserToPV.set(pv.created_user_id, pv.id);
+      }
+    });
     
     roles?.forEach(role => {
       const authUser = authUsers.find(u => u.id === role.user_id);
       const existing = userMap.get(role.user_id);
-      const qrCodes = userQRCards.get(role.user_id) || [];
+      const qrCardInfos = userQRCards.get(role.user_id) || [];
+      const qrCodes = qrCardInfos.map(c => c.unique_id);
+      const primaryCard = qrCardInfos[0] || null;
+      const pendingVolunteerId = authUserToPV.get(role.user_id) || null;
       
       // If user not in map, or if this role is 'admin' (higher priority), add/update
       if (!existing || role.role === 'admin') {
@@ -124,6 +172,10 @@ Deno.serve(async (req) => {
           first_name: authUser?.user_metadata?.first_name || null,
           last_name: authUser?.user_metadata?.last_name || null,
           qr_codes: qrCodes,
+          pending_volunteer_id: pendingVolunteerId,
+          assigned_zone: primaryCard?.assigned_zone || null,
+          marketplace_id: primaryCard?.marketplace_id || null,
+          volunteer_status: primaryCard?.status || null,
         });
       }
     });

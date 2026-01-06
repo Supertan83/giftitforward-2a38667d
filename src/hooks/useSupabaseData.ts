@@ -776,6 +776,10 @@ export interface UserWithRole {
   first_name: string | null;
   last_name: string | null;
   qr_codes: string[];
+  pending_volunteer_id: string | null;
+  assigned_zone: 'entrance' | 'marketplace' | 'exit' | null;
+  marketplace_id: string | null;
+  volunteer_status: string | null;
 }
 
 export const useUsers = () => {
@@ -809,6 +813,10 @@ export const useUsers = () => {
         first_name: string | null; 
         last_name: string | null;
         qr_codes?: string[];
+        pending_volunteer_id?: string | null;
+        assigned_zone?: string | null;
+        marketplace_id?: string | null;
+        volunteer_status?: string | null;
       }) => ({
         id: user.id,
         email: user.email,
@@ -817,6 +825,10 @@ export const useUsers = () => {
         first_name: user.first_name,
         last_name: user.last_name,
         qr_codes: user.qr_codes || [],
+        pending_volunteer_id: user.pending_volunteer_id || null,
+        assigned_zone: user.assigned_zone as 'entrance' | 'marketplace' | 'exit' | null,
+        marketplace_id: user.marketplace_id || null,
+        volunteer_status: user.volunteer_status || null,
       }));
     }
   });
@@ -989,6 +1001,57 @@ export const useGenerateVolunteerQR = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
       queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+};
+
+// Update volunteer assignment (zone and marketplace)
+export const useUpdateVolunteerAssignment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      pendingVolunteerId, 
+      assignedZone, 
+      marketplaceId,
+      status
+    }: { 
+      pendingVolunteerId: string; 
+      assignedZone?: 'entrance' | 'marketplace' | 'exit' | null; 
+      marketplaceId?: string | null;
+      status?: 'inactive' | 'checked_in' | 'checked_out';
+    }) => {
+      // Find the volunteer QR card for this pending volunteer
+      const { data: qrCard, error: findError } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id')
+        .eq('volunteer_id', pendingVolunteerId)
+        .maybeSingle();
+
+      if (findError) throw new SafeError(mapDatabaseError(findError), findError);
+      if (!qrCard) throw new SafeError('No QR card found for this volunteer');
+
+      // Build update object
+      const updateData: Record<string, unknown> = {};
+      if (assignedZone !== undefined) updateData.assigned_zone = assignedZone;
+      if (marketplaceId !== undefined) updateData.marketplace_id = marketplaceId;
+      if (status !== undefined) updateData.status = status;
+
+      // Update the QR card
+      const { data, error } = await supabase
+        .from('volunteer_qr_cards')
+        .update(updateData)
+        .eq('id', qrCard.id)
+        .select()
+        .single();
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['volunteer_check_in_status'] });
     }
   });
 };

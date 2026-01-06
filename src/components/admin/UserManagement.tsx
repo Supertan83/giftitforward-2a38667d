@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, Eye } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, UserWithRole } from '@/hooks/useSupabaseData';
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, useUpdateVolunteerAssignment, useMarketplaces, UserWithRole } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
@@ -45,9 +45,11 @@ const createUserSchema = z.object({
   role: z.enum(['admin', 'volunteer', 'employee'], { required_error: 'Please select a role' }),
 });
 
+type VolunteerZone = 'entrance' | 'marketplace' | 'exit';
+
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null; qr_codes: string[] } | null>(null);
+  const [editUser, setEditUser] = useState<UserWithRole | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string } | null>(null);
   const [qrPreviewUser, setQrPreviewUser] = useState<UserWithRole | null>(null);
   const [email, setEmail] = useState('');
@@ -56,14 +58,20 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [editRole, setEditRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
+  const [editAssignedZone, setEditAssignedZone] = useState<VolunteerZone | 'none'>('none');
+  const [editMarketplaceId, setEditMarketplaceId] = useState<string>('none');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: users = [], isLoading } = useUsers();
+  const { data: marketplaces = [] } = useMarketplaces();
   const createUser = useCreateUser();
   const deleteUser = useDeleteUser();
   const updateUserRole = useUpdateUserRole();
+  const updateVolunteerAssignment = useUpdateVolunteerAssignment();
   const generateQR = useGenerateVolunteerQR();
   const { toast } = useToast();
+
+  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
 
   const handleGenerateAndPreviewQR = async (user: UserWithRole) => {
     try {
@@ -145,23 +153,39 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     }
   };
 
-  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null; qr_codes: string[] }) => {
+  const handleEditUser = (user: UserWithRole) => {
     setEditUser(user);
     setEditRole(user.role);
     setEditFirstName(user.first_name || '');
     setEditLastName(user.last_name || '');
+    setEditAssignedZone(user.assigned_zone || 'none');
+    setEditMarketplaceId(user.marketplace_id || 'none');
   };
 
   const handleUpdateRole = async () => {
     if (!editUser) return;
     
     try {
+      // Update user role and name
       await updateUserRole.mutateAsync({ 
         userId: editUser.id, 
         role: editRole,
         firstName: editFirstName.trim() || undefined,
         lastName: editLastName.trim() || undefined,
       });
+
+      // If volunteer and has a pending_volunteer_id, update zone/marketplace assignment
+      if (editRole === 'volunteer' && editUser.pending_volunteer_id) {
+        const zoneValue = editAssignedZone === 'none' ? null : editAssignedZone;
+        const marketplaceValue = editMarketplaceId === 'none' ? null : editMarketplaceId;
+        
+        await updateVolunteerAssignment.mutateAsync({
+          pendingVolunteerId: editUser.pending_volunteer_id,
+          assignedZone: zoneValue,
+          marketplaceId: marketplaceValue,
+        });
+      }
+
       toast({
         title: 'User Updated',
         description: `${editFirstName || editUser.email} has been updated`,
@@ -327,7 +351,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditUser({ id: user.id, email: user.email, role: user.role, first_name: user.first_name, last_name: user.last_name, qr_codes: user.qr_codes })}
+                      onClick={() => handleEditUser(user)}
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -513,6 +537,72 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Volunteer Assignment Section - only show for volunteers with QR codes */}
+            {editRole === 'volunteer' && editUser?.pending_volunteer_id && (
+              <>
+                <div className="border-t border-border pt-4 mt-4">
+                  <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    Volunteer Assignment
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Assigned Zone</Label>
+                  <Select value={editAssignedZone} onValueChange={(v) => setEditAssignedZone(v as VolunteerZone | 'none')}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select zone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-muted-foreground">Not assigned</span>
+                      </SelectItem>
+                      <SelectItem value="entrance">
+                        <div className="flex items-center gap-2">
+                          <LogIn className="w-4 h-4 text-primary" />
+                          Entrance
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="marketplace">
+                        <div className="flex items-center gap-2">
+                          <ShoppingBag className="w-4 h-4 text-warning" />
+                          Marketplace
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="exit">
+                        <div className="flex items-center gap-2">
+                          <LogOut className="w-4 h-4 text-destructive" />
+                          Exit
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Assigned Marketplace</Label>
+                  <Select value={editMarketplaceId} onValueChange={setEditMarketplaceId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select marketplace" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-muted-foreground">Not assigned</span>
+                      </SelectItem>
+                      {availableMarketplaces.map((mp) => (
+                        <SelectItem key={mp.id} value={mp.id}>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            {mp.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex gap-3 justify-end">
@@ -521,9 +611,9 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
             </Button>
             <Button 
               onClick={handleUpdateRole} 
-              disabled={updateUserRole.isPending}
+              disabled={updateUserRole.isPending || updateVolunteerAssignment.isPending}
             >
-              {updateUserRole.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {(updateUserRole.isPending || updateVolunteerAssignment.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Save Changes
             </Button>
           </div>
