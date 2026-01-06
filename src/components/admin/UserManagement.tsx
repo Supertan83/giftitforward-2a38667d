@@ -30,9 +30,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, UserWithRole } from '@/hooks/useSupabaseData';
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, UserWithRole } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
+import { Plus } from 'lucide-react';
 
 interface UserManagementProps {
   onBack: () => void;
@@ -61,7 +62,24 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const createUser = useCreateUser();
   const deleteUser = useDeleteUser();
   const updateUserRole = useUpdateUserRole();
+  const generateQR = useGenerateVolunteerQR();
   const { toast } = useToast();
+
+  const handleGenerateQR = async (userId: string, userName: string) => {
+    try {
+      await generateQR.mutateAsync(userId);
+      toast({
+        title: 'QR Code Generated',
+        description: `QR code created for ${userName}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Generate QR Code',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleCreate = async () => {
     setErrors({});
@@ -269,8 +287,26 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
                         onClick={() => setQrPreviewUser(user)}
+                        title="View QR codes"
                       >
                         <QrCode className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {user.role === 'volunteer' && user.qr_codes.length === 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-muted-foreground hover:text-primary"
+                        onClick={() => handleGenerateQR(user.id, user.first_name || user.email)}
+                        disabled={generateQR.isPending}
+                        title="Generate QR code"
+                      >
+                        {generateQR.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                        ) : (
+                          <Plus className="w-3 h-3 mr-1" />
+                        )}
+                        QR
                       </Button>
                     )}
                     <Badge variant={user.role === 'admin' ? 'default' : user.role === 'employee' ? 'outline' : 'secondary'}>

@@ -924,6 +924,49 @@ export const useDeleteUser = () => {
   });
 };
 
+// Generate volunteer QR code for existing user
+export const useGenerateVolunteerQR = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      // Generate unique QR code ID
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const uniqueId = `VOL-${timestamp}-${random}`;
+
+      // Check if user already has a QR card
+      const { data: existing } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id')
+        .eq('volunteer_id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        throw new SafeError('Volunteer already has a QR code assigned');
+      }
+
+      // Create the volunteer QR card
+      const { data, error } = await supabase
+        .from('volunteer_qr_cards')
+        .insert({
+          unique_id: uniqueId,
+          volunteer_id: userId,
+          status: 'inactive'
+        })
+        .select()
+        .single();
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
+      queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
+    }
+  });
+};
+
 // Marketplace Events
 interface MarketplaceEvent {
   id: string;
