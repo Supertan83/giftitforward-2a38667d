@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const ENDPOINTS = {
   staging: 'https://surpluss-server.herokuapp.com/api/common/donation-allocations',
-  production: 'https://api.thesurpluss.com/api/common/donation-allocations'
+  production: 'https://api.thesurpluss.com/api/common/donation-allocations',
 };
 
 interface FetchParams {
@@ -17,7 +17,8 @@ interface FetchParams {
   to_date?: string;
   page?: number;
   limit?: number;
-  api_key?: string; // Optional API key if needed
+  // Optional API key (prefer SURPLUSS_API_KEY secret instead of passing this from the client)
+  api_key?: string;
 }
 
 serve(async (req) => {
@@ -28,15 +29,15 @@ serve(async (req) => {
 
   try {
     const params: FetchParams = await req.json();
-    
-    const { 
-      environment = 'production', // Default to production as per docs
-      event_id, 
-      from_date, 
-      to_date, 
-      page = 1, 
+
+    const {
+      environment = 'staging',
+      event_id,
+      from_date,
+      to_date,
+      page = 1,
       limit = 50,
-      api_key
+      api_key,
     } = params;
 
     console.log('Fetching Surpluss allocations:', { environment, event_id, from_date, to_date, page, limit });
@@ -45,7 +46,7 @@ serve(async (req) => {
     if (!baseUrl) {
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid environment' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
@@ -53,104 +54,96 @@ serve(async (req) => {
     const queryParams = new URLSearchParams();
     queryParams.set('page', page.toString());
     queryParams.set('limit', limit.toString());
-    
-    if (event_id) {
-      queryParams.set('event_id', event_id.toString());
-    }
-    if (from_date) {
-      queryParams.set('from_date', from_date);
-    }
-    if (to_date) {
-      queryParams.set('to_date', to_date);
-    }
+
+    if (event_id) queryParams.set('event_id', event_id.toString());
+    if (from_date) queryParams.set('from_date', from_date);
+    if (to_date) queryParams.set('to_date', to_date);
 
     const url = `${baseUrl}?${queryParams.toString()}`;
     console.log('Requesting:', url);
 
-    // Build headers - include API key if provided
+    // Build headers - include API key if configured
     const headers: Record<string, string> = {
       'Accept': 'application/json',
-      'Content-Type': 'application/json'
     };
 
-    // Check for API key from secret or parameter
     const surplussApiKey = Deno.env.get('SURPLUSS_API_KEY') || api_key;
     if (surplussApiKey) {
+      // Try the two most common schemes (safe even if one is ignored by upstream)
       headers['Authorization'] = `Bearer ${surplussApiKey}`;
-      console.log('Using API key for authentication');
+      headers['x-api-key'] = surplussApiKey;
+      console.log('Using API key for upstream authentication');
     }
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers
-    });
-
+    const response = await fetch(url, { method: 'GET', headers });
     const responseText = await response.text();
+
     console.log('Response status:', response.status);
     console.log('Response body preview:', responseText.substring(0, 500));
 
     if (!response.ok) {
       console.error('Surpluss API error:', response.status, responseText);
-      
-      // If 401 on staging, suggest trying production
-      if (response.status === 401 && environment === 'staging') {
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Staging API returned 401 unauthorized. The staging environment may require authentication. Try switching to Production environment which is documented as a public endpoint.`,
-            hint: 'Switch to Production environment in the dropdown'
-          }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
+
+      const hint =
+        response.status === 401
+          ? (environment === 'production'
+              ? 'Production is currently returning 401. Use Staging, or configure SURPLUSS_API_KEY for Production.'
+              : 'Staging is returning 401. Configure SURPLUSS_API_KEY.')
+          : undefined;
+
+      // IMPORTANT: always return 200 so the frontend can read the error body without throwing FunctionsHttpError
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Surpluss API returned ${response.status}: ${responseText}` 
+        JSON.stringify({
+          success: false,
+          upstream_status: response.status,
+          error: `Surpluss API returned ${response.status}: ${responseText}`,
+          hint,
         }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    let data;
+    let data: unknown;
     try {
       data = JSON.parse(responseText);
     } catch {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           error: 'Failed to parse API response as JSON',
-          raw: responseText.substring(0, 200)
+          upstream_status: 200,
+          raw: responseText.substring(0, 200),
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
-    
-    console.log('Received allocations:', data.data?.length || 0, 'records');
+
+    // deno-lint-ignore no-explicit-any
+    const typed = data as any;
+    console.log('Received allocations:', typed?.data?.length || 0, 'records');
 
     return new Response(
       JSON.stringify({
         success: true,
         environment,
-        data: data.data || [],
-        meta: data.meta || {
-          current_page: page,
-          per_page: limit,
-          total: data.data?.length || 0
-        }
+        data: typed?.data || [],
+        meta: typed?.meta || {
+          page,
+          limit,
+          total: typed?.data?.length || 0,
+        },
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-
   } catch (error) {
     console.error('Error fetching Surpluss allocations:', error);
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
 });
+
