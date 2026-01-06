@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -516,7 +517,77 @@ export const AdminDashboard = () => {
           </motion.div>}
 
         {/* Item Stock Overview */}
-        
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Item Stock Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {itemTypes && itemTypes.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-3 font-medium">Icon</th>
+                        <th className="text-left py-2 px-3 font-medium">Name</th>
+                        <th className="text-left py-2 px-3 font-medium">Category</th>
+                        <th className="text-right py-2 px-3 font-medium">Warehouse Stock</th>
+                        <th className="text-right py-2 px-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemTypes.map(item => (
+                        <tr key={item.id} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-3 text-xl">{item.icon}</td>
+                          <td className="py-2 px-3 font-medium">{item.name}</td>
+                          <td className="py-2 px-3">
+                            {item.category ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                                {item.category}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3">{item.totalStock.toLocaleString()}</td>
+                          <td className="text-right py-2 px-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-7 w-7 p-0"
+                                onClick={() => setFullEditItem({
+                                  id: item.id,
+                                  name: item.name,
+                                  icon: item.icon,
+                                  totalStock: item.totalStock.toString(),
+                                  category: item.category || ''
+                                })}
+                              >
+                                ✏️
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteConfirm({ id: item.id, name: item.name })}
+                              >
+                                🗑️
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No items found</p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
 
         {/* Edit Item Dialog */}
         <Dialog open={!!fullEditItem} onOpenChange={open => !open && setFullEditItem(null)}>
