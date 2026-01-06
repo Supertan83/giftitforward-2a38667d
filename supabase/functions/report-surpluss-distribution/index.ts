@@ -115,6 +115,9 @@ serve(async (req) => {
     for (const alloc of allocations) {
       const totalDistributed = alloc.materials.reduce((sum, m) => sum + m.distributed, 0);
       const totalAllocated = alloc.materials.reduce((sum, m) => sum + m.allocated, 0);
+      
+      // Find the matching API allocation for this report
+      const matchingApiAlloc = apiAllocations.find(a => a.id === alloc.allocation_id);
 
       const { error: insertError } = await supabase
         .from('surpluss_distribution_reports')
@@ -126,6 +129,7 @@ serve(async (req) => {
           allocated_total: totalAllocated,
           api_response_status: response.status,
           api_response_body: responseJson,
+          request_payload: matchingApiAlloc ? { allocations: [matchingApiAlloc] } : null,
           reported_at: reportedAt,
         });
 
