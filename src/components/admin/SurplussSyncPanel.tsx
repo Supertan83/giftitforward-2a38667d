@@ -48,13 +48,15 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [isFetching, setIsFetching] = useState(false);
   const [isSyncing, setSyncing] = useState(false);
   const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
+  const [syncedAllocationIds, setSyncedAllocationIds] = useState<Set<number>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
   const { toast } = useToast();
 
   const fetchAllocations = async () => {
     setIsFetching(true);
-    setSyncResults([]);
+    setSkippedCount(0);
     
     try {
       const { data, error } = await supabase.functions.invoke('fetch-surpluss-allocations', {
@@ -74,12 +76,23 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
         throw new Error(data.error || 'Failed to fetch allocations');
       }
 
-      setAllocations(data.data || []);
-      setTotalRecords(data.meta?.total || data.data?.length || 0);
+      const fetchedAllocations: SurplussAllocation[] = data.data || [];
+      
+      // Filter out already synced allocations
+      const newAllocations = fetchedAllocations.filter(
+        allocation => !syncedAllocationIds.has(allocation.id)
+      );
+      const skipped = fetchedAllocations.length - newAllocations.length;
+      setSkippedCount(skipped);
+
+      setAllocations(newAllocations);
+      setTotalRecords(data.meta?.total || fetchedAllocations.length || 0);
       
       toast({
         title: 'Allocations Fetched',
-        description: `Found ${data.data?.length || 0} allocations from ${environment}`
+        description: skipped > 0 
+          ? `Found ${newAllocations.length} new allocations (${skipped} already synced)`
+          : `Found ${newAllocations.length} allocations from ${environment}`
       });
     } catch (error) {
       console.error('Error fetching allocations:', error);
@@ -117,6 +130,20 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
       }
 
       setSyncResults(data.results || []);
+      
+      // Track successfully synced allocation IDs
+      const successfulIds = (data.results || [])
+        .filter((r: SyncResult) => r.status === 'success')
+        .map((r: SyncResult) => r.allocation_id);
+      
+      setSyncedAllocationIds(prev => {
+        const newSet = new Set(prev);
+        successfulIds.forEach((id: number) => newSet.add(id));
+        return newSet;
+      });
+
+      // Remove successfully synced allocations from the list
+      setAllocations(prev => prev.filter(a => !successfulIds.includes(a.id)));
       
       toast({
         title: 'Sync Complete',
@@ -160,6 +187,16 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
           }
           return [...prev, newResult];
         });
+
+        // Track synced allocation and remove from list if successful
+        if (newResult.status === 'success') {
+          setSyncedAllocationIds(prev => {
+            const newSet = new Set(prev);
+            newSet.add(allocation.id);
+            return newSet;
+          });
+          setAllocations(prev => prev.filter(a => a.id !== allocation.id));
+        }
       }
       
       toast({
