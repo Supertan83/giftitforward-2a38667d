@@ -7,21 +7,16 @@ import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
 import { useCardOperations } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
-import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 type Mode = 'distribute' | 'return';
 
-export const MarketplaceZone = () => {
+interface MarketplaceZoneProps {
+  selectedMarketplaceId: string;
+}
+
+export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps) => {
   const [showScanner, setShowScanner] = useState(false);
-  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('distribute');
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'warning';
@@ -31,7 +26,6 @@ export const MarketplaceZone = () => {
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
   const { data: allocations = [], isLoading: loadingAllocations, refetch: refetchAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
   const { distributeItemSimple, returnItemSimple } = useCardOperations();
   const { incrementDistributed, decrementDistributed } = useAllocationOperations();
@@ -40,9 +34,6 @@ export const MarketplaceZone = () => {
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
   const totalDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
   const totalAvailable = totalAllocated - totalDistributed;
-
-  // Get active marketplaces for selection
-  const activeMarketplaces = marketplaces.filter(m => m.status === 'active' || m.status === 'upcoming');
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
@@ -131,7 +122,7 @@ export const MarketplaceZone = () => {
     }
   }, [selectedMarketplaceId, mode, allocations, totalAvailable, distributeItemSimple, returnItemSimple, incrementDistributed, decrementDistributed, refetchAllocations]);
 
-  const isLoading = loadingMarketplaces || loadingAllocations;
+  const isLoading = loadingAllocations;
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -152,28 +143,6 @@ export const MarketplaceZone = () => {
           Distribute items to beneficiaries
         </p>
       </motion.div>
-
-      {/* Marketplace Selector */}
-      <div className="mb-4">
-        <label className="text-xs md:text-sm font-medium text-muted-foreground mb-2 block">
-          Select Marketplace
-        </label>
-        <Select
-          value={selectedMarketplaceId || ''}
-          onValueChange={(value) => setSelectedMarketplaceId(value || null)}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Choose a marketplace..." />
-          </SelectTrigger>
-          <SelectContent>
-            {activeMarketplaces.map((marketplace) => (
-              <SelectItem key={marketplace.id} value={marketplace.id}>
-                {marketplace.name} {marketplace.location && `- ${marketplace.location}`}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       {selectedMarketplaceId ? (
         <>

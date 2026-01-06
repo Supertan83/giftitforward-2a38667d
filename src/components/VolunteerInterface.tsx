@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, ShoppingBag, LogOut, User } from 'lucide-react';
+import { LogIn, ShoppingBag, LogOut, User, MapPin } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { EntranceZone } from '@/components/zones/EntranceZone';
 import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
 import { ExitZone } from '@/components/zones/ExitZone';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +17,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type Zone = 'entrance' | 'marketplace' | 'exit';
 
@@ -27,16 +35,22 @@ const zones = [
 
 export const VolunteerInterface = () => {
   const [activeZone, setActiveZone] = useState<Zone>('entrance');
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
   const { user, signOut } = useAuth();
+  const { data: marketplaces = [], isLoading: isLoadingMarketplaces } = useMarketplaces();
+
+  // Filter to show only upcoming or active marketplaces
+  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
+  const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
 
   const renderZone = () => {
     switch (activeZone) {
       case 'entrance':
-        return <EntranceZone />;
+        return <EntranceZone selectedMarketplaceId={selectedMarketplaceId} />;
       case 'marketplace':
-        return <MarketplaceZone />;
+        return <MarketplaceZone selectedMarketplaceId={selectedMarketplaceId} />;
       case 'exit':
-        return <ExitZone />;
+        return <ExitZone selectedMarketplaceId={selectedMarketplaceId} />;
     }
   };
 
@@ -73,6 +87,47 @@ export const VolunteerInterface = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+        
+        {/* Global Marketplace Selector */}
+        <div className="px-4 pb-3 border-t border-border/50 pt-2">
+          <div className="flex items-center gap-2 mb-1.5">
+            <MapPin className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-medium text-muted-foreground">Active Marketplace</span>
+          </div>
+          <Select
+            value={selectedMarketplaceId}
+            onValueChange={setSelectedMarketplaceId}
+            disabled={isLoadingMarketplaces}
+          >
+            <SelectTrigger className="w-full h-9">
+              <SelectValue placeholder="Select marketplace..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMarketplaces.map((marketplace) => (
+                <SelectItem key={marketplace.id} value={marketplace.id}>
+                  <div className="flex items-center gap-2">
+                    <span>{marketplace.name}</span>
+                    {marketplace.location && (
+                      <span className="text-muted-foreground text-xs">
+                        ({marketplace.location})
+                      </span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+              {availableMarketplaces.length === 0 && (
+                <SelectItem value="none" disabled>
+                  No marketplaces available
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          {selectedMarketplace && selectedMarketplace.event_date && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {new Date(selectedMarketplace.event_date).toLocaleDateString()}
+            </p>
+          )}
         </div>
       </header>
 
