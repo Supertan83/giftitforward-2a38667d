@@ -376,12 +376,8 @@ export const AdminDashboard = () => {
         </div>
 
         {/* Per-Marketplace Breakdown - Collapsible */}
-        {marketplaceStats.length > 0 && (
-          <div className="bg-card rounded-xl border border-border overflow-hidden mb-6 md:mb-8">
-            <button
-              onClick={() => setExpandedSection(expandedSection === 'distribution' ? null : 'distribution')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-            >
+        {marketplaceStats.length > 0 && <div className="bg-card rounded-xl border border-border overflow-hidden mb-6 md:mb-8">
+            <button onClick={() => setExpandedSection(expandedSection === 'distribution' ? null : 'distribution')} className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Store className="w-4 h-4 text-primary" />
@@ -391,21 +387,21 @@ export const AdminDashboard = () => {
                   <span className="text-xs text-muted-foreground ml-2">(click row to expand)</span>
                 </div>
               </div>
-              {expandedSection === 'distribution' ? (
-                <ChevronDown className="w-5 h-5 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              )}
+              {expandedSection === 'distribution' ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
             </button>
             <AnimatePresence>
-              {expandedSection === 'distribution' && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
+              {expandedSection === 'distribution' && <motion.div initial={{
+            height: 0,
+            opacity: 0
+          }} animate={{
+            height: 'auto',
+            opacity: 1
+          }} exit={{
+            height: 0,
+            opacity: 0
+          }} transition={{
+            duration: 0.2
+          }} className="overflow-hidden">
                   <div className="p-4 pt-0 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -419,10 +415,9 @@ export const AdminDashboard = () => {
                       </thead>
                       <tbody>
                         {marketplaceStats.map(mp => {
-                          const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
-                          const isExpanded = expandedMarketplace === mp.id;
-                          return (
-                            <>
+                    const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
+                    const isExpanded = expandedMarketplace === mp.id;
+                    return <>
                               <tr key={mp.id} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer" onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}>
                                 <td className="py-2 px-3">
                                   <div className="flex items-center gap-2">
@@ -440,8 +435,8 @@ export const AdminDashboard = () => {
                                   <div className="flex items-center justify-end gap-2">
                                     <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
                                       <div className="h-full bg-primary rounded-full transition-all" style={{
-                                        width: `${mp.allocated > 0 ? mp.distributed / mp.allocated * 100 : 0}%`
-                                      }} />
+                                width: `${mp.allocated > 0 ? mp.distributed / mp.allocated * 100 : 0}%`
+                              }} />
                                     </div>
                                     <span className="text-xs text-muted-foreground w-10">
                                       {mp.allocated > 0 ? Math.round(mp.distributed / mp.allocated * 100) : 0}%
@@ -449,76 +444,67 @@ export const AdminDashboard = () => {
                                   </div>
                                 </td>
                               </tr>
-                              {isExpanded && mpAllocations.map(alloc => (
-                                <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
+                              {isExpanded && mpAllocations.map(alloc => <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
                                   <td className="py-2 px-3 pl-10">
                                     <span className="text-muted-foreground">{alloc.itemName || 'Unknown Item'}</span>
                                   </td>
                                   <td className="text-right py-2 px-3">
-                                    {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? (
-                                      <div className="flex items-center justify-end gap-1">
+                                    {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? <div className="flex items-center justify-end gap-1">
                                         <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
-                                          ...editingAllocation,
-                                          value: e.target.value
-                                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
-                                          e.stopPropagation();
-                                          if (e.key === 'Enter') handleSaveAllocation();
-                                          if (e.key === 'Escape') setEditingAllocation(null);
-                                        }} />
+                              ...editingAllocation,
+                              value: e.target.value
+                            })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
+                              e.stopPropagation();
+                              if (e.key === 'Enter') handleSaveAllocation();
+                              if (e.key === 'Escape') setEditingAllocation(null);
+                            }} />
                                         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                                          e.stopPropagation();
-                                          handleSaveAllocation();
-                                        }}>✓</Button>
+                              e.stopPropagation();
+                              handleSaveAllocation();
+                            }}>✓</Button>
                                         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                                          e.stopPropagation();
-                                          setEditingAllocation(null);
-                                        }}>✕</Button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={e => {
-                                        e.stopPropagation();
-                                        setEditingAllocation({
-                                          id: alloc.id,
-                                          field: 'allocated',
-                                          value: alloc.allocatedQuantity.toString()
-                                        });
-                                      }} className="hover:text-primary hover:underline cursor-pointer">
+                              e.stopPropagation();
+                              setEditingAllocation(null);
+                            }}>✕</Button>
+                                      </div> : <button onClick={e => {
+                            e.stopPropagation();
+                            setEditingAllocation({
+                              id: alloc.id,
+                              field: 'allocated',
+                              value: alloc.allocatedQuantity.toString()
+                            });
+                          }} className="hover:text-primary hover:underline cursor-pointer">
                                         {alloc.allocatedQuantity.toLocaleString()}
-                                      </button>
-                                    )}
+                                      </button>}
                                   </td>
                                   <td className="text-right py-2 px-3">
-                                    {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? (
-                                      <div className="flex items-center justify-end gap-1">
+                                    {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? <div className="flex items-center justify-end gap-1">
                                         <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
-                                          ...editingAllocation,
-                                          value: e.target.value
-                                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
-                                          e.stopPropagation();
-                                          if (e.key === 'Enter') handleSaveAllocation();
-                                          if (e.key === 'Escape') setEditingAllocation(null);
-                                        }} />
+                              ...editingAllocation,
+                              value: e.target.value
+                            })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
+                              e.stopPropagation();
+                              if (e.key === 'Enter') handleSaveAllocation();
+                              if (e.key === 'Escape') setEditingAllocation(null);
+                            }} />
                                         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                                          e.stopPropagation();
-                                          handleSaveAllocation();
-                                        }}>✓</Button>
+                              e.stopPropagation();
+                              handleSaveAllocation();
+                            }}>✓</Button>
                                         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                                          e.stopPropagation();
-                                          setEditingAllocation(null);
-                                        }}>✕</Button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={e => {
-                                        e.stopPropagation();
-                                        setEditingAllocation({
-                                          id: alloc.id,
-                                          field: 'distributed',
-                                          value: alloc.distributedQuantity.toString()
-                                        });
-                                      }} className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
+                              e.stopPropagation();
+                              setEditingAllocation(null);
+                            }}>✕</Button>
+                                      </div> : <button onClick={e => {
+                            e.stopPropagation();
+                            setEditingAllocation({
+                              id: alloc.id,
+                              field: 'distributed',
+                              value: alloc.distributedQuantity.toString()
+                            });
+                          }} className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
                                         {alloc.distributedQuantity.toLocaleString()}
-                                      </button>
-                                    )}
+                                      </button>}
                                   </td>
                                   <td className="text-right py-2 px-3 text-muted-foreground">
                                     {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()}
@@ -527,120 +513,26 @@ export const AdminDashboard = () => {
                                     <div className="flex items-center justify-end gap-2">
                                       <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
                                         <div className="h-full bg-emerald-500 rounded-full transition-all" style={{
-                                          width: `${alloc.allocatedQuantity > 0 ? alloc.distributedQuantity / alloc.allocatedQuantity * 100 : 0}%`
-                                        }} />
+                                width: `${alloc.allocatedQuantity > 0 ? alloc.distributedQuantity / alloc.allocatedQuantity * 100 : 0}%`
+                              }} />
                                       </div>
                                       <span className="text-xs text-muted-foreground w-10">
                                         {alloc.allocatedQuantity > 0 ? Math.round(alloc.distributedQuantity / alloc.allocatedQuantity * 100) : 0}%
                                       </span>
                                     </div>
                                   </td>
-                                </tr>
-                              ))}
-                            </>
-                          );
-                        })}
+                                </tr>)}
+                            </>;
+                  })}
                       </tbody>
                     </table>
                   </div>
-                </motion.div>
-              )}
+                </motion.div>}
             </AnimatePresence>
-          </div>
-        )}
+          </div>}
 
         {/* Item Stock Overview - Collapsible */}
-        <div className="bg-card rounded-xl border border-border overflow-hidden mb-6">
-          <button
-            onClick={() => setExpandedSection(expandedSection === 'stockOverview' ? null : 'stockOverview')}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Package className="w-4 h-4 text-primary" />
-              </div>
-              <span className="font-display font-semibold text-sm md:text-base">Item Stock Overview</span>
-            </div>
-            {expandedSection === 'stockOverview' ? (
-              <ChevronDown className="w-5 h-5 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            )}
-          </button>
-          <AnimatePresence>
-            {expandedSection === 'stockOverview' && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="p-4 pt-0">
-                  {itemTypes && itemTypes.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left py-2 px-3 font-medium">Name</th>
-                            <th className="text-left py-2 px-3 font-medium">Category</th>
-                            <th className="text-right py-2 px-3 font-medium">Warehouse Stock</th>
-                            <th className="text-right py-2 px-3 font-medium">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {itemTypes.map(item => (
-                            <tr key={item.id} className="border-b hover:bg-muted/50">
-                              <td className="py-2 px-3 font-medium">{item.name}</td>
-                              <td className="py-2 px-3">
-                                {item.category ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                                    {item.category}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground text-xs">—</span>
-                                )}
-                              </td>
-                              <td className="text-right py-2 px-3">{item.totalStock.toLocaleString()}</td>
-                              <td className="text-right py-2 px-3">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="h-7 w-7 p-0"
-                                    onClick={() => setFullEditItem({
-                                      id: item.id,
-                                      name: item.name,
-                                      icon: item.icon,
-                                      totalStock: item.totalStock.toString(),
-                                      category: item.category || ''
-                                    })}
-                                  >
-                                    ✏️
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                    onClick={() => setDeleteConfirm({ id: item.id, name: item.name })}
-                                  >
-                                    🗑️
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-4">No items found</p>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        
 
 
         {/* Edit Item Dialog */}
@@ -661,9 +553,9 @@ export const AdminDashboard = () => {
                 <div className="space-y-2">
                   <Label htmlFor="edit-category">Category</Label>
                   <Select value={fullEditItem.category} onValueChange={value => setFullEditItem({
-                    ...fullEditItem,
-                    category: value
-                  })}>
+                ...fullEditItem,
+                category: value
+              })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category..." />
                     </SelectTrigger>
@@ -734,350 +626,380 @@ export const AdminDashboard = () => {
         <div className="space-y-3 mb-6 md:mb-8">
           {/* Volunteer Apps */}
           <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <button
-              onClick={() => setExpandedCategory(expandedCategory === 'volunteer' ? null : 'volunteer')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-            >
+            <button onClick={() => setExpandedCategory(expandedCategory === 'volunteer' ? null : 'volunteer')} className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
                   <UserPlus className="w-4 h-4 text-orange-500" />
                 </div>
                 <span className="font-display font-semibold text-sm md:text-base">Volunteer Apps</span>
               </div>
-              {expandedCategory === 'volunteer' ? (
-                <ChevronDown className="w-5 h-5 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              )}
+              {expandedCategory === 'volunteer' ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
             </button>
             <AnimatePresence>
-              {expandedCategory === 'volunteer' && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
+              {expandedCategory === 'volunteer' && <motion.div initial={{
+              height: 0,
+              opacity: 0
+            }} animate={{
+              height: 'auto',
+              opacity: 1
+            }} exit={{
+              height: 0,
+              opacity: 0
+            }} transition={{
+              duration: 0.2
+            }} className="overflow-hidden">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 pt-0">
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.05 }}
-                      onClick={() => setCurrentView('pending-volunteers')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.05
+                }} onClick={() => setCurrentView('pending-volunteers')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors mb-2">
                         <UserPlus className="w-5 h-5 text-orange-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Pending Volunteers</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                      onClick={() => setCurrentView('volunteer-qr-cards')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.1
+                }} onClick={() => setCurrentView('volunteer-qr-cards')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors mb-2">
                         <UserCheck className="w-5 h-5 text-blue-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Volunteer QR Cards</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                      onClick={() => setCurrentView('training-completion')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.15
+                }} onClick={() => setCurrentView('training-completion')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors mb-2">
                         <Award className="w-5 h-5 text-emerald-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Training Completion</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      onClick={() => navigate('/training')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.2
+                }} onClick={() => navigate('/training')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors mb-2">
                         <GraduationCap className="w-5 h-5 text-indigo-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Training Module</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                      onClick={() => setCurrentView('training-assessments')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.25
+                }} onClick={() => setCurrentView('training-assessments')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors mb-2">
                         <FileQuestion className="w-5 h-5 text-purple-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Training Assessments</h3>
                     </motion.button>
                   </div>
-                </motion.div>
-              )}
+                </motion.div>}
             </AnimatePresence>
           </div>
 
           {/* Beneficiary Apps */}
           <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <button
-              onClick={() => setExpandedCategory(expandedCategory === 'beneficiary' ? null : 'beneficiary')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-            >
+            <button onClick={() => setExpandedCategory(expandedCategory === 'beneficiary' ? null : 'beneficiary')} className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                   <QrCode className="w-4 h-4 text-primary" />
                 </div>
                 <span className="font-display font-semibold text-sm md:text-base">Beneficiary Apps</span>
               </div>
-              {expandedCategory === 'beneficiary' ? (
-                <ChevronDown className="w-5 h-5 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              )}
+              {expandedCategory === 'beneficiary' ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
             </button>
             <AnimatePresence>
-              {expandedCategory === 'beneficiary' && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
+              {expandedCategory === 'beneficiary' && <motion.div initial={{
+              height: 0,
+              opacity: 0
+            }} animate={{
+              height: 'auto',
+              opacity: 1
+            }} exit={{
+              height: 0,
+              opacity: 0
+            }} transition={{
+              duration: 0.2
+            }} className="overflow-hidden">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 pt-0">
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.05 }}
-                      onClick={() => setCurrentView('qr-generator')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.05
+                }} onClick={() => setCurrentView('qr-generator')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors mb-2">
                         <QrCode className="w-5 h-5 text-primary" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Generate QR Cards</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                      onClick={() => setCurrentView('partner-registrations')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.1
+                }} onClick={() => setCurrentView('partner-registrations')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-pink-500/10 flex items-center justify-center group-hover:bg-pink-500/20 transition-colors mb-2">
                         <ClipboardList className="w-5 h-5 text-pink-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Dubai Holdings</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                      onClick={() => setCurrentView('marketplaces')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.15
+                }} onClick={() => setCurrentView('marketplaces')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors mb-2">
                         <Store className="w-5 h-5 text-amber-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Marketplaces</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      onClick={() => setCurrentView('marketplace-reports')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.2
+                }} onClick={() => setCurrentView('marketplace-reports')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors mb-2">
                         <PieChart className="w-5 h-5 text-indigo-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Marketplace Reports</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                      onClick={() => setCurrentView('marketplace-sync')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.25
+                }} onClick={() => setCurrentView('marketplace-sync')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors mb-2">
                         <RefreshCw className="w-5 h-5 text-rose-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Sync & Reset Cards</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      onClick={async () => {
-                        toast({ title: 'Running auto-unblock...', description: 'Unblocking cards from previous days' });
-                        try {
-                          const { data, error } = await supabase.functions.invoke('auto-unblock-cards');
-                          if (error) throw error;
-                          toast({ 
-                            title: 'Auto-Unblock Complete', 
-                            description: `${data?.unblocked || 0} cards unblocked successfully` 
-                          });
-                        } catch (error) {
-                          toast({ 
-                            title: 'Unblock Failed', 
-                            description: error instanceof Error ? error.message : 'Failed to run auto-unblock',
-                            variant: 'destructive'
-                          });
-                        }
-                      }}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.3
+                }} onClick={async () => {
+                  toast({
+                    title: 'Running auto-unblock...',
+                    description: 'Unblocking cards from previous days'
+                  });
+                  try {
+                    const {
+                      data,
+                      error
+                    } = await supabase.functions.invoke('auto-unblock-cards');
+                    if (error) throw error;
+                    toast({
+                      title: 'Auto-Unblock Complete',
+                      description: `${data?.unblocked || 0} cards unblocked successfully`
+                    });
+                  } catch (error) {
+                    toast({
+                      title: 'Unblock Failed',
+                      description: error instanceof Error ? error.message : 'Failed to run auto-unblock',
+                      variant: 'destructive'
+                    });
+                  }
+                }} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-warning/10 flex items-center justify-center group-hover:bg-warning/20 transition-colors mb-2">
                         <Unlock className="w-5 h-5 text-warning" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Auto-Unblock Cards</h3>
                     </motion.button>
                   </div>
-                </motion.div>
-              )}
+                </motion.div>}
             </AnimatePresence>
           </div>
 
           {/* Admin Apps */}
           <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <button
-              onClick={() => setExpandedCategory(expandedCategory === 'admin' ? null : 'admin')}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-            >
+            <button onClick={() => setExpandedCategory(expandedCategory === 'admin' ? null : 'admin')} className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                   <Users className="w-4 h-4 text-violet-500" />
                 </div>
                 <span className="font-display font-semibold text-sm md:text-base">Admin Apps</span>
               </div>
-              {expandedCategory === 'admin' ? (
-                <ChevronDown className="w-5 h-5 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              )}
+              {expandedCategory === 'admin' ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
             </button>
             <AnimatePresence>
-              {expandedCategory === 'admin' && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
+              {expandedCategory === 'admin' && <motion.div initial={{
+              height: 0,
+              opacity: 0
+            }} animate={{
+              height: 'auto',
+              opacity: 1
+            }} exit={{
+              height: 0,
+              opacity: 0
+            }} transition={{
+              duration: 0.2
+            }} className="overflow-hidden">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 p-4 pt-0">
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.05 }}
-                      onClick={() => setCurrentView('inventory')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.05
+                }} onClick={() => setCurrentView('inventory')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-accent-soft flex items-center justify-center group-hover:bg-accent/20 transition-colors mb-2">
                         <Package className="w-5 h-5 text-accent-foreground" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Manage Inventory</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                      onClick={() => setCurrentView('allocations')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.1
+                }} onClick={() => setCurrentView('allocations')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors mb-2">
                         <TrendingUp className="w-5 h-5 text-teal-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Allocate Items</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                      onClick={() => setCurrentView('statistics')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.15
+                }} onClick={() => setCurrentView('statistics')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors mb-2">
                         <TrendingUp className="w-5 h-5 text-emerald-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Live Statistics</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      onClick={() => setCurrentView('users')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.2
+                }} onClick={() => setCurrentView('users')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors mb-2">
                         <Users className="w-5 h-5 text-violet-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Manage Users</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                      onClick={() => setCurrentView('webhooks')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.25
+                }} onClick={() => setCurrentView('webhooks')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors mb-2">
                         <Webhook className="w-5 h-5 text-cyan-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Webhook Events</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      onClick={() => setCurrentView('external-items')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.3
+                }} onClick={() => setCurrentView('external-items')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors mb-2">
                         <Database className="w-5 h-5 text-teal-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">External Items</h3>
                     </motion.button>
 
-                    <motion.button
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.35 }}
-                      onClick={() => setCurrentView('surpluss-sync')}
-                      className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group"
-                    >
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.35
+                }} onClick={() => setCurrentView('surpluss-sync')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
                       <div className="w-10 h-10 mx-auto rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors mb-2">
                         <Database className="w-5 h-5 text-cyan-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Surpluss Sync</h3>
                     </motion.button>
                   </div>
-                </motion.div>
-              )}
+                </motion.div>}
             </AnimatePresence>
           </div>
         </div>
