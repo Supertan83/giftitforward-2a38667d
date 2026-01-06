@@ -1008,6 +1008,7 @@ export type Database = {
       }
       volunteer_qr_cards: {
         Row: {
+          assigned_zone: Database["public"]["Enums"]["volunteer_zone"] | null
           checked_in_at: string | null
           checked_out_at: string | null
           created_at: string
@@ -1022,6 +1023,7 @@ export type Database = {
           volunteer_id: string | null
         }
         Insert: {
+          assigned_zone?: Database["public"]["Enums"]["volunteer_zone"] | null
           checked_in_at?: string | null
           checked_out_at?: string | null
           created_at?: string
@@ -1036,6 +1038,7 @@ export type Database = {
           volunteer_id?: string | null
         }
         Update: {
+          assigned_zone?: Database["public"]["Enums"]["volunteer_zone"] | null
           checked_in_at?: string | null
           checked_out_at?: string | null
           created_at?: string
@@ -1235,6 +1238,7 @@ export type Database = {
       app_role: "admin" | "volunteer" | "employee"
       card_status: "inactive" | "active" | "checked_out"
       transaction_type: "CheckIn" | "Distribution" | "Return" | "CheckOut"
+      volunteer_zone: "entrance" | "marketplace" | "exit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1365,6 +1369,7 @@ export const Constants = {
       app_role: ["admin", "volunteer", "employee"],
       card_status: ["inactive", "active", "checked_out"],
       transaction_type: ["CheckIn", "Distribution", "Return", "CheckOut"],
+      volunteer_zone: ["entrance", "marketplace", "exit"],
     },
   },
 } as const
