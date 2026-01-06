@@ -161,10 +161,10 @@ export const useCardOperations = () => {
     }: { 
       uniqueId: string; 
       beneficiaryInfo?: { 
-        gender: string; 
+        gender?: string; 
         maritalStatus?: string; 
         childrenCount?: number; 
-        nationality: string; 
+        nationality?: string; 
       };
       marketplaceId?: string;
     }) => {
