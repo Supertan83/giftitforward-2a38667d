@@ -929,36 +929,62 @@ export const useGenerateVolunteerQR = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({ userId, email, firstName, lastName }: { userId: string; email: string; firstName?: string; lastName?: string }) => {
       // Generate unique QR code ID
       const timestamp = Date.now().toString(36).toUpperCase();
       const random = Math.random().toString(36).substring(2, 6).toUpperCase();
       const uniqueId = `VOL-${timestamp}-${random}`;
 
-      // Check if user already has a QR card
-      const { data: existing } = await supabase
-        .from('volunteer_qr_cards')
+      // First check if a pending_volunteers record exists for this user
+      let { data: existingPV } = await supabase
+        .from('pending_volunteers')
         .select('id')
-        .eq('volunteer_id', userId)
+        .eq('created_user_id', userId)
         .maybeSingle();
 
-      if (existing) {
-        throw new SafeError('Volunteer already has a QR code assigned');
+      // If no pending_volunteers record exists, create one
+      if (!existingPV) {
+        const { data: newPV, error: pvError } = await supabase
+          .from('pending_volunteers')
+          .insert({
+            email: email,
+            first_name: firstName || email.split('@')[0],
+            last_name: lastName || '',
+            status: 'approved',
+            created_user_id: userId
+          })
+          .select('id')
+          .single();
+        
+        if (pvError) throw new SafeError(mapDatabaseError(pvError), pvError);
+        existingPV = newPV;
       }
 
-      // Create the volunteer QR card
+      // Check if user already has a QR card
+      const { data: existingQR } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id, unique_id')
+        .eq('volunteer_id', existingPV.id)
+        .maybeSingle();
+
+      if (existingQR) {
+        // Return existing QR code instead of throwing error
+        return { unique_id: existingQR.unique_id, existing: true };
+      }
+
+      // Create the volunteer QR card linked to pending_volunteers record
       const { data, error } = await supabase
         .from('volunteer_qr_cards')
         .insert({
           unique_id: uniqueId,
-          volunteer_id: userId,
+          volunteer_id: existingPV.id,
           status: 'inactive'
         })
         .select()
         .single();
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
-      return data;
+      return { unique_id: data.unique_id, existing: false };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });

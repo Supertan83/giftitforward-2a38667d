@@ -65,13 +65,24 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const generateQR = useGenerateVolunteerQR();
   const { toast } = useToast();
 
-  const handleGenerateQR = async (userId: string, userName: string) => {
+  const handleGenerateAndPreviewQR = async (user: UserWithRole) => {
     try {
-      await generateQR.mutateAsync(userId);
-      toast({
-        title: 'QR Code Generated',
-        description: `QR code created for ${userName}`,
+      const result = await generateQR.mutateAsync({
+        userId: user.id,
+        email: user.email,
+        firstName: user.first_name || undefined,
+        lastName: user.last_name || undefined
       });
+      
+      toast({
+        title: result.existing ? 'QR Code Found' : 'QR Code Generated',
+        description: result.existing 
+          ? `Existing QR code loaded for ${user.first_name || user.email}` 
+          : `New QR code created for ${user.first_name || user.email}`,
+      });
+      
+      // Open preview dialog after generation/finding
+      setQrPreviewUser({ ...user, qr_codes: [result.unique_id] });
     } catch (error) {
       toast({
         title: 'Failed to Generate QR Code',
@@ -297,9 +308,9 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                         variant="ghost"
                         size="sm"
                         className="h-8 text-xs text-muted-foreground hover:text-primary"
-                        onClick={() => handleGenerateQR(user.id, user.first_name || user.email)}
+                        onClick={() => handleGenerateAndPreviewQR(user)}
                         disabled={generateQR.isPending}
-                        title="Generate QR code"
+                        title="Generate and preview QR code"
                       >
                         {generateQR.isPending ? (
                           <Loader2 className="w-3 h-3 animate-spin mr-1" />
