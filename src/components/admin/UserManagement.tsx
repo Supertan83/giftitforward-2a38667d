@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Select,
   SelectContent,
@@ -29,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole } from '@/hooks/useSupabaseData';
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, UserWithRole } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -45,8 +46,9 @@ const createUserSchema = z.object({
 
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null } | null>(null);
+  const [editUser, setEditUser] = useState<{ id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null; qr_codes: string[] } | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string } | null>(null);
+  const [qrPreviewUser, setQrPreviewUser] = useState<UserWithRole | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
@@ -114,7 +116,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     }
   };
 
-  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null }) => {
+  const handleEditUser = (user: { id: string; email: string; role: 'admin' | 'volunteer' | 'employee'; first_name: string | null; last_name: string | null; qr_codes: string[] }) => {
     setEditUser(user);
     setEditRole(user.role);
     setEditFirstName(user.first_name || '');
@@ -261,6 +263,16 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {user.role === 'volunteer' && user.qr_codes.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => setQrPreviewUser(user)}
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Badge variant={user.role === 'admin' ? 'default' : user.role === 'employee' ? 'outline' : 'secondary'}>
                       {user.role}
                     </Badge>
@@ -268,7 +280,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditUser({ id: user.id, email: user.email, role: user.role, first_name: user.first_name, last_name: user.last_name })}
+                      onClick={() => handleEditUser({ id: user.id, email: user.email, role: user.role, first_name: user.first_name, last_name: user.last_name, qr_codes: user.qr_codes })}
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -493,6 +505,54 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* QR Code Preview Dialog */}
+      <Dialog open={!!qrPreviewUser} onOpenChange={(open) => !open && setQrPreviewUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl flex items-center gap-2">
+              <QrCode className="w-5 h-5" />
+              Volunteer QR Codes
+            </DialogTitle>
+            <DialogDescription>
+              {qrPreviewUser?.first_name || qrPreviewUser?.last_name 
+                ? `${qrPreviewUser?.first_name || ''} ${qrPreviewUser?.last_name || ''}`.trim()
+                : qrPreviewUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {qrPreviewUser?.qr_codes.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                <QrCode className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No QR codes assigned</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {qrPreviewUser?.qr_codes.map((code, index) => (
+                  <div key={code} className="bg-muted/50 rounded-lg p-4 flex items-center gap-4">
+                    <div className="bg-white p-2 rounded-lg">
+                      <QRCodeSVG value={code} size={80} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">
+                        {index === 0 ? 'Primary Card' : `Family Member ${index}`}
+                      </p>
+                      <p className="font-mono text-sm font-medium truncate">{code}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setQrPreviewUser(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
