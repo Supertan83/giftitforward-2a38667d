@@ -921,6 +921,7 @@ interface MarketplaceEvent {
   location: string | null;
   event_date: string | null;
   status: 'upcoming' | 'active' | 'completed';
+  outreach_partner: string | null;
   created_at: string;
 }
 
@@ -968,6 +969,7 @@ export const useCreateMarketplace = () => {
       location: string | null; 
       event_date: string | null; 
       status: 'upcoming' | 'active' | 'completed';
+      outreach_partner?: string | null;
     }) => {
       const { error } = await supabase
         .from('marketplace_events')
@@ -1011,6 +1013,7 @@ export const useUpdateMarketplace = () => {
       location: string | null; 
       event_date: string | null; 
       status: 'upcoming' | 'active' | 'completed';
+      outreach_partner?: string | null;
     }) => {
       const { id, ...updates } = marketplace;
       const { error } = await supabase
