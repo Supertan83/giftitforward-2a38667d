@@ -26,10 +26,10 @@ export const ItemCard = ({ item, isSelected, onClick, showStats = false }: ItemC
     >
       <div className="flex items-center gap-2 md:gap-3">
         <div className={cn(
-          'w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center text-xl md:text-2xl shrink-0',
+          'w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center shrink-0',
           isSelected ? 'bg-primary/20' : 'bg-muted'
         )}>
-          {item.icon}
+          <span className="text-lg md:text-xl font-semibold text-muted-foreground">{item.name.charAt(0)}</span>
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-semibold text-sm md:text-base text-foreground truncate">
