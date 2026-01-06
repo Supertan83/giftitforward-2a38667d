@@ -38,6 +38,7 @@ type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'market
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [expandedCategory, setExpandedCategory] = useState<'volunteer' | 'beneficiary' | 'admin' | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'distribution' | 'stockOverview' | null>(null);
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -374,220 +375,277 @@ export const AdminDashboard = () => {
           <StatCard icon={TrendingUp} label="Remaining" value={totalRemaining.toLocaleString()} subValue="items to distribute" variant="warning" />
         </div>
 
-        {/* Per-Marketplace Breakdown */}
-        {marketplaceStats.length > 0 && <motion.div initial={{
-        opacity: 0,
-        y: 20
-      }} animate={{
-        opacity: 1,
-        y: 0
-      }} className="bg-card rounded-xl border border-border p-4 md:p-6 mb-6 md:mb-8">
-            <h2 className="font-display font-semibold text-base md:text-lg mb-4 flex items-center gap-2">
-              <Store className="w-5 h-5 text-primary" />
-              Distribution by Marketplace
-              <span className="text-xs text-muted-foreground font-normal">(click row to expand)</span>
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Marketplace</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Allocated</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Distributed</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Remaining</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marketplaceStats.map(mp => {
-                const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
-                const isExpanded = expandedMarketplace === mp.id;
-                return <>
-                        <tr key={mp.id} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer" onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}>
-                          <td className="py-2 px-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
-                              <div>
-                                <div className="font-medium">{mp.name}</div>
-                                <div className="text-xs text-muted-foreground">{mp.location}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="text-right py-2 px-3">{mp.allocated.toLocaleString()}</td>
-                          <td className="text-right py-2 px-3 text-emerald-600">{mp.distributed.toLocaleString()}</td>
-                          <td className="text-right py-2 px-3">{mp.remaining.toLocaleString()}</td>
-                          <td className="text-right py-2 px-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                <div className="h-full bg-primary rounded-full transition-all" style={{
-                            width: `${mp.allocated > 0 ? mp.distributed / mp.allocated * 100 : 0}%`
-                          }} />
-                              </div>
-                              <span className="text-xs text-muted-foreground w-10">
-                                {mp.allocated > 0 ? Math.round(mp.distributed / mp.allocated * 100) : 0}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                        {isExpanded && mpAllocations.map(alloc => <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
-                            <td className="py-2 px-3 pl-10">
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <span>{alloc.itemIcon || '📦'}</span>
-                                <span>{alloc.itemName || 'Unknown Item'}</span>
-                              </div>
-                            </td>
-                            <td className="text-right py-2 px-3">
-                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? <div className="flex items-center justify-end gap-1">
-                                  <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
-                          ...editingAllocation,
-                          value: e.target.value
-                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter') handleSaveAllocation();
-                          if (e.key === 'Escape') setEditingAllocation(null);
-                        }} />
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                          e.stopPropagation();
-                          handleSaveAllocation();
-                        }}>✓</Button>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                          e.stopPropagation();
-                          setEditingAllocation(null);
-                        }}>✕</Button>
-                                </div> : <button onClick={e => {
-                        e.stopPropagation();
-                        setEditingAllocation({
-                          id: alloc.id,
-                          field: 'allocated',
-                          value: alloc.allocatedQuantity.toString()
-                        });
-                      }} className="hover:text-primary hover:underline cursor-pointer">
-                                  {alloc.allocatedQuantity.toLocaleString()}
-                                </button>}
-                            </td>
-                            <td className="text-right py-2 px-3">
-                              {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? <div className="flex items-center justify-end gap-1">
-                                  <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
-                          ...editingAllocation,
-                          value: e.target.value
-                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter') handleSaveAllocation();
-                          if (e.key === 'Escape') setEditingAllocation(null);
-                        }} />
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                          e.stopPropagation();
-                          handleSaveAllocation();
-                        }}>✓</Button>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
-                          e.stopPropagation();
-                          setEditingAllocation(null);
-                        }}>✕</Button>
-                                </div> : <button onClick={e => {
-                        e.stopPropagation();
-                        setEditingAllocation({
-                          id: alloc.id,
-                          field: 'distributed',
-                          value: alloc.distributedQuantity.toString()
-                        });
-                      }} className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
-                                  {alloc.distributedQuantity.toLocaleString()}
-                                </button>}
-                            </td>
-                            <td className="text-right py-2 px-3 text-muted-foreground">
-                              {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()}
-                            </td>
-                            <td className="text-right py-2 px-3">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{
-                            width: `${alloc.allocatedQuantity > 0 ? alloc.distributedQuantity / alloc.allocatedQuantity * 100 : 0}%`
-                          }} />
-                                </div>
-                                <span className="text-xs text-muted-foreground w-10">
-                                  {alloc.allocatedQuantity > 0 ? Math.round(alloc.distributedQuantity / alloc.allocatedQuantity * 100) : 0}%
-                                </span>
-                              </div>
-                            </td>
-                          </tr>)}
-                      </>;
-              })}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>}
-
-        {/* Item Stock Overview */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Item Stock Overview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {itemTypes && itemTypes.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-3 font-medium">Icon</th>
-                        <th className="text-left py-2 px-3 font-medium">Name</th>
-                        <th className="text-left py-2 px-3 font-medium">Category</th>
-                        <th className="text-right py-2 px-3 font-medium">Warehouse Stock</th>
-                        <th className="text-right py-2 px-3 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {itemTypes.map(item => (
-                        <tr key={item.id} className="border-b hover:bg-muted/50">
-                          <td className="py-2 px-3 text-xl">{item.icon}</td>
-                          <td className="py-2 px-3 font-medium">{item.name}</td>
-                          <td className="py-2 px-3">
-                            {item.category ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                                {item.category}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="text-right py-2 px-3">{item.totalStock.toLocaleString()}</td>
-                          <td className="text-right py-2 px-3">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-7 w-7 p-0"
-                                onClick={() => setFullEditItem({
-                                  id: item.id,
-                                  name: item.name,
-                                  icon: item.icon,
-                                  totalStock: item.totalStock.toString(),
-                                  category: item.category || ''
-                                })}
-                              >
-                                ✏️
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                onClick={() => setDeleteConfirm({ id: item.id, name: item.name })}
-                              >
-                                🗑️
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        {/* Per-Marketplace Breakdown - Collapsible */}
+        {marketplaceStats.length > 0 && (
+          <div className="bg-card rounded-xl border border-border overflow-hidden mb-6 md:mb-8">
+            <button
+              onClick={() => setExpandedSection(expandedSection === 'distribution' ? null : 'distribution')}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Store className="w-4 h-4 text-primary" />
                 </div>
+                <div className="text-left">
+                  <span className="font-display font-semibold text-sm md:text-base">Distribution by Marketplace</span>
+                  <span className="text-xs text-muted-foreground ml-2">(click row to expand)</span>
+                </div>
+              </div>
+              {expandedSection === 'distribution' ? (
+                <ChevronDown className="w-5 h-5 text-muted-foreground" />
               ) : (
-                <p className="text-muted-foreground text-center py-4">No items found</p>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
               )}
-            </CardContent>
-          </Card>
-        </motion.div>
+            </button>
+            <AnimatePresence>
+              {expandedSection === 'distribution' && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-4 pt-0 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Marketplace</th>
+                          <th className="text-right py-2 px-3 font-medium text-muted-foreground">Allocated</th>
+                          <th className="text-right py-2 px-3 font-medium text-muted-foreground">Distributed</th>
+                          <th className="text-right py-2 px-3 font-medium text-muted-foreground">Remaining</th>
+                          <th className="text-right py-2 px-3 font-medium text-muted-foreground">Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {marketplaceStats.map(mp => {
+                          const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
+                          const isExpanded = expandedMarketplace === mp.id;
+                          return (
+                            <>
+                              <tr key={mp.id} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer" onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}>
+                                <td className="py-2 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
+                                    <div>
+                                      <div className="font-medium">{mp.name}</div>
+                                      <div className="text-xs text-muted-foreground">{mp.location}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="text-right py-2 px-3">{mp.allocated.toLocaleString()}</td>
+                                <td className="text-right py-2 px-3 text-emerald-600">{mp.distributed.toLocaleString()}</td>
+                                <td className="text-right py-2 px-3">{mp.remaining.toLocaleString()}</td>
+                                <td className="text-right py-2 px-3">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-primary rounded-full transition-all" style={{
+                                        width: `${mp.allocated > 0 ? mp.distributed / mp.allocated * 100 : 0}%`
+                                      }} />
+                                    </div>
+                                    <span className="text-xs text-muted-foreground w-10">
+                                      {mp.allocated > 0 ? Math.round(mp.distributed / mp.allocated * 100) : 0}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                              {isExpanded && mpAllocations.map(alloc => (
+                                <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
+                                  <td className="py-2 px-3 pl-10">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <span>{alloc.itemIcon || '📦'}</span>
+                                      <span>{alloc.itemName || 'Unknown Item'}</span>
+                                    </div>
+                                  </td>
+                                  <td className="text-right py-2 px-3">
+                                    {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? (
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
+                                          ...editingAllocation,
+                                          value: e.target.value
+                                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
+                                          e.stopPropagation();
+                                          if (e.key === 'Enter') handleSaveAllocation();
+                                          if (e.key === 'Escape') setEditingAllocation(null);
+                                        }} />
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                                          e.stopPropagation();
+                                          handleSaveAllocation();
+                                        }}>✓</Button>
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                                          e.stopPropagation();
+                                          setEditingAllocation(null);
+                                        }}>✕</Button>
+                                      </div>
+                                    ) : (
+                                      <button onClick={e => {
+                                        e.stopPropagation();
+                                        setEditingAllocation({
+                                          id: alloc.id,
+                                          field: 'allocated',
+                                          value: alloc.allocatedQuantity.toString()
+                                        });
+                                      }} className="hover:text-primary hover:underline cursor-pointer">
+                                        {alloc.allocatedQuantity.toLocaleString()}
+                                      </button>
+                                    )}
+                                  </td>
+                                  <td className="text-right py-2 px-3">
+                                    {editingAllocation?.id === alloc.id && editingAllocation.field === 'distributed' ? (
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Input type="number" value={editingAllocation.value} onChange={e => setEditingAllocation({
+                                          ...editingAllocation,
+                                          value: e.target.value
+                                        })} className="w-20 h-7 text-right text-sm" autoFocus onClick={e => e.stopPropagation()} onKeyDown={e => {
+                                          e.stopPropagation();
+                                          if (e.key === 'Enter') handleSaveAllocation();
+                                          if (e.key === 'Escape') setEditingAllocation(null);
+                                        }} />
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                                          e.stopPropagation();
+                                          handleSaveAllocation();
+                                        }}>✓</Button>
+                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={e => {
+                                          e.stopPropagation();
+                                          setEditingAllocation(null);
+                                        }}>✕</Button>
+                                      </div>
+                                    ) : (
+                                      <button onClick={e => {
+                                        e.stopPropagation();
+                                        setEditingAllocation({
+                                          id: alloc.id,
+                                          field: 'distributed',
+                                          value: alloc.distributedQuantity.toString()
+                                        });
+                                      }} className="text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
+                                        {alloc.distributedQuantity.toLocaleString()}
+                                      </button>
+                                    )}
+                                  </td>
+                                  <td className="text-right py-2 px-3 text-muted-foreground">
+                                    {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()}
+                                  </td>
+                                  <td className="text-right py-2 px-3">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{
+                                          width: `${alloc.allocatedQuantity > 0 ? alloc.distributedQuantity / alloc.allocatedQuantity * 100 : 0}%`
+                                        }} />
+                                      </div>
+                                      <span className="text-xs text-muted-foreground w-10">
+                                        {alloc.allocatedQuantity > 0 ? Math.round(alloc.distributedQuantity / alloc.allocatedQuantity * 100) : 0}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Item Stock Overview - Collapsible */}
+        <div className="bg-card rounded-xl border border-border overflow-hidden mb-6">
+          <button
+            onClick={() => setExpandedSection(expandedSection === 'stockOverview' ? null : 'stockOverview')}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Package className="w-4 h-4 text-primary" />
+              </div>
+              <span className="font-display font-semibold text-sm md:text-base">Item Stock Overview</span>
+            </div>
+            {expandedSection === 'stockOverview' ? (
+              <ChevronDown className="w-5 h-5 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            )}
+          </button>
+          <AnimatePresence>
+            {expandedSection === 'stockOverview' && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 pt-0">
+                  {itemTypes && itemTypes.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2 px-3 font-medium">Icon</th>
+                            <th className="text-left py-2 px-3 font-medium">Name</th>
+                            <th className="text-left py-2 px-3 font-medium">Category</th>
+                            <th className="text-right py-2 px-3 font-medium">Warehouse Stock</th>
+                            <th className="text-right py-2 px-3 font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {itemTypes.map(item => (
+                            <tr key={item.id} className="border-b hover:bg-muted/50">
+                              <td className="py-2 px-3 text-xl">{item.icon}</td>
+                              <td className="py-2 px-3 font-medium">{item.name}</td>
+                              <td className="py-2 px-3">
+                                {item.category ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                                    {item.category}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="text-right py-2 px-3">{item.totalStock.toLocaleString()}</td>
+                              <td className="text-right py-2 px-3">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setFullEditItem({
+                                      id: item.id,
+                                      name: item.name,
+                                      icon: item.icon,
+                                      totalStock: item.totalStock.toString(),
+                                      category: item.category || ''
+                                    })}
+                                  >
+                                    ✏️
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                    onClick={() => setDeleteConfirm({ id: item.id, name: item.name })}
+                                  >
+                                    🗑️
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">No items found</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
 
         {/* Edit Item Dialog */}
