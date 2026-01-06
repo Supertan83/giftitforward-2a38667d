@@ -28,11 +28,28 @@ export const useVolunteerCheckInStatus = () => {
         };
       }
 
-      // Find volunteer card linked to this user
+      // First find the pending_volunteers record linked to this auth user
+      const { data: pendingVolunteer } = await supabase
+        .from('pending_volunteers')
+        .select('id')
+        .eq('created_user_id', user.id)
+        .maybeSingle();
+
+      if (!pendingVolunteer) {
+        return {
+          isCheckedIn: false,
+          assignedZone: null,
+          marketplaceId: null,
+          cardId: null,
+          checkedInAt: null
+        };
+      }
+
+      // Find volunteer card linked to the pending_volunteers record
       const { data: card, error } = await supabase
         .from('volunteer_qr_cards')
         .select('id, status, assigned_zone, marketplace_id, checked_in_at, volunteer_id')
-        .eq('volunteer_id', user.id)
+        .eq('volunteer_id', pendingVolunteer.id)
         .maybeSingle();
 
       if (error || !card) {
