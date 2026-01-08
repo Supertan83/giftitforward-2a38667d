@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { TrainingUserInfo } from '@/pages/TrainingPage';
+import dubaiHoldingLogo from '@/assets/dubai-holding-logo.png';
 
 interface QuizOption {
   id: string;
@@ -365,21 +366,12 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     );
   }
 
-  // Dubai Holding Logo Component
-  const DubaiHoldingLogo = () => (
-    <svg width="200" height="40" viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <text x="0" y="28" fontFamily="Arial, sans-serif" fontSize="24" fontWeight="bold" fill="#101820">
-        DUBAI HOLDING
-      </text>
-    </svg>
-  );
-
   // Quiz questions
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Header with logo */}
       <header className="flex-shrink-0 px-8 py-6">
-        <DubaiHoldingLogo />
+        <img src={dubaiHoldingLogo} alt="Dubai Holding" className="h-10" />
       </header>
 
       {/* Question content */}
