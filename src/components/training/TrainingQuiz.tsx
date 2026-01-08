@@ -365,85 +365,105 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     );
   }
 
+  // Dubai Holding Logo Component
+  const DubaiHoldingLogo = () => (
+    <svg width="200" height="40" viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <text x="0" y="28" fontFamily="Arial, sans-serif" fontSize="24" fontWeight="bold" fill="#101820">
+        DUBAI HOLDING
+      </text>
+    </svg>
+  );
+
   // Quiz questions
   return (
-    <div className="h-screen bg-[#1a1a1a] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-2">
-        <div className="flex items-center justify-between max-w-3xl mx-auto">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white/70">
-              Question {currentQuestion + 1} of {quizQuestions.length}
-            </span>
-          </div>
-          <div className="flex-1 max-w-md mx-4">
-            <Progress value={progress} className="h-1.5 bg-white/10" />
-          </div>
-          <span className="text-sm text-white/50">
-            {Object.keys(answers).length} answered
-          </span>
-        </div>
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      {/* Header with logo */}
+      <header className="flex-shrink-0 px-8 py-6">
+        <DubaiHoldingLogo />
       </header>
 
       {/* Question content */}
-      <main className="flex-1 min-h-0 flex items-center justify-center p-4 overflow-y-auto">
-        <div className="w-full max-w-2xl">
+      <main className="flex-1 min-h-0 flex flex-col items-center justify-center px-8 pb-4">
+        <div className="w-full max-w-5xl">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentQuestion}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-8"
             >
-              <h2 className="font-display font-semibold text-xl text-white text-center">
+              {/* Subtitle */}
+              <p className="text-center text-muted-foreground text-sm">
+                Volunteer Knowledge Check: Your Role in the Circular Economy
+              </p>
+              
+              {/* Question */}
+              <h2 className="font-display font-semibold text-2xl md:text-3xl text-primary text-center max-w-3xl mx-auto">
                 {currentQ.question}
               </h2>
               
-              <div className="space-y-3">
+              {/* Answer boxes grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
                 {currentQ.options.map((option, idx) => {
                   const isSelected = answers[currentQ.id] === option.id;
                   const isCorrect = option.isCorrect;
+                  const letter = String.fromCharCode(65 + idx);
                   
-                  let borderClass = 'border-white/20 hover:border-white/40';
-                  let bgClass = 'bg-white/5';
+                  // Determine box styling based on state
+                  let bgClass = 'bg-secondary hover:scale-[1.02] hover:shadow-lg';
+                  let textClass = 'text-white';
+                  let labelBgClass = 'bg-white/20';
+                  let isInteractive = !hasAnsweredCurrent;
                   
                   if (hasAnsweredCurrent) {
                     if (isCorrect) {
-                      borderClass = 'border-success';
-                      bgClass = 'bg-success/10';
+                      // Correct answer - green
+                      bgClass = 'bg-[#a4d65e]';
+                      textClass = 'text-foreground';
+                      labelBgClass = 'bg-black/10';
                     } else if (isSelected) {
-                      borderClass = 'border-destructive';
-                      bgClass = 'bg-destructive/10';
+                      // Wrong selection - red
+                      bgClass = 'bg-destructive';
+                      textClass = 'text-white';
+                      labelBgClass = 'bg-white/20';
                     } else {
-                      borderClass = 'border-white/10';
-                      bgClass = 'bg-white/5 opacity-50';
+                      // Other options - dimmed
+                      bgClass = 'bg-secondary/50';
+                      textClass = 'text-white/50';
+                      labelBgClass = 'bg-white/10';
                     }
-                  } else if (isSelected) {
-                    borderClass = 'border-primary';
-                    bgClass = 'bg-primary/10';
                   }
                   
                   return (
-                    <button
+                    <motion.button
                       key={option.id}
                       onClick={() => handleAnswer(option.id)}
                       disabled={hasAnsweredCurrent}
-                      className={`w-full p-4 rounded-lg border-2 text-left transition-all ${borderClass} ${bgClass} ${hasAnsweredCurrent ? 'cursor-default' : 'cursor-pointer'}`}
+                      whileHover={isInteractive ? { scale: 1.02 } : {}}
+                      whileTap={isInteractive ? { scale: 0.98 } : {}}
+                      className={`
+                        relative flex flex-col rounded-2xl overflow-hidden
+                        min-h-[180px] md:min-h-[220px]
+                        transition-all duration-200
+                        ${bgClass}
+                        ${isInteractive ? 'cursor-pointer' : 'cursor-default'}
+                      `}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-white">
-                          <span className="font-medium mr-2 text-white/70">{String.fromCharCode(65 + idx)}.</span>
+                      {/* Answer text */}
+                      <div className={`flex-1 p-4 flex items-center justify-center text-center ${textClass}`}>
+                        <span className="text-sm md:text-base font-medium leading-snug">
                           {option.text}
-                        </div>
-                        {hasAnsweredCurrent && isCorrect && (
-                          <Check className="w-5 h-5 text-success flex-shrink-0 ml-2" />
-                        )}
-                        {hasAnsweredCurrent && isSelected && !isCorrect && (
-                          <X className="w-5 h-5 text-destructive flex-shrink-0 ml-2" />
-                        )}
+                        </span>
                       </div>
-                    </button>
+                      
+                      {/* Letter label at bottom */}
+                      <div className={`${labelBgClass} py-2 border-t border-white/10`}>
+                        <span className={`text-lg font-bold ${textClass}`}>
+                          {letter}
+                        </span>
+                      </div>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -453,34 +473,26 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
       </main>
 
       {/* Navigation */}
-      <footer className="flex-shrink-0 py-4 px-4 bg-[#1a1a1a] border-t border-white/10">
-        <div className="flex justify-between max-w-2xl mx-auto">
+      <footer className="flex-shrink-0 py-6 px-8">
+        <div className="flex justify-center gap-4 max-w-5xl mx-auto">
           <Button
             variant="outline"
             onClick={goToPrevious}
             disabled={currentQuestion === 0}
-            className="border-white/20 text-white hover:bg-white/10"
+            className="min-w-[100px]"
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Back
           </Button>
-          
-          {isLastQuestion ? (
-            <Button
-              onClick={goToNext}
-              disabled={!allAnswered}
-            >
-              Complete Quiz
-            </Button>
-          ) : (
-            <Button
-              onClick={goToNext}
-              disabled={!hasAnsweredCurrent}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          )}
+          <Button
+            onClick={goToNext}
+            disabled={!hasAnsweredCurrent}
+            variant={hasAnsweredCurrent ? "default" : "outline"}
+            className="min-w-[100px]"
+          >
+            {isLastQuestion && allAnswered ? 'View Results' : 'Next'}
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
         </div>
       </footer>
     </div>
