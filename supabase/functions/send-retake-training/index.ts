@@ -15,6 +15,7 @@ interface SendRetakeTrainingRequest {
   firstName: string;
   lastName: string;
   email: string;
+  isReminder?: boolean; // If true, only send email without resetting training status
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -65,13 +66,13 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { volunteerId, firstName, lastName, email }: SendRetakeTrainingRequest = await req.json();
+    const { volunteerId, firstName, lastName, email, isReminder }: SendRetakeTrainingRequest = await req.json();
 
     const cleanFirstName = (firstName || '').trim();
     const cleanLastName = (lastName || '').trim();
     const cleanEmail = (email || '').trim();
 
-    console.log(`Sending retake training email to ${cleanEmail} for ${cleanFirstName} ${cleanLastName}`);
+    console.log(`${isReminder ? 'Sending training reminder' : 'Sending retake training'} email to ${cleanEmail} for ${cleanFirstName} ${cleanLastName}`);
 
     if (!cleanFirstName || !cleanEmail || !volunteerId) {
       console.error("Missing required fields:", { firstName: cleanFirstName, email: cleanEmail, volunteerId });
@@ -81,22 +82,24 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Reset training status in database
-    const { error: updateError } = await supabase
-      .from("pending_volunteers")
-      .update({
-        training_completed: false,
-        training_completed_at: null,
-        certificate_sent_at: null,
-      })
-      .eq("id", volunteerId);
+    // Only reset training status if this is NOT a reminder
+    if (!isReminder) {
+      const { error: updateError } = await supabase
+        .from("pending_volunteers")
+        .update({
+          training_completed: false,
+          training_completed_at: null,
+          certificate_sent_at: null,
+        })
+        .eq("id", volunteerId);
 
-    if (updateError) {
-      console.error("Error resetting training status:", updateError);
-      return new Response(
-        JSON.stringify({ error: "Failed to reset training status", success: false }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+      if (updateError) {
+        console.error("Error resetting training status:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to reset training status", success: false }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
     }
 
     // Get the base URL for the training link
@@ -106,10 +109,22 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Training URL: ${appUrl}`);
 
+    const emailSubject = isReminder 
+      ? "Reminder: Complete Your Circular Economy Training" 
+      : "Retake Your Circular Economy Training";
+
+    const emailHeading = isReminder 
+      ? "Training Reminder" 
+      : "Training Refresh Required";
+
+    const emailMessage = isReminder
+      ? `This is a friendly reminder to complete your <span class="highlight">Circular Economy Training Module</span>.`
+      : `Your training status has been reset and you're invited to <span class="highlight">retake the Circular Economy Training Module</span>.`;
+
     const emailResponse = await resend.emails.send({
       from: "GIF Volunteer Training <noreply@mgif.thesurpluss.com>",
       to: [cleanEmail],
-      subject: "Retake Your Circular Economy Training",
+      subject: emailSubject,
       html: `
         <!DOCTYPE html>
         <html>
@@ -127,16 +142,16 @@ const handler = async (req: Request): Promise<Response> => {
         <body>
           <div class="container">
             <div class="header">
-              <h1 style="color: #DA291C;">Training Refresh Required</h1>
+              <h1 style="color: #DA291C;">${emailHeading}</h1>
             </div>
             <div class="content">
               <p>Hello ${cleanFirstName},</p>
-              <p>Your training status has been reset and you're invited to <span class="highlight">retake the Circular Economy Training Module</span>.</p>
-              <p>This is a great opportunity to refresh your knowledge about circular economy principles and your role as a Gift It Forward volunteer.</p>
+              <p>${emailMessage}</p>
+              <p>This is a great opportunity to ${isReminder ? 'learn about' : 'refresh your knowledge of'} circular economy principles and your role as a Gift It Forward volunteer.</p>
               <p style="text-align: center;">
                 <a href="${appUrl}" class="button" style="color: white;">Start Training</a>
               </p>
-              <p>Once you complete the training and quiz, you'll receive a new certificate.</p>
+              <p>Once you complete the training and quiz, you'll receive a certificate.</p>
               <p>If you have any questions, please contact the volunteer coordination team.</p>
             </div>
             <div class="footer">
