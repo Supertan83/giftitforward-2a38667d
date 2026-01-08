@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.report-surpluss-distribution]
 verify_jwt = false
+
+[functions.send-retake-training]
+verify_jwt = false

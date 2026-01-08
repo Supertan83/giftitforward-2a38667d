@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,9 +14,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface TrainingCompletionViewerProps {
   onBack: () => void;
@@ -36,6 +46,10 @@ interface VolunteerTrainingStatus {
 export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending'>('all');
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [selectedVolunteer, setSelectedVolunteer] = useState<VolunteerTrainingStatus | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const { toast } = useToast();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['volunteer-training-status'],
@@ -66,6 +80,57 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
 
   const completedCount = volunteers.filter((v) => v.training_completed).length;
   const pendingCount = volunteers.filter((v) => !v.training_completed).length;
+
+  const handleResetClick = (volunteer: VolunteerTrainingStatus) => {
+    setSelectedVolunteer(volunteer);
+    setResetDialogOpen(true);
+  };
+
+  const handleResetConfirm = async () => {
+    if (!selectedVolunteer) return;
+    
+    setIsResetting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-retake-training', {
+        body: {
+          volunteerId: selectedVolunteer.id,
+          firstName: selectedVolunteer.first_name,
+          lastName: selectedVolunteer.last_name,
+          email: selectedVolunteer.email,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: 'Training Reset',
+          description: `${selectedVolunteer.first_name}'s training status has been reset and an email has been sent.`,
+        });
+        refetch();
+      } else if (data?.trainingReset) {
+        toast({
+          title: 'Training Reset (Email Failed)',
+          description: `Training status was reset but the email failed to send. ${data.error || ''}`,
+          variant: 'destructive',
+        });
+        refetch();
+      } else {
+        throw new Error(data?.error || 'Failed to reset training');
+      }
+    } catch (error: any) {
+      console.error('Error resetting training:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reset training status',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResetting(false);
+      setResetDialogOpen(false);
+      setSelectedVolunteer(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -202,12 +267,13 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
                   <TableHead>Account Status</TableHead>
                   <TableHead>Training Status</TableHead>
                   <TableHead>Completed At</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredVolunteers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No volunteers found
                     </TableCell>
                   </TableRow>
@@ -258,6 +324,18 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {volunteer.training_completed && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResetClick(volunteer)}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                            Reset
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -266,6 +344,38 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
           )}
         </motion.div>
       </main>
+
+      {/* Reset Confirmation Dialog */}
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Training Status</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset the training status for{' '}
+              <span className="font-semibold">
+                {selectedVolunteer?.first_name} {selectedVolunteer?.last_name}
+              </span>{' '}
+              and send them an email with a link to retake the training.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResetting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetConfirm} disabled={isResetting}>
+              {isResetting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reset & Send Email
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
