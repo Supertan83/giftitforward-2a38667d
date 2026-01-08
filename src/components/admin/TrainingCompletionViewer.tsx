@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2 } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,7 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [selectedVolunteer, setSelectedVolunteer] = useState<VolunteerTrainingStatus | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
@@ -84,6 +85,41 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
   const handleResetClick = (volunteer: VolunteerTrainingStatus) => {
     setSelectedVolunteer(volunteer);
     setResetDialogOpen(true);
+  };
+
+  const handleSendReminder = async (volunteer: VolunteerTrainingStatus) => {
+    setSendingReminderId(volunteer.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-retake-training', {
+        body: {
+          volunteerId: volunteer.id,
+          firstName: volunteer.first_name,
+          lastName: volunteer.last_name,
+          email: volunteer.email,
+          isReminder: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success || data?.trainingReset) {
+        toast({
+          title: 'Reminder Sent',
+          description: `Training reminder email sent to ${volunteer.first_name}.`,
+        });
+      } else {
+        throw new Error(data?.error || 'Failed to send reminder');
+      }
+    } catch (error: any) {
+      console.error('Error sending reminder:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send reminder email',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingReminderId(null);
+    }
   };
 
   const handleResetConfirm = async () => {
@@ -264,7 +300,6 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
                 <TableRow>
                   <TableHead>Volunteer</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Account Status</TableHead>
                   <TableHead>Training Status</TableHead>
                   <TableHead>Completed At</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -273,7 +308,7 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
               <TableBody>
                 {filteredVolunteers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No volunteers found
                     </TableCell>
                   </TableRow>
@@ -288,19 +323,6 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
                           <Mail className="w-3.5 h-3.5 text-muted-foreground" />
                           <span className="text-sm">{volunteer.email}</span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            volunteer.status === 'approved'
-                              ? 'default'
-                              : volunteer.status === 'rejected'
-                              ? 'destructive'
-                              : 'secondary'
-                          }
-                        >
-                          {volunteer.status}
-                        </Badge>
                       </TableCell>
                       <TableCell>
                         {volunteer.training_completed ? (
@@ -325,7 +347,7 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {volunteer.training_completed && (
+                        {volunteer.training_completed ? (
                           <Button
                             variant="outline"
                             size="sm"
@@ -333,6 +355,25 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
                           >
                             <RotateCcw className="w-3.5 h-3.5 mr-1" />
                             Reset
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSendReminder(volunteer)}
+                            disabled={sendingReminderId === volunteer.id}
+                          >
+                            {sendingReminderId === volunteer.id ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-3.5 h-3.5 mr-1" />
+                                Resend
+                              </>
+                            )}
                           </Button>
                         )}
                       </TableCell>
