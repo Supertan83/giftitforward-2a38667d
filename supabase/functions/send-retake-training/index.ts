@@ -102,10 +102,8 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Get the base URL for the training link
-    const trainingUrl = `${Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '.lovable.app')}/training`;
-    // Use a more reliable URL approach
-    const appUrl = "https://zrzlzggixuogpxberdxt.lovable.app/training";
+    // Production URL for the training page
+    const appUrl = "https://gif.thesurpluss.com/training";
 
     console.log(`Training URL: ${appUrl}`);
 
