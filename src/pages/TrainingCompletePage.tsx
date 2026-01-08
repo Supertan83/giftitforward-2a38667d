@@ -1,10 +1,17 @@
 import { motion } from 'framer-motion';
-import { CheckCircle, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle, ExternalLink, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import surplussLogo from '@/assets/surpluss-full-logo.svg';
 
 const TrainingCompletePage = () => {
+  const navigate = useNavigate();
+
+  const handleRetakeTraining = () => {
+    navigate('/training');
+  };
+
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
       <motion.div
@@ -40,6 +47,15 @@ const TrainingCompletePage = () => {
                   <li>• Join us at upcoming Gift It Forward events</li>
                 </ul>
               </div>
+
+              <Button
+                variant="default"
+                className="w-full"
+                onClick={handleRetakeTraining}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Retake Training
+              </Button>
 
               <Button
                 variant="outline"
