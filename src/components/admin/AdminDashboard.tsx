@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight, CloudUpload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -63,6 +63,7 @@ export const AdminDashboard = () => {
     name: string;
   } | null>(null);
   const [deleteInput, setDeleteInput] = useState('');
+  const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
   const navigate = useNavigate();
   const {
     signOut
@@ -971,6 +972,45 @@ export const AdminDashboard = () => {
                         <Database className="w-5 h-5 text-cyan-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Surpluss Sync</h3>
+                    </motion.button>
+
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.4
+                }} disabled={isSyncingHubspot} onClick={async () => {
+                  setIsSyncingHubspot(true);
+                  toast({
+                    title: 'Syncing to HubSpot...',
+                    description: 'Uploading approved volunteers to HubSpot contacts'
+                  });
+                  try {
+                    const { data, error } = await supabase.functions.invoke('hubspot-sync', {
+                      body: { action: 'sync_volunteers' }
+                    });
+                    if (error) throw error;
+                    toast({
+                      title: 'HubSpot Sync Complete',
+                      description: `Created: ${data?.results?.created || 0}, Updated: ${data?.results?.updated || 0}, Errors: ${data?.results?.errors || 0}`
+                    });
+                  } catch (error) {
+                    toast({
+                      title: 'Sync Failed',
+                      description: error instanceof Error ? error.message : 'Failed to sync with HubSpot',
+                      variant: 'destructive'
+                    });
+                  } finally {
+                    setIsSyncingHubspot(false);
+                  }
+                }} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group disabled:opacity-50">
+                      <div className="w-10 h-10 mx-auto rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors mb-2">
+                        {isSyncingHubspot ? <Loader2 className="w-5 h-5 text-orange-500 animate-spin" /> : <CloudUpload className="w-5 h-5 text-orange-500" />}
+                      </div>
+                      <h3 className="font-medium text-xs md:text-sm">{isSyncingHubspot ? 'Syncing...' : 'Sync to HubSpot'}</h3>
                     </motion.button>
                   </div>
                 </motion.div>}
