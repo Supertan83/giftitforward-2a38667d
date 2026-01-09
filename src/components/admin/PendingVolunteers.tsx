@@ -426,7 +426,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   <p>No {activeTab} volunteers</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div>
                   {activeTab === 'approved' && volunteers.length > 0 && (
                     <div className="flex items-center gap-4 p-4 border-b border-border bg-muted/30">
                       <div className="flex items-center gap-2">
@@ -455,19 +455,19 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       )}
                     </div>
                   )}
-                  <Table>
+                  <Table className="table-fixed w-full">
                     <TableHeader>
                       <TableRow>
-                        {activeTab === 'approved' && <TableHead className="w-12"></TableHead>}
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Company</TableHead>
-                        <TableHead>Family</TableHead>
-                        <TableHead>Events</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead>Status</TableHead>
-                        {activeTab === 'approved' && <TableHead>Email Status</TableHead>}
-                        <TableHead className="text-right">Actions</TableHead>
+                        {activeTab === 'approved' && <TableHead className="w-10"></TableHead>}
+                        <TableHead className="w-[15%] min-w-[100px]">Name</TableHead>
+                        <TableHead className="w-[18%] min-w-[120px]">Email</TableHead>
+                        <TableHead className="hidden md:table-cell w-[12%]">Company</TableHead>
+                        <TableHead className="hidden lg:table-cell w-[10%]">Family</TableHead>
+                        <TableHead className="hidden lg:table-cell w-[8%]">Events</TableHead>
+                        <TableHead className="hidden sm:table-cell w-[12%]">Submitted</TableHead>
+                        <TableHead className="w-[10%]">Status</TableHead>
+                        {activeTab === 'approved' && <TableHead className="hidden md:table-cell w-[12%]">Email Status</TableHead>}
+                        <TableHead className="text-right w-[15%]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -488,18 +488,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                 />
                               </TableCell>
                             )}
-                            <TableCell className="font-medium">
-                              {volunteer.first_name} {volunteer.last_name}
+                            <TableCell className="font-medium truncate max-w-[100px]">
+                              {volunteer.first_name} {volunteer.last_name?.charAt(0)}.
                             </TableCell>
-                            <TableCell className="text-muted-foreground">
+                            <TableCell className="text-muted-foreground truncate max-w-[120px]" title={volunteer.email}>
                               {volunteer.email}
                             </TableCell>
-                            <TableCell>
-                              <span className="text-sm text-muted-foreground">
+                            <TableCell className="hidden md:table-cell">
+                              <span className="text-sm text-muted-foreground truncate block max-w-[100px]">
                                 {volunteer.is_employee ? 'Dubai Holding' : (volunteer.external_company || 'Not specified')}
                               </span>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell">
                               {(() => {
                                 const deps = extractUniqueDependents(volunteer.events_json);
                                 if (deps.length === 0) {
@@ -507,103 +507,93 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                 }
                                 return (
                                   <div className="flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                                    <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                                     <span className="text-sm font-medium">{deps.length}</span>
-                                    <span className="text-xs text-muted-foreground hidden lg:inline">
-                                      ({deps.slice(0, 2).map(d => d.name).join(', ')}{deps.length > 2 ? '...' : ''})
-                                    </span>
                                   </div>
                                 );
                               })()}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell">
                               <span className="text-sm text-muted-foreground">
-                                {volunteer.events_list?.split(',').length || 0} events
+                                {volunteer.events_list?.split(',').length || 0}
                               </span>
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {formatDate(volunteer.created_at)}
+                            <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                              {new Date(volunteer.created_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
                               {getStatusBadge(volunteer.status)}
                             </TableCell>
                             {activeTab === 'approved' && (
-                              <TableCell>
-                                <div className="flex flex-col gap-1">
+                              <TableCell className="hidden md:table-cell">
+                                <div className="flex flex-col gap-0.5">
                                   {volunteer.email_opened ? (
-                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit">
-                                      <MailOpen className="w-3 h-3 mr-1" />
+                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit text-xs px-1.5 py-0">
+                                      <MailOpen className="w-3 h-3 mr-0.5" />
                                       Opened
                                     </Badge>
                                   ) : volunteer.email_sent ? (
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit">
-                                      <Check className="w-3 h-3 mr-1" />
+                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit text-xs px-1.5 py-0">
+                                      <Check className="w-3 h-3 mr-0.5" />
                                       Sent
                                     </Badge>
                                   ) : volunteer.email_send_count && volunteer.email_send_count > 0 ? (
-                                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit">
-                                      <X className="w-3 h-3 mr-1" />
+                                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit text-xs px-1.5 py-0">
+                                      <X className="w-3 h-3 mr-0.5" />
                                       Failed
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="bg-muted text-muted-foreground w-fit">
-                                      <Clock className="w-3 h-3 mr-1" />
+                                    <Badge variant="outline" className="bg-muted text-muted-foreground w-fit text-xs px-1.5 py-0">
+                                      <Clock className="w-3 h-3 mr-0.5" />
                                       Not sent
                                     </Badge>
                                   )}
-                                  {volunteer.email_opened_at ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      Opened: {new Date(volunteer.email_opened_at).toLocaleDateString()} {new Date(volunteer.email_opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  ) : volunteer.email_sent_at ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      Sent: {new Date(volunteer.email_sent_at).toLocaleDateString()} {new Date(volunteer.email_sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  ) : null}
                                 </div>
                               </TableCell>
                             )}
                             <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end gap-1">
                                 <Button
                                   variant="ghost"
-                                  size="sm"
+                                  size="icon"
+                                  className="h-7 w-7"
                                   onClick={() => openDetailsDialog(volunteer)}
                                 >
-                                  <Eye className="w-4 h-4" />
+                                  <Eye className="w-3.5 h-3.5" />
                                 </Button>
                                 {activeTab === 'pending' && (
                                   <>
                                     <Button
                                       variant="ghost"
-                                      size="sm"
-                                      className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                                      size="icon"
+                                      className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
                                       onClick={() => handleApprove(volunteer)}
                                       disabled={approveMutation.isPending}
                                     >
                                       {approveMutation.isPending ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                       ) : (
-                                        <Check className="w-4 h-4" />
+                                        <Check className="w-3.5 h-3.5" />
                                       )}
                                     </Button>
                                     <Button
                                       variant="ghost"
-                                      size="sm"
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-500/10"
+                                      size="icon"
+                                      className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-500/10"
                                       onClick={() => openRejectDialog(volunteer)}
                                       disabled={rejectMutation.isPending}
                                     >
-                                      <X className="w-4 h-4" />
+                                      <X className="w-3.5 h-3.5" />
                                     </Button>
                                   </>
                                 )}
                                 {activeTab === 'approved' && (
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1">
                                     {volunteer.temp_password && (
                                       <Button
-                                        variant="outline"
-                                        size="sm"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
                                         onClick={() => {
                                           setApprovedCredentials({
                                             email: volunteer.email,
@@ -612,27 +602,23 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                           });
                                           setShowCredentialsDialog(true);
                                         }}
+                                        title="View Credentials"
                                       >
-                                        View Credentials
+                                        <Eye className="w-3.5 h-3.5" />
                                       </Button>
                                     )}
                                     <Button
-                                      variant="outline"
-                                      size="sm"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
                                       onClick={() => resendEmailMutation.mutate(volunteer.id)}
                                       disabled={resendEmailMutation.isPending}
-                                      className="gap-1"
+                                      title="Resend Email"
                                     >
                                       {resendEmailMutation.isPending ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                       ) : (
-                                        <Mail className="w-3 h-3" />
-                                      )}
-                                      Resend
-                                      {(volunteer.email_send_count ?? 0) > 0 && (
-                                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                                          {volunteer.email_send_count}
-                                        </Badge>
+                                        <Mail className="w-3.5 h-3.5" />
                                       )}
                                     </Button>
                                   </div>
