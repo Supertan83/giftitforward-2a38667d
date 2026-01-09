@@ -662,7 +662,7 @@ export const AdminDashboard = () => {
                       <div className="w-10 h-10 mx-auto rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors mb-2">
                         <UserPlus className="w-5 h-5 text-orange-500" />
                       </div>
-                      <h3 className="font-medium text-xs md:text-sm">Pending Volunteers</h3>
+                      <h3 className="font-medium text-xs md:text-sm">Volunteers Added</h3>
                     </motion.button>
 
                     <motion.button initial={{
