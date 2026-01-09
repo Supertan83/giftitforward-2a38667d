@@ -650,7 +650,20 @@ export const AdminDashboard = () => {
               duration: 0.2
             }} className="overflow-hidden">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 pt-0">
-                    
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.05
+                }} onClick={() => setCurrentView('pending-volunteers')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
+                      <div className="w-10 h-10 mx-auto rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors mb-2">
+                        <UserPlus className="w-5 h-5 text-orange-500" />
+                      </div>
+                      <h3 className="font-medium text-xs md:text-sm">Pending Volunteers</h3>
+                    </motion.button>
 
                     <motion.button initial={{
                   opacity: 0,
