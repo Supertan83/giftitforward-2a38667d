@@ -13,7 +13,7 @@ const TrainingCompletePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#C5B9AC]/20 flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -69,7 +69,7 @@ const TrainingCompletePage = () => {
           </CardContent>
         </Card>
 
-        <p className="text-white/40 text-sm mt-6">
+        <p className="text-[#54585A]/40 text-sm mt-6">
           © {new Date().getFullYear()} Surpluss. All rights reserved.
         </p>
       </motion.div>
