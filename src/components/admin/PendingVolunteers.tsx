@@ -120,7 +120,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [activeTab, setActiveTab] = useState<'approved'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   const { toast } = useToast();
@@ -369,9 +369,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               </Button>
               <BrandLogo size="md" />
               <div>
-                <h1 className="font-display font-bold text-base md:text-lg">Pending Volunteers</h1>
+                <h1 className="font-display font-bold text-base md:text-lg">Volunteers Added</h1>
                 <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                  Review and approve volunteer applications
+                  View approved volunteers
                 </p>
               </div>
             </div>
@@ -384,34 +384,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Stats */}
-        {pendingCount.data !== undefined && pendingCount.data > 0 && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 flex items-center gap-3"
-          >
-            <Clock className="w-5 h-5 text-amber-600" />
-            <span className="text-amber-700 font-medium">
-              {pendingCount.data} volunteer{pendingCount.data !== 1 ? 's' : ''} awaiting approval
-            </span>
-          </motion.div>
-        )}
-
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pending' | 'approved' | 'rejected')}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'approved')}>
           <TabsList className="mb-4">
-            <TabsTrigger value="pending" className="gap-2">
-              <Clock className="w-4 h-4" />
-              Pending
-            </TabsTrigger>
             <TabsTrigger value="approved" className="gap-2">
               <Check className="w-4 h-4" />
-              Approved
-            </TabsTrigger>
-            <TabsTrigger value="rejected" className="gap-2">
-              <X className="w-4 h-4" />
-              Rejected
+              Approved Volunteers
             </TabsTrigger>
           </TabsList>
 
@@ -424,11 +402,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               ) : volunteers.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No {activeTab} volunteers</p>
+                  <p>No approved volunteers</p>
                 </div>
               ) : (
                 <div>
-                  {activeTab === 'approved' && volunteers.length > 0 && (
+                  {volunteers.length > 0 && (
                     <div className="flex items-center gap-4 p-4 border-b border-border bg-muted/30">
                       <div className="flex items-center gap-2">
                         <Checkbox
@@ -459,14 +437,14 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   <Table className="table-fixed w-full">
                     <TableHeader>
                       <TableRow>
-                        {activeTab === 'approved' && <TableHead className="w-10"></TableHead>}
+                        <TableHead className="w-10"></TableHead>
                         <TableHead className="w-[18%] min-w-[100px]">Name</TableHead>
                         <TableHead className="w-[22%] min-w-[120px]">Email</TableHead>
                         <TableHead className="hidden md:table-cell w-[14%]">Company</TableHead>
                         <TableHead className="hidden lg:table-cell w-[10%]">Family</TableHead>
                         <TableHead className="hidden lg:table-cell w-[8%]">Events</TableHead>
                         <TableHead className="hidden sm:table-cell w-[14%]">Submitted</TableHead>
-                        {activeTab === 'approved' && <TableHead className="hidden md:table-cell w-[12%]">Email Status</TableHead>}
+                        <TableHead className="hidden md:table-cell w-[12%]">Email Status</TableHead>
                         <TableHead className="text-right w-[14%]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -480,14 +458,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             exit={{ opacity: 0 }}
                             className="group"
                           >
-                            {activeTab === 'approved' && (
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedIds.has(volunteer.id)}
-                                  onCheckedChange={() => toggleSelect(volunteer.id)}
-                                />
-                              </TableCell>
-                            )}
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedIds.has(volunteer.id)}
+                                onCheckedChange={() => toggleSelect(volunteer.id)}
+                              />
+                            </TableCell>
                             <TableCell className="font-medium truncate max-w-[100px]">
                               {volunteer.first_name} {volunteer.last_name?.charAt(0)}.
                             </TableCell>
@@ -521,33 +497,31 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                               {new Date(volunteer.created_at).toLocaleDateString()}
                             </TableCell>
-                            {activeTab === 'approved' && (
-                              <TableCell className="hidden md:table-cell">
-                                <div className="flex flex-col gap-0.5">
-                                  {volunteer.email_opened ? (
-                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit text-xs px-1.5 py-0">
-                                      <MailOpen className="w-3 h-3 mr-0.5" />
-                                      Opened
-                                    </Badge>
-                                  ) : volunteer.email_sent ? (
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit text-xs px-1.5 py-0">
-                                      <Check className="w-3 h-3 mr-0.5" />
-                                      Sent
-                                    </Badge>
-                                  ) : volunteer.email_send_count && volunteer.email_send_count > 0 ? (
-                                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit text-xs px-1.5 py-0">
-                                      <X className="w-3 h-3 mr-0.5" />
-                                      Failed
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-muted text-muted-foreground w-fit text-xs px-1.5 py-0">
-                                      <Clock className="w-3 h-3 mr-0.5" />
-                                      Not sent
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                            )}
+                            <TableCell className="hidden md:table-cell">
+                              <div className="flex flex-col gap-0.5">
+                                {volunteer.email_opened ? (
+                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit text-xs px-1.5 py-0">
+                                    <MailOpen className="w-3 h-3 mr-0.5" />
+                                    Opened
+                                  </Badge>
+                                ) : volunteer.email_sent ? (
+                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit text-xs px-1.5 py-0">
+                                    <Check className="w-3 h-3 mr-0.5" />
+                                    Sent
+                                  </Badge>
+                                ) : volunteer.email_send_count && volunteer.email_send_count > 0 ? (
+                                  <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit text-xs px-1.5 py-0">
+                                    <X className="w-3 h-3 mr-0.5" />
+                                    Failed
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-muted text-muted-foreground w-fit text-xs px-1.5 py-0">
+                                    <Clock className="w-3 h-3 mr-0.5" />
+                                    Not sent
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <TooltipProvider delayDuration={200}>
                                 <div className="flex items-center justify-end gap-1">
@@ -564,86 +538,46 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     </TooltipTrigger>
                                     <TooltipContent>View Details</TooltipContent>
                                   </Tooltip>
-                                  {activeTab === 'pending' && (
-                                    <>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                                            onClick={() => handleApprove(volunteer)}
-                                            disabled={approveMutation.isPending}
-                                          >
-                                            {approveMutation.isPending ? (
-                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            ) : (
-                                              <Check className="w-3.5 h-3.5" />
-                                            )}
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Approve</TooltipContent>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-500/10"
-                                            onClick={() => openRejectDialog(volunteer)}
-                                            disabled={rejectMutation.isPending}
-                                          >
-                                            <X className="w-3.5 h-3.5" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Reject</TooltipContent>
-                                      </Tooltip>
-                                    </>
+                                  {volunteer.temp_password && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => {
+                                            setApprovedCredentials({
+                                              email: volunteer.email,
+                                              password: volunteer.temp_password!,
+                                              emailSent: volunteer.email_sent ?? false
+                                            });
+                                            setShowCredentialsDialog(true);
+                                          }}
+                                        >
+                                          <KeyRound className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>View Credentials</TooltipContent>
+                                    </Tooltip>
                                   )}
-                                  {activeTab === 'approved' && (
-                                    <>
-                                      {volunteer.temp_password && (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7"
-                                              onClick={() => {
-                                                setApprovedCredentials({
-                                                  email: volunteer.email,
-                                                  password: volunteer.temp_password!,
-                                                  emailSent: volunteer.email_sent ?? false
-                                                });
-                                                setShowCredentialsDialog(true);
-                                              }}
-                                            >
-                                              <KeyRound className="w-3.5 h-3.5" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>View Credentials</TooltipContent>
-                                        </Tooltip>
-                                      )}
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7"
-                                            onClick={() => resendEmailMutation.mutate(volunteer.id)}
-                                            disabled={resendEmailMutation.isPending}
-                                          >
-                                            {resendEmailMutation.isPending ? (
-                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            ) : (
-                                              <Mail className="w-3.5 h-3.5" />
-                                            )}
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Resend Email</TooltipContent>
-                                      </Tooltip>
-                                    </>
-                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => resendEmailMutation.mutate(volunteer.id)}
+                                        disabled={resendEmailMutation.isPending}
+                                      >
+                                        {resendEmailMutation.isPending ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <Mail className="w-3.5 h-3.5" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Resend Email</TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </TooltipProvider>
                             </TableCell>
