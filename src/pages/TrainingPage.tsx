@@ -83,14 +83,14 @@ const TrainingPage = () => {
   // Show loading while auth is being checked
   if (authLoading || isLoadingUserInfo) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#C5B9AC] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="text-center"
         >
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-white/70">Loading...</p>
+          <p className="text-foreground/70">Loading...</p>
         </motion.div>
       </div>
     );
@@ -108,7 +108,7 @@ const TrainingPage = () => {
 
   // Welcome screen before starting training
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#C5B9AC] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
