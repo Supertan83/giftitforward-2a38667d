@@ -72,9 +72,9 @@ const TrainingSlideshow = ({ userInfo }: TrainingSlideshowProps) => {
   }
 
   return (
-    <div className="h-screen bg-[#1a1a1a] flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#C5B9AC]/20 flex flex-col overflow-hidden">
       {/* Header with progress */}
-      <header className="flex-shrink-0 bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-2">
+      <header className="flex-shrink-0 bg-[#C5B9AC]/30 backdrop-blur border-b border-[#54585A]/20 px-4 py-2">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-2">
             <Button
@@ -82,19 +82,19 @@ const TrainingSlideshow = ({ userInfo }: TrainingSlideshowProps) => {
               size="icon"
               onClick={handlePrevious}
               disabled={isFirstSlide}
-              className="text-white/70 hover:text-white hover:bg-white/10 disabled:opacity-30"
+              className="text-[#54585A]/70 hover:text-[#54585A] hover:bg-[#54585A]/10 disabled:opacity-30"
               aria-label="Previous slide"
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <span className="text-sm font-medium text-white/70 min-w-[60px] text-center">
+            <span className="text-sm font-medium text-[#54585A]/70 min-w-[60px] text-center">
               {currentSlide + 1} / {slides.length}
             </span>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleNext}
-              className="text-white/70 hover:text-white hover:bg-white/10"
+              className="text-[#54585A]/70 hover:text-[#54585A] hover:bg-[#54585A]/10"
               aria-label="Next slide"
             >
               <ChevronRight className="h-5 w-5" />
@@ -102,14 +102,14 @@ const TrainingSlideshow = ({ userInfo }: TrainingSlideshowProps) => {
           </div>
 
           <div className="flex-1 max-w-md mx-4">
-            <Progress value={progress} className="h-1.5 bg-white/10" />
+            <Progress value={progress} className="h-1.5 bg-[#54585A]/10" />
           </div>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={handleClose}
-            className="text-white/70 hover:text-white hover:bg-white/10"
+            className="text-[#54585A]/70 hover:text-[#54585A] hover:bg-[#54585A]/10"
             aria-label="Close training"
           >
             <X className="h-5 w-5" />
@@ -132,7 +132,7 @@ const TrainingSlideshow = ({ userInfo }: TrainingSlideshowProps) => {
       </main>
 
       {/* Slide indicators */}
-      <footer className="flex-shrink-0 py-3 px-4 bg-[#1a1a1a]">
+      <footer className="flex-shrink-0 py-3 px-4 bg-[#C5B9AC]/20">
         <div className="flex justify-center gap-1.5 max-w-7xl mx-auto flex-wrap">
           {slides.map((_, index) => (
             <button
@@ -140,10 +140,10 @@ const TrainingSlideshow = ({ userInfo }: TrainingSlideshowProps) => {
               onClick={() => setCurrentSlide(index)}
               className={`h-1.5 rounded-full transition-all ${
                 index === currentSlide 
-                  ? 'bg-white w-6' 
+                  ? 'bg-[#54585A] w-6' 
                   : index < currentSlide 
-                    ? 'bg-white/50 w-1.5' 
-                    : 'bg-white/20 w-1.5'
+                    ? 'bg-[#54585A]/50 w-1.5' 
+                    : 'bg-[#54585A]/20 w-1.5'
               }`}
               aria-label={`Go to slide ${index + 1}`}
             />
