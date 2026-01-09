@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -34,6 +34,7 @@ import {
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PendingVolunteer {
   id: string;
@@ -122,6 +123,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<'approved'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [eventFilter, setEventFilter] = useState<string>('all');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -139,6 +141,31 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       return data as PendingVolunteer[];
     }
   });
+
+  // Extract unique events from all volunteers
+  const uniqueEvents = useMemo(() => {
+    const eventsSet = new Set<string>();
+    volunteers.forEach(v => {
+      if (v.events_list) {
+        v.events_list.split(',').forEach(e => {
+          const formatted = formatEventName(e.trim());
+          if (formatted) eventsSet.add(formatted);
+        });
+      }
+    });
+    return Array.from(eventsSet).sort();
+  }, [volunteers]);
+
+  // Filter volunteers by selected event
+  const filteredVolunteers = useMemo(() => {
+    if (eventFilter === 'all') return volunteers;
+    return volunteers.filter(v => {
+      if (!v.events_list) return false;
+      return v.events_list.split(',').some(e => 
+        formatEventName(e.trim()) === eventFilter
+      );
+    });
+  }, [volunteers, eventFilter]);
 
   const approveMutation = useMutation({
     mutationFn: async (pendingId: string) => {
@@ -306,10 +333,10 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === volunteers.length) {
+    if (selectedIds.size === filteredVolunteers.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(volunteers.map(v => v.id)));
+      setSelectedIds(new Set(filteredVolunteers.map(v => v.id)));
     }
   };
 
@@ -384,6 +411,29 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
+        {/* Event Filter */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-muted-foreground" />
+            <Select value={eventFilter} onValueChange={setEventFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by event" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Events</SelectItem>
+                {uniqueEvents.map(event => (
+                  <SelectItem key={event} value={event}>{event}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {eventFilter !== 'all' && (
+            <Badge variant="secondary" className="gap-1">
+              {filteredVolunteers.length} volunteer{filteredVolunteers.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
+        </div>
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'approved')}>
           <TabsList className="mb-4">
@@ -399,18 +449,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 </div>
-              ) : volunteers.length === 0 ? (
+              ) : filteredVolunteers.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No approved volunteers</p>
+                  <p>{eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers'}</p>
                 </div>
               ) : (
                 <div>
-                  {volunteers.length > 0 && (
+                  {filteredVolunteers.length > 0 && (
                     <div className="flex items-center gap-4 p-4 border-b border-border bg-muted/30">
                       <div className="flex items-center gap-2">
                         <Checkbox
-                          checked={selectedIds.size === volunteers.length && volunteers.length > 0}
+                          checked={selectedIds.size === filteredVolunteers.length && filteredVolunteers.length > 0}
                           onCheckedChange={toggleSelectAll}
                         />
                         <span className="text-sm text-muted-foreground">
@@ -450,7 +500,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     </TableHeader>
                     <TableBody>
                       <AnimatePresence>
-                        {volunteers.map((volunteer) => (
+                        {filteredVolunteers.map((volunteer) => (
                           <motion.tr
                             key={volunteer.id}
                             initial={{ opacity: 0 }}
