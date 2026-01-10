@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -35,6 +35,13 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+interface VolunteerQRCard {
+  unique_id: string;
+  status: string;
+}
 
 interface PendingVolunteer {
   id: string;
@@ -66,6 +73,12 @@ interface PendingVolunteer {
   email_opened: boolean | null;
   email_opened_at: string | null;
   created_at: string;
+  source_data: unknown;
+  training_completed: boolean | null;
+  training_completed_at: string | null;
+  certificate_sent_at: string | null;
+  created_user_id: string | null;
+  volunteer_qr_cards?: VolunteerQRCard[];
 }
 
 interface PendingVolunteersProps {
@@ -89,6 +102,7 @@ interface Dependent {
   name: string;
   type: string;
   gender?: string;
+  qrCode?: string;
 }
 
 const extractUniqueDependents = (eventsJson: unknown): Dependent[] => {
@@ -133,7 +147,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('pending_volunteers')
-        .select('*')
+        .select(`
+          *,
+          volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (
+            unique_id,
+            status
+          )
+        `)
         .eq('status', activeTab)
         .order('created_at', { ascending: false });
       
@@ -665,7 +685,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-muted-foreground" />
-                    <span>{selectedVolunteer.email}</span>
+                    <span className="text-sm break-all">{selectedVolunteer.email}</span>
                   </div>
                   {selectedVolunteer.phone_number && (
                     <div className="flex items-center gap-2">
@@ -681,9 +701,106 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </div>
               </div>
 
+              {/* QR Codes Section */}
+              {selectedVolunteer.volunteer_qr_cards && selectedVolunteer.volunteer_qr_cards.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
+                    <QrCode className="w-4 h-4" />
+                    QR Codes ({selectedVolunteer.volunteer_qr_cards.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedVolunteer.volunteer_qr_cards.map((card, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs font-mono bg-background px-2 py-1 rounded">{card.unique_id}</code>
+                          <Badge variant={card.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                            {card.status}
+                          </Badge>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => {
+                            navigator.clipboard.writeText(card.unique_id);
+                            toast({ title: 'QR code copied!' });
+                          }}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Training Status */}
+              <div>
+                <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <GraduationCap className="w-4 h-4" />
+                  Training Status
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    {selectedVolunteer.training_completed ? (
+                      <Check className="w-4 h-4 text-emerald-500" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-amber-500" />
+                    )}
+                    <span>
+                      Training: {selectedVolunteer.training_completed 
+                        ? `Completed (${new Date(selectedVolunteer.training_completed_at!).toLocaleDateString()})`
+                        : 'Not completed'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedVolunteer.certificate_sent_at ? (
+                      <Check className="w-4 h-4 text-emerald-500" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <span>
+                      Certificate: {selectedVolunteer.certificate_sent_at 
+                        ? `Sent (${new Date(selectedVolunteer.certificate_sent_at).toLocaleDateString()})`
+                        : 'Not sent'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Family Members */}
+              {(() => {
+                const deps = extractUniqueDependents(selectedVolunteer.events_json);
+                if (deps.length === 0) return null;
+                return (
+                  <div>
+                    <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Family Members ({deps.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {deps.map((dep, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={dep.type === 'adult' ? 'default' : 'secondary'} className="text-xs">
+                              {dep.type === 'adult' ? 'Adult' : 'Child'}
+                            </Badge>
+                            <span className="font-medium">{dep.name}</span>
+                            {dep.gender && <span className="text-muted-foreground text-sm">({dep.gender})</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Company Info */}
               <div>
-                <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">Company</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Employment
+                </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
                     <Building className="w-4 h-4 text-muted-foreground" />
@@ -697,6 +814,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   {selectedVolunteer.is_employee && selectedVolunteer.employee_number && (
                     <div className="text-sm">
                       <span className="text-muted-foreground">Employee #:</span> {selectedVolunteer.employee_number}
+                    </div>
+                  )}
+                  {selectedVolunteer.employee_join_date && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Date of Joining:</span> {selectedVolunteer.employee_join_date}
                     </div>
                   )}
                 </div>
@@ -752,6 +874,24 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {/* Raw Webhook Data - Collapsible */}
+              {selectedVolunteer.source_data && (
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 hover:bg-muted rounded-lg transition-colors group">
+                    <Code className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Raw Webhook Data</span>
+                    <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto group-data-[state=open]:rotate-180 transition-transform" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <ScrollArea className="h-[300px] mt-2">
+                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto font-mono whitespace-pre-wrap break-all">
+                        {JSON.stringify(selectedVolunteer.source_data, null, 2)}
+                      </pre>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </Collapsible>
               )}
 
               {/* Rejection reason if rejected */}
