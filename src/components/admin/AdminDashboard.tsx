@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight, CloudUpload } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight, CloudUpload, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -30,11 +30,12 @@ import { MarketplaceReports } from '@/components/admin/MarketplaceReports';
 import { SurplussSyncPanel } from '@/components/admin/SurplussSyncPanel';
 import { AllocationManagement } from '@/components/admin/AllocationManagement';
 import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewer';
+import { HubSpotEmailConfig } from '@/components/admin/HubSpotEmailConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config';
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [expandedCategory, setExpandedCategory] = useState<'volunteer' | 'beneficiary' | 'admin' | null>(null);
@@ -342,6 +343,11 @@ export const AdminDashboard = () => {
   // Show Surpluss Sync view
   if (currentView === 'surpluss-sync') {
     return <SurplussSyncPanel onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show HubSpot Email Config view
+  if (currentView === 'hubspot-email-config') {
+    return <HubSpotEmailConfig onBack={() => setCurrentView('dashboard')} />;
   }
   if (isLoading || allocationsLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
@@ -881,7 +887,7 @@ export const AdminDashboard = () => {
             }} transition={{
               duration: 0.2
             }} className="overflow-hidden">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 p-4 pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3 p-4 pt-0">
                     <motion.button initial={{
                   opacity: 0,
                   y: 10
@@ -1024,6 +1030,21 @@ export const AdminDashboard = () => {
                         {isSyncingHubspot ? <Loader2 className="w-5 h-5 text-orange-500 animate-spin" /> : <CloudUpload className="w-5 h-5 text-orange-500" />}
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">{isSyncingHubspot ? 'Syncing...' : 'Sync to HubSpot'}</h3>
+                    </motion.button>
+
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.45
+                }} onClick={() => setCurrentView('hubspot-email-config')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
+                      <div className="w-10 h-10 mx-auto rounded-lg bg-pink-500/10 flex items-center justify-center group-hover:bg-pink-500/20 transition-colors mb-2">
+                        <Mail className="w-5 h-5 text-pink-500" />
+                      </div>
+                      <h3 className="font-medium text-xs md:text-sm">HubSpot Emails</h3>
                     </motion.button>
                   </div>
                 </motion.div>}
