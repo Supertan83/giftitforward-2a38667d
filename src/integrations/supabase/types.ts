@@ -423,6 +423,33 @@ export type Database = {
         }
         Relationships: []
       }
+      hubspot_email_config: {
+        Row: {
+          created_at: string
+          email_type: string
+          enabled: boolean | null
+          id: string
+          template_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email_type: string
+          enabled?: boolean | null
+          id?: string
+          template_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email_type?: string
+          enabled?: boolean | null
+          id?: string
+          template_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       item_types: {
         Row: {
           allocated_to_marketplace: number
