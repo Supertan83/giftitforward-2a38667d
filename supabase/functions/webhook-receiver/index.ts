@@ -9,6 +9,120 @@ const corsHeaders = {
 
 // Initialize Resend for sending welcome emails
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const HUBSPOT_API_KEY = Deno.env.get("HUBSPOT_API_KEY");
+
+interface EmailConfig {
+  email_type: string;
+  template_id: string | null;
+  enabled: boolean;
+}
+
+// Helper to get email config from database
+// deno-lint-ignore no-explicit-any
+async function getEmailConfig(supabase: any, emailType: string): Promise<EmailConfig | null> {
+  try {
+    const { data, error } = await supabase
+      .from('hubspot_email_config')
+      .select('email_type, template_id, enabled')
+      .eq('email_type', emailType)
+      .single();
+    
+    if (error || !data) return null;
+    return data as EmailConfig;
+  } catch {
+    return null;
+  }
+}
+
+// Send email via HubSpot transactional API
+async function sendViaHubSpot(
+  templateId: string,
+  recipientEmail: string,
+  customProperties: Record<string, string>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // First, ensure contact exists in HubSpot
+    const searchResponse = await fetch(
+      'https://api.hubapi.com/crm/v3/objects/contacts/search',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filterGroups: [{
+            filters: [{
+              propertyName: 'email',
+              operator: 'EQ',
+              value: recipientEmail,
+            }]
+          }]
+        })
+      }
+    );
+
+    const searchData = await searchResponse.json();
+    
+    // Create contact if doesn't exist
+    if (!searchData.results || searchData.results.length === 0) {
+      const createResponse = await fetch(
+        'https://api.hubapi.com/crm/v3/objects/contacts',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            properties: {
+              email: recipientEmail,
+              firstname: customProperties.first_name || '',
+            }
+          })
+        }
+      );
+      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        console.error('Failed to create HubSpot contact:', errorData);
+      }
+    }
+
+    // Send transactional email
+    const emailResponse = await fetch(
+      'https://api.hubapi.com/marketing/v3/transactional/single-email/send',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailId: parseInt(templateId),
+          message: {
+            to: recipientEmail,
+          },
+          customProperties: customProperties,
+          contactProperties: customProperties
+        })
+      }
+    );
+
+    if (!emailResponse.ok) {
+      const errorData = await emailResponse.json();
+      console.error('HubSpot email send failed:', errorData);
+      return { success: false, error: errorData.message || 'HubSpot email failed' };
+    }
+
+    const result = await emailResponse.json();
+    console.log('HubSpot email sent successfully:', result);
+    return { success: true };
+  } catch (error) {
+    console.error('HubSpot email error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown HubSpot error' };
+  }
+}
 
 // Generate unique volunteer QR card ID
 function generateVolunteerQRId(): string {

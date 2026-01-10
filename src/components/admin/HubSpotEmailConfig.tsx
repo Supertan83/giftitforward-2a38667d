@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Mail, Save, Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Mail, Save, Loader2, CheckCircle, AlertCircle, ExternalLink, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -109,7 +110,7 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
 
       toast({
         title: 'Configuration Saved',
-        description: 'HubSpot email settings have been updated'
+        description: 'Email settings have been updated'
       });
 
       setEditedConfigs({});
@@ -125,9 +126,17 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
     }
   };
 
-  const enabledCount = configs.filter(c => 
-    editedConfigs[c.email_type]?.enabled ?? c.enabled
-  ).length;
+  const getEmailProvider = (config: EmailConfig) => {
+    const enabled = getConfigValue(config, 'enabled') as boolean;
+    const templateId = getConfigValue(config, 'template_id') as string || '';
+    return enabled && templateId.trim().length > 0 ? 'hubspot' : 'resend';
+  };
+
+  const setEmailProvider = (emailType: string, provider: 'resend' | 'hubspot') => {
+    handleInputChange(emailType, 'enabled', provider === 'hubspot');
+  };
+
+  const hubspotCount = configs.filter(c => getEmailProvider(c) === 'hubspot').length;
 
   if (isLoading) {
     return (
@@ -147,9 +156,9 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
               Back
             </Button>
             <div className="flex-1">
-              <h1 className="font-display font-bold text-lg">HubSpot Email Configuration</h1>
+              <h1 className="font-display font-bold text-lg">Email Service Configuration</h1>
               <p className="text-sm text-muted-foreground">
-                Configure HubSpot transactional email template IDs
+                Choose email provider for each email type
               </p>
             </div>
             {hasChanges && (
@@ -173,19 +182,26 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5" />
-                  Email Delivery Status
+                  <Settings className="w-5 h-5" />
+                  Email Service Overview
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  {enabledCount === 0 
-                    ? 'All emails are sent via Resend (default)'
-                    : `${enabledCount} of ${configs.length} email types configured for HubSpot`
+                  {hubspotCount === 0 
+                    ? 'All emails are sent via Resend'
+                    : hubspotCount === configs.length
+                    ? 'All emails are sent via HubSpot'
+                    : `${hubspotCount} via HubSpot, ${configs.length - hubspotCount} via Resend`
                   }
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Badge variant={enabledCount > 0 ? 'default' : 'secondary'}>
-                  {enabledCount > 0 ? 'HubSpot Active' : 'Using Resend'}
+                <Badge variant="outline" className="gap-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  Resend: {configs.length - hubspotCount}
+                </Badge>
+                <Badge variant="outline" className="gap-1">
+                  <div className="w-2 h-2 rounded-full bg-orange-500" />
+                  HubSpot: {hubspotCount}
                 </Badge>
               </div>
             </div>
@@ -203,7 +219,7 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
                   <li>Go to HubSpot → Marketing → Email → Templates</li>
                   <li>Create or edit a transactional email template</li>
                   <li>The template ID is in the URL: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">.../email/TEMPLATE_ID/...</code></li>
-                  <li>Enter the numeric ID below and enable the toggle</li>
+                  <li>Enter the numeric ID below and select "HubSpot" as provider</li>
                 </ol>
                 <a 
                   href="https://knowledge.hubspot.com/email/create-transactional-emails" 
@@ -227,63 +243,90 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
               description: ''
             };
             const templateId = getConfigValue(config, 'template_id') as string || '';
-            const enabled = getConfigValue(config, 'enabled') as boolean;
-            const isConfigured = templateId && templateId.trim().length > 0;
+            const currentProvider = getEmailProvider(config);
+            const hasTemplateId = templateId.trim().length > 0;
 
             return (
-              <Card key={config.id} className={enabled ? 'border-primary/50' : ''}>
+              <Card key={config.id} className={currentProvider === 'hubspot' ? 'border-orange-500/50' : ''}>
                 <CardContent className="pt-6">
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium">{typeInfo.title}</h3>
-                        {enabled && isConfigured ? (
-                          <Badge variant="default" className="text-xs">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            HubSpot
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <h3 className="font-medium">{typeInfo.title}</h3>
+                          <Badge 
+                            variant={currentProvider === 'hubspot' ? 'default' : 'secondary'}
+                            className={currentProvider === 'hubspot' ? 'bg-orange-500' : 'bg-blue-500 text-white'}
+                          >
+                            {currentProvider === 'hubspot' ? (
+                              <>
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                HubSpot
+                              </>
+                            ) : 'Resend'}
                           </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs">Resend</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {typeInfo.description}
-                      </p>
-                      
-                      <div className="space-y-3">
-                        <div>
-                          <Label htmlFor={`template-${config.email_type}`}>
-                            HubSpot Template ID
-                          </Label>
-                          <Input
-                            id={`template-${config.email_type}`}
-                            placeholder="e.g., 12345678"
-                            value={templateId}
-                            onChange={(e) => handleInputChange(config.email_type, 'template_id', e.target.value)}
-                            className="mt-1.5"
-                          />
                         </div>
+                        <p className="text-sm text-muted-foreground">
+                          {typeInfo.description}
+                        </p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 sm:pt-6">
-                      <Label htmlFor={`enable-${config.email_type}`} className="text-sm">
-                        Use HubSpot
+                    {/* Provider Selection */}
+                    <div className="space-y-3">
+                      <Label>Email Provider</Label>
+                      <RadioGroup 
+                        value={currentProvider}
+                        onValueChange={(value) => setEmailProvider(config.email_type, value as 'resend' | 'hubspot')}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="resend" id={`resend-${config.email_type}`} />
+                          <Label htmlFor={`resend-${config.email_type}`} className="flex items-center gap-2 cursor-pointer">
+                            <div className="w-3 h-3 rounded-full bg-blue-500" />
+                            Resend (Default)
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem 
+                            value="hubspot" 
+                            id={`hubspot-${config.email_type}`}
+                            disabled={!hasTemplateId}
+                          />
+                          <Label 
+                            htmlFor={`hubspot-${config.email_type}`} 
+                            className={`flex items-center gap-2 cursor-pointer ${!hasTemplateId ? 'opacity-50' : ''}`}
+                          >
+                            <div className="w-3 h-3 rounded-full bg-orange-500" />
+                            HubSpot
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                      
+                      {!hasTemplateId && (
+                        <p className="text-xs text-amber-600">
+                          Enter a HubSpot Template ID to enable HubSpot delivery
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Template ID Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`template-${config.email_type}`}>
+                        HubSpot Template ID
                       </Label>
-                      <Switch
-                        id={`enable-${config.email_type}`}
-                        checked={enabled}
-                        onCheckedChange={(checked) => handleInputChange(config.email_type, 'enabled', checked)}
-                        disabled={!isConfigured && !enabled}
+                      <Input
+                        id={`template-${config.email_type}`}
+                        placeholder="e.g., 12345678"
+                        value={templateId}
+                        onChange={(e) => handleInputChange(config.email_type, 'template_id', e.target.value)}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Required only if using HubSpot for this email type
+                      </p>
                     </div>
                   </div>
-                  
-                  {enabled && !isConfigured && (
-                    <p className="text-xs text-amber-600 mt-3">
-                      ⚠️ Template ID required to enable HubSpot delivery
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             );
@@ -294,9 +337,9 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
         <Card className="bg-muted/50">
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">
-              <strong>Note:</strong> When HubSpot is disabled or template ID is not configured for an email type, 
-              emails will be sent via Resend (the default email provider). This allows for a gradual migration 
-              to HubSpot as you create and test each template.
+              <strong>Note:</strong> You can configure each email type independently. 
+              This allows for a gradual migration to HubSpot as you create and test each template. 
+              Certificate emails with PDF attachments work best with Resend as HubSpot doesn't support attachments.
             </p>
           </CardContent>
         </Card>
