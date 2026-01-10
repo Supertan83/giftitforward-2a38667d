@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Mail, Save, Loader2, CheckCircle, AlertCircle, ExternalLink, Settings } from 'lucide-react';
+import { ArrowLeft, Mail, Save, Loader2, CheckCircle, AlertCircle, ExternalLink, Settings, ChevronDown, ChevronUp, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,6 +36,40 @@ const emailTypeLabels: Record<string, { title: string; description: string }> = 
   }
 };
 
+// HubSpot template properties documentation
+const templateProperties: Record<string, { property: string; description: string }[]> = {
+  welcome: [
+    { property: '{{ custom.first_name }}', description: "Volunteer's first name" },
+    { property: '{{ custom.last_name }}', description: "Volunteer's last name" },
+    { property: '{{ custom.full_name }}', description: 'Full name (first + last)' },
+    { property: '{{ custom.email }}', description: 'Volunteer email address' },
+    { property: '{{ custom.temp_password }}', description: 'Temporary login password' },
+    { property: '{{ custom.qr_card_id }}', description: 'Volunteer QR card ID (e.g., VOL-ABC123)' },
+    { property: '{{ custom.qr_code_url }}', description: 'URL to QR code image (use in <img src="">)' },
+    { property: '{{ custom.login_url }}', description: 'Login page URL' },
+    { property: '{{ custom.training_url }}', description: 'Training page URL' },
+    { property: '{{ custom.family_count }}', description: 'Number of family members' },
+    { property: '{{ custom.total_qr_count }}', description: 'Total QR codes (volunteer + family)' },
+    { property: '{{ custom.family_member_1_name }}', description: 'Family member 1 name (up to 10)' },
+    { property: '{{ custom.family_member_1_type }}', description: 'Family member 1 type (Adult/Child)' },
+    { property: '{{ custom.family_member_1_qr_id }}', description: 'Family member 1 QR ID' },
+    { property: '{{ custom.family_member_1_qr_url }}', description: 'Family member 1 QR code image URL' },
+  ],
+  survey: [
+    { property: '{{ custom.first_name }}', description: "Volunteer's first name" },
+    { property: '{{ custom.volunteer_name }}', description: 'Full volunteer name' },
+    { property: '{{ custom.survey_url }}', description: 'Survey page URL' },
+  ],
+  training: [
+    { property: '{{ custom.first_name }}', description: "Volunteer's first name" },
+    { property: '{{ custom.training_url }}', description: 'Training page URL' },
+  ],
+  certificate: [
+    { property: '{{ custom.first_name }}', description: "Volunteer's first name" },
+    { property: '{{ custom.volunteer_name }}', description: 'Full volunteer name' },
+  ],
+};
+
 interface HubSpotEmailConfigProps {
   onBack: () => void;
 }
@@ -45,6 +79,7 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [editedConfigs, setEditedConfigs] = useState<Record<string, Partial<EmailConfig>>>({});
+  const [expandedProperties, setExpandedProperties] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -138,6 +173,12 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
 
   const hubspotCount = configs.filter(c => getEmailProvider(c) === 'hubspot').length;
 
+  const toggleProperties = (emailType: string) => {
+    setExpandedProperties(prev => ({
+      ...prev,
+      [emailType]: !prev[emailType]
+    }));
+  };
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -326,6 +367,50 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
                         Required only if using HubSpot for this email type
                       </p>
                     </div>
+                    
+                    {/* Template Properties Documentation */}
+                    {templateProperties[config.email_type] && (
+                      <Collapsible 
+                        open={expandedProperties[config.email_type]} 
+                        onOpenChange={() => toggleProperties(config.email_type)}
+                      >
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground hover:text-foreground">
+                            <span className="flex items-center gap-2">
+                              <Code className="w-4 h-4" />
+                              Template Properties Reference
+                            </span>
+                            {expandedProperties[config.email_type] ? (
+                              <ChevronUp className="w-4 h-4" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="mt-2 p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Use these personalization tokens in your HubSpot template:
+                            </p>
+                            <div className="space-y-1.5">
+                              {templateProperties[config.email_type].map((prop, idx) => (
+                                <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-xs">
+                                  <code className="bg-background px-1.5 py-0.5 rounded font-mono text-primary shrink-0">
+                                    {prop.property}
+                                  </code>
+                                  <span className="text-muted-foreground">{prop.description}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {config.email_type === 'welcome' && (
+                              <p className="text-xs text-amber-600 mt-3">
+                                💡 For family members 2-10, use the same pattern: family_member_2_name, family_member_2_qr_url, etc.
+                              </p>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
                   </div>
                 </CardContent>
               </Card>

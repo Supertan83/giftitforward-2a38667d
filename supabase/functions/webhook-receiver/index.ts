@@ -178,9 +178,12 @@ interface EmailCustomization {
 }
 
 // Helper function to send welcome email to approved volunteer with QR codes (including family members)
+// deno-lint-ignore no-explicit-any
 async function sendWelcomeEmailWithQR(
+  supabaseClient: any,
   email: string,
   firstName: string,
+  lastName: string,
   tempPassword: string,
   loginUrl: string,
   trainingUrl: string,
@@ -188,7 +191,7 @@ async function sendWelcomeEmailWithQR(
   pendingId: string,
   familyQRs: FamilyMemberQR[] = [],
   customization?: EmailCustomization
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; provider?: string }> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pendingId}`;
@@ -196,7 +199,72 @@ async function sendWelcomeEmailWithQR(
     // Generate QR code URL using a public QR code API
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCardId)}`;
     
-    // Generate family member QR sections
+    // Check email configuration to determine provider
+    const emailConfig = await getEmailConfig(supabaseClient, 'welcome');
+    const useHubSpot = emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
+    
+    console.log(`Welcome email config: HubSpot enabled=${emailConfig?.enabled}, template_id=${emailConfig?.template_id}, using HubSpot=${useHubSpot}`);
+    
+    // If HubSpot is enabled, send via HubSpot with custom properties
+    if (useHubSpot) {
+      console.log('Sending welcome email via HubSpot');
+      
+      // Build custom properties for HubSpot template
+      const customProperties: Record<string, string> = {
+        first_name: firstName,
+        last_name: lastName,
+        full_name: `${firstName} ${lastName}`.trim(),
+        email: email,
+        temp_password: tempPassword,
+        qr_card_id: qrCardId,
+        qr_code_url: qrCodeUrl,
+        login_url: loginUrl,
+        training_url: trainingUrl,
+        family_count: String(familyQRs.length),
+        total_qr_count: String(1 + familyQRs.length),
+      };
+      
+      // Add custom greeting/message if provided
+      if (customization?.greeting) {
+        customProperties.custom_greeting = customization.greeting;
+      }
+      if (customization?.message) {
+        customProperties.custom_message = customization.message;
+      }
+      if (customization?.subject) {
+        customProperties.custom_subject = customization.subject;
+      }
+      
+      // Add family member properties (up to 10)
+      familyQRs.slice(0, 10).forEach((fam, index) => {
+        const i = index + 1;
+        customProperties[`family_member_${i}_name`] = fam.name;
+        customProperties[`family_member_${i}_type`] = fam.type === 'children' ? 'Child' : 'Adult';
+        customProperties[`family_member_${i}_qr_id`] = fam.qrCardId;
+        customProperties[`family_member_${i}_qr_url`] = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(fam.qrCardId)}`;
+        if (fam.gender) {
+          customProperties[`family_member_${i}_gender`] = fam.gender;
+        }
+      });
+      
+      // Set empty strings for unused family member slots (so template conditionals work)
+      for (let i = familyQRs.length + 1; i <= 10; i++) {
+        customProperties[`family_member_${i}_name`] = '';
+        customProperties[`family_member_${i}_type`] = '';
+        customProperties[`family_member_${i}_qr_id`] = '';
+        customProperties[`family_member_${i}_qr_url`] = '';
+      }
+      
+      console.log('HubSpot custom properties:', JSON.stringify(customProperties, null, 2));
+      
+      const hubspotResult = await sendViaHubSpot(emailConfig.template_id!, email, customProperties);
+      return { ...hubspotResult, provider: 'hubspot' };
+    }
+    
+    // Otherwise, send via Resend (default behavior)
+    console.log('Sending welcome email via Resend');
+    
+    // Generate family member QR sections for Resend HTML
     const familyQRSections = familyQRs.map(fam => {
       const famQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(fam.qrCardId)}`;
       const typeLabel = fam.type === 'children' ? 'Child' : 'Adult';
@@ -313,27 +381,30 @@ async function sendWelcomeEmailWithQR(
 
     if (error) {
       console.error("Failed to send welcome email with QR:", error);
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, provider: 'resend' };
     }
 
-    console.log(`Welcome email with QR sent successfully to ${email} (${1 + familyQRs.length} QR codes)`);
-    return { success: true };
+    console.log(`Welcome email with QR sent successfully to ${email} via Resend (${1 + familyQRs.length} QR codes)`);
+    return { success: true, provider: 'resend' };
   } catch (err) {
     console.error("Error sending welcome email with QR:", err);
-    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error", provider: 'unknown' };
   }
 }
 
 // Legacy helper function for backwards compatibility
+// deno-lint-ignore no-explicit-any
 async function sendWelcomeEmail(
+  supabaseClient: any,
   email: string,
   firstName: string,
+  lastName: string,
   tempPassword: string,
   loginUrl: string,
   pendingId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; provider?: string }> {
   // Call new function without QR
-  return sendWelcomeEmailWithQR(email, firstName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId, []);
+  return sendWelcomeEmailWithQR(supabaseClient, email, firstName, lastName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId, []);
 }
 
 interface VolunteerData {
@@ -1278,8 +1349,10 @@ serve(async (req) => {
           const trainingUrl = `${appUrl}/training`;
 
           const emailResult = await sendWelcomeEmailWithQR(
+            supabase,
             volunteer.email,
             firstName,
+            '', // No last name for manual creation
             tempPassword,
             loginUrl,
             trainingUrl,
@@ -2088,8 +2161,10 @@ serve(async (req) => {
 
           // Send welcome email with all QR codes (volunteer + family members)
           const emailResult = await sendWelcomeEmailWithQR(
+            supabase,
             volunteerEmail,
             firstName,
+            lastName,
             tempPassword,
             loginUrl,
             trainingUrl,
@@ -2340,15 +2415,17 @@ serve(async (req) => {
       console.log(`Created ${familyQRs.length} family member QR cards for manual approval`);
 
       // Send welcome email with login credentials and QR codes (only if new user)
-      let emailResult: { success: boolean; error?: string } = { success: false };
+      let emailResult: { success: boolean; error?: string; provider?: string } = { success: false };
       if (!userAlreadyExists) {
         const appUrl = 'https://gif.thesurpluss.com';
         const loginUrl = `${appUrl}/auth`;
         const trainingUrl = `${appUrl}/training`;
         
         emailResult = await sendWelcomeEmailWithQR(
+          supabase,
           pendingVolunteer.email,
           pendingVolunteer.first_name,
+          pendingVolunteer.last_name || '',
           tempPassword,
           loginUrl,
           trainingUrl,
@@ -2674,8 +2751,10 @@ serve(async (req) => {
       const trainingUrl = `${appUrl}/training`;
       
       const emailResult = await sendWelcomeEmailWithQR(
+        supabase,
         volunteer.email,
         volunteer.first_name,
+        volunteer.last_name || '',
         volunteer.temp_password,
         loginUrl,
         trainingUrl,
@@ -2786,8 +2865,10 @@ serve(async (req) => {
       // Send emails to all selected volunteers
       for (const volunteer of volunteers) {
         const emailResult = await sendWelcomeEmail(
+          supabase,
           volunteer.email,
           volunteer.first_name,
+          volunteer.last_name || '',
           volunteer.temp_password!,
           loginUrl,
           volunteer.id
