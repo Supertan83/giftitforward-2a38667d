@@ -57,29 +57,43 @@ export default function VolunteerSurveyPage() {
 
   const fetchSurvey = async () => {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('volunteer_surveys')
-        .select('*')
-        .eq('survey_token', token)
-        .maybeSingle();
+      // Use edge function to fetch survey (server-side token validation)
+      const { data, error: fetchError } = await supabase.functions.invoke('submit-survey', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: null,
+      });
 
-      if (fetchError) throw fetchError;
+      // The invoke method doesn't support GET with query params, so we need to use a different approach
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey?action=get&token=${encodeURIComponent(token!)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      if (!data) {
-        setError('Survey not found. The link may be invalid or expired.');
+      const result = await response.json();
+
+      if (!result.success) {
+        setError(result.error || 'Survey not found. The link may be invalid or expired.');
         setLoading(false);
         return;
       }
 
-      setSurveyData(data);
+      setSurveyData(result.survey);
 
       // If already completed, show certificate
-      if (data.completed_at) {
-        setExperienceWord(data.experience_word || '');
-        setWouldVolunteerAgain(data.would_volunteer_again?.toString() || null);
-        setImprovementSuggestions(data.improvement_suggestions || '');
+      if (result.survey.completed_at) {
+        setExperienceWord(result.survey.experience_word || '');
+        setWouldVolunteerAgain(result.survey.would_volunteer_again?.toString() || null);
+        setImprovementSuggestions(result.survey.improvement_suggestions || '');
         setShowCertificate(true);
-        setCertificateSent(!!data.certificate_sent_at);
+        setCertificateSent(!!result.survey.certificate_sent_at);
       }
     } catch (err) {
       console.error('Error fetching survey:', err);
@@ -120,24 +134,20 @@ export default function VolunteerSurveyPage() {
     setSubmitting(true);
 
     try {
-      const { error: updateError } = await supabase
-        .from('volunteer_surveys')
-        .update({
-          experience_word: experienceWord.trim(),
-          would_volunteer_again: wouldVolunteerAgain === 'true',
-          improvement_suggestions: improvementSuggestions.trim(),
-          completed_at: new Date().toISOString(),
-        })
-        .eq('survey_token', token);
+      // Use edge function for secure server-side submission
+      const { data, error: submitError } = await supabase.functions.invoke('submit-survey', {
+        body: {
+          surveyToken: token,
+          experienceWord: experienceWord.trim(),
+          wouldVolunteerAgain: wouldVolunteerAgain === 'true',
+          improvementSuggestions: improvementSuggestions.trim(),
+        },
+      });
 
-      if (updateError) throw updateError;
+      if (submitError) throw submitError;
 
-      // Update volunteer card survey completion
-      if (surveyData?.volunteer_card_id) {
-        await supabase
-          .from('volunteer_qr_cards')
-          .update({ survey_completed_at: new Date().toISOString() })
-          .eq('id', surveyData.volunteer_card_id);
+      if (data && !data.success) {
+        throw new Error(data.error || 'Failed to submit survey');
       }
 
       setShowCertificate(true);
@@ -149,11 +159,11 @@ export default function VolunteerSurveyPage() {
         title: 'Survey Submitted!',
         description: 'Thank you for your feedback.',
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error submitting survey:', err);
       toast({
         title: 'Submission Failed',
-        description: 'Please try again.',
+        description: err.message || 'Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -269,11 +279,10 @@ export default function VolunteerSurveyPage() {
 
       setCertificateSent(true);
 
-      // Update certificate_sent_at in survey
-      await supabase
-        .from('volunteer_surveys')
-        .update({ certificate_sent_at: new Date().toISOString() })
-        .eq('survey_token', token);
+      // Update certificate_sent_at via edge function
+      await supabase.functions.invoke('submit-survey?action=update-certificate-sent', {
+        body: { surveyToken: token },
+      });
 
       toast({
         title: 'Certificate Sent!',
