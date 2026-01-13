@@ -76,27 +76,27 @@ export const EmailPreviewDialog = ({
           
           {/* Email Body */}
           <div className="px-6 py-4 bg-white space-y-5">
-            <p className="text-gray-800 m-0">Dear {`{{custom.first_name}}`},</p>
+            <p className="text-gray-800 m-0"><strong>Dear {`{{custom.first_name}}`},</strong></p>
             
             <p className="text-gray-700">
-              Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us. 
-              Your volunteer registration has been successfully confirmed.
+              Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us on the <strong>19th of February</strong> at the <strong>Ajman, Al Hamidya</strong> and <strong>Boys' Community School Marketplace</strong>.
             </p>
             
             <p className="text-gray-700">
+              Your volunteer registration has been successfully confirmed.<br />
               Below are the key details you'll need to prepare for your volunteering experience:
             </p>
             
             {/* QR Code Section */}
             <div className="mt-6">
-              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">Your Volunteer QR Code</h3>
+              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">
+                Your Volunteer QR Code - <span className="text-[#DA291C]">Don't forget to bring this with you.</span>
+              </h3>
               <p className="text-gray-700 text-sm mb-1">
                 Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend.
-              </p>
-              <p className="text-gray-700 text-sm mb-4">
                 This allows us to record your attendance and issue your volunteer certificate.
               </p>
-              <div className="inline-block">
+              <div className="inline-block mt-4">
                 <img 
                   src={qrCodeUrl} 
                   alt="Volunteer QR Code" 
@@ -109,7 +109,7 @@ export const EmailPreviewDialog = ({
             </div>
             
             {/* Training Section */}
-            <div className="flex flex-col md:flex-row gap-4 mt-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex flex-col md:flex-row gap-0 mt-6 bg-white border border-gray-200 overflow-hidden">
               <div className="md:w-1/2">
                 <img 
                   src={trainingImageUrl}
@@ -118,17 +118,16 @@ export const EmailPreviewDialog = ({
                 />
               </div>
               <div className="md:w-1/2 p-4 flex flex-col justify-center">
-                <h3 className="text-base font-bold text-gray-900 m-0 mb-2">Mandatory Sustainability Training</h3>
+                <h3 className="text-base font-bold text-gray-900 m-0 mb-2">Complimentary Circular Economy Training</h3>
                 <p className="text-gray-700 text-sm mb-4">
-                  Before attending your first marketplace, all volunteers are required to complete a short sustainability training. 
-                  It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
+                  Before attending your first marketplace, we encourage all volunteers to complete a short circular economy training. It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
                 </p>
                 <div>
                   <a 
                     href={trainingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block bg-[#0D4A6F] text-white px-5 py-2.5 rounded font-semibold text-sm no-underline hover:bg-[#0a3d5c] transition-colors"
+                    className="inline-block bg-[#DA291C] text-white px-5 py-2.5 rounded font-semibold text-sm no-underline hover:bg-[#b8231a] transition-colors"
                   >
                     Start Training
                   </a>
@@ -136,23 +135,23 @@ export const EmailPreviewDialog = ({
               </div>
             </div>
             
-            {/* On-site Marketplace App Access */}
+            {/* On-site Marketplace Access */}
             <div className="mt-6">
-              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">On-site Marketplace App Access</h3>
+              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">On-site Marketplace Access</h3>
               <p className="text-gray-700 text-sm mb-3">
-                During the marketplace, you may be asked to use the Gift It Forward marketplace management app, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
+                During the marketplace, you may be asked to use the Gift It Forward marketplace management platform via your web browser, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
               </p>
               <p className="text-gray-700 text-sm mb-2">Your login credentials are as follows:</p>
-              <p className="text-gray-800 text-sm m-0">Email: {`{{custom.email}}`}</p>
-              <p className="text-gray-800 text-sm m-0 mb-4">Temporary Password: {`{{custom.temp_password}}`}</p>
+              <p className="text-gray-800 text-sm m-0">Email: [{`{{custom.email}}`}]</p>
+              <p className="text-gray-800 text-sm m-0 mb-4">Temporary Password: [{`{{custom.temp_password}}`}]</p>
               <div>
                 <a 
                   href={loginUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block bg-[#B8860B] text-white px-5 py-2.5 rounded font-semibold text-sm no-underline hover:opacity-90 transition-opacity"
+                  className="inline-block bg-[#DA291C] text-white px-5 py-2.5 rounded font-semibold text-sm no-underline hover:opacity-90 transition-opacity"
                 >
-                  Login to the App
+                  Login to the Marketplace
                 </a>
               </div>
             </div>
@@ -182,7 +181,7 @@ export const EmailPreviewDialog = ({
                 <img 
                   src={dubaiHoldingLogoUrl}
                   alt="Dubai Holding"
-                  className="h-8"
+                  className="h-10"
                 />
               </div>
               <div className="text-right">
