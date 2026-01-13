@@ -36,7 +36,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs';
+import { EmailManagement } from '@/components/admin/EmailManagement';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management';
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [expandedCategory, setExpandedCategory] = useState<'volunteer' | 'beneficiary' | 'admin' | null>(null);
@@ -354,6 +355,11 @@ export const AdminDashboard = () => {
   // Show Email Logs view
   if (currentView === 'email-logs') {
     return <EmailLogsViewer onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  // Show Email Management view
+  if (currentView === 'email-management') {
+    return <EmailManagement onBack={() => setCurrentView('dashboard')} />;
   }
   if (isLoading || allocationsLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
@@ -1066,6 +1072,21 @@ export const AdminDashboard = () => {
                         <Mail className="w-5 h-5 text-red-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Email Logs</h3>
+                    </motion.button>
+
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.55
+                }} onClick={() => setCurrentView('email-management')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
+                      <div className="w-10 h-10 mx-auto rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors mb-2">
+                        <Mail className="w-5 h-5 text-emerald-500" />
+                      </div>
+                      <h3 className="font-medium text-xs md:text-sm">Email Preview & Test</h3>
                     </motion.button>
                   </div>
                 </motion.div>}
