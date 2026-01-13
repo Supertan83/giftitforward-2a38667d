@@ -448,7 +448,7 @@ async function sendWelcomeEmailWithQR(
                   <!-- Greeting -->
                   <tr>
                     <td style="padding: 0 30px 15px 30px;">
-                      <p style="margin: 0; font-size: 15px; color: #333333;">Dear ${firstName},</p>
+                      <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p>
                     </td>
                   </tr>
                   
@@ -476,31 +476,26 @@ async function sendWelcomeEmailWithQR(
                       <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
                         ${customization?.greeting || customization?.message 
                           ? "Here's everything you need to get started:"
-                          : "Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us. Your volunteer registration has been successfully confirmed."
+                          : "Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us on the <strong>19th of February</strong> at the <strong>Ajman, Al Hamidya</strong> and <strong>Boys' Community School Marketplace</strong>."
                         }
                       </p>
                     </td>
                   </tr>
                   
-                  ${!customization?.greeting && !customization?.message ? `
                   <tr>
                     <td style="padding: 0 30px 20px 30px;">
                       <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                        Below are the key details you'll need to prepare for your volunteering experience:
+                        Your volunteer registration has been successfully confirmed.<br>Below are the key details you'll need to prepare for your volunteering experience:
                       </p>
                     </td>
                   </tr>
-                  ` : ''}
                   
                   <!-- QR Code Section -->
                   <tr>
                     <td style="padding: 0 30px 10px 30px;">
-                      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Volunteer QR Code</h3>
-                      <p style="margin: 0 0 5px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                        Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend.
-                      </p>
+                      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Volunteer QR Code - <span style="color: #DA291C;">Don't forget to bring this with you.</span></h3>
                       <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                        This allows us to record your attendance and issue your volunteer certificate.
+                        Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend. This allows us to record your attendance and issue your volunteer certificate.
                       </p>
                     </td>
                   </tr>
@@ -528,23 +523,23 @@ async function sendWelcomeEmailWithQR(
                             <img src="${trainingImageUrl}" alt="Your Role in the Circular Economy" width="270" style="display: block; width: 100%; height: auto;" />
                           </td>
                           <td width="50%" valign="top" style="padding: 20px;">
-                            <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Mandatory Sustainability Training</h3>
+                            <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Complimentary Circular Economy Training</h3>
                             <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                              Before attending your first marketplace, all volunteers are required to complete a short sustainability training. It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
+                              Before attending your first marketplace, we encourage all volunteers to complete a short circular economy training. It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
                             </p>
-                            <a href="${trainingUrl}" style="display: inline-block; background-color: #0D4A6F; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
+                            <a href="${trainingUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
                           </td>
                         </tr>
                       </table>
                     </td>
                   </tr>
                   
-                  <!-- On-site Marketplace App Access -->
+                  <!-- On-site Marketplace Access -->
                   <tr>
                     <td style="padding: 0 30px 10px 30px;">
-                      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">On-site Marketplace App Access</h3>
+                      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">On-site Marketplace Access</h3>
                       <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                        During the marketplace, you may be asked to use the Gift It Forward marketplace management app, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
+                        During the marketplace, you may be asked to use the Gift It Forward marketplace management platform via your web browser, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
                       </p>
                       <p style="margin: 0 0 5px 0; font-size: 13px; color: #333333;">Your login credentials are as follows:</p>
                     </td>
@@ -552,19 +547,19 @@ async function sendWelcomeEmailWithQR(
                   
                   <tr>
                     <td style="padding: 0 30px 5px 30px;">
-                      <p style="margin: 0; font-size: 13px; color: #333333;">Email: ${email}</p>
+                      <p style="margin: 0; font-size: 13px; color: #333333;">Email: [${email}]</p>
                     </td>
                   </tr>
                   
                   <tr>
                     <td style="padding: 0 30px 15px 30px;">
-                      <p style="margin: 0; font-size: 13px; color: #333333;">Temporary Password: ${tempPassword}</p>
+                      <p style="margin: 0; font-size: 13px; color: #333333;">Temporary Password: [${tempPassword}]</p>
                     </td>
                   </tr>
                   
                   <tr>
                     <td style="padding: 0 30px 25px 30px;">
-                      <a href="${loginUrl}" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the App</a>
+                      <a href="${loginUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the Marketplace</a>
                     </td>
                   </tr>
                   
@@ -597,7 +592,7 @@ async function sendWelcomeEmailWithQR(
                       <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
                           <td width="50%" valign="middle">
-                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="40" style="display: block;" />
                           </td>
                           <td width="50%" valign="middle" style="text-align: right;">
                             <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
