@@ -132,12 +132,17 @@ async function sendViaHubSpot(
   }
 }
 
-// Send email via Resend
+// Send email via Resend with Dubai Holding branded template
 async function sendViaResend(
   cleanEmail: string,
   cleanName: string,
-  surveyUrl: string
+  surveyUrl: string,
+  supabaseUrl: string
 ): Promise<{ success: boolean; error?: string }> {
+  const firstName = cleanName.split(" ")[0];
+  const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+  const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+
   const emailResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -145,48 +150,115 @@ async function sendViaResend(
       Authorization: `Bearer ${RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: "GIF Volunteer <noreply@mgif.thesurpluss.com>",
+      from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
       to: [cleanEmail],
       subject: "Thank You for Volunteering! Share Your Feedback",
       html: `
         <!DOCTYPE html>
         <html>
         <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; background: #ffffff; }
-            .header { background: #DA291C; padding: 30px 20px; text-align: center; }
-            .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
-            .content { padding: 30px 20px; }
-            .highlight { color: #DA291C; font-weight: bold; }
-            .button { display: inline-block; padding: 14px 28px; background-color: #DA291C; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
-            .footer { padding: 20px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #eee; }
-          </style>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>Thank You, ${cleanName.split(" ")[0]}!</h1>
-            </div>
-            <div class="content">
-              <p>Thank you for volunteering with <span class="highlight">Gift It Forward</span>!</p>
-              <p>Your time and effort made a real difference in supporting our circular economy mission and helping those in need.</p>
-              <p>We'd love to hear about your experience. Please take a moment to complete this short survey:</p>
-              
-              <div style="text-align: center;">
-                <a href="${surveyUrl}" class="button">Complete Survey & Get Certificate</a>
-              </div>
-              
-              <p style="color: #666; font-size: 14px;">After completing the survey, you'll receive your <strong>Certificate of Participation</strong>.</p>
-              
-              <p>Thank you for being part of the change!</p>
-              <p>Warm regards,<br><strong>The GIF Team</strong></p>
-            </div>
-            <div class="footer">
-              <p>© ${new Date().getFullYear()} Gift It Forward. All rights reserved.</p>
-              <p>If you have any questions, please contact us.</p>
-            </div>
-          </div>
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+            <tr>
+              <td align="center" style="padding: 20px 0;">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                  
+                  <!-- Hero Image -->
+                  <tr>
+                    <td>
+                      <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Execution Partner Label -->
+                  <tr>
+                    <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                      <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Main Title -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px; text-align: center;">
+                      <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                        Thank You for Volunteering!
+                      </h1>
+                    </td>
+                  </tr>
+                  
+                  <!-- Greeting -->
+                  <tr>
+                    <td style="padding: 0 30px 15px 30px;">
+                      <p style="margin: 0; font-size: 15px; color: #333333;">Dear ${firstName},</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Content -->
+                  <tr>
+                    <td style="padding: 0 30px 15px 30px;">
+                      <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        Thank you for volunteering with <strong>Gift It Forward</strong>! Your time and effort made a real difference in supporting our circular economy mission and helping those in need.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        We'd love to hear about your experience. Please take a moment to complete this short survey:
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <!-- CTA Button -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px; text-align: center;">
+                      <a href="${surveyUrl}" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 14px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 4px;">Complete Survey & Get Certificate</a>
+                    </td>
+                  </tr>
+                  
+                  <tr>
+                    <td style="padding: 0 30px 25px 30px;">
+                      <p style="margin: 0; font-size: 12px; color: #666666; text-align: center;">
+                        After completing the survey, you'll receive your <strong>Certificate of Participation</strong>.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Closing -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                        Thank you for being part of the change!
+                      </p>
+                      <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Warm regards,</p>
+                      <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">The GIF Team</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td width="50%" valign="middle">
+                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                          </td>
+                          <td width="50%" valign="middle" style="text-align: right;">
+                            <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                </table>
+              </td>
+            </tr>
+          </table>
         </body>
         </html>
       `,
@@ -303,7 +375,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     } else {
       console.log('Using Resend for survey email');
-      emailResult = await sendViaResend(cleanEmail, cleanName, surveyUrl);
+      emailResult = await sendViaResend(cleanEmail, cleanName, surveyUrl, supabaseUrl);
     }
 
     if (!emailResult.success) {

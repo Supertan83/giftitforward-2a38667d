@@ -166,14 +166,16 @@ const handler = async (req: Request): Promise<Response> => {
     const fullName = cleanLastName ? `${cleanFirstName} ${cleanLastName}` : cleanFirstName;
     const filename = `certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
 
+    // Get Supabase URL for email assets
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+    const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+
     // Check email configuration
     const emailConfig = await getEmailConfig('certificate');
     const useHubSpot = emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
 
     // Note: HubSpot doesn't support attachments, so we always use Resend for certificate emails
-    // But if HubSpot is configured, we can still send a notification via HubSpot
-    // For now, we'll use Resend when there's an attachment, regardless of config
-    
     if (useHubSpot) {
       console.log('Note: HubSpot is configured for certificate emails, but attachments require Resend');
       console.log('Falling back to Resend for certificate email with PDF attachment');
@@ -182,44 +184,108 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Attempting to send email to ${cleanEmail} with filename ${filename}`);
 
     const emailResponse = await resend.emails.send({
-      from: "GIF Volunteer Training <noreply@mgif.thesurpluss.com>",
+      from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
       to: [cleanEmail],
       subject: "Your Circular Economy Training Certificate",
       html: `
         <!DOCTYPE html>
         <html>
         <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 10px; }
-            .highlight { color: #DA291C; font-weight: bold; }
-            .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
-          </style>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1 style="color: #DA291C;">Congratulations, ${cleanFirstName}!</h1>
-            </div>
-            <div class="content">
-              <p>You've successfully completed the <span class="highlight">Circular Economy Training Module</span>.</p>
-              <p>Your certificate of completion is attached to this email. This certificate recognizes your commitment to understanding circular economy principles and your role as a Gift It Forward volunteer.</p>
-              <h3>What You've Learned:</h3>
-              <ul>
-                <li>The fundamentals of the Circular Economy</li>
-                <li>How Gift It Forward redistributes surplus items</li>
-                <li>The impact of avoided emissions</li>
-                <li>Your role as a Circular Economy advocate</li>
-              </ul>
-              <p>Thank you for being part of this important initiative. Together, we're making a positive impact on communities and the environment.</p>
-            </div>
-            <div class="footer">
-              <p>© ${new Date().getFullYear()} Surpluss. All rights reserved.</p>
-              <p>Gift It Forward 2026</p>
-            </div>
-          </div>
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+            <tr>
+              <td align="center" style="padding: 20px 0;">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                  
+                  <!-- Hero Image -->
+                  <tr>
+                    <td>
+                      <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Execution Partner Label -->
+                  <tr>
+                    <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                      <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Main Title -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px; text-align: center;">
+                      <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                        Congratulations, ${cleanFirstName}!
+                      </h1>
+                    </td>
+                  </tr>
+                  
+                  <!-- Content -->
+                  <tr>
+                    <td style="padding: 0 30px 15px 30px;">
+                      <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        You've successfully completed the <strong>Circular Economy Training Module</strong>.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        Your certificate of completion is attached to this email. This certificate recognizes your commitment to understanding circular economy principles and your role as a Gift It Forward volunteer.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <!-- What You've Learned -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin: 0 0 12px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What You've Learned:</h3>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
+                          <li>The fundamentals of the Circular Economy</li>
+                          <li>How Gift It Forward redistributes surplus items</li>
+                          <li>The impact of avoided emissions</li>
+                          <li>Your role as a Circular Economy advocate</li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                  
+                  <!-- Closing -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                        Thank you for being part of this important initiative. Together, we're making a positive impact on communities and the environment.
+                      </p>
+                      <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p>
+                      <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td width="50%" valign="middle">
+                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                          </td>
+                          <td width="50%" valign="middle" style="text-align: right;">
+                            <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                </table>
+              </td>
+            </tr>
+          </table>
         </body>
         </html>
       `,
