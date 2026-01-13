@@ -339,7 +339,7 @@ async function sendWelcomeEmailWithQR(
       
       const hubspotResult = await sendViaHubSpot(emailConfig.template_id!, email, customProperties);
       
-      // Log the email attempt
+      // Log the HubSpot email attempt
       await logEmailAttempt(
         'hubspot',
         hubspotResult.success,
@@ -348,11 +348,19 @@ async function sendWelcomeEmailWithQR(
         hubspotResult.responseData || null
       );
       
-      return { ...hubspotResult, provider: 'hubspot' };
+      // If HubSpot succeeded, return success
+      if (hubspotResult.success) {
+        return { success: true, provider: 'hubspot' };
+      }
+      
+      // HubSpot failed - fallback to Resend
+      console.log(`HubSpot failed: ${hubspotResult.error}. Falling back to Resend...`);
+      // Continue to Resend fallback below (don't return here)
     }
     
-    // Otherwise, send via Resend (default behavior)
-    console.log('Sending welcome email via Resend');
+    // Send via Resend (either as primary or as fallback from HubSpot)
+    const isHubSpotFallback = useHubSpot; // If we got here and HubSpot was configured, it means HubSpot failed
+    console.log(`Sending welcome email via Resend${isHubSpotFallback ? ' (HubSpot fallback)' : ''}`);
     
     // Generate family member QR sections for Resend HTML
     const familyQRSections = familyQRs.map(fam => {
@@ -470,32 +478,32 @@ async function sendWelcomeEmailWithQR(
     });
 
     if (error) {
-      console.error("Failed to send welcome email with QR:", error);
+      console.error("Failed to send welcome email with QR via Resend:", error);
       
       // Log failed Resend attempt
       await logEmailAttempt(
-        'resend',
+        isHubSpotFallback ? 'resend_fallback' : 'resend',
         false,
         error.message,
-        { to: email, subject: emailSubject },
+        { to: email, subject: emailSubject, isHubSpotFallback },
         { error: error.message, name: error.name }
       );
       
-      return { success: false, error: error.message, provider: 'resend' };
+      return { success: false, error: error.message, provider: isHubSpotFallback ? 'resend_fallback' : 'resend' };
     }
 
-    console.log(`Welcome email with QR sent successfully to ${email} via Resend (${1 + familyQRs.length} QR codes)`);
+    console.log(`Welcome email with QR sent successfully to ${email} via Resend${isHubSpotFallback ? ' (HubSpot fallback)' : ''} (${1 + familyQRs.length} QR codes)`);
     
     // Log successful Resend attempt
     await logEmailAttempt(
-      'resend',
+      isHubSpotFallback ? 'resend_fallback' : 'resend',
       true,
       null,
-      { to: email, subject: emailSubject },
+      { to: email, subject: emailSubject, isHubSpotFallback },
       { status: 'sent' }
     );
     
-    return { success: true, provider: 'resend' };
+    return { success: true, provider: isHubSpotFallback ? 'resend_fallback' : 'resend' };
   } catch (err) {
     console.error("Error sending welcome email with QR:", err);
     
