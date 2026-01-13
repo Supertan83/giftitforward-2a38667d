@@ -30,10 +30,11 @@ export const EmailPreviewDialog = ({
   
   const emailSubject = customSubject || "Thank you for Registering as a Gift It Forward Volunteer!";
 
-  // Hero image hosted publicly
-  const heroImageUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/storage/v1/object/public/email-assets/gif-hero-banner.jpg';
-  const trainingImageUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/storage/v1/object/public/email-assets/training-module-banner.jpg';
-  const dubaiHoldingLogoUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/storage/v1/object/public/email-assets/dubai-holding-logo.png';
+  // Use public folder images for preview (these will be served from the app)
+  // In actual emails, these need to be uploaded to Supabase storage
+  const heroImageUrl = '/images/email/gif-hero-banner.jpg';
+  const trainingImageUrl = '/images/email/training-module-banner.jpg';
+  const dubaiHoldingLogoUrl = '/images/email/dubai-holding-logo.png';
 
   return (
     <Dialog>
