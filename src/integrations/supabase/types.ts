@@ -76,6 +76,53 @@ export type Database = {
           },
         ]
       }
+      email_send_logs: {
+        Row: {
+          created_at: string
+          email_type: string
+          error_message: string | null
+          id: string
+          pending_volunteer_id: string | null
+          provider: string
+          recipient_email: string
+          request_payload: Json | null
+          response_data: Json | null
+          success: boolean
+        }
+        Insert: {
+          created_at?: string
+          email_type: string
+          error_message?: string | null
+          id?: string
+          pending_volunteer_id?: string | null
+          provider: string
+          recipient_email: string
+          request_payload?: Json | null
+          response_data?: Json | null
+          success?: boolean
+        }
+        Update: {
+          created_at?: string
+          email_type?: string
+          error_message?: string | null
+          id?: string
+          pending_volunteer_id?: string | null
+          provider?: string
+          recipient_email?: string
+          request_payload?: Json | null
+          response_data?: Json | null
+          success?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_logs_pending_volunteer_id_fkey"
+            columns: ["pending_volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "pending_volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_dependents: {
         Row: {
           created_at: string
