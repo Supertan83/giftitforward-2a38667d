@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ArrowLeft, Mail, AlertCircle, CheckCircle, RefreshCw, Copy, ChevronDown, ChevronRight, Filter } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Mail, AlertCircle, CheckCircle, RefreshCw, Copy, ChevronDown, ChevronRight, Filter, RotateCcw, Loader2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,7 +33,9 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
   const [filterProvider, setFilterProvider] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: logs = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['email-logs', filterProvider, filterStatus, filterType],
@@ -69,6 +71,50 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
       title: 'Copied',
       description: `${label} copied to clipboard`
     });
+  };
+
+  const handleRetryEmail = async (log: EmailLog) => {
+    if (!log.pending_volunteer_id) {
+      toast({
+        title: 'Cannot Retry',
+        description: 'No volunteer ID associated with this email log',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setRetryingId(log.id);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('resend-welcome-email', {
+        body: {
+          pending_volunteer_id: log.pending_volunteer_id,
+          email_type: log.email_type,
+          force_resend: true
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: 'Email Sent',
+          description: `Successfully resent ${log.email_type} email to ${log.recipient_email} via ${data.provider}`
+        });
+        // Refresh logs to show the new attempt
+        queryClient.invalidateQueries({ queryKey: ['email-logs'] });
+      } else {
+        throw new Error(data?.error || 'Failed to resend email');
+      }
+    } catch (error) {
+      toast({
+        title: 'Retry Failed',
+        description: error instanceof Error ? error.message : 'Failed to resend email',
+        variant: 'destructive'
+      });
+    } finally {
+      setRetryingId(null);
+    }
   };
 
   const uniqueProviders = [...new Set(logs.map(l => l.provider))];
@@ -233,6 +279,29 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <div className="px-4 pb-4 space-y-4 border-t pt-4">
+                            {/* Retry Button for failed emails */}
+                            {!log.success && log.pending_volunteer_id && (
+                              <div className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRetryEmail(log);
+                                  }}
+                                  disabled={retryingId === log.id}
+                                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                >
+                                  {retryingId === log.id ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="w-4 h-4 mr-2" />
+                                  )}
+                                  {retryingId === log.id ? 'Sending...' : 'Retry Email'}
+                                </Button>
+                              </div>
+                            )}
+                            
                             {log.error_message && (
                               <div>
                                 <div className="text-sm font-medium text-red-600 mb-1">Error Message</div>
