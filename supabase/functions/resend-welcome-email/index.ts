@@ -104,40 +104,51 @@ serve(async (req: Request) => {
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(primaryQR)}`;
       const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pending_volunteer_id}`;
 
+      // Email assets URLs
+      const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+      const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
+      const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+
       // Build family QR sections
       const familyQRSections = familyQRs.map((fam, index) => {
         const famQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(fam.unique_id)}`;
         return `
-          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; flex: 1; min-width: 140px;">
-            <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151;">Family Member ${index + 1}</p>
-            <img src="${famQrUrl}" alt="QR Code" style="width: 120px; height: 120px; margin: 0 auto; display: block;" />
-            <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280; word-break: break-all;">${fam.unique_id}</p>
-          </div>
+          <tr>
+            <td style="padding: 10px; text-align: center;">
+              <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Arial, sans-serif;">Family Member ${index + 1}</p>
+              <img src="${famQrUrl}" alt="QR Code" width="120" height="120" style="display: block; margin: 0 auto;" />
+              <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280;">${fam.unique_id}</p>
+            </td>
+          </tr>
         `;
       }).join('');
 
       const familySection = familyQRs.length > 0 ? `
-        <div style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 20px; margin: 25px 0;">
-          <h3 style="margin-top: 0; color: #166534;">👨‍👩‍👧‍👦 Family Member QR Cards (${familyQRs.length})</h3>
-          <div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center;">
-            ${familyQRSections}
-          </div>
-        </div>
+        <tr>
+          <td style="padding: 20px 30px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;">
+              <tr>
+                <td style="padding: 20px;">
+                  <h3 style="margin: 0 0 15px 0; color: #166534; font-family: Arial, sans-serif;">Family Member QR Cards (${familyQRs.length})</h3>
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    ${familyQRSections}
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
       ` : '';
 
-      const emailSubject = familyQRs.length > 0 
-        ? `Welcome to GIF - Your Volunteer QR Cards (${1 + familyQRs.length} total)`
-        : "Welcome to GIF - Your Volunteer Account & QR Card";
+      const emailSubject = "[Resent] Thank you for Registering as a Gift It Forward Volunteer!";
 
       // Use stored temp password or indicate it needs reset
-      const passwordSection = volunteer.temp_password 
-        ? `<p style="margin: 8px 0;"><strong>Temporary Password:</strong> <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${volunteer.temp_password}</code></p>`
-        : `<p style="margin: 8px 0; color: #b45309;"><strong>Password:</strong> Please use the "Forgot Password" link to reset your password.</p>`;
+      const tempPasswordDisplay = volunteer.temp_password || 'Please use "Forgot Password" to reset';
 
       const { error: emailError } = await resend.emails.send({
-        from: "Surpluss Volunteers <noreply@mgif.thesurpluss.com>",
+        from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
         to: [volunteer.email],
-        subject: `[Resent] ${emailSubject}`,
+        subject: emailSubject,
         html: `
           <!DOCTYPE html>
           <html>
@@ -145,52 +156,178 @@ serve(async (req: Request) => {
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
           </head>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Gift It Forward!</h1>
-            </div>
-            
-            <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
-              <p style="font-size: 18px; margin-top: 0;">Hi ${volunteer.first_name},</p>
-              
-              <p>Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:</p>
-              
-              <div style="background: white; border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
-                <h3 style="margin-top: 0; color: #059669;">🎫 Your Volunteer QR Card</h3>
-                <p style="color: #6b7280; font-size: 14px; margin-bottom: 15px;">Present this QR code when checking in at marketplace events</p>
-                <img src="${qrCodeUrl}" alt="Your Volunteer QR Code" style="width: 180px; height: 180px; margin: 0 auto; display: block;" />
-                <p style="font-family: monospace; font-size: 14px; margin-top: 10px; color: #374151; background: #f3f4f6; padding: 8px; border-radius: 6px;">${primaryQR}</p>
-              </div>
-              
-              ${familySection}
-              
-              <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                <h3 style="margin-top: 0; color: #b45309;">📚 Required: Complete Training Module</h3>
-                <p style="margin-bottom: 15px; color: #92400e;">Before your first volunteer session, please complete our training module.</p>
-                <div style="text-align: center;">
-                  <a href="${trainingUrl}" style="display: inline-block; background: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600;">Start Training</a>
-                </div>
-              </div>
-              
-              <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                <h3 style="margin-top: 0; color: #059669;">🔐 Your Login Credentials</h3>
-                <p style="margin: 8px 0;"><strong>Email:</strong> ${volunteer.email}</p>
-                ${passwordSection}
-              </div>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${loginUrl}" style="display: inline-block; background: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Log In Now</a>
-              </div>
-              
-              <p style="color: #6b7280; font-size: 14px;">For security, please change your password after your first login.</p>
-              
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 25px 0;">
-              
-              <p style="color: #6b7280; font-size: 14px; margin-bottom: 0;">
-                Thank you for joining our volunteer community!<br>
-                <strong>The GIF (Gift It Forward) Team</strong>
-              </p>
-            </div>
+          <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+              <tr>
+                <td align="center" style="padding: 20px 0;">
+                  <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                    
+                    <!-- Hero Image -->
+                    <tr>
+                      <td>
+                        <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                      </td>
+                    </tr>
+                    
+                    <!-- Execution Partner Label -->
+                    <tr>
+                      <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                        <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Main Title -->
+                    <tr>
+                      <td style="padding: 0 30px 20px 30px; text-align: center;">
+                        <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                          Thank you for Registering as a<br>Gift It Forward Volunteer!
+                        </h1>
+                      </td>
+                    </tr>
+                    
+                    <!-- Greeting -->
+                    <tr>
+                      <td style="padding: 0 30px 15px 30px;">
+                        <p style="margin: 0; font-size: 15px; color: #333333;">Dear ${volunteer.first_name},</p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Intro Text -->
+                    <tr>
+                      <td style="padding: 0 30px 15px 30px;">
+                        <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                          Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us. Your volunteer registration has been successfully confirmed.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 20px 30px;">
+                        <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                          Below are the key details you'll need to prepare for your volunteering experience:
+                        </p>
+                      </td>
+                    </tr>
+                    
+                    <!-- QR Code Section -->
+                    <tr>
+                      <td style="padding: 0 30px 10px 30px;">
+                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Volunteer QR Code</h3>
+                        <p style="margin: 0 0 5px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                          Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend.
+                        </p>
+                        <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                          This allows us to record your attendance and issue your volunteer certificate.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 10px 30px;">
+                        <img src="${qrCodeUrl}" alt="Volunteer QR Code" width="150" height="150" style="display: block;" />
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 25px 30px;">
+                        <p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: ${primaryQR}</p>
+                      </td>
+                    </tr>
+                    
+                    ${familySection}
+                    
+                    <!-- Training Section -->
+                    <tr>
+                      <td style="padding: 0 30px 25px 30px;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb;">
+                          <tr>
+                            <td width="50%" valign="top">
+                              <img src="${trainingImageUrl}" alt="Your Role in the Circular Economy" width="270" style="display: block; width: 100%; height: auto;" />
+                            </td>
+                            <td width="50%" valign="top" style="padding: 20px;">
+                              <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Mandatory Sustainability Training</h3>
+                              <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                                Before attending your first marketplace, all volunteers are required to complete a short sustainability training. It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
+                              </p>
+                              <a href="${trainingUrl}" style="display: inline-block; background-color: #0D4A6F; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    
+                    <!-- On-site Marketplace App Access -->
+                    <tr>
+                      <td style="padding: 0 30px 10px 30px;">
+                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">On-site Marketplace App Access</h3>
+                        <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                          During the marketplace, you may be asked to use the Gift It Forward marketplace management app, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
+                        </p>
+                        <p style="margin: 0 0 5px 0; font-size: 13px; color: #333333;">Your login credentials are as follows:</p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 5px 30px;">
+                        <p style="margin: 0; font-size: 13px; color: #333333;">Email: ${volunteer.email}</p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 15px 30px;">
+                        <p style="margin: 0; font-size: 13px; color: #333333;">Temporary Password: ${tempPasswordDisplay}</p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 25px 30px;">
+                        <a href="${loginUrl}" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the App</a>
+                      </td>
+                    </tr>
+                    
+                    <!-- What's Next Section -->
+                    <tr>
+                      <td style="padding: 0 30px 20px 30px;">
+                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What's Next?</h3>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
+                          <li>Mark your calendar</li>
+                          <li>Look out for reminder emails and WhatsApp notifications closer to each event</li>
+                          <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a></li>
+                        </ul>
+                      </td>
+                    </tr>
+                    
+                    <!-- Closing -->
+                    <tr>
+                      <td style="padding: 0 30px 20px 30px;">
+                        <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                          Thank you for being part of this meaningful initiative. We look forward to welcoming you on-site.
+                        </p>
+                        <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best Regards,</p>
+                        <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                      <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                        <table width="100%" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td width="50%" valign="middle">
+                              <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                            </td>
+                            <td width="50%" valign="middle" style="text-align: right;">
+                              <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    
+                  </table>
+                </td>
+              </tr>
+            </table>
             <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;width:1px;height:1px;border:0;" />
           </body>
           </html>

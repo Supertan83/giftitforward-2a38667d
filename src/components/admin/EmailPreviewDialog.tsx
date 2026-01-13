@@ -24,11 +24,16 @@ export const EmailPreviewDialog = ({
   const appUrl = 'https://gif.thesurpluss.com';
   const loginUrl = `${appUrl}/auth`;
   const trainingUrl = `${appUrl}/training`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrCardId)}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCardId)}`;
   
   const firstName = volunteerName.split(' ')[0] || 'Volunteer';
   
-  const emailSubject = customSubject || "Welcome to GIF - Your Volunteer Account & QR Card";
+  const emailSubject = customSubject || "Thank you for Registering as a Gift It Forward Volunteer!";
+
+  // Hero image hosted publicly
+  const heroImageUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/storage/v1/object/public/email-assets/gif-hero-banner.jpg';
+  const trainingImageUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/storage/v1/object/public/email-assets/training-module-banner.jpg';
+  const dubaiHoldingLogoUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/storage/v1/object/public/email-assets/dubai-holding-logo.png';
 
   return (
     <Dialog>
@@ -46,101 +51,143 @@ export const EmailPreviewDialog = ({
         
         {/* Email Preview Container */}
         <div className="border rounded-lg overflow-hidden bg-white">
-          {/* Email Header */}
-          <div 
-            className="p-6 text-center"
-            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
-          >
-            <h1 className="text-white text-2xl font-bold m-0">Welcome to Gift It Forward!</h1>
+          {/* Hero Image with Logo */}
+          <div className="relative">
+            <img 
+              src={heroImageUrl}
+              alt="Gift It Forward volunteers"
+              className="w-full h-auto"
+              style={{ display: 'block', maxHeight: '200px', objectFit: 'cover', objectPosition: 'center' }}
+            />
+          </div>
+          
+          {/* Execution Partner Label */}
+          <div className="text-center py-4 bg-white">
+            <p className="text-xs tracking-widest text-[#B8860B] font-semibold m-0">EXECUTION PARTNER</p>
+          </div>
+          
+          {/* Main Title */}
+          <div className="text-center px-6 pb-4 bg-white">
+            <h1 className="text-2xl font-bold text-gray-900 m-0">
+              Thank you for Registering as a<br />Gift It Forward Volunteer!
+            </h1>
           </div>
           
           {/* Email Body */}
-          <div className="p-6 bg-gray-50 space-y-6">
-            <p className="text-lg m-0">Hi {firstName},</p>
-            
-            {customGreeting && (
-              <p className="text-gray-800 font-medium">{customGreeting}</p>
-            )}
-            
-            {customMessage && (
-              <p className="text-gray-700 whitespace-pre-wrap">{customMessage}</p>
-            )}
+          <div className="px-6 py-4 bg-white space-y-5">
+            <p className="text-gray-800 m-0">Dear {`{{custom.first_name}}`},</p>
             
             <p className="text-gray-700">
-              {!customGreeting && !customMessage 
-                ? "Great news! Your volunteer registration has been confirmed. Here's everything you need to get started:"
-                : "Here's everything you need to get started:"
-              }
+              Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us. 
+              Your volunteer registration has been successfully confirmed.
+            </p>
+            
+            <p className="text-gray-700">
+              Below are the key details you'll need to prepare for your volunteering experience:
             </p>
             
             {/* QR Code Section */}
-            <div className="bg-white border-2 border-emerald-500 rounded-xl p-5 text-center">
-              <h3 className="text-emerald-600 font-semibold mb-1">🎫 Your Volunteer QR Card</h3>
-              <p className="text-gray-500 text-sm mb-4">
-                Present this QR code when checking in at marketplace events
+            <div className="mt-6">
+              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">Your Volunteer QR Code</h3>
+              <p className="text-gray-700 text-sm mb-1">
+                Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend.
               </p>
-              <img 
-                src={qrCodeUrl} 
-                alt="Volunteer QR Code" 
-                className="w-[180px] h-[180px] mx-auto block"
-              />
-              <p className="font-mono text-sm mt-3 bg-gray-100 py-2 px-3 rounded-md text-gray-700 inline-block">
-                {qrCardId}
+              <p className="text-gray-700 text-sm mb-4">
+                This allows us to record your attendance and issue your volunteer certificate.
+              </p>
+              <div className="inline-block">
+                <img 
+                  src={qrCodeUrl} 
+                  alt="Volunteer QR Code" 
+                  className="w-[150px] h-[150px] block"
+                />
+              </div>
+              <p className="text-gray-500 text-sm mt-2 m-0">
+                QR Card ID: {`{{custom.qr_card_id}}`}
               </p>
             </div>
             
-            {/* Training Module Section */}
-            <div className="bg-amber-50 border border-amber-400 rounded-lg p-5">
-              <h3 className="text-amber-700 font-semibold mb-2">📚 Required: Complete Training Module</h3>
-              <p className="text-amber-800 text-sm mb-4">
-                Before your first volunteer session, please complete our training module to earn your Training Certificate.
+            {/* Training Section */}
+            <div className="flex flex-col md:flex-row gap-4 mt-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="md:w-1/2">
+                <img 
+                  src={trainingImageUrl}
+                  alt="Your Role in the Circular Economy"
+                  className="w-full h-auto"
+                />
+              </div>
+              <div className="md:w-1/2 p-4 flex flex-col justify-center">
+                <h3 className="text-base font-bold text-gray-900 m-0 mb-2">Mandatory Sustainability Training</h3>
+                <p className="text-gray-700 text-sm mb-4">
+                  Before attending your first marketplace, all volunteers are required to complete a short sustainability training. 
+                  It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
+                </p>
+                <div>
+                  <a 
+                    href={trainingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-[#0D4A6F] text-white px-5 py-2.5 rounded font-semibold text-sm no-underline hover:bg-[#0a3d5c] transition-colors"
+                  >
+                    Start Training
+                  </a>
+                </div>
+              </div>
+            </div>
+            
+            {/* On-site Marketplace App Access */}
+            <div className="mt-6">
+              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">On-site Marketplace App Access</h3>
+              <p className="text-gray-700 text-sm mb-3">
+                During the marketplace, you may be asked to use the Gift It Forward marketplace management app, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
               </p>
-              <div className="text-center">
+              <p className="text-gray-700 text-sm mb-2">Your login credentials are as follows:</p>
+              <p className="text-gray-800 text-sm m-0">Email: {`{{custom.email}}`}</p>
+              <p className="text-gray-800 text-sm m-0 mb-4">Temporary Password: {`{{custom.temp_password}}`}</p>
+              <div>
                 <a 
-                  href={trainingUrl}
+                  href={loginUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block bg-amber-500 text-white px-6 py-3 rounded-lg font-semibold no-underline hover:bg-amber-600 transition-colors"
+                  className="inline-block bg-[#B8860B] text-white px-5 py-2.5 rounded font-semibold text-sm no-underline hover:opacity-90 transition-opacity"
                 >
-                  Start Training
+                  Login to the App
                 </a>
               </div>
             </div>
             
-            {/* Login Credentials */}
-            <div className="bg-white border border-gray-200 rounded-lg p-5">
-              <h3 className="text-emerald-600 font-semibold mb-3">🔐 Your Login Credentials</h3>
-              <p className="my-2"><strong>Email:</strong> {volunteerEmail}</p>
-              <p className="my-2">
-                <strong>Temporary Password:</strong>{' '}
-                <code className="bg-gray-100 px-2 py-1 rounded font-mono text-sm">
-                  {tempPassword}
-                </code>
+            {/* What's Next Section */}
+            <div className="mt-6">
+              <h3 className="text-base font-bold text-gray-900 m-0 mb-2">What's Next?</h3>
+              <ul className="text-gray-700 text-sm pl-5 m-0 space-y-1">
+                <li>Mark your calendar</li>
+                <li>Look out for reminder emails and WhatsApp notifications closer to each event</li>
+                <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" className="text-[#0D4A6F]">giftitforward@dubaiholding.com</a></li>
+              </ul>
+            </div>
+            
+            {/* Closing */}
+            <div className="mt-6">
+              <p className="text-gray-700 text-sm">
+                Thank you for being part of this meaningful initiative. We look forward to welcoming you on-site.
               </p>
+              <p className="text-gray-800 text-sm mt-4 m-0">Best Regards,</p>
+              <p className="text-gray-900 font-semibold text-sm m-0">Gift It Forward Team</p>
             </div>
             
-            {/* Login Button */}
-            <div className="text-center py-4">
-              <a 
-                href={loginUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block bg-emerald-500 text-white px-7 py-3.5 rounded-lg font-semibold text-base no-underline hover:bg-emerald-600 transition-colors"
-              >
-                Log In Now
-              </a>
+            {/* Footer */}
+            <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center">
+              <div>
+                <img 
+                  src={dubaiHoldingLogoUrl}
+                  alt="Dubai Holding"
+                  className="h-8"
+                />
+              </div>
+              <div className="text-right">
+                <p className="text-gray-500 text-xs italic m-0">For the Good of Tomorrow</p>
+              </div>
             </div>
-            
-            <p className="text-gray-500 text-sm">
-              For security, please change your password after your first login.
-            </p>
-            
-            <hr className="border-gray-200 my-6" />
-            
-            <p className="text-gray-500 text-sm">
-              Thank you for joining our volunteer community!<br />
-              <strong>The GIF (Gift It Forward) Team</strong>
-            </p>
           </div>
         </div>
       </DialogContent>
