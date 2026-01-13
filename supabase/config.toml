@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.hubspot-sync]
 verify_jwt = false
+
+[functions.resend-welcome-email]
+verify_jwt = false
