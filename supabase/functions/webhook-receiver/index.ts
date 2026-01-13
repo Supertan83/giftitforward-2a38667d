@@ -39,7 +39,21 @@ async function sendViaHubSpot(
   templateId: string,
   recipientEmail: string,
   customProperties: Record<string, string>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; requestPayload?: Record<string, unknown>; responseData?: Record<string, unknown> }> {
+  // Check if API key exists
+  if (!HUBSPOT_API_KEY) {
+    console.error('HUBSPOT_API_KEY is not configured');
+    return { 
+      success: false, 
+      error: 'HUBSPOT_API_KEY is not configured in environment',
+      requestPayload: { templateId, recipientEmail },
+      responseData: { error: 'missing_api_key' }
+    };
+  }
+
+  console.log(`Attempting HubSpot email send - Template: ${templateId}, To: ${recipientEmail}`);
+  console.log('HubSpot API key exists:', !!HUBSPOT_API_KEY, 'Key length:', HUBSPOT_API_KEY?.length || 0);
+
   try {
     // First, ensure contact exists in HubSpot
     const searchResponse = await fetch(
@@ -63,9 +77,11 @@ async function sendViaHubSpot(
     );
 
     const searchData = await searchResponse.json();
+    console.log('HubSpot contact search response:', JSON.stringify(searchData));
     
     // Create contact if doesn't exist
     if (!searchData.results || searchData.results.length === 0) {
+      console.log('Contact not found, creating new contact');
       const createResponse = await fetch(
         'https://api.hubapi.com/crm/v3/objects/contacts',
         {
@@ -83,11 +99,28 @@ async function sendViaHubSpot(
         }
       );
       
+      const createData = await createResponse.json();
+      console.log('HubSpot contact creation response:', JSON.stringify(createData));
+      
       if (!createResponse.ok) {
-        const errorData = await createResponse.json();
-        console.error('Failed to create HubSpot contact:', errorData);
+        console.error('Failed to create HubSpot contact:', createData);
+        // Continue anyway - contact might already exist with different email format
       }
+    } else {
+      console.log('Contact already exists in HubSpot');
     }
+
+    // Build email request payload
+    const emailPayload = {
+      emailId: parseInt(templateId),
+      message: {
+        to: recipientEmail,
+      },
+      customProperties: customProperties,
+      contactProperties: customProperties
+    };
+
+    console.log('HubSpot transactional email request payload:', JSON.stringify(emailPayload, null, 2));
 
     // Send transactional email
     const emailResponse = await fetch(
@@ -98,29 +131,49 @@ async function sendViaHubSpot(
           'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          emailId: parseInt(templateId),
-          message: {
-            to: recipientEmail,
-          },
-          customProperties: customProperties,
-          contactProperties: customProperties
-        })
+        body: JSON.stringify(emailPayload)
       }
     );
 
-    if (!emailResponse.ok) {
-      const errorData = await emailResponse.json();
-      console.error('HubSpot email send failed:', errorData);
-      return { success: false, error: errorData.message || 'HubSpot email failed' };
+    const responseText = await emailResponse.text();
+    let responseJson: Record<string, unknown> = {};
+    try {
+      responseJson = JSON.parse(responseText);
+    } catch {
+      responseJson = { rawText: responseText };
     }
 
-    const result = await emailResponse.json();
-    console.log('HubSpot email sent successfully:', result);
-    return { success: true };
+    console.log('HubSpot email response status:', emailResponse.status);
+    console.log('HubSpot email response body:', responseText);
+
+    if (!emailResponse.ok) {
+      const errorMessage = (responseJson as { message?: string }).message || 
+                          (responseJson as { errors?: Array<{ message?: string }> }).errors?.[0]?.message ||
+                          `HTTP ${emailResponse.status}: ${responseText}`;
+      console.error('HubSpot email send failed:', errorMessage);
+      return { 
+        success: false, 
+        error: errorMessage,
+        requestPayload: emailPayload,
+        responseData: responseJson
+      };
+    }
+
+    console.log('HubSpot email sent successfully:', responseJson);
+    return { 
+      success: true,
+      requestPayload: emailPayload,
+      responseData: responseJson
+    };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown HubSpot error';
     console.error('HubSpot email error:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown HubSpot error' };
+    return { 
+      success: false, 
+      error: errorMessage,
+      requestPayload: { templateId, recipientEmail, customProperties },
+      responseData: { exception: String(error) }
+    };
   }
 }
 
@@ -192,6 +245,33 @@ async function sendWelcomeEmailWithQR(
   familyQRs: FamilyMemberQR[] = [],
   customization?: EmailCustomization
 ): Promise<{ success: boolean; error?: string; provider?: string }> {
+  // Helper to log email send attempt
+  const logEmailAttempt = async (
+    provider: string,
+    success: boolean,
+    errorMessage: string | null,
+    requestPayload: Record<string, unknown> | null,
+    responseData: Record<string, unknown> | null
+  ) => {
+    try {
+      await supabaseClient
+        .from('email_send_logs')
+        .insert({
+          pending_volunteer_id: pendingId,
+          email_type: 'welcome',
+          provider: provider,
+          recipient_email: email,
+          success: success,
+          error_message: errorMessage,
+          request_payload: requestPayload,
+          response_data: responseData
+        });
+      console.log(`Email log created: provider=${provider}, success=${success}`);
+    } catch (logError) {
+      console.error('Failed to log email attempt:', logError);
+    }
+  };
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pendingId}`;
@@ -203,7 +283,7 @@ async function sendWelcomeEmailWithQR(
     const emailConfig = await getEmailConfig(supabaseClient, 'welcome');
     const useHubSpot = emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
     
-    console.log(`Welcome email config: HubSpot enabled=${emailConfig?.enabled}, template_id=${emailConfig?.template_id}, using HubSpot=${useHubSpot}`);
+    console.log(`Welcome email config: HubSpot enabled=${emailConfig?.enabled}, template_id=${emailConfig?.template_id}, API key exists=${!!HUBSPOT_API_KEY}, using HubSpot=${useHubSpot}`);
     
     // If HubSpot is enabled, send via HubSpot with custom properties
     if (useHubSpot) {
@@ -258,6 +338,16 @@ async function sendWelcomeEmailWithQR(
       console.log('HubSpot custom properties:', JSON.stringify(customProperties, null, 2));
       
       const hubspotResult = await sendViaHubSpot(emailConfig.template_id!, email, customProperties);
+      
+      // Log the email attempt
+      await logEmailAttempt(
+        'hubspot',
+        hubspotResult.success,
+        hubspotResult.error || null,
+        hubspotResult.requestPayload || null,
+        hubspotResult.responseData || null
+      );
+      
       return { ...hubspotResult, provider: 'hubspot' };
     }
     
@@ -381,13 +471,52 @@ async function sendWelcomeEmailWithQR(
 
     if (error) {
       console.error("Failed to send welcome email with QR:", error);
+      
+      // Log failed Resend attempt
+      await logEmailAttempt(
+        'resend',
+        false,
+        error.message,
+        { to: email, subject: emailSubject },
+        { error: error.message, name: error.name }
+      );
+      
       return { success: false, error: error.message, provider: 'resend' };
     }
 
     console.log(`Welcome email with QR sent successfully to ${email} via Resend (${1 + familyQRs.length} QR codes)`);
+    
+    // Log successful Resend attempt
+    await logEmailAttempt(
+      'resend',
+      true,
+      null,
+      { to: email, subject: emailSubject },
+      { status: 'sent' }
+    );
+    
     return { success: true, provider: 'resend' };
   } catch (err) {
     console.error("Error sending welcome email with QR:", err);
+    
+    // Log exception - define logEmailAttempt inline for catch block
+    try {
+      await supabaseClient
+        .from('email_send_logs')
+        .insert({
+          pending_volunteer_id: pendingId,
+          email_type: 'welcome',
+          provider: 'unknown',
+          recipient_email: email,
+          success: false,
+          error_message: err instanceof Error ? err.message : "Unknown error",
+          request_payload: { to: email },
+          response_data: { exception: String(err) }
+        });
+    } catch (logError) {
+      console.error('Failed to log email exception:', logError);
+    }
+    
     return { success: false, error: err instanceof Error ? err.message : "Unknown error", provider: 'unknown' };
   }
 }
