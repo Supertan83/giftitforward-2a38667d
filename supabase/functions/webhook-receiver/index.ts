@@ -177,6 +177,71 @@ async function sendViaHubSpot(
   }
 }
 
+// Helper to format time for display (HH:MM:SS -> H:MM AM/PM)
+function formatTime(time: string | null | undefined): string {
+  if (!time) return '';
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+}
+
+// Helper to format date for display
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+  return date.toLocaleDateString('en-GB', options);
+}
+
+// Interface for marketplace info
+interface MarketplaceInfo {
+  name: string;
+  location: string | null;
+  event_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+// Helper to fetch marketplace info
+// deno-lint-ignore no-explicit-any
+async function getMarketplaceInfo(supabase: any, marketplaceId: string | null | undefined): Promise<MarketplaceInfo | null> {
+  if (!marketplaceId) return null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('marketplace_events')
+      .select('name, location, event_date, start_time, end_time')
+      .eq('id', marketplaceId)
+      .maybeSingle();
+    
+    if (error || !data) return null;
+    return data as MarketplaceInfo;
+  } catch {
+    return null;
+  }
+}
+
+// Helper to fetch first upcoming marketplace
+// deno-lint-ignore no-explicit-any
+async function getFirstUpcomingMarketplace(supabase: any): Promise<MarketplaceInfo | null> {
+  try {
+    const { data, error } = await supabase
+      .from('marketplace_events')
+      .select('name, location, event_date, start_time, end_time')
+      .in('status', ['upcoming', 'active'])
+      .order('event_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    
+    if (error || !data) return null;
+    return data as MarketplaceInfo;
+  } catch {
+    return null;
+  }
+}
+
 // Generate unique volunteer QR card ID
 function generateVolunteerQRId(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -243,7 +308,8 @@ async function sendWelcomeEmailWithQR(
   qrCardId: string,
   pendingId: string,
   familyQRs: FamilyMemberQR[] = [],
-  customization?: EmailCustomization
+  customization?: EmailCustomization,
+  marketplace?: MarketplaceInfo | null
 ): Promise<{ success: boolean; error?: string; provider?: string }> {
   // Helper to log email send attempt
   const logEmailAttempt = async (
@@ -289,6 +355,12 @@ async function sendWelcomeEmailWithQR(
     if (useHubSpot) {
       console.log('Sending welcome email via HubSpot');
       
+      // Format marketplace details
+      const eventDate = formatDate(marketplace?.event_date);
+      const startTime = formatTime(marketplace?.start_time);
+      const endTime = formatTime(marketplace?.end_time);
+      const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+      
       // Build custom properties for HubSpot template
       const customProperties: Record<string, string> = {
         first_name: firstName,
@@ -302,6 +374,13 @@ async function sendWelcomeEmailWithQR(
         training_url: trainingUrl,
         family_count: String(familyQRs.length),
         total_qr_count: String(1 + familyQRs.length),
+        // Marketplace info
+        marketplace_name: marketplace?.name || '',
+        marketplace_location: marketplace?.location || '',
+        marketplace_date: eventDate,
+        marketplace_start_time: startTime,
+        marketplace_end_time: endTime,
+        marketplace_time_range: timeRange,
       };
       
       // Add custom greeting/message if provided
@@ -361,6 +440,25 @@ async function sendWelcomeEmailWithQR(
     // Send via Resend (either as primary or as fallback from HubSpot)
     const isHubSpotFallback = useHubSpot; // If we got here and HubSpot was configured, it means HubSpot failed
     console.log(`Sending welcome email via Resend${isHubSpotFallback ? ' (HubSpot fallback)' : ''}`);
+    
+    // Format marketplace details for Resend email
+    const eventDate = formatDate(marketplace?.event_date);
+    const startTime = formatTime(marketplace?.start_time);
+    const endTime = formatTime(marketplace?.end_time);
+    const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+    const marketplaceName = marketplace?.name || '';
+    const marketplaceLocation = marketplace?.location || '';
+    
+    // Build dynamic intro text with marketplace info
+    let introText = "Thank you for registering as a Gift It Forward Volunteer.";
+    if (marketplaceName || eventDate) {
+      introText += " We're delighted to have you join us";
+      if (eventDate) introText += ` on the <strong>${eventDate}</strong>`;
+      if (timeRange) introText += ` from <strong>${timeRange}</strong>`;
+      if (marketplaceName) introText += ` at the <strong>${marketplaceName}</strong>`;
+      if (marketplaceLocation) introText += ` in <strong>${marketplaceLocation}</strong>`;
+      introText += ".";
+    }
     
     // Email assets URLs
     const supabaseProjectUrl = Deno.env.get('SUPABASE_URL') || '';
