@@ -24,6 +24,32 @@ interface EmailConfig {
   enabled: boolean;
 }
 
+interface MarketplaceInfo {
+  name: string;
+  location: string | null;
+  event_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+// Helper to format time for display (HH:MM:SS -> H:MM AM/PM)
+function formatTime(time: string | null | undefined): string {
+  if (!time) return '';
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+}
+
+// Helper to format date for display
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+  return date.toLocaleDateString('en-GB', options);
+}
+
 // Helper to get email config from database
 // deno-lint-ignore no-explicit-any
 async function getEmailConfig(supabase: any, emailType: string): Promise<EmailConfig | null> {
@@ -36,6 +62,25 @@ async function getEmailConfig(supabase: any, emailType: string): Promise<EmailCo
     
     if (error || !data) return null;
     return data as EmailConfig;
+  } catch {
+    return null;
+  }
+}
+
+// Helper to fetch marketplace info
+// deno-lint-ignore no-explicit-any
+async function getMarketplaceInfo(supabase: any, marketplaceId: string | null | undefined): Promise<MarketplaceInfo | null> {
+  if (!marketplaceId) return null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('marketplace_events')
+      .select('name, location, event_date, start_time, end_time')
+      .eq('id', marketplaceId)
+      .maybeSingle();
+    
+    if (error || !data) return null;
+    return data as MarketplaceInfo;
   } catch {
     return null;
   }
@@ -137,11 +182,29 @@ async function sendViaResend(
   cleanEmail: string,
   cleanName: string,
   surveyUrl: string,
-  supabaseUrl: string
+  supabaseUrl: string,
+  marketplace: MarketplaceInfo | null
 ): Promise<{ success: boolean; error?: string }> {
   const firstName = cleanName.split(" ")[0];
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+
+  // Format marketplace details
+  const marketplaceName = marketplace?.name || 'Gift It Forward Marketplace';
+  const eventDate = formatDate(marketplace?.event_date);
+  const startTime = formatTime(marketplace?.start_time);
+  const endTime = formatTime(marketplace?.end_time);
+  const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+  const location = marketplace?.location || '';
+
+  // Build event details text
+  let eventDetails = '';
+  if (marketplaceName) {
+    eventDetails = `at <strong>${marketplaceName}</strong>`;
+    if (eventDate) eventDetails += ` on <strong>${eventDate}</strong>`;
+    if (timeRange) eventDetails += ` (${timeRange})`;
+    if (location) eventDetails += ` in ${location}`;
+  }
 
   const emailResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -192,7 +255,7 @@ async function sendViaResend(
                   <!-- Greeting -->
                   <tr>
                     <td style="padding: 0 30px 15px 30px;">
-                      <p style="margin: 0; font-size: 15px; color: #333333;">Dear ${firstName},</p>
+                      <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p>
                     </td>
                   </tr>
                   
@@ -200,7 +263,7 @@ async function sendViaResend(
                   <tr>
                     <td style="padding: 0 30px 15px 30px;">
                       <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                        Thank you for volunteering with <strong>Gift It Forward</strong>! Your time and effort made a real difference in supporting our circular economy mission and helping those in need.
+                        Thank you for volunteering with <strong>Gift It Forward</strong>${eventDetails ? ' ' + eventDetails : ''}! Your time and effort made a real difference in supporting our circular economy mission and helping those in need.
                       </p>
                     </td>
                   </tr>
@@ -216,7 +279,7 @@ async function sendViaResend(
                   <!-- CTA Button -->
                   <tr>
                     <td style="padding: 0 30px 20px 30px; text-align: center;">
-                      <a href="${surveyUrl}" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 14px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 4px;">Complete Survey & Get Certificate</a>
+                      <a href="${surveyUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 14px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 4px;">Complete Survey & Get Certificate</a>
                     </td>
                   </tr>
                   
@@ -294,7 +357,7 @@ const handler = async (req: Request): Promise<Response> => {
     const cleanEmail = (volunteerEmail || "").trim();
     const cleanName = (volunteerName || "").trim();
 
-    console.log(`Creating survey for ${cleanName} (${cleanEmail})`);
+    console.log(`Creating survey for ${cleanName} (${cleanEmail}), marketplace: ${marketplaceId}`);
 
     // Validate inputs
     if (!cleanEmail || !cleanName) {
@@ -315,6 +378,10 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Fetch marketplace info for email content
+    const marketplace = await getMarketplaceInfo(supabase, marketplaceId);
+    console.log('Marketplace info:', marketplace);
 
     // Generate unique survey token
     const surveyToken = crypto.randomUUID();
@@ -364,6 +431,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (useHubSpot) {
       console.log('Using HubSpot for survey email');
+      
+      // Include marketplace info in HubSpot properties
+      const eventDate = formatDate(marketplace?.event_date);
+      const startTime = formatTime(marketplace?.start_time);
+      const endTime = formatTime(marketplace?.end_time);
+      
       emailResult = await sendViaHubSpot(
         emailConfig.template_id!,
         cleanEmail,
@@ -371,11 +444,17 @@ const handler = async (req: Request): Promise<Response> => {
           first_name: cleanName.split(" ")[0],
           full_name: cleanName,
           survey_url: surveyUrl,
+          marketplace_name: marketplace?.name || '',
+          marketplace_location: marketplace?.location || '',
+          marketplace_date: eventDate,
+          marketplace_start_time: startTime,
+          marketplace_end_time: endTime,
+          marketplace_time_range: startTime && endTime ? `${startTime} - ${endTime}` : '',
         }
       );
     } else {
       console.log('Using Resend for survey email');
-      emailResult = await sendViaResend(cleanEmail, cleanName, surveyUrl, supabaseUrl);
+      emailResult = await sendViaResend(cleanEmail, cleanName, surveyUrl, supabaseUrl, marketplace);
     }
 
     if (!emailResult.success) {
