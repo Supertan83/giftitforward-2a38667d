@@ -256,8 +256,12 @@ const handler = async (req: Request): Promise<Response> => {
         ? `This is a friendly reminder to complete your <span class="highlight">Circular Economy Training Module</span>.`
         : `Your training status has been reset and you're invited to <span class="highlight">retake the Circular Economy Training Module</span>.`;
 
-      const emailResponse = await resend.emails.send({
-        from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      // Try primary sender first, fallback if domain not verified
+      const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
+      const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+      
+      let emailResponse = await resend.emails.send({
+        from: primarySender,
         to: [cleanEmail],
         subject: emailSubject,
         html: `
@@ -299,8 +303,58 @@ const handler = async (req: Request): Promise<Response> => {
         `,
       });
 
-      console.log("Retake training email sent:", emailResponse);
+      console.log("Retake training email attempt:", emailResponse);
 
+      if (emailResponse.error) {
+        const errorMessage = emailResponse.error.message || "";
+        console.log(`Primary sender failed: ${errorMessage}`);
+        
+        // Check if error is domain-related, try fallback
+        if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
+          console.log(`Retrying with fallback sender: ${fallbackSender}`);
+          emailResponse = await resend.emails.send({
+            from: fallbackSender,
+            to: [cleanEmail],
+            subject: emailSubject,
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <style>
+                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                  .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                  .header { text-align: center; margin-bottom: 30px; }
+                  .content { background: #f9f9f9; padding: 30px; border-radius: 10px; }
+                  .highlight { color: #DA291C; font-weight: bold; }
+                  .button { display: inline-block; background: #DA291C; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+                  .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="header">
+                    <h1 style="color: #DA291C;">${emailHeading}</h1>
+                  </div>
+                  <div class="content">
+                    <p>Hello ${cleanFirstName},</p>
+                    <p>${emailMessage}</p>
+                    <p style="text-align: center;">
+                      <a href="${appUrl}" class="button" style="color: white;">Start Training</a>
+                    </p>
+                    <p>Once you complete the training and quiz, you'll receive a certificate.</p>
+                  </div>
+                  <div class="footer">
+                    <p>© ${new Date().getFullYear()} Surpluss. All rights reserved.</p>
+                    <p>Gift It Forward 2026</p>
+                  </div>
+                </div>
+              </body>
+              </html>
+            `,
+          });
+        }
+      }
+      
       if (emailResponse.error) {
         emailResult = { success: false, error: emailResponse.error.message || "Email sending failed" };
       } else {

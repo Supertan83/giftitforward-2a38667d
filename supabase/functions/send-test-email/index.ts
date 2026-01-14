@@ -367,6 +367,52 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
   return '';
 }
 
+// Helper function to send email via Resend with fallback sender
+async function sendEmailWithFallback(
+  emailOptions: {
+    to: string[];
+    subject: string;
+    html: string;
+  }
+): Promise<{ success: boolean; error?: string; usedFallback?: boolean }> {
+  const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
+  const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+  
+  // Try primary sender first
+  console.log(`Attempting email with primary sender: ${primarySender}`);
+  const primaryResult = await resend.emails.send({
+    from: primarySender,
+    ...emailOptions,
+  });
+  
+  if (!primaryResult.error) {
+    console.log("Email sent successfully with primary sender");
+    return { success: true, usedFallback: false };
+  }
+  
+  // Check if error is domain-related
+  const errorMessage = primaryResult.error?.message || "";
+  console.log(`Primary sender failed: ${errorMessage}`);
+  
+  if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
+    console.log(`Retrying with fallback sender: ${fallbackSender}`);
+    const fallbackResult = await resend.emails.send({
+      from: fallbackSender,
+      ...emailOptions,
+    });
+    
+    if (!fallbackResult.error) {
+      console.log("Email sent successfully with fallback sender");
+      return { success: true, usedFallback: true };
+    }
+    
+    console.error("Fallback sender also failed:", fallbackResult.error);
+    return { success: false, error: fallbackResult.error?.message || "Fallback email failed" };
+  }
+  
+  return { success: false, error: errorMessage };
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -434,47 +480,77 @@ const handler = async (req: Request): Promise<Response> => {
 
     const html = generateEmailHTML(email_type, firstName, supabaseUrl);
 
-    const emailPayload: {
-      from: string;
-      to: string[];
-      subject: string;
-      html: string;
-      attachments?: Array<{ filename: string; content: string }>;
-    } = {
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+    // For certificate test, we need attachments so handle differently
+    if (email_type === 'certificate') {
+      // Try primary sender first
+      const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
+      const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+      const samplePdf = "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovQ29udGVudHMgNCAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKFRlc3QgQ2VydGlmaWNhdGUpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDUKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDE0NyAwMDAwMCBuIAowMDAwMDAwMjI2IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgNQovUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKMzE5CiUlRU9G";
+      
+      let emailResponse = await resend.emails.send({
+        from: primarySender,
+        to: [recipient_email],
+        subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
+        html,
+        attachments: [{ filename: "test-certificate.pdf", content: samplePdf }],
+      });
+      
+      if (emailResponse.error) {
+        const errorMessage = emailResponse.error?.message || "";
+        console.log(`Primary sender failed for certificate: ${errorMessage}`);
+        
+        if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
+          console.log(`Retrying certificate email with fallback sender: ${fallbackSender}`);
+          emailResponse = await resend.emails.send({
+            from: fallbackSender,
+            to: [recipient_email],
+            subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
+            html,
+            attachments: [{ filename: "test-certificate.pdf", content: samplePdf }],
+          });
+        }
+      }
+      
+      if (emailResponse.error) {
+        console.error("Resend error:", emailResponse.error);
+        return new Response(
+          JSON.stringify({ success: false, error: emailResponse.error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      console.log(`Test certificate email sent successfully: ${emailResponse.data?.id}`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Test ${email_type} email sent to ${recipient_email}`,
+          id: emailResponse.data?.id,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // For welcome and survey emails, use the helper with fallback
+    const emailResult = await sendEmailWithFallback({
       to: [recipient_email],
       subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
       html,
-    };
+    });
 
-    // For certificate test, add a sample PDF attachment
-    if (email_type === 'certificate') {
-      // Simple PDF placeholder (base64 encoded minimal PDF)
-      emailPayload.attachments = [
-        {
-          filename: "test-certificate.pdf",
-          content: "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovQ29udGVudHMgNCAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKFRlc3QgQ2VydGlmaWNhdGUpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDUKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDE0NyAwMDAwMCBuIAowMDAwMDAwMjI2IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgNQovUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKMzE5CiUlRU9G",
-        },
-      ];
-    }
-
-    const emailResponse = await resend.emails.send(emailPayload);
-
-    if (emailResponse.error) {
-      console.error("Resend error:", emailResponse.error);
+    if (!emailResult.success) {
+      console.error("Email send error:", emailResult.error);
       return new Response(
-        JSON.stringify({ success: false, error: emailResponse.error.message }),
+        JSON.stringify({ success: false, error: emailResult.error }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Test email sent successfully: ${emailResponse.data?.id}`);
+    console.log(`Test email sent successfully${emailResult.usedFallback ? ' (using fallback sender)' : ''}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Test ${email_type} email sent to ${recipient_email}`,
-        id: emailResponse.data?.id,
+        message: `Test ${email_type} email sent to ${recipient_email}${emailResult.usedFallback ? ' (using fallback sender)' : ''}`,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

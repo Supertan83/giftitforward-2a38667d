@@ -206,14 +206,18 @@ async function sendViaResend(
     if (location) eventDetails += ` in ${location}`;
   }
 
-  const emailResponse = await fetch("https://api.resend.com/emails", {
+  // Try primary sender first, fallback if domain not verified
+  const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
+  const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+  
+  let emailResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      from: primarySender,
       to: [cleanEmail],
       subject: "Thank You for Volunteering! Share Your Feedback",
       html: `
@@ -328,11 +332,108 @@ async function sendViaResend(
     }),
   });
 
-  const emailResult = await emailResponse.json();
+  let emailResult = await emailResponse.json();
 
   if (!emailResponse.ok) {
-    console.error("Resend email send failed:", emailResult);
-    return { success: false, error: emailResult.message || "Failed to send email" };
+    const errorMessage = emailResult.message || "";
+    console.log(`Primary sender failed: ${errorMessage}`);
+    
+    // Check if error is domain-related, try fallback
+    if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
+      console.log(`Retrying with fallback sender: ${fallbackSender}`);
+      emailResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+        },
+        body: JSON.stringify({
+          from: fallbackSender,
+          to: [cleanEmail],
+          subject: "Thank You for Volunteering! Share Your Feedback",
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+                <tr>
+                  <td align="center" style="padding: 20px 0;">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                      <!-- Hero Image -->
+                      <tr>
+                        <td>
+                          <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                        </td>
+                      </tr>
+                      <!-- Execution Partner Label -->
+                      <tr>
+                        <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                          <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                        </td>
+                      </tr>
+                      <!-- Main Title -->
+                      <tr>
+                        <td style="padding: 0 30px 20px 30px; text-align: center;">
+                          <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                            Thank You for Volunteering!
+                          </h1>
+                        </td>
+                      </tr>
+                      <!-- Greeting -->
+                      <tr>
+                        <td style="padding: 0 30px 15px 30px;">
+                          <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p>
+                        </td>
+                      </tr>
+                      <!-- Content -->
+                      <tr>
+                        <td style="padding: 0 30px 15px 30px;">
+                          <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                            Thank you for volunteering with <strong>Gift It Forward</strong>${eventDetails ? ' ' + eventDetails : ''}! We'd love to hear about your experience.
+                          </p>
+                        </td>
+                      </tr>
+                      <!-- CTA Button -->
+                      <tr>
+                        <td style="padding: 0 30px 20px 30px; text-align: center;">
+                          <a href="${surveyUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 14px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 4px;">Complete Survey & Get Certificate</a>
+                        </td>
+                      </tr>
+                      <!-- Footer -->
+                      <tr>
+                        <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td width="50%" valign="middle">
+                                <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                              </td>
+                              <td width="50%" valign="middle" style="text-align: right;">
+                                <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+            </html>
+          `,
+        }),
+      });
+      emailResult = await emailResponse.json();
+    }
+    
+    if (!emailResponse.ok) {
+      console.error("Resend email send failed (after fallback):", emailResult);
+      return { success: false, error: emailResult.message || "Failed to send email" };
+    }
   }
 
   console.log("Resend email sent successfully:", emailResult);

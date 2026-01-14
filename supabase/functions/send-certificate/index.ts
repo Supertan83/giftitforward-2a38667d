@@ -257,8 +257,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Attempting to send email to ${cleanEmail} with filename ${filename}`);
 
-    const emailResponse = await resend.emails.send({
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+    // Try primary sender first, fallback if domain not verified
+    const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
+    const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+    
+    let emailResponse = await resend.emails.send({
+      from: primarySender,
       to: [cleanEmail],
       subject: "Your Circular Economy Training Certificate",
       html: `
@@ -379,25 +383,108 @@ const handler = async (req: Request): Promise<Response> => {
       ],
     });
 
-    console.log("Email sent successfully:", emailResponse);
+    console.log("Email send attempt completed:", emailResponse);
 
-    // Check for Resend errors
+    // Check for Resend errors - try fallback if domain not verified
     if (emailResponse.error) {
-      console.error("Resend error:", emailResponse.error);
+      const errorMessage = emailResponse.error.message || "";
+      console.log(`Primary sender failed: ${errorMessage}`);
       
-      // Return 200 with error details so frontend can show appropriate message
+      if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
+        console.log(`Retrying with fallback sender: ${fallbackSender}`);
+        emailResponse = await resend.emails.send({
+          from: fallbackSender,
+          to: [cleanEmail],
+          subject: "Your Circular Economy Training Certificate",
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+                <tr>
+                  <td align="center" style="padding: 20px 0;">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                      <!-- Hero Image -->
+                      <tr>
+                        <td>
+                          <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                        </td>
+                      </tr>
+                      <!-- Execution Partner Label -->
+                      <tr>
+                        <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                          <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                        </td>
+                      </tr>
+                      <!-- Main Title -->
+                      <tr>
+                        <td style="padding: 0 30px 20px 30px; text-align: center;">
+                          <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                            Congratulations, ${cleanFirstName}!
+                          </h1>
+                        </td>
+                      </tr>
+                      <!-- Content -->
+                      <tr>
+                        <td style="padding: 0 30px 15px 30px;">
+                          <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                            You've successfully completed the <strong>Circular Economy Training Module</strong> and served as a valued Gift It Forward volunteer.
+                          </p>
+                        </td>
+                      </tr>
+                      ${participationDetails ? `<tr><td style="padding: 0 30px 15px 30px;">${participationDetails}</td></tr>` : ''}
+                      <tr>
+                        <td style="padding: 0 30px 20px 30px;">
+                          <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                            Your certificate of completion is attached to this email.
+                          </p>
+                        </td>
+                      </tr>
+                      <!-- Footer -->
+                      <tr>
+                        <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td width="50%" valign="middle">
+                                <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                              </td>
+                              <td width="50%" valign="middle" style="text-align: right;">
+                                <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+            </html>
+          `,
+          attachments: [{ filename: filename, content: certificateBase64 }],
+        });
+      }
+    }
+
+    // Check again after potential retry
+    if (emailResponse.error) {
+      console.error("Resend error (after fallback attempt):", emailResponse.error);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: emailResponse.error.message || "Email sending failed",
           details: "Please ensure the domain is verified in Resend"
         }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+
+    console.log("Email sent successfully:", emailResponse.data?.id);
 
     return new Response(
       JSON.stringify({ success: true, id: emailResponse.data?.id, provider: 'resend' }),
