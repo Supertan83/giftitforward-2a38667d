@@ -2510,8 +2510,81 @@ serve(async (req) => {
     if (payload.triggerType === 'form_submission' && payload.payload?.data) {
       const formData = payload.payload.data;
       
-      // Check if it has volunteer form fields
-      if (formData['Work Email'] && formData['First Name']) {
+      // Check if it has volunteer form fields (at minimum First Name is required)
+      if (formData['First Name']) {
+        // Check if email is missing - create pending record for admin visibility
+        const volunteerEmail = formData['Work Email']?.trim();
+        
+        if (!volunteerEmail) {
+          console.log('DH Webflow form submission missing email - creating pending record for admin review');
+          
+          // Parse eventsjson if it's a string
+          let eventsJson = null;
+          if (formData.eventsjson) {
+            try {
+              eventsJson = typeof formData.eventsjson === 'string' 
+                ? JSON.parse(formData.eventsjson) 
+                : formData.eventsjson;
+            } catch (e) {
+              console.warn('Failed to parse eventsjson:', e);
+              eventsJson = formData.eventsjson;
+            }
+          }
+          
+          // Create a pending record so admin can see it and contact the volunteer
+          const { data: pendingData, error: pendingError } = await supabase
+            .from('pending_volunteers')
+            .insert({
+              webhook_event_id: eventData?.id || null,
+              email: `missing_email_${Date.now()}@placeholder.invalid`, // Placeholder for required field
+              first_name: formData['First Name'],
+              last_name: formData['Last Name'] || '',
+              phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
+              gender: formData.Gender || null,
+              is_employee: formData['Dubai Holding Employee'] === 'Yes',
+              employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
+              employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
+              employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
+              external_company: formData['Not Employee - Company'] || null,
+              has_medical_condition: formData['Medical Condition'] === 'Yes',
+              medical_condition_details: formData['Medical Condition Details'] || null,
+              emergency_contact_name: formData['Emergency Contact Name'] || null,
+              emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
+              emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
+              is_fasting: formData['Fasting during event'] === 'Yes',
+              events_list: formData.eventslist || null,
+              events_json: eventsJson,
+              source_data: formData,
+              status: 'pending' // Needs admin attention - missing email
+            })
+            .select()
+            .single();
+
+          if (pendingError) {
+            console.error('Failed to create pending volunteer record:', pendingError);
+          } else {
+            console.log(`Created pending record for volunteer with missing email: ${formData['First Name']} ${formData['Last Name'] || ''}, ID: ${pendingData?.id}`);
+          }
+
+          // Mark webhook as processed (we handled it, just couldn't fully process)
+          if (eventData?.id) {
+            await supabase
+              .from('webhook_events')
+              .update({ processed: true })
+              .eq('id', eventData.id);
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Work Email is missing from the form submission. Volunteer record created for admin review.',
+              pending_id: pendingData?.id,
+              name: `${formData['First Name']} ${formData['Last Name'] || ''}`.trim(),
+              phone: formData['Phone Number'] || null
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         console.log('Detected DH Webflow volunteer form submission - AUTO APPROVING');
         
         try {
