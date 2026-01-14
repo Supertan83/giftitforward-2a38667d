@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { EmailProviderConfig } from './EmailProviderConfig';
 
 interface EmailManagementProps {
   onBack: () => void;
@@ -315,11 +316,15 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       </header>
 
       <main className="container max-w-6xl py-6 px-4">
-        <Tabs defaultValue="assets" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="providers" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="providers" className="flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              Providers
+            </TabsTrigger>
             <TabsTrigger value="assets" className="flex items-center gap-2">
               <Image className="w-4 h-4" />
-              Email Assets
+              Assets
             </TabsTrigger>
             <TabsTrigger value="preview" className="flex items-center gap-2">
               <Eye className="w-4 h-4" />
@@ -327,9 +332,14 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
             </TabsTrigger>
             <TabsTrigger value="test" className="flex items-center gap-2">
               <Send className="w-4 h-4" />
-              Test Emails
+              Test
             </TabsTrigger>
           </TabsList>
+
+          {/* Email Providers Tab */}
+          <TabsContent value="providers">
+            <EmailProviderConfig />
+          </TabsContent>
 
           {/* Email Assets Tab */}
           <TabsContent value="assets">
