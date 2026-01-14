@@ -264,6 +264,100 @@ interface MarketplaceEventDetails {
   slug?: string; // For matching
 }
 
+// Interface for calendar links
+interface CalendarLinks {
+  google: string;
+  outlook: string;
+  icsDataUrl: string;
+}
+
+// Helper to generate calendar links for an event
+function generateCalendarLinks(event: { 
+  name: string; 
+  date: string; // formatted date like "January 22, 2026"
+  startTime: string | null; // raw time like "09:00:00"
+  endTime: string | null; // raw time like "14:00:00"
+  location: string;
+}): CalendarLinks {
+  // Parse the date string to get a Date object
+  let eventDateObj: Date;
+  try {
+    // Try parsing the formatted date
+    eventDateObj = new Date(event.date);
+    if (isNaN(eventDateObj.getTime())) {
+      // Fallback: try current year
+      eventDateObj = new Date();
+    }
+  } catch {
+    eventDateObj = new Date();
+  }
+  
+  // Extract date components
+  const year = eventDateObj.getFullYear();
+  const month = String(eventDateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(eventDateObj.getDate()).padStart(2, '0');
+  
+  // Parse times or use defaults (9 AM - 2 PM)
+  let startHour = 9, startMinute = 0;
+  let endHour = 14, endMinute = 0;
+  
+  if (event.startTime) {
+    const [h, m] = event.startTime.split(':');
+    startHour = parseInt(h) || 9;
+    startMinute = parseInt(m) || 0;
+  }
+  
+  if (event.endTime) {
+    const [h, m] = event.endTime.split(':');
+    endHour = parseInt(h) || 14;
+    endMinute = parseInt(m) || 0;
+  }
+  
+  // Format for Google Calendar (YYYYMMDDTHHmmss - local time, no Z suffix)
+  const googleStart = `${year}${month}${day}T${String(startHour).padStart(2, '0')}${String(startMinute).padStart(2, '0')}00`;
+  const googleEnd = `${year}${month}${day}T${String(endHour).padStart(2, '0')}${String(endMinute).padStart(2, '0')}00`;
+  
+  // Format for Outlook (ISO 8601 without timezone for local time)
+  const outlookStart = `${year}-${month}-${day}T${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00`;
+  const outlookEnd = `${year}-${month}-${day}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00`;
+  
+  const title = `GIF Volunteer: ${event.name}`;
+  const description = `Gift It Forward volunteer marketplace event${event.location ? ` at ${event.location}` : ''}. Please bring your QR code for check-in.`;
+  
+  // Google Calendar URL
+  const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${googleStart}/${googleEnd}&location=${encodeURIComponent(event.location || '')}&details=${encodeURIComponent(description)}`;
+  
+  // Outlook Web URL
+  const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${outlookStart}&enddt=${outlookEnd}&location=${encodeURIComponent(event.location || '')}&body=${encodeURIComponent(description)}`;
+  
+  // ICS file content for Apple Calendar / download
+  const icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Gift It Forward//Volunteer Event//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `DTSTART:${googleStart}`,
+    `DTEND:${googleEnd}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+    `LOCATION:${event.location || ''}`,
+    `UID:gif-event-${year}${month}${day}@thesurpluss.com`,
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+  
+  // Create data URL for ICS download
+  const icsDataUrl = `data:text/calendar;charset=utf-8,${encodeURIComponent(icsContent)}`;
+  
+  return {
+    google: googleUrl,
+    outlook: outlookUrl,
+    icsDataUrl
+  };
+}
+
 // Helper to look up marketplace events by slug/name pattern
 // deno-lint-ignore no-explicit-any
 async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promise<Map<string, MarketplaceEventDetails>> {
@@ -640,7 +734,15 @@ async function sendWelcomeEmailWithQR(
     
     
     // Parse eventsJson and look up marketplace times
-    let registeredEvents: Array<{ name: string; date: string; time: string; location: string }> = [];
+    let registeredEvents: Array<{ 
+      name: string; 
+      date: string; 
+      time: string; 
+      location: string;
+      rawStartTime: string | null;
+      rawEndTime: string | null;
+      rawDate: string | null;
+    }> = [];
     
     if (eventsJson && Array.isArray(eventsJson)) {
       // Extract event slugs from eventsJson
@@ -658,14 +760,14 @@ async function sendWelcomeEmailWithQR(
         const dbMarketplace = marketplaceDetails.get(evt.event);
         
         // Use DB times if available, otherwise fall back to form data
-        const eventDate = dbMarketplace?.event_date 
+        const eventDateFormatted = dbMarketplace?.event_date 
           ? formatDate(dbMarketplace.event_date) 
           : evt.eventDate || '';
-        const startTime = formatTime(dbMarketplace?.start_time);
-        const endTime = formatTime(dbMarketplace?.end_time);
-        const timeRange = startTime && endTime 
-          ? `${startTime} - ${endTime}` 
-          : (startTime || endTime || 'Time TBD');
+        const startTimeFormatted = formatTime(dbMarketplace?.start_time);
+        const endTimeFormatted = formatTime(dbMarketplace?.end_time);
+        const timeRange = startTimeFormatted && endTimeFormatted 
+          ? `${startTimeFormatted} - ${endTimeFormatted}` 
+          : (startTimeFormatted || endTimeFormatted || 'Time TBD');
         
         // Get name from DB or generate from slug
         const eventName = dbMarketplace?.name || evt.event
@@ -676,9 +778,12 @@ async function sendWelcomeEmailWithQR(
         
         registeredEvents.push({
           name: eventName,
-          date: eventDate,
+          date: eventDateFormatted,
           time: timeRange,
-          location: dbMarketplace?.location || ''
+          location: dbMarketplace?.location || '',
+          rawStartTime: dbMarketplace?.start_time || null,
+          rawEndTime: dbMarketplace?.end_time || null,
+          rawDate: dbMarketplace?.event_date || null
         });
       }
       
@@ -706,7 +811,7 @@ async function sendWelcomeEmailWithQR(
       introText += ".";
     }
     
-    // Build events section HTML for multiple registered events
+    // Build events section HTML for multiple registered events with calendar buttons
     const eventsSection = registeredEvents.length > 0 ? `
       <tr>
         <td style="padding: 0 30px 20px 30px;">
@@ -714,16 +819,46 @@ async function sendWelcomeEmailWithQR(
             <tr>
               <td style="padding: 15px 20px;">
                 <h3 style="margin: 0 0 15px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">📅 Your Registered Events</h3>
-                ${registeredEvents.map(evt => `
-                  <div style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                ${registeredEvents.map(evt => {
+                  // Generate calendar links for this event
+                  const calLinks = generateCalendarLinks({
+                    name: evt.name,
+                    date: evt.rawDate || evt.date,
+                    startTime: evt.rawStartTime,
+                    endTime: evt.rawEndTime,
+                    location: evt.location
+                  });
+                  
+                  return `
+                  <div style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
                     <p style="margin: 0 0 5px 0; font-size: 14px; color: #1a1a1a; font-weight: 600;">${evt.name}</p>
-                    <p style="margin: 0; font-size: 13px; color: #4b5563;">
+                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #4b5563;">
                       <strong>Date:</strong> ${evt.date || 'TBD'} &nbsp;|&nbsp; 
                       <strong>Time:</strong> ${evt.time}
                       ${evt.location ? ` &nbsp;|&nbsp; <strong>Location:</strong> ${evt.location}` : ''}
                     </p>
+                    <!-- Add to Calendar Buttons -->
+                    <table cellpadding="0" cellspacing="0" style="margin-top: 5px;">
+                      <tr>
+                        <td style="padding-right: 8px;">
+                          <a href="${calLinks.google}" target="_blank" style="display: inline-block; padding: 6px 12px; background: #4285f4; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 500;">
+                            📅 Google
+                          </a>
+                        </td>
+                        <td style="padding-right: 8px;">
+                          <a href="${calLinks.outlook}" target="_blank" style="display: inline-block; padding: 6px 12px; background: #0078d4; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 500;">
+                            📅 Outlook
+                          </a>
+                        </td>
+                        <td>
+                          <a href="${calLinks.icsDataUrl}" download="gif-volunteer-event.ics" style="display: inline-block; padding: 6px 12px; background: #374151; color: white; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 500;">
+                            📅 Download .ics
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </div>
-                `).join('')}
+                `}).join('')}
               </td>
             </tr>
           </table>
