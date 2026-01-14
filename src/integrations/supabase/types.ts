@@ -569,6 +569,16 @@ export type Database = {
       marketplace_events: {
         Row: {
           created_at: string
+          demographics_female_adults: number | null
+          demographics_female_children: number | null
+          demographics_male_adults: number | null
+          demographics_male_children: number | null
+          demographics_nationalities: Json | null
+          demographics_notes: string | null
+          demographics_total_adults: number | null
+          demographics_total_children: number | null
+          demographics_total_families: number | null
+          demographics_updated_at: string | null
           end_time: string | null
           event_date: string | null
           external_id: number | null
@@ -582,6 +592,16 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          demographics_female_adults?: number | null
+          demographics_female_children?: number | null
+          demographics_male_adults?: number | null
+          demographics_male_children?: number | null
+          demographics_nationalities?: Json | null
+          demographics_notes?: string | null
+          demographics_total_adults?: number | null
+          demographics_total_children?: number | null
+          demographics_total_families?: number | null
+          demographics_updated_at?: string | null
           end_time?: string | null
           event_date?: string | null
           external_id?: number | null
@@ -595,6 +615,16 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          demographics_female_adults?: number | null
+          demographics_female_children?: number | null
+          demographics_male_adults?: number | null
+          demographics_male_children?: number | null
+          demographics_nationalities?: Json | null
+          demographics_notes?: string | null
+          demographics_total_adults?: number | null
+          demographics_total_children?: number | null
+          demographics_total_families?: number | null
+          demographics_updated_at?: string | null
           end_time?: string | null
           event_date?: string | null
           external_id?: number | null
