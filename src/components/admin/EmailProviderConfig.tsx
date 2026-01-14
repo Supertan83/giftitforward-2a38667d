@@ -14,6 +14,7 @@ interface EmailProviderConfigRow {
   email_type: string;
   primary_provider: string;
   fallback_enabled: boolean;
+  resend_sender: string | null;
   updated_at: string;
 }
 
@@ -21,6 +22,11 @@ const PROVIDERS = [
   { value: 'microsoft_graph', label: 'Microsoft Graph (Outlook)', icon: '📧' },
   { value: 'hubspot', label: 'HubSpot', icon: '🟠' },
   { value: 'resend', label: 'Resend', icon: '📤' },
+];
+
+const RESEND_SENDERS = [
+  { value: 'mgif', label: 'noreply@mgif.thesurpluss.com', description: 'Verified domain (fallback)' },
+  { value: 'dubaiholding', label: 'giftitforward@dubaiholding.com', description: 'Primary domain (requires verification)' },
 ];
 
 const EMAIL_TYPES = [
@@ -153,7 +159,7 @@ export function EmailProviderConfig() {
               </div>
 
               {config ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor={`provider-${emailType.value}`}>Primary Provider</Label>
                     <Select
@@ -177,6 +183,35 @@ export function EmailProviderConfig() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor={`resend-sender-${emailType.value}`}>Resend Sender</Label>
+                    <Select
+                      value={config.resend_sender || 'mgif'}
+                      onValueChange={(value) =>
+                        updateConfig(emailType.value, { resend_sender: value })
+                      }
+                      disabled={isSaving}
+                    >
+                      <SelectTrigger id={`resend-sender-${emailType.value}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RESEND_SENDERS.map(sender => (
+                          <SelectItem key={sender.value} value={sender.value}>
+                            <div className="flex flex-col">
+                              <span>{sender.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {config.resend_sender === 'dubaiholding' 
+                        ? 'Will fallback to mgif if domain not verified' 
+                        : 'Verified sender domain'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor={`fallback-${emailType.value}`}>Fallback Enabled</Label>
                     <div className="flex items-center gap-2 h-10">
                       <Switch
@@ -190,11 +225,11 @@ export function EmailProviderConfig() {
                       <span className="text-sm text-muted-foreground">
                         {config.fallback_enabled ? (
                           <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                            <Check className="h-4 w-4" /> Will try other providers if primary fails
+                            <Check className="h-4 w-4" /> Fallback on
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                            <AlertCircle className="h-4 w-4" /> Only primary provider will be used
+                            <AlertCircle className="h-4 w-4" /> Primary only
                           </span>
                         )}
                       </span>

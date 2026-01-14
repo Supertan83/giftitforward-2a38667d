@@ -83,6 +83,7 @@ export type Database = {
           fallback_enabled: boolean
           id: string
           primary_provider: string
+          resend_sender: string | null
           updated_at: string
         }
         Insert: {
@@ -91,6 +92,7 @@ export type Database = {
           fallback_enabled?: boolean
           id?: string
           primary_provider?: string
+          resend_sender?: string | null
           updated_at?: string
         }
         Update: {
@@ -99,6 +101,7 @@ export type Database = {
           fallback_enabled?: boolean
           id?: string
           primary_provider?: string
+          resend_sender?: string | null
           updated_at?: string
         }
         Relationships: []
