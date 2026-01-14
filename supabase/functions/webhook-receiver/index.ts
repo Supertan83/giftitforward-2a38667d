@@ -399,18 +399,38 @@ async function sendWelcomeEmailWithQR(
     // Generate QR code URL using a public QR code API
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCardId)}`;
     
-    // Check if Microsoft Graph is configured (primary provider)
+    // Fetch email provider configuration from database
+    let primaryProvider = 'microsoft_graph';
+    let fallbackEnabled = true;
+    
+    try {
+      const { data: providerConfig } = await supabaseClient
+        .from('email_provider_config')
+        .select('primary_provider, fallback_enabled')
+        .eq('email_type', 'welcome')
+        .single();
+      
+      if (providerConfig) {
+        primaryProvider = providerConfig.primary_provider;
+        fallbackEnabled = providerConfig.fallback_enabled;
+        console.log(`Email provider config from DB: primary=${primaryProvider}, fallback=${fallbackEnabled}`);
+      }
+    } catch (configError) {
+      console.warn('Could not fetch email provider config, using defaults:', configError);
+    }
+    
+    // Check if Microsoft Graph is configured
     const azureTenantId = Deno.env.get('AZURE_TENANT_ID');
     const azureClientId = Deno.env.get('AZURE_CLIENT_ID');
     const azureClientSecret = Deno.env.get('AZURE_CLIENT_SECRET');
     const senderEmail = Deno.env.get('SENDER_EMAIL');
-    const useMicrosoftGraph = !!(azureTenantId && azureClientId && azureClientSecret && senderEmail);
+    const microsoftGraphConfigured = !!(azureTenantId && azureClientId && azureClientSecret && senderEmail);
     
-    console.log(`Welcome email config: Microsoft Graph configured=${useMicrosoftGraph}`);
+    console.log(`Welcome email config: primary=${primaryProvider}, MS Graph configured=${microsoftGraphConfigured}`);
     
-    // Try Microsoft Graph first if configured
-    if (useMicrosoftGraph) {
-      console.log('Sending welcome email via Microsoft Graph');
+    // Try Microsoft Graph if it's the primary provider and configured
+    if (primaryProvider === 'microsoft_graph' && microsoftGraphConfigured) {
+      console.log('Sending welcome email via Microsoft Graph (primary)');
       
       const msGraphResult = await sendWelcomeEmailViaMicrosoftGraph(
         supabaseUrl,
@@ -441,16 +461,17 @@ async function sendWelcomeEmailWithQR(
       console.log(`Microsoft Graph failed: ${msGraphResult.error}. Falling back to HubSpot/Resend...`);
     }
     
-    // Check email configuration for HubSpot fallback
+    // Check email configuration for HubSpot fallback (only if fallback is enabled or HubSpot is primary)
     const emailConfig = await getEmailConfig(supabaseClient, 'welcome');
-    const useHubSpot = emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
-    const isMicrosoftGraphFallback = useMicrosoftGraph; // If we got here and MS Graph was configured, it failed
+    const useHubSpot = (primaryProvider === 'hubspot' || (fallbackEnabled && primaryProvider === 'microsoft_graph')) && 
+                       emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
+    const triedMicrosoftGraph = primaryProvider === 'microsoft_graph' && microsoftGraphConfigured;
     
     console.log(`HubSpot config: enabled=${emailConfig?.enabled}, template_id=${emailConfig?.template_id}, API key exists=${!!HUBSPOT_API_KEY}, using HubSpot=${useHubSpot}`);
     
     // If HubSpot is enabled, send via HubSpot with custom properties
-    if (useHubSpot) {
-      console.log(`Sending welcome email via HubSpot${isMicrosoftGraphFallback ? ' (Microsoft Graph fallback)' : ''}`);
+    if (useHubSpot && (primaryProvider === 'hubspot' || triedMicrosoftGraph)) {
+      console.log(`Sending welcome email via HubSpot${triedMicrosoftGraph ? ' (Microsoft Graph fallback)' : primaryProvider === 'hubspot' ? ' (primary)' : ''}`);
       
       // Format marketplace details
       const eventDate = formatDate(marketplace?.event_date);
@@ -516,7 +537,7 @@ async function sendWelcomeEmailWithQR(
       const hubspotResult = await sendViaHubSpot(emailConfig.template_id!, email, customProperties);
       
       // Log the HubSpot email attempt
-      const hubspotProvider = isMicrosoftGraphFallback ? 'hubspot_fallback' : 'hubspot';
+      const hubspotProvider = triedMicrosoftGraph ? 'hubspot_fallback' : 'hubspot';
       await logEmailAttempt(
         hubspotProvider,
         hubspotResult.success,
@@ -536,9 +557,16 @@ async function sendWelcomeEmailWithQR(
     }
     
     // Send via Resend (either as primary or as fallback from HubSpot/Microsoft Graph)
-    const isHubSpotFallback = useHubSpot; // If we got here and HubSpot was configured, it means HubSpot failed
-    const isFallback = useMicrosoftGraph || useHubSpot;
-    console.log(`Sending welcome email via Resend${isFallback ? ' (fallback)' : ''}`);
+    const triedHubSpot = useHubSpot && (primaryProvider === 'hubspot' || triedMicrosoftGraph);
+    const isFallback = triedMicrosoftGraph || triedHubSpot;
+    
+    // Skip Resend if fallback is disabled and we've already tried primary
+    if (!fallbackEnabled && (triedMicrosoftGraph || triedHubSpot)) {
+      console.log('Fallback disabled, not trying Resend');
+      return { success: false, error: 'Primary email provider failed and fallback is disabled', provider: primaryProvider };
+    }
+    
+    console.log(`Sending welcome email via Resend${isFallback ? ' (fallback)' : primaryProvider === 'resend' ? ' (primary)' : ''}`);
     
     
     // Format marketplace details for Resend email
@@ -816,28 +844,28 @@ async function sendWelcomeEmailWithQR(
       
       // Log failed Resend attempt
       await logEmailAttempt(
-        isHubSpotFallback ? 'resend_fallback' : 'resend',
+        isFallback ? 'resend_fallback' : 'resend',
         false,
         error.message,
-        { to: email, subject: emailSubject, isHubSpotFallback },
+        { to: email, subject: emailSubject, isFallback },
         { error: error.message, name: error.name }
       );
       
-      return { success: false, error: error.message, provider: isHubSpotFallback ? 'resend_fallback' : 'resend' };
+      return { success: false, error: error.message, provider: isFallback ? 'resend_fallback' : 'resend' };
     }
 
-    console.log(`Welcome email with QR sent successfully to ${email} via Resend${isHubSpotFallback ? ' (HubSpot fallback)' : ''} (${1 + familyQRs.length} QR codes)`);
+    console.log(`Welcome email with QR sent successfully to ${email} via Resend${isFallback ? ' (fallback)' : ''} (${1 + familyQRs.length} QR codes)`);
     
     // Log successful Resend attempt
     await logEmailAttempt(
-      isHubSpotFallback ? 'resend_fallback' : 'resend',
+      isFallback ? 'resend_fallback' : 'resend',
       true,
       null,
-      { to: email, subject: emailSubject, isHubSpotFallback },
+      { to: email, subject: emailSubject, isFallback },
       { status: 'sent' }
     );
     
-    return { success: true, provider: isHubSpotFallback ? 'resend_fallback' : 'resend' };
+    return { success: true, provider: isFallback ? 'resend_fallback' : 'resend' };
   } catch (err) {
     console.error("Error sending welcome email with QR:", err);
     

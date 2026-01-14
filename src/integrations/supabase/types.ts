@@ -76,6 +76,33 @@ export type Database = {
           },
         ]
       }
+      email_provider_config: {
+        Row: {
+          created_at: string
+          email_type: string
+          fallback_enabled: boolean
+          id: string
+          primary_provider: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email_type: string
+          fallback_enabled?: boolean
+          id?: string
+          primary_provider?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email_type?: string
+          fallback_enabled?: boolean
+          id?: string
+          primary_provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_send_logs: {
         Row: {
           created_at: string
