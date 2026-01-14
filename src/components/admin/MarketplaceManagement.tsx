@@ -33,17 +33,41 @@ const createMarketplaceSchema = z.object({
   event_date: z.string().optional(),
   status: z.enum(['upcoming', 'active', 'completed']),
   outreach_partner: z.string().max(200).optional(),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
 });
+
+// Helper to format time for display
+const formatTime = (time: string | null | undefined) => {
+  if (!time) return null;
+  // Time comes as HH:MM:SS from database, format as HH:MM AM/PM
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+};
 
 export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingMarketplace, setEditingMarketplace] = useState<{ id: string; name: string; location: string; eventDate: string; status: 'upcoming' | 'active' | 'completed'; outreachPartner: string } | null>(null);
+  const [editingMarketplace, setEditingMarketplace] = useState<{ 
+    id: string; 
+    name: string; 
+    location: string; 
+    eventDate: string; 
+    status: 'upcoming' | 'active' | 'completed'; 
+    outreachPartner: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [status, setStatus] = useState<'upcoming' | 'active' | 'completed'>('upcoming');
   const [outreachPartner, setOutreachPartner] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: marketplaces = [], isLoading } = useMarketplaces();
@@ -52,7 +76,16 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const updateMarketplace = useUpdateMarketplace();
   const { toast } = useToast();
 
-  const handleEdit = (marketplace: { id: string; name: string; location: string | null; event_date: string | null; status: string; outreach_partner: string | null }) => {
+  const handleEdit = (marketplace: { 
+    id: string; 
+    name: string; 
+    location: string | null; 
+    event_date: string | null; 
+    status: string; 
+    outreach_partner: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+  }) => {
     setEditingMarketplace({
       id: marketplace.id,
       name: marketplace.name,
@@ -60,6 +93,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       eventDate: marketplace.event_date || '',
       status: marketplace.status as 'upcoming' | 'active' | 'completed',
       outreachPartner: marketplace.outreach_partner || '',
+      startTime: marketplace.start_time || '',
+      endTime: marketplace.end_time || '',
     });
     setShowEditModal(true);
   };
@@ -73,7 +108,9 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       location: editingMarketplace.location || undefined, 
       event_date: editingMarketplace.eventDate || undefined, 
       status: editingMarketplace.status,
-      outreach_partner: editingMarketplace.outreachPartner || undefined
+      outreach_partner: editingMarketplace.outreachPartner || undefined,
+      start_time: editingMarketplace.startTime || undefined,
+      end_time: editingMarketplace.endTime || undefined
     });
     
     if (!result.success) {
@@ -95,6 +132,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         event_date: editingMarketplace.eventDate || null,
         status: editingMarketplace.status,
         outreach_partner: editingMarketplace.outreachPartner || null,
+        start_time: editingMarketplace.startTime || null,
+        end_time: editingMarketplace.endTime || null,
       });
       toast({
         title: 'Marketplace Updated',
@@ -119,7 +158,9 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       location: location || undefined, 
       event_date: eventDate || undefined, 
       status,
-      outreach_partner: outreachPartner || undefined
+      outreach_partner: outreachPartner || undefined,
+      start_time: startTime || undefined,
+      end_time: endTime || undefined
     });
     
     if (!result.success) {
@@ -140,6 +181,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         event_date: eventDate || null,
         status,
         outreach_partner: outreachPartner || null,
+        start_time: startTime || null,
+        end_time: endTime || null,
       });
       toast({
         title: 'Marketplace Created',
@@ -151,6 +194,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       setEventDate('');
       setStatus('upcoming');
       setOutreachPartner('');
+      setStartTime('');
+      setEndTime('');
     } catch (error) {
       toast({
         title: 'Failed to Create Marketplace',
@@ -307,6 +352,12 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                             {new Date(marketplace.event_date).toLocaleDateString()}
                           </span>
                         )}
+                        {(marketplace.start_time || marketplace.end_time) && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatTime(marketplace.start_time)}{marketplace.start_time && marketplace.end_time && ' - '}{formatTime(marketplace.end_time)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -383,6 +434,35 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 value={eventDate}
                 onChange={(e) => setEventDate(e.target.value)}
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="start_time">Start Time</Label>
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="start_time"
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end_time">End Time</Label>
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="end_time"
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -473,6 +553,35 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   value={editingMarketplace.eventDate}
                   onChange={(e) => setEditingMarketplace({ ...editingMarketplace, eventDate: e.target.value })}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-start_time">Start Time</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="edit-start_time"
+                      type="time"
+                      value={editingMarketplace.startTime}
+                      onChange={(e) => setEditingMarketplace({ ...editingMarketplace, startTime: e.target.value })}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-end_time">End Time</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="edit-end_time"
+                      type="time"
+                      value={editingMarketplace.endTime}
+                      onChange={(e) => setEditingMarketplace({ ...editingMarketplace, endTime: e.target.value })}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">

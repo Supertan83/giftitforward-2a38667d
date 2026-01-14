@@ -63,6 +63,10 @@ export interface MarketplaceEvent {
   date: string;
   location: string;
   status: 'upcoming' | 'active' | 'completed';
+  event_date?: string | null;
+  outreach_partner?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 export interface VolunteerQRCard {
