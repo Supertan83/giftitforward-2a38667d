@@ -441,7 +441,7 @@ const handler = async (req: Request): Promise<Response> => {
       html: string;
       attachments?: Array<{ filename: string; content: string }>;
     } = {
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
       to: [recipient_email],
       subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
       html,

@@ -258,7 +258,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Attempting to send email to ${cleanEmail} with filename ${filename}`);
 
     const emailResponse = await resend.emails.send({
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
       to: [cleanEmail],
       subject: "Your Circular Economy Training Certificate",
       html: `
