@@ -631,8 +631,12 @@ async function sendWelcomeEmailWithQR(
     // Build email subject
     const emailSubject = customization?.subject || "Thank you for Registering as a Gift It Forward Volunteer!";
     
-    const { error } = await resend.emails.send({
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+    // Try primary sender first, fallback if domain not verified
+    const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
+    const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+    
+    let resendResult = await resend.emails.send({
+      from: primarySender,
       to: [email],
       subject: emailSubject,
       html: `
@@ -839,19 +843,64 @@ async function sendWelcomeEmailWithQR(
       `,
     });
 
-    if (error) {
-      console.error("Failed to send welcome email with QR via Resend:", error);
+    // Check if primary sender failed with domain error, try fallback
+    if (resendResult.error) {
+      const errorMessage = resendResult.error.message || "";
+      console.log(`Primary Resend sender failed: ${errorMessage}`);
+      
+      if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
+        console.log(`Retrying with fallback sender: ${fallbackSender}`);
+        resendResult = await resend.emails.send({
+          from: fallbackSender,
+          to: [email],
+          subject: emailSubject,
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+            <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+                <tr>
+                  <td align="center" style="padding: 20px 0;">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                      <tr><td><img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" /></td></tr>
+                      <tr><td style="padding: 20px 30px 10px 30px; text-align: center;"><p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p></td></tr>
+                      <tr><td style="padding: 0 30px 20px 30px; text-align: center;"><h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold;">Thank you for Registering as a Gift It Forward Volunteer!</h1></td></tr>
+                      <tr><td style="padding: 0 30px 15px 30px;"><p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p></td></tr>
+                      <tr><td style="padding: 0 30px 15px 30px;"><p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">${introText}</p></td></tr>
+                      <tr><td style="padding: 0 30px 10px 30px;"><h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Volunteer QR Code</h3></td></tr>
+                      <tr><td style="padding: 0 30px 10px 30px;"><img src="${qrCodeUrl}" alt="Volunteer QR Code" width="150" height="150" style="display: block;" /></td></tr>
+                      <tr><td style="padding: 0 30px 25px 30px;"><p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: ${qrCardId}</p></td></tr>
+                      ${familySection}
+                      <tr><td style="padding: 0 30px 10px 30px;"><p style="margin: 0; font-size: 13px; color: #333333;">Email: ${email}</p><p style="margin: 0; font-size: 13px; color: #333333;">Temporary Password: ${tempPassword}</p></td></tr>
+                      <tr><td style="padding: 15px 30px 25px 30px;"><a href="${loginUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the Marketplace</a></td></tr>
+                      <tr><td style="padding: 0 30px 25px 30px;"><a href="${trainingUrl}" style="display: inline-block; background-color: #0D4A6F; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a></td></tr>
+                      <tr><td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;"><table width="100%" cellpadding="0" cellspacing="0"><tr><td width="50%" valign="middle"><img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="40" style="display: block;" /></td><td width="50%" valign="middle" style="text-align: right;"><p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p></td></tr></table></td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;width:1px;height:1px;border:0;" />
+            </body>
+            </html>
+          `,
+        });
+      }
+    }
+
+    if (resendResult.error) {
+      console.error("Failed to send welcome email with QR via Resend (after fallback):", resendResult.error);
       
       // Log failed Resend attempt
       await logEmailAttempt(
         isFallback ? 'resend_fallback' : 'resend',
         false,
-        error.message,
+        resendResult.error.message,
         { to: email, subject: emailSubject, isFallback },
-        { error: error.message, name: error.name }
+        { error: resendResult.error.message, name: resendResult.error.name }
       );
       
-      return { success: false, error: error.message, provider: isFallback ? 'resend_fallback' : 'resend' };
+      return { success: false, error: resendResult.error.message, provider: isFallback ? 'resend_fallback' : 'resend' };
     }
 
     console.log(`Welcome email with QR sent successfully to ${email} via Resend${isFallback ? ' (fallback)' : ''} (${1 + familyQRs.length} QR codes)`);
