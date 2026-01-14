@@ -402,22 +402,30 @@ async function sendWelcomeEmailWithQR(
     // Fetch email provider configuration from database
     let primaryProvider = 'microsoft_graph';
     let fallbackEnabled = true;
+    let resendSender = 'mgif'; // Default to verified domain
     
     try {
       const { data: providerConfig } = await supabaseClient
         .from('email_provider_config')
-        .select('primary_provider, fallback_enabled')
+        .select('primary_provider, fallback_enabled, resend_sender')
         .eq('email_type', 'welcome')
         .single();
       
       if (providerConfig) {
         primaryProvider = providerConfig.primary_provider;
         fallbackEnabled = providerConfig.fallback_enabled;
-        console.log(`Email provider config from DB: primary=${primaryProvider}, fallback=${fallbackEnabled}`);
+        resendSender = providerConfig.resend_sender || 'mgif';
+        console.log(`Email provider config from DB: primary=${primaryProvider}, fallback=${fallbackEnabled}, resend_sender=${resendSender}`);
       }
     } catch (configError) {
       console.warn('Could not fetch email provider config, using defaults:', configError);
     }
+    
+    // Determine Resend sender based on config
+    const resendPrimarySender = resendSender === 'dubaiholding' 
+      ? "Gift It Forward <giftitforward@dubaiholding.com>"
+      : "Gift It Forward <noreply@mgif.thesurpluss.com>";
+    const resendFallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
     
     // Check if Microsoft Graph is configured
     const azureTenantId = Deno.env.get('AZURE_TENANT_ID');
@@ -631,12 +639,11 @@ async function sendWelcomeEmailWithQR(
     // Build email subject
     const emailSubject = customization?.subject || "Thank you for Registering as a Gift It Forward Volunteer!";
     
-    // Try primary sender first, fallback if domain not verified
-    const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
-    const fallbackSender = "Gift It Forward <noreply@mgif.thesurpluss.com>";
+    // Use configured Resend sender (from DB config above)
+    console.log(`Using Resend sender: ${resendPrimarySender}, fallback: ${resendFallbackSender}`);
     
     let resendResult = await resend.emails.send({
-      from: primarySender,
+      from: resendPrimarySender,
       to: [email],
       subject: emailSubject,
       html: `
@@ -849,9 +856,9 @@ async function sendWelcomeEmailWithQR(
       console.log(`Primary Resend sender failed: ${errorMessage}`);
       
       if (errorMessage.includes("domain") || errorMessage.includes("not verified") || errorMessage.includes("not found")) {
-        console.log(`Retrying with fallback sender: ${fallbackSender}`);
+        console.log(`Retrying with fallback sender: ${resendFallbackSender}`);
         resendResult = await resend.emails.send({
-          from: fallbackSender,
+          from: resendFallbackSender,
           to: [email],
           subject: emailSubject,
           html: `
