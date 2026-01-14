@@ -632,7 +632,7 @@ async function sendWelcomeEmailWithQR(
     const emailSubject = customization?.subject || "Thank you for Registering as a Gift It Forward Volunteer!";
     
     const { error } = await resend.emails.send({
-      from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
+      from: "Gift It Forward <giftitforward@dubaiholding.com>",
       to: [email],
       subject: emailSubject,
       html: `
