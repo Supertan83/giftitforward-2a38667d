@@ -295,6 +295,58 @@ interface EmailCustomization {
   message?: string;
 }
 
+// Helper function to send welcome email via Microsoft Graph edge function
+async function sendWelcomeEmailViaMicrosoftGraph(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  volunteerId: string,
+  email: string,
+  firstName: string,
+  lastName: string,
+  tempPassword: string,
+  qrCardId: string,
+  marketplaceId?: string | null
+): Promise<{ success: boolean; error?: string; provider: string }> {
+  try {
+    console.log(`Calling send-welcome-email edge function for ${email}`);
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`,
+      },
+      body: JSON.stringify({
+        volunteerId,
+        email,
+        firstName,
+        lastName,
+        tempPassword,
+        qrCodeId: qrCardId,
+        marketplaceId: marketplaceId || undefined,
+      }),
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok || !responseData.success) {
+      console.error('Microsoft Graph email failed:', responseData.error || response.status);
+      return { 
+        success: false, 
+        error: responseData.error || `HTTP ${response.status}`,
+        provider: 'microsoft_graph'
+      };
+    }
+
+    console.log(`Welcome email sent successfully via Microsoft Graph to ${email}`);
+    return { success: true, provider: 'microsoft_graph' };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error calling send-welcome-email:', error);
+    return { success: false, error: errorMessage, provider: 'microsoft_graph' };
+  }
+}
+
 // Helper function to send welcome email to approved volunteer with QR codes (including family members)
 // deno-lint-ignore no-explicit-any
 async function sendWelcomeEmailWithQR(
@@ -309,7 +361,8 @@ async function sendWelcomeEmailWithQR(
   pendingId: string,
   familyQRs: FamilyMemberQR[] = [],
   customization?: EmailCustomization,
-  marketplace?: MarketplaceInfo | null
+  marketplace?: MarketplaceInfo | null,
+  marketplaceId?: string | null
 ): Promise<{ success: boolean; error?: string; provider?: string }> {
   // Helper to log email send attempt
   const logEmailAttempt = async (
@@ -340,20 +393,64 @@ async function sendWelcomeEmailWithQR(
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pendingId}`;
     
     // Generate QR code URL using a public QR code API
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCardId)}`;
     
-    // Check email configuration to determine provider
+    // Check if Microsoft Graph is configured (primary provider)
+    const azureTenantId = Deno.env.get('AZURE_TENANT_ID');
+    const azureClientId = Deno.env.get('AZURE_CLIENT_ID');
+    const azureClientSecret = Deno.env.get('AZURE_CLIENT_SECRET');
+    const senderEmail = Deno.env.get('SENDER_EMAIL');
+    const useMicrosoftGraph = !!(azureTenantId && azureClientId && azureClientSecret && senderEmail);
+    
+    console.log(`Welcome email config: Microsoft Graph configured=${useMicrosoftGraph}`);
+    
+    // Try Microsoft Graph first if configured
+    if (useMicrosoftGraph) {
+      console.log('Sending welcome email via Microsoft Graph');
+      
+      const msGraphResult = await sendWelcomeEmailViaMicrosoftGraph(
+        supabaseUrl,
+        serviceRoleKey,
+        pendingId,
+        email,
+        firstName,
+        lastName,
+        tempPassword,
+        qrCardId,
+        marketplaceId
+      );
+      
+      // Log the Microsoft Graph email attempt
+      await logEmailAttempt(
+        'microsoft_graph',
+        msGraphResult.success,
+        msGraphResult.error || null,
+        { to: email, qrCardId, marketplaceId },
+        { provider: 'microsoft_graph', success: msGraphResult.success }
+      );
+      
+      if (msGraphResult.success) {
+        return { success: true, provider: 'microsoft_graph' };
+      }
+      
+      // Microsoft Graph failed - fallback to HubSpot/Resend
+      console.log(`Microsoft Graph failed: ${msGraphResult.error}. Falling back to HubSpot/Resend...`);
+    }
+    
+    // Check email configuration for HubSpot fallback
     const emailConfig = await getEmailConfig(supabaseClient, 'welcome');
     const useHubSpot = emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
+    const isMicrosoftGraphFallback = useMicrosoftGraph; // If we got here and MS Graph was configured, it failed
     
-    console.log(`Welcome email config: HubSpot enabled=${emailConfig?.enabled}, template_id=${emailConfig?.template_id}, API key exists=${!!HUBSPOT_API_KEY}, using HubSpot=${useHubSpot}`);
+    console.log(`HubSpot config: enabled=${emailConfig?.enabled}, template_id=${emailConfig?.template_id}, API key exists=${!!HUBSPOT_API_KEY}, using HubSpot=${useHubSpot}`);
     
     // If HubSpot is enabled, send via HubSpot with custom properties
     if (useHubSpot) {
-      console.log('Sending welcome email via HubSpot');
+      console.log(`Sending welcome email via HubSpot${isMicrosoftGraphFallback ? ' (Microsoft Graph fallback)' : ''}`);
       
       // Format marketplace details
       const eventDate = formatDate(marketplace?.event_date);
@@ -419,8 +516,9 @@ async function sendWelcomeEmailWithQR(
       const hubspotResult = await sendViaHubSpot(emailConfig.template_id!, email, customProperties);
       
       // Log the HubSpot email attempt
+      const hubspotProvider = isMicrosoftGraphFallback ? 'hubspot_fallback' : 'hubspot';
       await logEmailAttempt(
-        'hubspot',
+        hubspotProvider,
         hubspotResult.success,
         hubspotResult.error || null,
         hubspotResult.requestPayload || null,
@@ -429,7 +527,7 @@ async function sendWelcomeEmailWithQR(
       
       // If HubSpot succeeded, return success
       if (hubspotResult.success) {
-        return { success: true, provider: 'hubspot' };
+        return { success: true, provider: hubspotProvider };
       }
       
       // HubSpot failed - fallback to Resend
@@ -437,9 +535,11 @@ async function sendWelcomeEmailWithQR(
       // Continue to Resend fallback below (don't return here)
     }
     
-    // Send via Resend (either as primary or as fallback from HubSpot)
+    // Send via Resend (either as primary or as fallback from HubSpot/Microsoft Graph)
     const isHubSpotFallback = useHubSpot; // If we got here and HubSpot was configured, it means HubSpot failed
-    console.log(`Sending welcome email via Resend${isHubSpotFallback ? ' (HubSpot fallback)' : ''}`);
+    const isFallback = useMicrosoftGraph || useHubSpot;
+    console.log(`Sending welcome email via Resend${isFallback ? ' (fallback)' : ''}`);
+    
     
     // Format marketplace details for Resend email
     const eventDate = formatDate(marketplace?.event_date);
@@ -775,7 +875,7 @@ async function sendWelcomeEmail(
   pendingId: string
 ): Promise<{ success: boolean; error?: string; provider?: string }> {
   // Call new function without QR
-  return sendWelcomeEmailWithQR(supabaseClient, email, firstName, lastName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId, []);
+  return sendWelcomeEmailWithQR(supabaseClient, email, firstName, lastName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId, [], undefined, undefined, undefined);
 }
 
 interface VolunteerData {
@@ -1730,7 +1830,9 @@ serve(async (req) => {
             volunteerQRId,
             pendingId,
             [], // No family members for manual creation
-            volunteerPayload.email_customization // Pass custom email content
+            volunteerPayload.email_customization, // Pass custom email content
+            null, // marketplace info
+            null // marketplaceId
           );
 
           if (emailResult.success) {
@@ -2541,7 +2643,10 @@ serve(async (req) => {
             trainingUrl,
             qrCardId,
             pendingData.id,
-            familyQRs
+            familyQRs,
+            undefined, // customization
+            undefined, // marketplace info
+            undefined // marketplaceId - could be extracted from pendingData if needed
           );
 
           // Update pending volunteer with email status
@@ -2802,7 +2907,10 @@ serve(async (req) => {
           trainingUrl,
           qrCardId,
           pending_id,
-          familyQRs
+          familyQRs,
+          undefined, // customization
+          undefined, // marketplace info
+          undefined // marketplaceId
         );
 
         // Update email tracking fields
@@ -3131,7 +3239,10 @@ serve(async (req) => {
         trainingUrl,
         volunteerQrId,
         pending_id,
-        familyQRs
+        familyQRs,
+        undefined, // customization
+        undefined, // marketplace info
+        undefined // marketplaceId
       );
 
       // Update email tracking fields
