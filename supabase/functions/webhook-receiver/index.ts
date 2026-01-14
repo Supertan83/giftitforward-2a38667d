@@ -242,6 +242,67 @@ async function getFirstUpcomingMarketplace(supabase: any): Promise<MarketplaceIn
   }
 }
 
+// Interface for event registration data from form
+interface RegisteredEvent {
+  event: string; // slug like "emirati-family-support-marketplace-february-22"
+  eventDate: string; // "February 22, 2026"
+  'family-members-joining'?: string;
+  'number-of-children'?: string;
+  'number-of-adults'?: string;
+  'fnb-required'?: string;
+  dependents?: Array<{ name: string; type: string; gender?: string }>;
+  'total-attendees'?: number;
+}
+
+// Interface for marketplace with times from database
+interface MarketplaceEventDetails {
+  name: string;
+  location: string | null;
+  event_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  slug?: string; // For matching
+}
+
+// Helper to look up marketplace events by slug/name pattern
+// deno-lint-ignore no-explicit-any
+async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promise<Map<string, MarketplaceEventDetails>> {
+  const result = new Map<string, MarketplaceEventDetails>();
+  if (!eventSlugs.length) return result;
+  
+  try {
+    // Fetch all marketplace events and try to match by name pattern
+    const { data: marketplaces, error } = await supabase
+      .from('marketplace_events')
+      .select('name, location, event_date, start_time, end_time')
+      .order('event_date', { ascending: true });
+    
+    if (error || !marketplaces) return result;
+    
+    for (const slug of eventSlugs) {
+      // Convert slug to searchable pattern
+      // e.g., "emirati-family-support-marketplace-february-22" -> "emirati", "family", "support"
+      const slugParts = slug.toLowerCase().split('-').filter(p => 
+        p.length > 2 && !['the', 'and', 'for', 'marketplace'].includes(p)
+      );
+      
+      for (const mp of marketplaces) {
+        const mpNameLower = mp.name.toLowerCase();
+        // Check if marketplace name contains key parts of the slug
+        const matchCount = slugParts.filter(part => mpNameLower.includes(part)).length;
+        if (matchCount >= 2 || (slugParts.length === 1 && mpNameLower.includes(slugParts[0]))) {
+          result.set(slug, { ...mp, slug });
+          break;
+        }
+      }
+    }
+    
+    return result;
+  } catch {
+    return result;
+  }
+}
+
 // Generate unique volunteer QR card ID
 function generateVolunteerQRId(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -362,7 +423,8 @@ async function sendWelcomeEmailWithQR(
   familyQRs: FamilyMemberQR[] = [],
   customization?: EmailCustomization,
   marketplace?: MarketplaceInfo | null,
-  marketplaceId?: string | null
+  marketplaceId?: string | null,
+  eventsJson?: unknown // Array of registered events from form
 ): Promise<{ success: boolean; error?: string; provider?: string }> {
   // Helper to log email send attempt
   const logEmailAttempt = async (
@@ -577,7 +639,53 @@ async function sendWelcomeEmailWithQR(
     console.log(`Sending welcome email via Resend${isFallback ? ' (fallback)' : primaryProvider === 'resend' ? ' (primary)' : ''}`);
     
     
-    // Format marketplace details for Resend email
+    // Parse eventsJson and look up marketplace times
+    let registeredEvents: Array<{ name: string; date: string; time: string; location: string }> = [];
+    
+    if (eventsJson && Array.isArray(eventsJson)) {
+      // Extract event slugs from eventsJson
+      const eventSlugs = eventsJson
+        .map((e: RegisteredEvent) => e.event)
+        .filter((slug): slug is string => !!slug);
+      
+      console.log(`Looking up marketplace times for ${eventSlugs.length} events:`, eventSlugs);
+      
+      // Look up marketplace details from database
+      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
+      
+      // Build registered events list with times from DB
+      for (const evt of eventsJson as RegisteredEvent[]) {
+        const dbMarketplace = marketplaceDetails.get(evt.event);
+        
+        // Use DB times if available, otherwise fall back to form data
+        const eventDate = dbMarketplace?.event_date 
+          ? formatDate(dbMarketplace.event_date) 
+          : evt.eventDate || '';
+        const startTime = formatTime(dbMarketplace?.start_time);
+        const endTime = formatTime(dbMarketplace?.end_time);
+        const timeRange = startTime && endTime 
+          ? `${startTime} - ${endTime}` 
+          : (startTime || endTime || 'Time TBD');
+        
+        // Get name from DB or generate from slug
+        const eventName = dbMarketplace?.name || evt.event
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+          .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
+        
+        registeredEvents.push({
+          name: eventName,
+          date: eventDate,
+          time: timeRange,
+          location: dbMarketplace?.location || ''
+        });
+      }
+      
+      console.log(`Built ${registeredEvents.length} events with times:`, registeredEvents);
+    }
+    
+    // Format single marketplace details for Resend email (fallback if no eventsJson)
     const eventDate = formatDate(marketplace?.event_date);
     const startTime = formatTime(marketplace?.start_time);
     const endTime = formatTime(marketplace?.end_time);
@@ -585,16 +693,43 @@ async function sendWelcomeEmailWithQR(
     const marketplaceName = marketplace?.name || '';
     const marketplaceLocation = marketplace?.location || '';
     
-    // Build dynamic intro text with marketplace info
+    // Build dynamic intro text based on registered events
     let introText = "Thank you for registering as a Gift It Forward Volunteer.";
-    if (marketplaceName || eventDate) {
+    if (registeredEvents.length > 0) {
+      introText = "Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us at the following marketplace event(s):";
+    } else if (marketplaceName || eventDate) {
       introText += " We're delighted to have you join us";
-      if (eventDate) introText += ` on the <strong>${eventDate}</strong>`;
+      if (eventDate) introText += ` on <strong>${eventDate}</strong>`;
       if (timeRange) introText += ` from <strong>${timeRange}</strong>`;
       if (marketplaceName) introText += ` at the <strong>${marketplaceName}</strong>`;
       if (marketplaceLocation) introText += ` in <strong>${marketplaceLocation}</strong>`;
       introText += ".";
     }
+    
+    // Build events section HTML for multiple registered events
+    const eventsSection = registeredEvents.length > 0 ? `
+      <tr>
+        <td style="padding: 0 30px 20px 30px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0f4f8; border-radius: 8px; border: 1px solid #d1d5db;">
+            <tr>
+              <td style="padding: 15px 20px;">
+                <h3 style="margin: 0 0 15px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">📅 Your Registered Events</h3>
+                ${registeredEvents.map(evt => `
+                  <div style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 5px 0; font-size: 14px; color: #1a1a1a; font-weight: 600;">${evt.name}</p>
+                    <p style="margin: 0; font-size: 13px; color: #4b5563;">
+                      <strong>Date:</strong> ${evt.date || 'TBD'} &nbsp;|&nbsp; 
+                      <strong>Time:</strong> ${evt.time}
+                      ${evt.location ? ` &nbsp;|&nbsp; <strong>Location:</strong> ${evt.location}` : ''}
+                    </p>
+                  </div>
+                `).join('')}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    ` : '';
     
     // Email assets URLs
     const supabaseProjectUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -711,13 +846,12 @@ async function sendWelcomeEmailWithQR(
                   <tr>
                     <td style="padding: 0 30px 15px 30px;">
                       <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                        ${customization?.greeting || customization?.message 
-                          ? "Here's everything you need to get started:"
-                          : "Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us on the <strong>19th of February</strong> at the <strong>Ajman, Al Hamidya</strong> and <strong>Boys' Community School Marketplace</strong>."
-                        }
+                        ${introText}
                       </p>
                     </td>
                   </tr>
+                  
+                  ${eventsSection}
                   
                   <tr>
                     <td style="padding: 0 30px 20px 30px;">
@@ -2803,7 +2937,8 @@ serve(async (req) => {
             familyQRs,
             undefined, // customization
             undefined, // marketplace info
-            undefined // marketplaceId - could be extracted from pendingData if needed
+            undefined, // marketplaceId
+            eventsJson // Pass events data for times in email
           );
 
           // Update pending volunteer with email status
@@ -3067,7 +3202,8 @@ serve(async (req) => {
           familyQRs,
           undefined, // customization
           undefined, // marketplace info
-          undefined // marketplaceId
+          undefined, // marketplaceId
+          pendingVolunteer.events_json // Pass events data for times in email
         );
 
         // Update email tracking fields
@@ -3399,7 +3535,8 @@ serve(async (req) => {
         familyQRs,
         undefined, // customization
         undefined, // marketplace info
-        undefined // marketplaceId
+        undefined, // marketplaceId
+        volunteer.events_json // Pass events data for times in email
       );
 
       // Update email tracking fields
