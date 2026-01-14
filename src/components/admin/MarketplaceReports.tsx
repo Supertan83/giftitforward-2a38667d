@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarketplaceAllocations';
+import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { 
   PieChart, 
   Pie, 
@@ -277,107 +278,11 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
                   </div>
                 </div>
 
-                {/* Beneficiaries Section */}
-                <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
-                  <button
-                    onClick={() => toggleSection('beneficiaries')}
-                    className="w-full p-4 md:p-6 flex items-center justify-between text-left hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users className="w-5 h-5 text-primary" />
-                      <h3 className="font-display font-semibold text-lg">Beneficiary Demographics</h3>
-                    </div>
-                    {expandedSections.beneficiaries ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </button>
-                  
-                  {expandedSections.beneficiaries && (
-                    <div className="px-4 md:px-6 pb-6 space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Gender Distribution */}
-                        <div>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3">Gender Distribution</h4>
-                          {Object.keys(report.beneficiaries.byGender).length > 0 ? (
-                            <ResponsiveContainer width="100%" height={200}>
-                              <PieChart>
-                                <Pie
-                                  data={formatGenderData(report.beneficiaries.byGender)}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={40}
-                                  outerRadius={70}
-                                  dataKey="value"
-                                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                >
-                                  {formatGenderData(report.beneficiaries.byGender).map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip />
-                              </PieChart>
-                            </ResponsiveContainer>
-                          ) : (
-                            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                              No data available
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Marital Status Distribution */}
-                        <div>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3">Marital Status</h4>
-                          {Object.keys(report.beneficiaries.byMaritalStatus).length > 0 ? (
-                            <ResponsiveContainer width="100%" height={200}>
-                              <PieChart>
-                                <Pie
-                                  data={formatGenderData(report.beneficiaries.byMaritalStatus)}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={40}
-                                  outerRadius={70}
-                                  dataKey="value"
-                                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                >
-                                  {formatGenderData(report.beneficiaries.byMaritalStatus).map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip />
-                              </PieChart>
-                            </ResponsiveContainer>
-                          ) : (
-                            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                              No data available
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Average Children */}
-                        <div>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3">Family Statistics</h4>
-                          <div className="bg-muted/50 rounded-lg p-4 h-[200px] flex flex-col items-center justify-center">
-                            <p className="text-4xl font-bold text-primary">{report.beneficiaries.avgChildrenCount.toFixed(1)}</p>
-                            <p className="text-sm text-muted-foreground mt-2">Avg. Children per Family</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Nationality Breakdown */}
-                      {Object.keys(report.beneficiaries.byNationality).length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3">Nationality Breakdown</h4>
-                          <ResponsiveContainer width="100%" height={200}>
-                            <BarChart data={formatGenderData(report.beneficiaries.byNationality)}>
-                              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                              <YAxis tick={{ fontSize: 12 }} />
-                              <Tooltip />
-                              <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                {/* Beneficiary Demographics Editor */}
+                <MarketplaceDemographicsEditor
+                  marketplaceId={selectedMarketplaceId}
+                  marketplaceName={report.marketplace.name}
+                />
 
                 {/* Items Section */}
                 <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
