@@ -257,7 +257,7 @@ const handler = async (req: Request): Promise<Response> => {
         : `Your training status has been reset and you're invited to <span class="highlight">retake the Circular Economy Training Module</span>.`;
 
       const emailResponse = await resend.emails.send({
-        from: "Gift It Forward <giftitforward@dubaiholding.com>",
+        from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
         to: [cleanEmail],
         subject: emailSubject,
         html: `

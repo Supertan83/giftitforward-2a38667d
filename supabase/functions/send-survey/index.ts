@@ -213,7 +213,7 @@ async function sendViaResend(
       Authorization: `Bearer ${RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
       to: [cleanEmail],
       subject: "Thank You for Volunteering! Share Your Feedback",
       html: `
