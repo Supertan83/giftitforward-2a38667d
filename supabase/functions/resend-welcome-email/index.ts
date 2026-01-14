@@ -146,7 +146,7 @@ serve(async (req: Request) => {
       const tempPasswordDisplay = volunteer.temp_password || 'Please use "Forgot Password" to reset';
 
       const { error: emailError } = await resend.emails.send({
-        from: "Gift It Forward <noreply@mgif.thesurpluss.com>",
+        from: "Gift It Forward <giftitforward@dubaiholding.com>",
         to: [volunteer.email],
         subject: emailSubject,
         html: `
