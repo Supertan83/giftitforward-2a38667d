@@ -10,6 +10,9 @@ interface EmailPreviewDialogProps {
   customSubject?: string;
   customGreeting?: string;
   customMessage?: string;
+  marketplaceDate?: string;
+  marketplaceTime?: string;
+  marketplaceLocation?: string;
 }
 
 export const EmailPreviewDialog = ({ 
@@ -19,7 +22,10 @@ export const EmailPreviewDialog = ({
   qrCardId = 'VOL-PREVIEW-1234',
   customSubject,
   customGreeting,
-  customMessage
+  customMessage,
+  marketplaceDate = '19th of February',
+  marketplaceTime = '9:00 AM - 3:00 PM',
+  marketplaceLocation = 'Ajman, Al Hamidya'
 }: EmailPreviewDialogProps) => {
   const appUrl = 'https://gif.thesurpluss.com';
   const loginUrl = `${appUrl}/auth`;
@@ -79,7 +85,7 @@ export const EmailPreviewDialog = ({
             <p className="text-gray-800 m-0"><strong>Dear {`{{custom.first_name}}`},</strong></p>
             
             <p className="text-gray-700">
-              Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us on the <strong>19th of February</strong> at the <strong>Ajman, Al Hamidya</strong> and <strong>Boys' Community School Marketplace</strong>.
+              Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us on the <strong>{marketplaceDate}</strong> from <strong>{marketplaceTime}</strong> at the <strong>{marketplaceLocation}</strong> marketplace.
             </p>
             
             <p className="text-gray-700">
@@ -160,7 +166,7 @@ export const EmailPreviewDialog = ({
             <div className="mt-6">
               <h3 className="text-base font-bold text-gray-900 m-0 mb-2">What's Next?</h3>
               <ul className="text-gray-700 text-sm pl-5 m-0 space-y-1">
-                <li>Mark your calendar</li>
+                <li>Mark your calendar for <strong>{marketplaceDate}</strong> at <strong>{marketplaceTime}</strong></li>
                 <li>Look out for reminder emails and WhatsApp notifications closer to each event</li>
                 <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" className="text-[#0D4A6F]">giftitforward@dubaiholding.com</a></li>
               </ul>

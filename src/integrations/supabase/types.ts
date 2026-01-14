@@ -539,34 +539,40 @@ export type Database = {
       marketplace_events: {
         Row: {
           created_at: string
+          end_time: string | null
           event_date: string | null
           external_id: number | null
           id: string
           location: string | null
           name: string
           outreach_partner: string | null
+          start_time: string | null
           status: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          end_time?: string | null
           event_date?: string | null
           external_id?: number | null
           id?: string
           location?: string | null
           name: string
           outreach_partner?: string | null
+          start_time?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          end_time?: string | null
           event_date?: string | null
           external_id?: number | null
           id?: string
           location?: string | null
           name?: string
           outreach_partner?: string | null
+          start_time?: string | null
           status?: string
           updated_at?: string
         }
