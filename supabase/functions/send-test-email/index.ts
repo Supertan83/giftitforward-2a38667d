@@ -13,6 +13,103 @@ interface SendTestEmailRequest {
   email_type: 'welcome' | 'survey' | 'certificate';
   recipient_email: string;
   test_mode: boolean;
+  provider?: 'resend' | 'microsoft_graph';
+}
+
+// Microsoft Graph helper functions
+async function getMicrosoftAccessToken(): Promise<string> {
+  const tenantId = Deno.env.get("AZURE_TENANT_ID");
+  const clientId = Deno.env.get("AZURE_CLIENT_ID");
+  const clientSecret = Deno.env.get("AZURE_CLIENT_SECRET");
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error("Microsoft Graph credentials not configured (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)");
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: "https://graph.microsoft.com/.default",
+      grant_type: "client_credentials",
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Token request failed:", errorText);
+    throw new Error(`Failed to obtain Microsoft Graph token: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function sendEmailViaMicrosoftGraph(
+  accessToken: string,
+  senderEmail: string,
+  recipientEmail: string,
+  subject: string,
+  htmlContent: string,
+  bccEmail?: string
+): Promise<{ success: boolean; error?: string }> {
+  const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+  
+  const emailPayload: any = {
+    message: {
+      subject,
+      body: { contentType: "HTML", content: htmlContent },
+      toRecipients: [{ emailAddress: { address: recipientEmail } }],
+    },
+    saveToSentItems: true,
+  };
+
+  if (bccEmail) {
+    emailPayload.message.bccRecipients = [{ emailAddress: { address: bccEmail } }];
+  }
+
+  const response = await fetch(sendMailUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(emailPayload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Microsoft Graph send failed:", errorText);
+    return { success: false, error: `Microsoft Graph API error: ${response.status} - ${errorText}` };
+  }
+
+  return { success: true };
+}
+
+async function checkMicrosoftGraphStatus(): Promise<{ configured: boolean; canAuthenticate: boolean; error?: string }> {
+  const tenantId = Deno.env.get("AZURE_TENANT_ID");
+  const clientId = Deno.env.get("AZURE_CLIENT_ID");
+  const clientSecret = Deno.env.get("AZURE_CLIENT_SECRET");
+  const senderEmail = Deno.env.get("SENDER_EMAIL");
+
+  if (!tenantId || !clientId || !clientSecret) {
+    return { configured: false, canAuthenticate: false, error: "Azure credentials not configured" };
+  }
+
+  if (!senderEmail) {
+    return { configured: true, canAuthenticate: false, error: "SENDER_EMAIL not configured" };
+  }
+
+  try {
+    await getMicrosoftAccessToken();
+    return { configured: true, canAuthenticate: true };
+  } catch (error) {
+    return { configured: true, canAuthenticate: false, error: error instanceof Error ? error.message : "Token error" };
+  }
 }
 
 // Generate branded email HTML template
@@ -460,7 +557,18 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { email_type, recipient_email, test_mode }: SendTestEmailRequest = await req.json();
+    const body = await req.json();
+    
+    // Handle status check request
+    if (body.action === 'check_status') {
+      const status = await checkMicrosoftGraphStatus();
+      return new Response(
+        JSON.stringify(status),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { email_type, recipient_email, test_mode, provider = 'resend' }: SendTestEmailRequest = body;
 
     if (!email_type || !recipient_email) {
       return new Response(
@@ -469,7 +577,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Sending test ${email_type} email to ${recipient_email}`);
+    console.log(`Sending test ${email_type} email to ${recipient_email} via ${provider}`);
 
     const firstName = "Test Volunteer";
     const emailSubjects: Record<string, string> = {
@@ -479,8 +587,65 @@ const handler = async (req: Request): Promise<Response> => {
     };
 
     const html = generateEmailHTML(email_type, firstName, supabaseUrl);
+    const subject = emailSubjects[email_type] || `[TEST] ${email_type} Email`;
 
-    // For certificate test, we need attachments so handle differently
+    // Handle Microsoft Graph provider
+    if (provider === 'microsoft_graph') {
+      console.log("Using Microsoft Graph to send test email...");
+      
+      try {
+        const accessToken = await getMicrosoftAccessToken();
+        const senderEmail = Deno.env.get("SENDER_EMAIL");
+        const bccEmail = Deno.env.get("HUBSPOT_BCC_ADDRESS");
+        
+        if (!senderEmail) {
+          return new Response(
+            JSON.stringify({ success: false, error: "SENDER_EMAIL not configured for Microsoft Graph" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        const result = await sendEmailViaMicrosoftGraph(
+          accessToken,
+          senderEmail,
+          recipient_email,
+          subject,
+          html,
+          bccEmail
+        );
+        
+        if (!result.success) {
+          console.error("Microsoft Graph send failed:", result.error);
+          return new Response(
+            JSON.stringify({ success: false, error: result.error, provider: 'microsoft_graph' }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        console.log(`Test email sent successfully via Microsoft Graph from ${senderEmail}`);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Test ${email_type} email sent to ${recipient_email} via Microsoft Graph`,
+            provider: 'microsoft_graph',
+            sender: senderEmail,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (error) {
+        console.error("Microsoft Graph error:", error);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: error instanceof Error ? error.message : "Microsoft Graph error",
+            provider: 'microsoft_graph'
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // For certificate test with Resend, we need attachments so handle differently
     if (email_type === 'certificate') {
       // Try primary sender first
       const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";

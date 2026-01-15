@@ -35,13 +35,21 @@ const EMAIL_TYPES = [
   { value: 'certificate', label: 'Certificate Email', description: 'Sent after completing training' },
 ];
 
+const EMAIL_PROVIDERS = [
+  { value: 'resend', label: 'Resend', description: 'Default email provider' },
+  { value: 'microsoft_graph', label: 'Microsoft Graph', description: 'Client Outlook (appears in Sent folder)' },
+];
+
 export const EmailManagement = ({ onBack }: EmailManagementProps) => {
   const [assets, setAssets] = useState<EmailAsset[]>(EMAIL_ASSETS);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadingAsset, setUploadingAsset] = useState<string | null>(null);
   const [selectedEmailType, setSelectedEmailType] = useState<string>('welcome');
+  const [selectedProvider, setSelectedProvider] = useState<string>('resend');
   const [testEmail, setTestEmail] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [msGraphStatus, setMsGraphStatus] = useState<{ configured: boolean; canAuthenticate: boolean; error?: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const { toast } = useToast();
@@ -106,6 +114,24 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
     }
   };
 
+  // Check Microsoft Graph status
+  const checkMsGraphStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-test-email', {
+        body: { action: 'check_status' }
+      });
+      
+      if (error) throw error;
+      setMsGraphStatus(data);
+    } catch (error) {
+      console.error('Status check error:', error);
+      setMsGraphStatus({ configured: false, canAuthenticate: false, error: 'Failed to check status' });
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
   // Send test email
   const handleSendTestEmail = async () => {
     if (!testEmail.trim()) {
@@ -124,7 +150,8 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
         body: {
           email_type: selectedEmailType,
           recipient_email: testEmail.trim(),
-          test_mode: true
+          test_mode: true,
+          provider: selectedProvider
         }
       });
 
@@ -133,7 +160,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       if (data?.success) {
         toast({
           title: 'Test Email Sent',
-          description: `${EMAIL_TYPES.find(e => e.value === selectedEmailType)?.label} sent to ${testEmail}`
+          description: `${EMAIL_TYPES.find(e => e.value === selectedEmailType)?.label} sent via ${data.provider || selectedProvider}${data.sender ? ` from ${data.sender}` : ''}`
         });
       } else {
         throw new Error(data?.error || 'Failed to send test email');
@@ -510,77 +537,143 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
 
           {/* Test Emails Tab */}
           <TabsContent value="test">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Send className="w-5 h-5" />
-                  Send Test Email
-                </CardTitle>
-                <CardDescription>
-                  Send a test email to verify the template looks correct
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <Label>Email Type</Label>
-                    <Select value={selectedEmailType} onValueChange={setSelectedEmailType}>
-                      <SelectTrigger className="mt-1.5">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {EMAIL_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="space-y-6">
+              {/* Microsoft Graph Status Card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Microsoft Graph Status
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={checkMsGraphStatus}
+                      disabled={isCheckingStatus}
+                    >
+                      {isCheckingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check'}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {msGraphStatus === null ? (
+                    <p className="text-sm text-muted-foreground">Click "Check" to verify Microsoft Graph configuration</p>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      {msGraphStatus.canAuthenticate ? (
+                        <>
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <span className="text-sm text-green-700">Microsoft Graph is configured and can authenticate</span>
+                        </>
+                      ) : msGraphStatus.configured ? (
+                        <>
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                          <span className="text-sm text-yellow-700">Configured but auth failed: {msGraphStatus.error}</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                          <span className="text-sm text-red-700">{msGraphStatus.error || 'Not configured'}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                  <div>
-                    <Label>Recipient Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                      className="mt-1.5"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      The test email will use sample data for placeholders
-                    </p>
-                  </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Send className="w-5 h-5" />
+                    Send Test Email
+                  </CardTitle>
+                  <CardDescription>
+                    Send a test email to verify the template looks correct
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Email Type</Label>
+                        <Select value={selectedEmailType} onValueChange={setSelectedEmailType}>
+                          <SelectTrigger className="mt-1.5">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {EMAIL_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Provider</Label>
+                        <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                          <SelectTrigger className="mt-1.5">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {EMAIL_PROVIDERS.map((provider) => (
+                              <SelectItem key={provider.value} value={provider.value}>
+                                <div className="flex flex-col">
+                                  <span>{provider.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {EMAIL_PROVIDERS.find(p => p.value === selectedProvider)?.description}
+                        </p>
+                      </div>
+                    </div>
 
-                  <Button
-                    onClick={handleSendTestEmail}
-                    disabled={isSendingTest || !testEmail.trim()}
-                    className="w-full"
-                  >
-                    {isSendingTest ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Send Test Email
-                      </>
-                    )}
-                  </Button>
+                    <div>
+                      <Label>Recipient Email</Label>
+                      <Input
+                        type="email"
+                        placeholder="your.email@example.com"
+                        value={testEmail}
+                        onChange={(e) => setTestEmail(e.target.value)}
+                        className="mt-1.5"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The test email will use sample data for placeholders
+                      </p>
+                    </div>
 
-                  <div className="p-4 bg-muted rounded-lg">
-                    <h4 className="font-medium mb-2">Test Email Details</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• <strong>Welcome Email:</strong> Includes sample QR code and credentials</li>
-                      <li>• <strong>Survey Email:</strong> Contains a non-functional survey link</li>
-                      <li>• <strong>Certificate Email:</strong> Includes a sample PDF certificate</li>
-                    </ul>
+                    <Button
+                      onClick={handleSendTestEmail}
+                      disabled={isSendingTest || !testEmail.trim()}
+                      className="w-full"
+                    >
+                      {isSendingTest ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          Sending via {selectedProvider === 'microsoft_graph' ? 'Microsoft Graph' : 'Resend'}...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          Send Test Email via {selectedProvider === 'microsoft_graph' ? 'Microsoft Graph' : 'Resend'}
+                        </>
+                      )}
+                    </Button>
+
+                    <div className="p-4 bg-muted rounded-lg">
+                      <h4 className="font-medium mb-2">Test Email Details</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• <strong>Welcome Email:</strong> Includes sample QR code and credentials</li>
+                        <li>• <strong>Survey Email:</strong> Contains a non-functional survey link</li>
+                        <li>• <strong>Certificate Email:</strong> Includes a sample PDF certificate (Resend only)</li>
+                        <li>• <strong>Microsoft Graph:</strong> Email appears in client's Outlook Sent folder</li>
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>
