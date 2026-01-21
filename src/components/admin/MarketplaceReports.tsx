@@ -27,6 +27,7 @@ import {
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
+import { VolunteerTrackingSection } from './VolunteerTrackingSection';
 import { 
   PieChart, 
   Pie, 
@@ -285,6 +286,12 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
                   marketplaceLocation={report.marketplace.location}
                   marketplaceDate={report.marketplace.eventDate}
                   outreachPartner={report.marketplace.outreachPartner}
+                />
+
+                {/* Volunteer Tracking Section */}
+                <VolunteerTrackingSection
+                  marketplaceId={selectedMarketplaceId}
+                  marketplaceName={report.marketplace.name}
                 />
 
                 {/* Items Section */}
