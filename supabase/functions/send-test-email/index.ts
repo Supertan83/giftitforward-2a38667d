@@ -135,6 +135,8 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
   const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=VOL-TEST-1234`;
+  const loginUrl = "https://giftitforward.lovable.app/auth";
+  const trainingUrl = "https://giftitforward.lovable.app/training";
 
   const baseStyles = `
     <style>
@@ -161,14 +163,14 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
   const footer = `
     <!-- Footer -->
     <tr>
-      <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+      <td style="padding: 20px 40px; border-top: 1px solid #e5e7eb;">
         <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
             <td width="50%" valign="middle">
-              <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+              <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="40" style="display: block;" />
             </td>
             <td width="50%" valign="middle" style="text-align: right;">
-              <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+              <p style="margin: 0; font-size: 13px; color: #54585A; font-style: italic;">For the Good of Tomorrow</p>
             </td>
           </tr>
         </table>
@@ -178,12 +180,12 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
 
   if (emailType === 'welcome') {
     // Get marketplace details from volunteer data or use defaults
-    const marketplaceName = volunteerData?.marketplace_name || 'GIF Marketplace - Test Event';
     const marketplaceDate = volunteerData?.marketplace_date 
       ? new Date(volunteerData.marketplace_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-      : 'TBD';
-    const marketplaceLocation = volunteerData?.marketplace_location || 'Jumeirah Golf Estates Clubhouse';
-    const marketplaceTime = volunteerData?.marketplace_time || '09:00 - 14:00';
+      : 'February 19, 2026';
+    const marketplaceLocation = volunteerData?.marketplace_location || 'Ajman, Al Hamidya and Boys\' Community School Marketplace.';
+    const marketplaceTime = volunteerData?.marketplace_time || '07.00 am - 01.30 pm';
+    const testEmail = volunteerData?.first_name ? `${volunteerData.first_name.toLowerCase()}@thesurpluss.com` : 'test@thesurpluss.com';
     
     return `
       <!DOCTYPE html>
@@ -193,11 +195,12 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         ${baseStyles}
       </head>
-      <body>
+      <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
         <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
           <tr>
             <td align="center" style="padding: 20px 0;">
               <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                
                 <!-- Hero Image -->
                 <tr>
                   <td>
@@ -205,36 +208,42 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
                   </td>
                 </tr>
                 
+                <!-- Red Vertical Line -->
+                <tr>
+                  <td style="padding: 25px 0 0 0; text-align: center;">
+                    <div style="width: 2px; height: 30px; background-color: #DA291C; margin: 0 auto;"></div>
+                  </td>
+                </tr>
+                
                 <!-- Main Title -->
                 <tr>
-                  <td style="padding: 25px 30px 20px 30px; text-align: center;">
-                    <h1 style="margin: 0; font-size: 22px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
-                      Thank you for registering as a<br>Gift It Forward volunteer
+                  <td style="padding: 20px 40px 25px 40px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 26px; color: #5D5348; font-weight: normal; line-height: 1.4; font-family: Georgia, 'Times New Roman', serif;">
+                      Thank you for registering<br>as a Gift It Forward volunteer
                     </h1>
                   </td>
                 </tr>
                 
                 <!-- Greeting -->
                 <tr>
-                  <td style="padding: 0 30px 15px 30px;">
-                    <p style="margin: 0; font-size: 15px; color: #333333;">Dear ${firstName},</p>
+                  <td style="padding: 0 40px 12px 40px;">
+                    <p style="margin: 0; font-size: 14px; color: #1a1a1a;"><strong>Dear [Volunteer Name],</strong></p>
                   </td>
                 </tr>
                 
                 <!-- Intro Text -->
                 <tr>
-                  <td style="padding: 0 30px 15px 30px;">
-                    <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                      We're delighted to have you join us. Your volunteer registration has been successfully confirmed for the following event:
+                  <td style="padding: 0 40px 15px 40px;">
+                    <p style="margin: 0; font-size: 13px; color: #333333; line-height: 1.6;">
+                      Your volunteer registration has been <strong>successfully confirmed</strong> for the <strong>Gift It Forward marketplace</strong> taking place on:
                     </p>
                   </td>
                 </tr>
                 
                 <!-- Event Details -->
                 <tr>
-                  <td style="padding: 0 30px 20px 30px;">
-                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 2;">
-                      <li><strong>Event:</strong> ${marketplaceName}</li>
+                  <td style="padding: 0 40px 18px 40px;">
+                    <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #333333; line-height: 1.9;">
                       <li><strong>Date:</strong> ${marketplaceDate}</li>
                       <li><strong>Location:</strong> ${marketplaceLocation}</li>
                       <li><strong>Timings:</strong> ${marketplaceTime}</li>
@@ -242,96 +251,197 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
                   </td>
                 </tr>
                 
-                <!-- Helpful Reminders -->
+                <!-- Helpful Reminders Intro -->
                 <tr>
-                  <td style="padding: 0 30px 20px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Helpful reminders:</h3>
-                    <ol style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 2;" type="a">
-                      <li>Arrive at least 15 minutes before your shift starts</li>
-                      <li>Wear comfortable clothing and closed-toe shoes</li>
-                      <li>Bring your QR code (shown below) for check-in</li>
-                      <li>Stay hydrated and take breaks when needed</li>
-                    </ol>
+                  <td style="padding: 0 40px 8px 40px;">
+                    <p style="margin: 0; font-size: 13px; color: #333333;">Here are a few helpful reminders before the event:</p>
                   </td>
                 </tr>
                 
-                <!-- QR Code Section -->
+                <!-- Helpful Reminders List -->
                 <tr>
-                  <td style="padding: 0 30px 10px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your QR code allows you to:</h3>
-                    <ul style="margin: 0 0 15px 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
-                      <li>Check in and out of events</li>
-                      <li>Track your volunteer hours</li>
-                      <li>Access marketplace zones</li>
-                    </ul>
-                  </td>
-                </tr>
-                
-                <tr>
-                  <td style="padding: 0 30px 10px 30px; text-align: center;">
-                    <img src="${qrCodeUrl}" alt="Volunteer QR Code" width="150" height="150" style="display: block; margin: 0 auto;" />
-                    <p style="margin: 10px 0 0 0; font-size: 12px; color: #666666;">QR Card ID: VOL-TEST-1234</p>
-                  </td>
-                </tr>
-                
-                <!-- Login Credentials -->
-                <tr>
-                  <td style="padding: 20px 30px 10px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold; border-bottom: 2px solid #0D4A6F; padding-bottom: 5px; display: inline-block;">Platform login credentials</h3>
-                    <p style="margin: 10px 0; font-size: 14px; color: #333333;">
-                      <strong>Email:</strong> test@example.com<br>
-                      <strong>Password:</strong> TestPass123!
-                    </p>
-                  </td>
-                </tr>
-                
-                <tr>
-                  <td style="padding: 15px 30px 25px 30px;">
-                    <a href="https://gif.thesurpluss.com/auth" style="display: inline-block; background-color: #0D4A6F; color: #ffffff; padding: 12px 24px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 4px;">Login to the platform</a>
-                  </td>
-                </tr>
-                
-                <!-- Training Section -->
-                <tr>
-                  <td style="padding: 0 30px 25px 30px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                  <td style="padding: 0 40px 20px 55px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 13px; color: #333333;">
                       <tr>
-                        <td width="45%" valign="top">
-                          <img src="${trainingImageUrl}" alt="Circular Economy Training" width="250" style="display: block; width: 100%; height: auto;" />
+                        <td style="padding: 3px 0; line-height: 1.5;">
+                          <strong>a. Arrival:</strong> Gates open 15 minutes before the marketplace begins. We recommend arriving a bit early to allow time for a smooth check-in.
                         </td>
-                        <td width="55%" valign="middle" style="padding: 20px;">
-                          <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Circular Economy Training Module</h3>
-                          <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                            Please complete this short training before your first volunteer shift.
-                          </p>
-                          <a href="https://gif.thesurpluss.com/training" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
+                      </tr>
+                      <tr>
+                        <td style="padding: 3px 0; line-height: 1.5;">
+                          <strong>b. Your QR code:</strong> Please have your QR code ready on your phone - it helps us clock you in and out quickly.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 3px 0; line-height: 1.5;">
+                          <strong>c. Bring this email:</strong> Having this confirmation handy will help us welcome you at the venue without any delays.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 3px 0; line-height: 1.5;">
+                          <strong>d. Your registration:</strong> This registration is linked to your name, so please make sure you're the one attending.
                         </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
                 
-                <!-- What's Next -->
+                <!-- QR Code Section Header -->
                 <tr>
-                  <td style="padding: 0 30px 20px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What's next?</h3>
-                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
-                      <li>Complete the training module above</li>
-                      <li>Save this email with your QR code</li>
-                      <li>Mark your calendar for ${marketplaceDate}</li>
-                      <li>Look out for reminder notifications</li>
+                  <td style="padding: 0 40px 5px 40px;">
+                    <p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Your volunteer QR code</p>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 0 40px 15px 40px;">
+                    <p style="margin: 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                      We recommend saving it on your phone and keeping a screenshot available offline.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- QR Code -->
+                <tr>
+                  <td style="padding: 0 40px 8px 40px;">
+                    <img src="${qrCodeUrl}" alt="Volunteer QR Code" width="130" height="130" style="display: block;" />
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 0 40px 12px 40px;">
+                    <p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: {{ custom.qr_card_id }}</p>
+                  </td>
+                </tr>
+                
+                <!-- QR Code Benefits -->
+                <tr>
+                  <td style="padding: 0 40px 25px 40px;">
+                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Your QR code allows you to:</p>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #333333; line-height: 1.8;">
+                      <li>Record your attendance.</li>
+                      <li>Track volunteer hours.</li>
+                      <li>Receive your official <strong>Gift It Forward 2026 volunteer certificate</strong>.</li>
+                    </ul>
+                  </td>
+                </tr>
+                
+                <!-- Login Credentials Section - Gray Background -->
+                <tr>
+                  <td style="padding: 0 40px 0 40px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+                      <tr>
+                        <td style="padding: 20px 25px 15px 25px; text-align: center;">
+                          <p style="margin: 0; font-size: 14px; color: #1a1a1a; text-decoration: underline; font-weight: bold;">Your login credentials for the training & marketplace platform</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 0 25px 12px 25px;">
+                          <p style="margin: 0; font-size: 13px; color: #333333; line-height: 1.6;">
+                            You'll need these details to complete the <strong>Circular Economy Training Module</strong> and <strong>access the marketplace platform</strong> on event day:
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 0 25px 5px 25px;">
+                          <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> [${testEmail}]</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 0 25px 12px 25px;">
+                          <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> [12345678]</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 0 25px 20px 25px;">
+                          <p style="margin: 0; font-size: 13px; color: #DA291C; font-weight: bold;">Please save these credentials - you'll need them to start the training below.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Divider Line -->
+                <tr>
+                  <td style="padding: 25px 40px;">
+                    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 0;" />
+                  </td>
+                </tr>
+                
+                <!-- Training Section -->
+                <tr>
+                  <td style="padding: 0 40px 25px 40px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td width="45%" valign="top" style="padding-right: 20px;">
+                          <img src="${trainingImageUrl}" alt="Your Role in the Circular Economy" width="230" style="display: block; width: 100%; height: auto; border: 1px solid #e5e7eb;" />
+                        </td>
+                        <td width="55%" valign="top">
+                          <h3 style="margin: 0 0 12px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Circular Economy Training Module</h3>
+                          <p style="margin: 0 0 18px 0; font-size: 13px; color: #333333; line-height: 1.55;">
+                            Before attending your first marketplace, we encourage volunteers to complete this short module. It introduces the campaign's sustainability goals and highlights how actions contribute to reducing waste. Volunteers who complete the training receive a certificate of completion.
+                          </p>
+                          <a href="${trainingUrl}" style="display: inline-block; background-color: #C5B9AC; color: #ffffff; padding: 12px 24px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 0;">Start Training</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Divider Line -->
+                <tr>
+                  <td style="padding: 0 40px 20px 40px;">
+                    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 0;" />
+                  </td>
+                </tr>
+                
+                <!-- On-site Marketplace Access -->
+                <tr>
+                  <td style="padding: 0 40px 8px 40px;">
+                    <p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">On-site marketplace access</p>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 0 40px 15px 40px;">
+                    <p style="margin: 0; font-size: 13px; color: #333333; line-height: 1.55;">
+                      During the marketplace, you may be asked to use the Gift It Forward marketplace management platform via your web browser, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
+                    </p>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 0 40px 25px 40px;">
+                    <a href="${loginUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 24px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 0;">Login to the platform</a>
+                  </td>
+                </tr>
+                
+                <!-- What's Next Section -->
+                <tr>
+                  <td style="padding: 0 40px 8px 40px;">
+                    <p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">What's next?</p>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 0 40px 20px 40px;">
+                    <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #333333; line-height: 1.8;">
+                      <li>Save this event to your calendar.</li>
+                      <li>Look out for reminder emails and WhatsApp notifications closer to each event.</li>
+                      <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" style="color: #333333;">giftitforward@dubaiholding.com</a>.</li>
+                      <li>If you or a family member have any specific medical conditions, please contact The Surpluss team ahead of the event so we can ensure a safe and supportive volunteering experience. You can reach the team at <strong><a href="mailto:giftitforward@dubaiholding.com" style="color: #333333;">giftitforward@dubaiholding.com</a></strong>.</li>
                     </ul>
                   </td>
                 </tr>
                 
                 <!-- Closing -->
                 <tr>
-                  <td style="padding: 0 30px 25px 30px;">
-                    <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.5;">
-                      If you have any questions, please contact us at <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a>
+                  <td style="padding: 0 40px 25px 40px;">
+                    <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.55;">
+                      Thank you for being part of this meaningful initiative. We look forward to welcoming you on-site.
                     </p>
-                    <p style="margin: 0 0 3px 0; font-size: 14px; color: #333333;">Best regards,</p>
-                    <p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: 600;">Gift It Forward team</p>
+                    <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p>
+                    <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: bold;">Gift It Forward team</p>
                   </td>
                 </tr>
                 
