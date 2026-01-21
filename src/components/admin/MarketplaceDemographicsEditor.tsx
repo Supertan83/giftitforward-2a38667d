@@ -41,12 +41,16 @@ interface MarketplaceDemographics {
 interface MarketplaceDemographicsEditorProps {
   marketplaceId: string;
   marketplaceName: string;
+  marketplaceLocation?: string | null;
+  marketplaceDate?: string | null;
   onUpdate?: () => void;
 }
 
 export const MarketplaceDemographicsEditor = ({
   marketplaceId,
   marketplaceName,
+  marketplaceLocation,
+  marketplaceDate,
   onUpdate
 }: MarketplaceDemographicsEditorProps) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -220,6 +224,13 @@ export const MarketplaceDemographicsEditor = ({
           <div>
             <h3 className="font-display font-semibold text-lg">Beneficiary Demographics</h3>
             <p className="text-sm text-foreground/80">{marketplaceName}</p>
+            {(marketplaceLocation || marketplaceDate) && (
+              <p className="text-xs text-muted-foreground">
+                {marketplaceLocation}
+                {marketplaceLocation && marketplaceDate && ' • '}
+                {marketplaceDate && new Date(marketplaceDate).toLocaleDateString()}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               {hasDemographicsData 
                 ? `Last updated: ${new Date(demographics.demographics_updated_at!).toLocaleDateString()}`

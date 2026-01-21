@@ -282,6 +282,8 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
                 <MarketplaceDemographicsEditor
                   marketplaceId={selectedMarketplaceId}
                   marketplaceName={report.marketplace.name}
+                  marketplaceLocation={report.marketplace.location}
+                  marketplaceDate={report.marketplace.eventDate}
                 />
 
                 {/* Items Section */}
