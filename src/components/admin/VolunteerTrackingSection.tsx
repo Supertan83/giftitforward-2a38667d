@@ -45,7 +45,7 @@ export const VolunteerTrackingSection = ({
       // Get registered volunteers - those who have this marketplace in their events_list
       const { data: pendingVolunteers, error: pvError } = await supabase
         .from('pending_volunteers')
-        .select('id, external_company, employee_vertical, events_list')
+        .select('id, external_company, employee_vertical, events_list, is_employee')
         .not('events_list', 'is', null);
 
       if (pvError) throw pvError;
@@ -70,7 +70,8 @@ export const VolunteerTrackingSection = ({
           pending_volunteers (
             id,
             external_company,
-            employee_vertical
+            employee_vertical,
+            is_employee
           )
         `)
         .eq('marketplace_id', marketplaceId)
@@ -79,17 +80,30 @@ export const VolunteerTrackingSection = ({
       if (vcError) throw vcError;
 
       // Calculate breakdowns from attended volunteers
+      // Company Breakdown: for NON-Dubai Holding employees (external partners)
+      // Vertical Breakdown: for Dubai Holding employees
       const companyBreakdown: Record<string, number> = {};
       const verticalBreakdown: Record<string, number> = {};
 
       volunteerCards?.forEach(card => {
-        const volunteer = card.pending_volunteers as { external_company: string | null; employee_vertical: string | null } | null;
+        const volunteer = card.pending_volunteers as { 
+          external_company: string | null; 
+          employee_vertical: string | null;
+          is_employee: boolean | null;
+        } | null;
+        
         if (volunteer) {
-          const company = volunteer.external_company || 'Not Specified';
-          const vertical = volunteer.employee_vertical || 'Not Specified';
+          // If NOT a Dubai Holding employee (external partner) → count in Company Breakdown
+          if (!volunteer.is_employee && volunteer.external_company) {
+            const company = volunteer.external_company;
+            companyBreakdown[company] = (companyBreakdown[company] || 0) + 1;
+          }
           
-          companyBreakdown[company] = (companyBreakdown[company] || 0) + 1;
-          verticalBreakdown[vertical] = (verticalBreakdown[vertical] || 0) + 1;
+          // If IS a Dubai Holding employee → count in Vertical Breakdown
+          if (volunteer.is_employee && volunteer.employee_vertical) {
+            const vertical = volunteer.employee_vertical;
+            verticalBreakdown[vertical] = (verticalBreakdown[vertical] || 0) + 1;
+          }
         }
       });
 
@@ -171,12 +185,13 @@ export const VolunteerTrackingSection = ({
             )}
           </div>
 
-          {/* Company Breakdown */}
+          {/* Company Breakdown - External Partners (Non-Dubai Holding) */}
           {Object.keys(data.companyBreakdown).length > 0 && (
             <div>
               <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
                 <Building2 className="w-4 h-4" />
                 Company Breakdown
+                <span className="text-xs text-muted-foreground font-normal">(External Partners)</span>
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                 {Object.entries(data.companyBreakdown)
@@ -184,6 +199,27 @@ export const VolunteerTrackingSection = ({
                   .map(([company, count]) => (
                     <div key={company} className="bg-muted/50 rounded-lg px-3 py-2 flex justify-between items-center">
                       <span className="text-sm truncate">{company}</span>
+                      <span className="font-medium text-sm ml-2">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Vertical Breakdown - Dubai Holding Employees */}
+          {Object.keys(data.verticalBreakdown).length > 0 && (
+            <div>
+              <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
+                <Briefcase className="w-4 h-4" />
+                Vertical Breakdown
+                <span className="text-xs text-muted-foreground font-normal">(Dubai Holding)</span>
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                {Object.entries(data.verticalBreakdown)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([vertical, count]) => (
+                    <div key={vertical} className="bg-muted/50 rounded-lg px-3 py-2 flex justify-between items-center">
+                      <span className="text-sm truncate">{vertical}</span>
                       <span className="font-medium text-sm ml-2">{count}</span>
                     </div>
                   ))}
