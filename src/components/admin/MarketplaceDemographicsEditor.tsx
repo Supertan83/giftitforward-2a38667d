@@ -219,6 +219,7 @@ export const MarketplaceDemographicsEditor = ({
           </div>
           <div>
             <h3 className="font-display font-semibold text-lg">Beneficiary Demographics</h3>
+            <p className="text-sm text-foreground/80">{marketplaceName}</p>
             <p className="text-xs text-muted-foreground">
               {hasDemographicsData 
                 ? `Last updated: ${new Date(demographics.demographics_updated_at!).toLocaleDateString()}`
