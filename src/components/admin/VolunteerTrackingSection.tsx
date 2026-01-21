@@ -14,6 +14,8 @@ import { supabase } from '@/integrations/supabase/client';
 interface VolunteerTrackingData {
   registered: number;
   attended: number;
+  dubaiHoldingCount: number;
+  externalPartnerCount: number;
   companyBreakdown: Record<string, number>;
   verticalBreakdown: Record<string, number>;
 }
@@ -31,6 +33,8 @@ export const VolunteerTrackingSection = ({
   const [data, setData] = useState<VolunteerTrackingData>({
     registered: 0,
     attended: 0,
+    dubaiHoldingCount: 0,
+    externalPartnerCount: 0,
     companyBreakdown: {},
     verticalBreakdown: {}
   });
@@ -84,6 +88,8 @@ export const VolunteerTrackingSection = ({
       // Vertical Breakdown: for Dubai Holding employees
       const companyBreakdown: Record<string, number> = {};
       const verticalBreakdown: Record<string, number> = {};
+      let dubaiHoldingCount = 0;
+      let externalPartnerCount = 0;
 
       volunteerCards?.forEach(card => {
         const volunteer = card.pending_volunteers as { 
@@ -97,12 +103,16 @@ export const VolunteerTrackingSection = ({
           if (!volunteer.is_employee && volunteer.external_company) {
             const company = volunteer.external_company;
             companyBreakdown[company] = (companyBreakdown[company] || 0) + 1;
+            externalPartnerCount++;
           }
           
           // If IS a Dubai Holding employee → count in Vertical Breakdown
-          if (volunteer.is_employee && volunteer.employee_vertical) {
-            const vertical = volunteer.employee_vertical;
-            verticalBreakdown[vertical] = (verticalBreakdown[vertical] || 0) + 1;
+          if (volunteer.is_employee) {
+            dubaiHoldingCount++;
+            if (volunteer.employee_vertical) {
+              const vertical = volunteer.employee_vertical;
+              verticalBreakdown[vertical] = (verticalBreakdown[vertical] || 0) + 1;
+            }
           }
         }
       });
@@ -110,9 +120,12 @@ export const VolunteerTrackingSection = ({
       setData({
         registered: registeredVolunteers.length,
         attended: volunteerCards?.length || 0,
+        dubaiHoldingCount,
+        externalPartnerCount,
         companyBreakdown,
         verticalBreakdown
       });
+
     } catch (error) {
       console.error('Error loading volunteer data:', error);
     } finally {
@@ -184,6 +197,32 @@ export const VolunteerTrackingSection = ({
               <Progress value={attendanceRate} className="h-3" />
             )}
           </div>
+
+          {/* Dubai Holding vs External Partners Summary */}
+          {data.attended > 0 && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Briefcase className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Dubai Holding</span>
+                </div>
+                <p className="text-2xl font-bold text-primary">{data.dubaiHoldingCount}</p>
+                <p className="text-xs text-muted-foreground">
+                  {data.attended > 0 ? Math.round((data.dubaiHoldingCount / data.attended) * 100) : 0}% of attendees
+                </p>
+              </div>
+              <div className="bg-amber-500/5 rounded-lg p-4 border border-amber-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm font-medium">External Partners</span>
+                </div>
+                <p className="text-2xl font-bold text-amber-600">{data.externalPartnerCount}</p>
+                <p className="text-xs text-muted-foreground">
+                  {data.attended > 0 ? Math.round((data.externalPartnerCount / data.attended) * 100) : 0}% of attendees
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Company Breakdown - External Partners (Non-Dubai Holding) */}
           {Object.keys(data.companyBreakdown).length > 0 && (
