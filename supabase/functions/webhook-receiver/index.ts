@@ -245,7 +245,9 @@ async function getFirstUpcomingMarketplace(supabase: any): Promise<MarketplaceIn
 // Interface for event registration data from form
 interface RegisteredEvent {
   event: string; // slug like "emirati-family-support-marketplace-february-22"
-  eventDate: string; // "February 22, 2026"
+  eventDate?: string; // "February 22, 2026"
+  eventTime?: string; // "7:30PM – 11:30PM"
+  eventLocation?: string; // "Dubai, Al Twar"
   'family-members-joining'?: string;
   'number-of-children'?: string;
   'number-of-adults'?: string;
@@ -755,19 +757,24 @@ async function sendWelcomeEmailWithQR(
       // Look up marketplace details from database
       const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
       
-      // Build registered events list with times from DB
+      // Build registered events list with times from DB or form data
       for (const evt of eventsJson as RegisteredEvent[]) {
         const dbMarketplace = marketplaceDetails.get(evt.event);
         
-        // Use DB times if available, otherwise fall back to form data
+        // Use DB data if available, otherwise fall back to form data
         const eventDateFormatted = dbMarketplace?.event_date 
           ? formatDate(dbMarketplace.event_date) 
-          : evt.eventDate || '';
+          : (evt.eventDate || '');
+        
+        // For time: prefer DB times, fall back to form eventTime
         const startTimeFormatted = formatTime(dbMarketplace?.start_time);
         const endTimeFormatted = formatTime(dbMarketplace?.end_time);
         const timeRange = startTimeFormatted && endTimeFormatted 
           ? `${startTimeFormatted} - ${endTimeFormatted}` 
-          : (startTimeFormatted || endTimeFormatted || 'Time TBD');
+          : (startTimeFormatted || endTimeFormatted || evt.eventTime || '');
+        
+        // For location: prefer DB location, fall back to form eventLocation
+        const eventLocation = dbMarketplace?.location || evt.eventLocation || '';
         
         // Get name from DB or generate from slug
         const eventName = dbMarketplace?.name || evt.event
@@ -780,7 +787,7 @@ async function sendWelcomeEmailWithQR(
           name: eventName,
           date: eventDateFormatted,
           time: timeRange,
-          location: dbMarketplace?.location || '',
+          location: eventLocation,
           rawStartTime: dbMarketplace?.start_time || null,
           rawEndTime: dbMarketplace?.end_time || null,
           rawDate: dbMarketplace?.event_date || null
@@ -912,18 +919,41 @@ async function sendWelcomeEmailWithQR(
     // Use configured Resend sender (from DB config above)
     console.log(`Using Resend sender: ${resendPrimarySender}, fallback: ${resendFallbackSender}`);
     
-    // Build event details section
-    const eventDetailsHtml = registeredEvents.length > 0 
-      ? registeredEvents.map(evt => `
-          <li><strong>Date:</strong> ${evt.date || 'TBD'}</li>
-          <li><strong>Location:</strong> ${evt.location || 'TBD'}</li>
-          <li><strong>Timings:</strong> ${evt.time || 'TBD'}</li>
-        `).join('') 
-      : `
+    // Build event details section - handle multiple events with better UI
+    let eventDetailsHtml = '';
+    
+    if (registeredEvents.length > 1) {
+      // Multiple events - show each separately with visual separation
+      eventDetailsHtml = registeredEvents.map((evt, index) => `
+        <div style="margin-bottom: 15px; padding: 12px 15px; background-color: #f9fafb; border-left: 3px solid #DA291C; border-radius: 0 4px 4px 0;">
+          <p style="margin: 0 0 8px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">${evt.name}</p>
+          <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.6;">
+            ${evt.date ? `<li><strong>Date:</strong> ${evt.date}</li>` : ''}
+            ${evt.location ? `<li><strong>Location:</strong> ${evt.location}</li>` : ''}
+            ${evt.time ? `<li><strong>Timings:</strong> ${evt.time}</li>` : ''}
+          </ul>
+        </div>
+      `).join('');
+    } else if (registeredEvents.length === 1) {
+      // Single event - simple bullet list
+      const evt = registeredEvents[0];
+      eventDetailsHtml = `
+        <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+          ${evt.date ? `<li><strong>Date:</strong> ${evt.date}</li>` : ''}
+          ${evt.location ? `<li><strong>Location:</strong> ${evt.location}</li>` : ''}
+          ${evt.time ? `<li><strong>Timings:</strong> ${evt.time}</li>` : ''}
+        </ul>
+      `;
+    } else {
+      // Fallback to marketplace info
+      eventDetailsHtml = `
+        <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
           ${eventDate ? `<li><strong>Date:</strong> ${eventDate}</li>` : ''}
           ${marketplaceLocation ? `<li><strong>Location:</strong> ${marketplaceLocation}</li>` : ''}
           ${timeRange ? `<li><strong>Timings:</strong> ${timeRange}</li>` : ''}
-        `;
+        </ul>
+      `;
+    }
     
     let resendResult = await resend.emails.send({
       from: resendPrimarySender,
@@ -977,9 +1007,7 @@ async function sendWelcomeEmailWithQR(
                   <!-- Event Details -->
                   <tr>
                     <td style="padding: 0 30px 20px 30px;">
-                      <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
-                        ${eventDetailsHtml}
-                      </ul>
+                      ${eventDetailsHtml}
                     </td>
                   </tr>
                   
@@ -1061,13 +1089,13 @@ async function sendWelcomeEmailWithQR(
                   
                   <tr>
                     <td style="padding: 0 30px 5px 30px;">
-                      <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> [${email}]</p>
+                      <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> ${email}</p>
                     </td>
                   </tr>
                   
                   <tr>
                     <td style="padding: 0 30px 15px 30px;">
-                      <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> [${tempPassword}]</p>
+                      <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> ${tempPassword}</p>
                     </td>
                   </tr>
                   
@@ -1193,8 +1221,8 @@ async function sendWelcomeEmailWithQR(
                       <tr><td style="padding: 0 30px 15px 30px; background-color: #f8f8f8;"><p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: ${qrCardId}</p></td></tr>
                       ${familySection}
                       <tr><td style="padding: 20px 30px 10px 30px; border-top: 2px solid #e5e7eb;"><p style="margin: 0 0 10px 0; font-size: 14px; color: #333333; text-decoration: underline; font-weight: bold;">Your login credentials</p></td></tr>
-                      <tr><td style="padding: 0 30px 5px 30px;"><p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> [${email}]</p></td></tr>
-                      <tr><td style="padding: 0 30px 15px 30px;"><p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> [${tempPassword}]</p></td></tr>
+                      <tr><td style="padding: 0 30px 5px 30px;"><p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> ${email}</p></td></tr>
+                      <tr><td style="padding: 0 30px 15px 30px;"><p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> ${tempPassword}</p></td></tr>
                       <tr><td style="padding: 0 30px 25px 30px;"><a href="${loginUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the platform</a></td></tr>
                       <tr><td style="padding: 0 30px 25px 30px;"><a href="${trainingUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a></td></tr>
                       <tr><td style="padding: 0 30px 20px 30px;"><p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p><p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward team</p></td></tr>

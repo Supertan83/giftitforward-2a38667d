@@ -76,7 +76,7 @@ export const EmailPreviewDialog = ({
           
           {/* Email Body */}
           <div className="px-6 py-4 bg-white space-y-5">
-            <p className="text-gray-800 m-0"><strong>Dear [Volunteer Name],</strong></p>
+            <p className="text-gray-800 m-0"><strong>Dear {firstName},</strong></p>
             
             <p className="text-gray-700">
               Your volunteer registration has been <strong>successfully confirmed</strong> for the <strong>Gift It Forward marketplace</strong> taking place on:
@@ -114,7 +114,7 @@ export const EmailPreviewDialog = ({
                 />
               </div>
               <p className="text-gray-500 text-sm mt-2 m-0">
-                QR Card ID: {`{{custom.qr_card_id}}`}
+                QR Card ID: {qrCardId}
               </p>
               
               <p className="text-gray-800 text-sm font-bold mt-4 mb-2">Your QR code allows you to:</p>
@@ -131,8 +131,8 @@ export const EmailPreviewDialog = ({
               <p className="text-gray-700 text-sm mb-3">
                 You'll need these details to complete the <strong>Circular Economy Training Module</strong> and access the <strong>marketplace platform</strong> on event day:
               </p>
-              <p className="text-gray-800 text-sm m-0"><strong>Email:</strong> [{`{{custom.email}}`}]</p>
-              <p className="text-gray-800 text-sm m-0 mb-4"><strong>Temporary Password:</strong> [{`{{custom.temp_password}}`}]</p>
+              <p className="text-gray-800 text-sm m-0"><strong>Email:</strong> {volunteerEmail}</p>
+              <p className="text-gray-800 text-sm m-0 mb-4"><strong>Temporary Password:</strong> {tempPassword}</p>
               <p className="text-[#DA291C] text-sm font-bold">Please save these credentials – you'll need them to start the training below.</p>
             </div>
             
