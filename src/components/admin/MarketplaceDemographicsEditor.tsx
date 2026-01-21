@@ -43,6 +43,7 @@ interface MarketplaceDemographicsEditorProps {
   marketplaceName: string;
   marketplaceLocation?: string | null;
   marketplaceDate?: string | null;
+  outreachPartner?: string | null;
   onUpdate?: () => void;
 }
 
@@ -51,6 +52,7 @@ export const MarketplaceDemographicsEditor = ({
   marketplaceName,
   marketplaceLocation,
   marketplaceDate,
+  outreachPartner,
   onUpdate
 }: MarketplaceDemographicsEditorProps) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -224,8 +226,10 @@ export const MarketplaceDemographicsEditor = ({
           <div>
             <h3 className="font-display font-semibold text-lg">Beneficiary Demographics</h3>
             <p className="text-sm text-foreground/80">{marketplaceName}</p>
-            {(marketplaceLocation || marketplaceDate) && (
+            {(marketplaceLocation || marketplaceDate || outreachPartner) && (
               <p className="text-xs text-muted-foreground">
+                {outreachPartner && <span className="text-primary font-medium">{outreachPartner}</span>}
+                {outreachPartner && (marketplaceLocation || marketplaceDate) && ' • '}
                 {marketplaceLocation}
                 {marketplaceLocation && marketplaceDate && ' • '}
                 {marketplaceDate && new Date(marketplaceDate).toLocaleDateString()}

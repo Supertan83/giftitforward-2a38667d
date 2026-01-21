@@ -284,6 +284,7 @@ export const MarketplaceReports = ({ onBack }: MarketplaceReportsProps) => {
                   marketplaceName={report.marketplace.name}
                   marketplaceLocation={report.marketplace.location}
                   marketplaceDate={report.marketplace.eventDate}
+                  outreachPartner={report.marketplace.outreachPartner}
                 />
 
                 {/* Items Section */}
