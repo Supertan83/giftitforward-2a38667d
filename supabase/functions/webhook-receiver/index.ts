@@ -2825,11 +2825,47 @@ serve(async (req) => {
     // AUTO-APPROVE: Dubai Holding volunteers are automatically approved and accounts created
     if (payload.triggerType === 'form_submission' && payload.payload?.data) {
       const formData = payload.payload.data;
+
+      const extractEmailFromDhFormData = (data: Record<string, unknown>): string | null => {
+        const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+        const normalized = new Map<string, unknown>();
+        for (const [key, value] of Object.entries(data)) {
+          normalized.set(key.trim().toLowerCase(), value);
+        }
+
+        const preferredKeys = [
+          'work email',
+          'work email address',
+          'email',
+          'email address',
+          'e-mail',
+          'work_email',
+          'workemail',
+        ];
+
+        for (const key of preferredKeys) {
+          const value = normalized.get(key);
+          if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed && emailRegex.test(trimmed)) return trimmed;
+          }
+        }
+
+        // Last resort: scan all string fields for something that looks like an email.
+        for (const value of normalized.values()) {
+          if (typeof value !== 'string') continue;
+          const match = value.match(emailRegex);
+          if (match?.[0]) return match[0].trim();
+        }
+
+        return null;
+      };
       
       // Check if it has volunteer form fields (at minimum First Name is required)
       if (formData['First Name']) {
         // Check if email is missing - create pending record for admin visibility
-        const volunteerEmail = formData['Work Email']?.trim();
+        const volunteerEmail = extractEmailFromDhFormData(formData);
         
         if (!volunteerEmail) {
           console.log('DH Webflow form submission missing email - creating pending record for admin review');
@@ -2893,7 +2929,7 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({
               success: false,
-              error: 'Work Email is missing from the form submission. Volunteer record created for admin review.',
+              error: 'Email is missing from the form submission. Volunteer record created for admin review.',
               pending_id: pendingData?.id,
               name: `${formData['First Name']} ${formData['Last Name'] || ''}`.trim(),
               phone: formData['Phone Number'] || null
@@ -2917,9 +2953,14 @@ serve(async (req) => {
             }
           }
 
-          const volunteerEmail = formData['Work Email'];
+          const volunteerEmail = extractEmailFromDhFormData(formData);
           const firstName = formData['First Name'];
           const lastName = formData['Last Name'] || '';
+
+          if (!volunteerEmail) {
+            console.log('DH Webflow volunteer form submission missing email (post-parse) - creating pending record for admin review');
+            throw new Error('Email is missing from the form submission');
+          }
 
           // Generate temp password and create user account immediately
           const tempPassword = generateTempPassword();
