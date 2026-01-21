@@ -140,7 +140,7 @@ serve(async (req: Request) => {
         </tr>
       ` : '';
 
-      const emailSubject = "[Resent] Thank you for Registering as a Gift It Forward Volunteer!";
+      const emailSubject = "[Resent] Thank you for registering as a Gift It Forward volunteer";
 
       // Use stored temp password or indicate it needs reset
       const tempPasswordDisplay = volunteer.temp_password || 'Please use "Forgot Password" to reset';
