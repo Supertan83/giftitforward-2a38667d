@@ -243,13 +243,13 @@ function buildEmailHtml(
               
               <tr>
                 <td style="padding: 0 30px 5px 30px;">
-                  <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> [${email}]</p>
+                  <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> ${email}</p>
                 </td>
               </tr>
               
               <tr>
                 <td style="padding: 0 30px 15px 30px;">
-                  <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> [${tempPassword}]</p>
+                  <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> ${tempPassword}</p>
                 </td>
               </tr>
               

@@ -344,12 +344,12 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
                       </tr>
                       <tr>
                         <td style="padding: 0 25px 5px 25px;">
-                          <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> [${testEmail}]</p>
+                          <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> ${testEmail}</p>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding: 0 25px 12px 25px;">
-                          <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> [12345678]</p>
+                          <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> Abc123!@#xyz</p>
                         </td>
                       </tr>
                       <tr>
