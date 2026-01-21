@@ -575,12 +575,8 @@ export type Database = {
           demographics_male_children: number | null
           demographics_nationalities: Json | null
           demographics_notes: string | null
-          demographics_reach_adults: number | null
-          demographics_reach_children: number | null
-          demographics_reach_families: number | null
-          demographics_target_adults: number | null
-          demographics_target_children: number | null
-          demographics_target_families: number | null
+          demographics_reach: number | null
+          demographics_target: number | null
           demographics_total_adults: number | null
           demographics_total_children: number | null
           demographics_total_families: number | null
@@ -604,12 +600,8 @@ export type Database = {
           demographics_male_children?: number | null
           demographics_nationalities?: Json | null
           demographics_notes?: string | null
-          demographics_reach_adults?: number | null
-          demographics_reach_children?: number | null
-          demographics_reach_families?: number | null
-          demographics_target_adults?: number | null
-          demographics_target_children?: number | null
-          demographics_target_families?: number | null
+          demographics_reach?: number | null
+          demographics_target?: number | null
           demographics_total_adults?: number | null
           demographics_total_children?: number | null
           demographics_total_families?: number | null
@@ -633,12 +625,8 @@ export type Database = {
           demographics_male_children?: number | null
           demographics_nationalities?: Json | null
           demographics_notes?: string | null
-          demographics_reach_adults?: number | null
-          demographics_reach_children?: number | null
-          demographics_reach_families?: number | null
-          demographics_target_adults?: number | null
-          demographics_target_children?: number | null
-          demographics_target_families?: number | null
+          demographics_reach?: number | null
+          demographics_target?: number | null
           demographics_total_adults?: number | null
           demographics_total_children?: number | null
           demographics_total_families?: number | null
