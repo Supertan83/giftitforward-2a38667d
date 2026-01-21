@@ -11,12 +11,15 @@ import {
   Baby,
   Home,
   Loader2,
-  Globe
+  Globe,
+  Target,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -31,6 +34,14 @@ interface MarketplaceDemographics {
   demographics_nationalities: Record<string, number>;
   demographics_notes: string | null;
   demographics_updated_at: string | null;
+  // Target values
+  demographics_target_families: number;
+  demographics_target_adults: number;
+  demographics_target_children: number;
+  // Reach values
+  demographics_reach_families: number;
+  demographics_reach_adults: number;
+  demographics_reach_children: number;
 }
 
 interface MarketplaceDemographicsEditorProps {
@@ -58,7 +69,13 @@ export const MarketplaceDemographicsEditor = ({
     demographics_female_children: 0,
     demographics_nationalities: {},
     demographics_notes: null,
-    demographics_updated_at: null
+    demographics_updated_at: null,
+    demographics_target_families: 0,
+    demographics_target_adults: 0,
+    demographics_target_children: 0,
+    demographics_reach_families: 0,
+    demographics_reach_adults: 0,
+    demographics_reach_children: 0
   });
   
   const [newNationality, setNewNationality] = useState('');
@@ -83,7 +100,13 @@ export const MarketplaceDemographicsEditor = ({
           demographics_female_children,
           demographics_nationalities,
           demographics_notes,
-          demographics_updated_at
+          demographics_updated_at,
+          demographics_target_families,
+          demographics_target_adults,
+          demographics_target_children,
+          demographics_reach_families,
+          demographics_reach_adults,
+          demographics_reach_children
         `)
         .eq('id', marketplaceId)
         .single();
@@ -101,7 +124,13 @@ export const MarketplaceDemographicsEditor = ({
           demographics_female_children: data.demographics_female_children || 0,
           demographics_nationalities: (data.demographics_nationalities as Record<string, number>) || {},
           demographics_notes: data.demographics_notes,
-          demographics_updated_at: data.demographics_updated_at
+          demographics_updated_at: data.demographics_updated_at,
+          demographics_target_families: data.demographics_target_families || 0,
+          demographics_target_adults: data.demographics_target_adults || 0,
+          demographics_target_children: data.demographics_target_children || 0,
+          demographics_reach_families: data.demographics_reach_families || 0,
+          demographics_reach_adults: data.demographics_reach_adults || 0,
+          demographics_reach_children: data.demographics_reach_children || 0
         });
       }
     } catch (error) {
@@ -127,7 +156,13 @@ export const MarketplaceDemographicsEditor = ({
           demographics_female_children: demographics.demographics_female_children,
           demographics_nationalities: demographics.demographics_nationalities,
           demographics_notes: demographics.demographics_notes,
-          demographics_updated_at: new Date().toISOString()
+          demographics_updated_at: new Date().toISOString(),
+          demographics_target_families: demographics.demographics_target_families,
+          demographics_target_adults: demographics.demographics_target_adults,
+          demographics_target_children: demographics.demographics_target_children,
+          demographics_reach_families: demographics.demographics_reach_families,
+          demographics_reach_adults: demographics.demographics_reach_adults,
+          demographics_reach_children: demographics.demographics_reach_children
         })
         .eq('id', marketplaceId);
 
@@ -179,6 +214,24 @@ export const MarketplaceDemographicsEditor = ({
 
   const totalPeople = demographics.demographics_total_adults + demographics.demographics_total_children;
   const hasDemographicsData = demographics.demographics_updated_at !== null;
+
+  // Calculate achievement percentages
+  const calculateAchievement = (reach: number, target: number) => {
+    if (target === 0) return 0;
+    return Math.min(Math.round((reach / target) * 100), 100);
+  };
+
+  const familiesAchievement = calculateAchievement(demographics.demographics_reach_families, demographics.demographics_target_families);
+  const adultsAchievement = calculateAchievement(demographics.demographics_reach_adults, demographics.demographics_target_adults);
+  const childrenAchievement = calculateAchievement(demographics.demographics_reach_children, demographics.demographics_target_children);
+  
+  const totalTargetPeople = demographics.demographics_target_adults + demographics.demographics_target_children;
+  const totalReachPeople = demographics.demographics_reach_adults + demographics.demographics_reach_children;
+  const overallAchievement = calculateAchievement(totalReachPeople, totalTargetPeople);
+
+  const hasTargetData = demographics.demographics_target_families > 0 || 
+                        demographics.demographics_target_adults > 0 || 
+                        demographics.demographics_target_children > 0;
 
   if (isLoading) {
     return (
@@ -233,6 +286,78 @@ export const MarketplaceDemographicsEditor = ({
             animate={{ opacity: 1 }}
             className="space-y-6"
           >
+            {/* Target vs Reach Comparison */}
+            {hasTargetData && (
+              <div className="bg-gradient-to-r from-purple-500/5 to-blue-500/5 rounded-xl p-4 border border-purple-500/20">
+                <div className="flex items-center gap-2 mb-4">
+                  <Target className="w-5 h-5 text-purple-500" />
+                  <h4 className="font-semibold">Target vs Reach</h4>
+                  <div className="ml-auto flex items-center gap-2">
+                    <TrendingUp className={`w-4 h-4 ${overallAchievement >= 80 ? 'text-emerald-500' : overallAchievement >= 50 ? 'text-amber-500' : 'text-red-500'}`} />
+                    <span className={`font-bold ${overallAchievement >= 80 ? 'text-emerald-600' : overallAchievement >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                      {overallAchievement}% Overall
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Families */}
+                  <div className="bg-card/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Home className="w-4 h-4 text-blue-500" />
+                        Families
+                      </span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${familiesAchievement >= 80 ? 'bg-emerald-100 text-emerald-700' : familiesAchievement >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                        {familiesAchievement}%
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-2xl font-bold">{demographics.demographics_reach_families}</span>
+                      <span className="text-muted-foreground text-sm">/ {demographics.demographics_target_families}</span>
+                    </div>
+                    <Progress value={familiesAchievement} className="h-2" />
+                  </div>
+
+                  {/* Adults */}
+                  <div className="bg-card/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-emerald-500" />
+                        Adults
+                      </span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${adultsAchievement >= 80 ? 'bg-emerald-100 text-emerald-700' : adultsAchievement >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                        {adultsAchievement}%
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-2xl font-bold">{demographics.demographics_reach_adults}</span>
+                      <span className="text-muted-foreground text-sm">/ {demographics.demographics_target_adults}</span>
+                    </div>
+                    <Progress value={adultsAchievement} className="h-2" />
+                  </div>
+
+                  {/* Children */}
+                  <div className="bg-card/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Baby className="w-4 h-4 text-amber-500" />
+                        Children
+                      </span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${childrenAchievement >= 80 ? 'bg-emerald-100 text-emerald-700' : childrenAchievement >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                        {childrenAchievement}%
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-2xl font-bold">{demographics.demographics_reach_children}</span>
+                      <span className="text-muted-foreground text-sm">/ {demographics.demographics_target_children}</span>
+                    </div>
+                    <Progress value={childrenAchievement} className="h-2" />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Summary Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-muted/50 rounded-lg p-4 text-center">
@@ -326,46 +451,150 @@ export const MarketplaceDemographicsEditor = ({
             animate={{ opacity: 1 }}
             className="space-y-6"
           >
-            {/* Family & Totals */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="total_families">Total Families</Label>
-                <Input
-                  id="total_families"
-                  type="number"
-                  min="0"
-                  value={demographics.demographics_total_families}
-                  onChange={(e) => setDemographics(prev => ({
-                    ...prev,
-                    demographics_total_families: parseInt(e.target.value) || 0
-                  }))}
-                />
+            {/* Target Values */}
+            <div className="bg-purple-500/5 rounded-lg p-4 border border-purple-500/20">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="w-5 h-5 text-purple-500" />
+                <h4 className="font-semibold">Target Values (Planned)</h4>
               </div>
-              <div>
-                <Label htmlFor="total_adults">Total Adults</Label>
-                <Input
-                  id="total_adults"
-                  type="number"
-                  min="0"
-                  value={demographics.demographics_total_adults}
-                  onChange={(e) => setDemographics(prev => ({
-                    ...prev,
-                    demographics_total_adults: parseInt(e.target.value) || 0
-                  }))}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="target_families">Target Families</Label>
+                  <Input
+                    id="target_families"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_target_families}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_target_families: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="target_adults">Target Adults</Label>
+                  <Input
+                    id="target_adults"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_target_adults}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_target_adults: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="target_children">Target Children</Label>
+                  <Input
+                    id="target_children"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_target_children}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_target_children: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="total_children">Total Children</Label>
-                <Input
-                  id="total_children"
-                  type="number"
-                  min="0"
-                  value={demographics.demographics_total_children}
-                  onChange={(e) => setDemographics(prev => ({
-                    ...prev,
-                    demographics_total_children: parseInt(e.target.value) || 0
-                  }))}
-                />
+            </div>
+
+            {/* Reach Values */}
+            <div className="bg-emerald-500/5 rounded-lg p-4 border border-emerald-500/20">
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp className="w-5 h-5 text-emerald-500" />
+                <h4 className="font-semibold">Reach Values (Actual)</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="reach_families">Reach Families</Label>
+                  <Input
+                    id="reach_families"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_reach_families}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_reach_families: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="reach_adults">Reach Adults</Label>
+                  <Input
+                    id="reach_adults"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_reach_adults}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_reach_adults: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="reach_children">Reach Children</Label>
+                  <Input
+                    id="reach_children"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_reach_children}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_reach_children: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Family & Totals (Existing) */}
+            <div>
+              <h4 className="font-semibold mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-muted-foreground" />
+                Current Totals (Detailed Breakdown)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="total_families">Total Families</Label>
+                  <Input
+                    id="total_families"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_total_families}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_total_families: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="total_adults">Total Adults</Label>
+                  <Input
+                    id="total_adults"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_total_adults}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_total_adults: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="total_children">Total Children</Label>
+                  <Input
+                    id="total_children"
+                    type="number"
+                    min="0"
+                    value={demographics.demographics_total_children}
+                    onChange={(e) => setDemographics(prev => ({
+                      ...prev,
+                      demographics_total_children: parseInt(e.target.value) || 0
+                    }))}
+                  />
+                </div>
               </div>
             </div>
 
