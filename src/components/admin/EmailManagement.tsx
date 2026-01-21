@@ -248,35 +248,31 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
     setIsSimulating(true);
 
     try {
-      // Create the webhook-like payload that mimics Dubai Holding registration
-      // The webhook-receiver expects a 'volunteers' array
-      const webhookPayload = {
-        action: 'create_volunteer',
-        api_key: 'test_simulation', // Will be handled by admin auth
-        volunteers: [{
-          email: simulatedVolunteer.email,
-          name: `${simulatedVolunteer.first_name} ${simulatedVolunteer.last_name}`,
-          phone: simulatedVolunteer.phone_number,
-          first_name: simulatedVolunteer.first_name,
-          last_name: simulatedVolunteer.last_name,
-          is_employee: simulatedVolunteer.is_employee,
-          employee_vertical: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_vertical : null,
-          external_company: !simulatedVolunteer.is_employee ? simulatedVolunteer.external_company : null,
-          employee_number: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_number : null,
-          events_list: simulatedVolunteer.events_list,
-          // Include marketplace details for email
-          marketplace_name: simulatedVolunteer.marketplace_name,
-          marketplace_date: simulatedVolunteer.marketplace_date,
-          marketplace_location: simulatedVolunteer.marketplace_location,
-          marketplace_time: simulatedVolunteer.marketplace_time,
-        }],
-        send_email: true,
-        email_provider: selectedProvider,
-        test_mode: true,
-      };
-
-      const { data, error } = await supabase.functions.invoke('webhook-receiver', {
-        body: webhookPayload
+      // Use send-test-email function with simulated volunteer data
+      // This doesn't create a user, just sends the email with the provided details
+      const { data, error } = await supabase.functions.invoke('send-test-email', {
+        body: {
+          email_type: 'welcome',
+          recipient_email: simulatedVolunteer.email,
+          provider: selectedProvider,
+          test_mode: true,
+          // Pass simulated volunteer details for email personalization
+          volunteer_data: {
+            first_name: simulatedVolunteer.first_name,
+            last_name: simulatedVolunteer.last_name,
+            name: `${simulatedVolunteer.first_name} ${simulatedVolunteer.last_name}`,
+            phone: simulatedVolunteer.phone_number,
+            is_employee: simulatedVolunteer.is_employee,
+            employee_vertical: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_vertical : null,
+            external_company: !simulatedVolunteer.is_employee ? simulatedVolunteer.external_company : null,
+            employee_number: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_number : null,
+            events_list: simulatedVolunteer.events_list,
+            marketplace_name: simulatedVolunteer.marketplace_name,
+            marketplace_date: simulatedVolunteer.marketplace_date,
+            marketplace_location: simulatedVolunteer.marketplace_location,
+            marketplace_time: simulatedVolunteer.marketplace_time,
+          }
+        }
       });
 
       if (error) throw error;
@@ -284,10 +280,10 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       if (data?.success) {
         toast({
           title: 'Test Email Sent!',
-          description: `Welcome email sent to ${simulatedVolunteer.email} via ${data.email_provider || selectedProvider}`,
+          description: `Welcome email sent to ${simulatedVolunteer.email} via ${data.provider || selectedProvider}`,
         });
       } else {
-        throw new Error(data?.message || data?.error || 'Failed to send test email');
+        throw new Error(data?.error || 'Failed to send test email');
       }
     } catch (error) {
       console.error('Simulation error:', error);
