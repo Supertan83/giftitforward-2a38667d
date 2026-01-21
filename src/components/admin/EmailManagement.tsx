@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings } from 'lucide-react';
+import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings, User, Building2, Calendar, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { EmailProviderConfig } from './EmailProviderConfig';
@@ -22,6 +23,60 @@ interface EmailAsset {
   uploaded: boolean;
   url?: string;
 }
+
+interface SimulatedVolunteer {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  is_employee: boolean;
+  employee_vertical: string;
+  external_company: string;
+  employee_number: string;
+  events_list: string;
+  marketplace_name: string;
+  marketplace_date: string;
+  marketplace_location: string;
+  marketplace_time: string;
+}
+
+const DEFAULT_SIMULATED_VOLUNTEER: SimulatedVolunteer = {
+  first_name: 'Ahmed',
+  last_name: 'Al Maktoum',
+  email: '',
+  phone_number: '+971 50 123 4567',
+  is_employee: true,
+  employee_vertical: 'TECOM Group',
+  external_company: '',
+  employee_number: 'DH-12345',
+  events_list: 'GIF Marketplace - January 2025',
+  marketplace_name: 'GIF Marketplace - January 2025',
+  marketplace_date: '2025-01-25',
+  marketplace_location: 'Jumeirah Golf Estates Clubhouse',
+  marketplace_time: '09:00 - 14:00',
+};
+
+const DH_VERTICALS = [
+  'TECOM Group',
+  'Jumeirah Group',
+  'Arab Media Group',
+  'Dubai Holding Entertainment',
+  'Dubai Holding Real Estate',
+  'Dubai Holding Asset Management',
+  'Corporate Services',
+  'Other',
+];
+
+const EXTERNAL_COMPANIES = [
+  'Emaar Properties',
+  'DEWA',
+  'RTA',
+  'Dubai Municipality',
+  'DIFC',
+  'Dubai Customs',
+  'Dubai Health Authority',
+  'Other',
+];
 
 const EMAIL_ASSETS: EmailAsset[] = [
   { name: 'Hero Banner', file: 'gif-hero-banner.jpg', uploaded: false },
@@ -51,6 +106,8 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [msGraphStatus, setMsGraphStatus] = useState<{ configured: boolean; canAuthenticate: boolean; error?: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [simulatedVolunteer, setSimulatedVolunteer] = useState<SimulatedVolunteer>(DEFAULT_SIMULATED_VOLUNTEER);
+  const [isSimulating, setIsSimulating] = useState(false);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const { toast } = useToast();
 
@@ -174,6 +231,71 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       });
     } finally {
       setIsSendingTest(false);
+    }
+  };
+
+  // Simulate volunteer registration and send welcome email
+  const handleSimulateVolunteer = async () => {
+    if (!simulatedVolunteer.email.trim()) {
+      toast({
+        title: 'Email Required',
+        description: 'Please enter your email address to receive the test email',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsSimulating(true);
+
+    try {
+      // Create the webhook-like payload that mimics Dubai Holding registration
+      const webhookPayload = {
+        action: 'create_volunteer',
+        api_key: 'test_simulation', // Will be handled by admin auth
+        data: {
+          first_name: simulatedVolunteer.first_name,
+          last_name: simulatedVolunteer.last_name,
+          email: simulatedVolunteer.email,
+          phone_number: simulatedVolunteer.phone_number,
+          is_employee: simulatedVolunteer.is_employee,
+          employee_vertical: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_vertical : null,
+          external_company: !simulatedVolunteer.is_employee ? simulatedVolunteer.external_company : null,
+          employee_number: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_number : null,
+          events_list: simulatedVolunteer.events_list,
+          // Include marketplace details for email
+          marketplace_name: simulatedVolunteer.marketplace_name,
+          marketplace_date: simulatedVolunteer.marketplace_date,
+          marketplace_location: simulatedVolunteer.marketplace_location,
+          marketplace_time: simulatedVolunteer.marketplace_time,
+        },
+        send_email: true,
+        email_provider: selectedProvider,
+        test_mode: true,
+      };
+
+      const { data, error } = await supabase.functions.invoke('webhook-receiver', {
+        body: webhookPayload
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: 'Test Email Sent!',
+          description: `Welcome email sent to ${simulatedVolunteer.email} via ${data.email_provider || selectedProvider}`,
+        });
+      } else {
+        throw new Error(data?.message || data?.error || 'Failed to send test email');
+      }
+    } catch (error) {
+      console.error('Simulation error:', error);
+      toast({
+        title: 'Simulation Failed',
+        description: error instanceof Error ? error.message : 'Failed to simulate volunteer registration',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSimulating(false);
     }
   };
 
@@ -560,18 +682,18 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                     <div className="flex items-center gap-3">
                       {msGraphStatus.canAuthenticate ? (
                         <>
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                          <span className="text-sm text-green-700">Microsoft Graph is configured and can authenticate</span>
+                          <CheckCircle className="w-5 h-5 text-success" />
+                          <span className="text-sm text-success">Microsoft Graph is configured and can authenticate</span>
                         </>
                       ) : msGraphStatus.configured ? (
                         <>
-                          <AlertCircle className="w-5 h-5 text-yellow-600" />
-                          <span className="text-sm text-yellow-700">Configured but auth failed: {msGraphStatus.error}</span>
+                          <AlertCircle className="w-5 h-5 text-warning" />
+                          <span className="text-sm text-warning">Configured but auth failed: {msGraphStatus.error}</span>
                         </>
                       ) : (
                         <>
-                          <AlertCircle className="w-5 h-5 text-red-600" />
-                          <span className="text-sm text-red-700">{msGraphStatus.error || 'Not configured'}</span>
+                          <AlertCircle className="w-5 h-5 text-destructive" />
+                          <span className="text-sm text-destructive">{msGraphStatus.error || 'Not configured'}</span>
                         </>
                       )}
                     </div>
@@ -579,14 +701,260 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                 </CardContent>
               </Card>
 
+              {/* Volunteer Simulation Form */}
+              <Card className="border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="w-5 h-5" />
+                    Simulate Dubai Holding Registration
+                  </CardTitle>
+                  <CardDescription>
+                    Fill in volunteer details as if registering through the Dubai Holding form. This will create a real test record and send the welcome email.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Volunteer Type Toggle */}
+                    <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="is_employee"
+                          checked={simulatedVolunteer.is_employee}
+                          onCheckedChange={(checked) => 
+                            setSimulatedVolunteer(prev => ({ 
+                              ...prev, 
+                              is_employee: checked === true,
+                              employee_vertical: checked ? prev.employee_vertical : '',
+                              external_company: checked ? '' : prev.external_company,
+                            }))
+                          }
+                        />
+                        <Label htmlFor="is_employee" className="font-medium">
+                          Dubai Holding Employee
+                        </Label>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {simulatedVolunteer.is_employee 
+                          ? '(Will show in Vertical Breakdown)' 
+                          : '(Will show in Company Breakdown as External Partner)'}
+                      </span>
+                    </div>
+
+                    {/* Personal Details */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>First Name *</Label>
+                        <Input
+                          value={simulatedVolunteer.first_name}
+                          onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, first_name: e.target.value }))}
+                          placeholder="Ahmed"
+                          className="mt-1.5"
+                        />
+                      </div>
+                      <div>
+                        <Label>Last Name *</Label>
+                        <Input
+                          value={simulatedVolunteer.last_name}
+                          onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, last_name: e.target.value }))}
+                          placeholder="Al Maktoum"
+                          className="mt-1.5"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Email Address * (You will receive the test email here)</Label>
+                        <Input
+                          type="email"
+                          value={simulatedVolunteer.email}
+                          onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, email: e.target.value }))}
+                          placeholder="your.email@example.com"
+                          className="mt-1.5"
+                        />
+                      </div>
+                      <div>
+                        <Label>Phone Number</Label>
+                        <Input
+                          value={simulatedVolunteer.phone_number}
+                          onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, phone_number: e.target.value }))}
+                          placeholder="+971 50 123 4567"
+                          className="mt-1.5"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Conditional Fields based on Employee Status */}
+                    {simulatedVolunteer.is_employee ? (
+                      <div className="grid grid-cols-2 gap-4 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                        <div className="flex items-center gap-2 col-span-2 mb-2">
+                          <Building2 className="w-4 h-4 text-primary" />
+                          <span className="font-medium text-sm">Dubai Holding Details</span>
+                        </div>
+                        <div>
+                          <Label>Vertical / Business Unit *</Label>
+                          <Select 
+                            value={simulatedVolunteer.employee_vertical} 
+                            onValueChange={(value) => setSimulatedVolunteer(prev => ({ ...prev, employee_vertical: value }))}
+                          >
+                            <SelectTrigger className="mt-1.5">
+                              <SelectValue placeholder="Select vertical" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DH_VERTICALS.map((vertical) => (
+                                <SelectItem key={vertical} value={vertical}>{vertical}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Employee Number</Label>
+                          <Input
+                            value={simulatedVolunteer.employee_number}
+                            onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, employee_number: e.target.value }))}
+                            placeholder="DH-12345"
+                            className="mt-1.5"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4 p-4 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Building2 className="w-4 h-4 text-amber-600" />
+                          <span className="font-medium text-sm">External Partner Details</span>
+                        </div>
+                        <div>
+                          <Label>Company Name *</Label>
+                          <Select 
+                            value={simulatedVolunteer.external_company} 
+                            onValueChange={(value) => setSimulatedVolunteer(prev => ({ ...prev, external_company: value }))}
+                          >
+                            <SelectTrigger className="mt-1.5">
+                              <SelectValue placeholder="Select company" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {EXTERNAL_COMPANIES.map((company) => (
+                                <SelectItem key={company} value={company}>{company}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Event Details */}
+                    <div className="p-4 bg-muted/50 rounded-lg border">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium text-sm">Marketplace Event Details</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Event Name</Label>
+                          <Input
+                            value={simulatedVolunteer.marketplace_name}
+                            onChange={(e) => setSimulatedVolunteer(prev => ({ 
+                              ...prev, 
+                              marketplace_name: e.target.value,
+                              events_list: e.target.value 
+                            }))}
+                            placeholder="GIF Marketplace - January 2025"
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div>
+                          <Label>Date</Label>
+                          <Input
+                            type="date"
+                            value={simulatedVolunteer.marketplace_date}
+                            onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, marketplace_date: e.target.value }))}
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div>
+                          <Label>Location</Label>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <Input
+                              value={simulatedVolunteer.marketplace_location}
+                              onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, marketplace_location: e.target.value }))}
+                              placeholder="Jumeirah Golf Estates Clubhouse"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label>Timings</Label>
+                          <Input
+                            value={simulatedVolunteer.marketplace_time}
+                            onChange={(e) => setSimulatedVolunteer(prev => ({ ...prev, marketplace_time: e.target.value }))}
+                            placeholder="09:00 - 14:00"
+                            className="mt-1.5"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Provider Selection */}
+                    <div>
+                      <Label>Email Provider</Label>
+                      <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                        <SelectTrigger className="mt-1.5">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EMAIL_PROVIDERS.map((provider) => (
+                            <SelectItem key={provider.value} value={provider.value}>
+                              {provider.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {EMAIL_PROVIDERS.find(p => p.value === selectedProvider)?.description}
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={handleSimulateVolunteer}
+                      disabled={isSimulating || !simulatedVolunteer.email.trim() || !simulatedVolunteer.first_name.trim()}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isSimulating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          Simulating Registration & Sending Email...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          Simulate Registration & Send Welcome Email
+                        </>
+                      )}
+                    </Button>
+
+                    <div className="p-4 bg-muted rounded-lg">
+                      <h4 className="font-medium mb-2">What This Does:</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Creates a pending volunteer record with the details above</li>
+                        <li>• Generates a unique QR code for the volunteer</li>
+                        <li>• Sends the complete welcome email with all sections</li>
+                        <li>• Tests the full onboarding flow end-to-end</li>
+                      </ul>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Simple Test Email Card */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Send className="w-5 h-5" />
-                    Send Test Email
+                    Quick Test Email (Generic)
                   </CardTitle>
                   <CardDescription>
-                    Send a test email to verify the template looks correct
+                    Send a test email with placeholder data (no record created)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -608,68 +976,35 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                         </Select>
                       </div>
                       <div>
-                        <Label>Provider</Label>
-                        <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                          <SelectTrigger className="mt-1.5">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {EMAIL_PROVIDERS.map((provider) => (
-                              <SelectItem key={provider.value} value={provider.value}>
-                                <div className="flex flex-col">
-                                  <span>{provider.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {EMAIL_PROVIDERS.find(p => p.value === selectedProvider)?.description}
-                        </p>
+                        <Label>Recipient Email</Label>
+                        <Input
+                          type="email"
+                          placeholder="your.email@example.com"
+                          value={testEmail}
+                          onChange={(e) => setTestEmail(e.target.value)}
+                          className="mt-1.5"
+                        />
                       </div>
-                    </div>
-
-                    <div>
-                      <Label>Recipient Email</Label>
-                      <Input
-                        type="email"
-                        placeholder="your.email@example.com"
-                        value={testEmail}
-                        onChange={(e) => setTestEmail(e.target.value)}
-                        className="mt-1.5"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        The test email will use sample data for placeholders
-                      </p>
                     </div>
 
                     <Button
                       onClick={handleSendTestEmail}
                       disabled={isSendingTest || !testEmail.trim()}
+                      variant="outline"
                       className="w-full"
                     >
                       {isSendingTest ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          Sending via {selectedProvider === 'microsoft_graph' ? 'Microsoft Graph' : 'Resend'}...
+                          Sending...
                         </>
                       ) : (
                         <>
                           <Send className="w-4 h-4 mr-2" />
-                          Send Test Email via {selectedProvider === 'microsoft_graph' ? 'Microsoft Graph' : 'Resend'}
+                          Send Quick Test
                         </>
                       )}
                     </Button>
-
-                    <div className="p-4 bg-muted rounded-lg">
-                      <h4 className="font-medium mb-2">Test Email Details</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• <strong>Welcome Email:</strong> Includes sample QR code and credentials</li>
-                        <li>• <strong>Survey Email:</strong> Contains a non-functional survey link</li>
-                        <li>• <strong>Certificate Email:</strong> Includes a sample PDF certificate (Resend only)</li>
-                        <li>• <strong>Microsoft Graph:</strong> Email appears in client's Outlook Sent folder</li>
-                      </ul>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
