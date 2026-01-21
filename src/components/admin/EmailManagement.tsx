@@ -249,14 +249,16 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
 
     try {
       // Create the webhook-like payload that mimics Dubai Holding registration
+      // The webhook-receiver expects a 'volunteers' array
       const webhookPayload = {
         action: 'create_volunteer',
         api_key: 'test_simulation', // Will be handled by admin auth
-        data: {
+        volunteers: [{
+          email: simulatedVolunteer.email,
+          name: `${simulatedVolunteer.first_name} ${simulatedVolunteer.last_name}`,
+          phone: simulatedVolunteer.phone_number,
           first_name: simulatedVolunteer.first_name,
           last_name: simulatedVolunteer.last_name,
-          email: simulatedVolunteer.email,
-          phone_number: simulatedVolunteer.phone_number,
           is_employee: simulatedVolunteer.is_employee,
           employee_vertical: simulatedVolunteer.is_employee ? simulatedVolunteer.employee_vertical : null,
           external_company: !simulatedVolunteer.is_employee ? simulatedVolunteer.external_company : null,
@@ -267,7 +269,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
           marketplace_date: simulatedVolunteer.marketplace_date,
           marketplace_location: simulatedVolunteer.marketplace_location,
           marketplace_time: simulatedVolunteer.marketplace_time,
-        },
+        }],
         send_email: true,
         email_provider: selectedProvider,
         test_mode: true,
