@@ -9,11 +9,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface VolunteerData {
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  phone?: string;
+  is_employee?: boolean;
+  employee_vertical?: string | null;
+  external_company?: string | null;
+  employee_number?: string | null;
+  events_list?: string;
+  marketplace_name?: string;
+  marketplace_date?: string;
+  marketplace_location?: string;
+  marketplace_time?: string;
+}
+
 interface SendTestEmailRequest {
   email_type: 'welcome' | 'survey' | 'certificate';
   recipient_email: string;
   test_mode: boolean;
   provider?: 'resend' | 'microsoft_graph';
+  volunteer_data?: VolunteerData;
 }
 
 // Microsoft Graph helper functions
@@ -112,8 +129,8 @@ async function checkMicrosoftGraphStatus(): Promise<{ configured: boolean; canAu
   }
 }
 
-// Generate branded email HTML template
-function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: string): string {
+// Generate branded email HTML template with optional volunteer data
+function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: string, volunteerData?: VolunteerData): string {
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
@@ -160,6 +177,14 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
   `;
 
   if (emailType === 'welcome') {
+    // Get marketplace details from volunteer data or use defaults
+    const marketplaceName = volunteerData?.marketplace_name || 'GIF Marketplace - Test Event';
+    const marketplaceDate = volunteerData?.marketplace_date 
+      ? new Date(volunteerData.marketplace_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : 'TBD';
+    const marketplaceLocation = volunteerData?.marketplace_location || 'Jumeirah Golf Estates Clubhouse';
+    const marketplaceTime = volunteerData?.marketplace_time || '09:00 - 14:00';
+    
     return `
       <!DOCTYPE html>
       <html>
@@ -173,13 +198,18 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
           <tr>
             <td align="center" style="padding: 20px 0;">
               <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
-                ${header}
+                <!-- Hero Image -->
+                <tr>
+                  <td>
+                    <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                  </td>
+                </tr>
                 
                 <!-- Main Title -->
                 <tr>
-                  <td style="padding: 0 30px 20px 30px; text-align: center;">
-                    <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
-                      Thank you for Registering as a<br>Gift It Forward Volunteer!
+                  <td style="padding: 25px 30px 20px 30px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 22px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                      Thank you for registering as a<br>Gift It Forward volunteer
                     </h1>
                   </td>
                 </tr>
@@ -195,97 +225,113 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
                 <tr>
                   <td style="padding: 0 30px 15px 30px;">
                     <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                      Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us. Your volunteer registration has been successfully confirmed.
+                      We're delighted to have you join us. Your volunteer registration has been successfully confirmed for the following event:
                     </p>
                   </td>
                 </tr>
                 
+                <!-- Event Details -->
                 <tr>
                   <td style="padding: 0 30px 20px 30px;">
-                    <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                      Below are the key details you'll need to prepare for your volunteering experience:
-                    </p>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 2;">
+                      <li><strong>Event:</strong> ${marketplaceName}</li>
+                      <li><strong>Date:</strong> ${marketplaceDate}</li>
+                      <li><strong>Location:</strong> ${marketplaceLocation}</li>
+                      <li><strong>Timings:</strong> ${marketplaceTime}</li>
+                    </ul>
+                  </td>
+                </tr>
+                
+                <!-- Helpful Reminders -->
+                <tr>
+                  <td style="padding: 0 30px 20px 30px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Helpful reminders:</h3>
+                    <ol style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 2;" type="a">
+                      <li>Arrive at least 15 minutes before your shift starts</li>
+                      <li>Wear comfortable clothing and closed-toe shoes</li>
+                      <li>Bring your QR code (shown below) for check-in</li>
+                      <li>Stay hydrated and take breaks when needed</li>
+                    </ol>
                   </td>
                 </tr>
                 
                 <!-- QR Code Section -->
                 <tr>
                   <td style="padding: 0 30px 10px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Volunteer QR Code</h3>
-                    <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                      Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend.
+                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your QR code allows you to:</h3>
+                    <ul style="margin: 0 0 15px 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+                      <li>Check in and out of events</li>
+                      <li>Track your volunteer hours</li>
+                      <li>Access marketplace zones</li>
+                    </ul>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 0 30px 10px 30px; text-align: center;">
+                    <img src="${qrCodeUrl}" alt="Volunteer QR Code" width="150" height="150" style="display: block; margin: 0 auto;" />
+                    <p style="margin: 10px 0 0 0; font-size: 12px; color: #666666;">QR Card ID: VOL-TEST-1234</p>
+                  </td>
+                </tr>
+                
+                <!-- Login Credentials -->
+                <tr>
+                  <td style="padding: 20px 30px 10px 30px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold; border-bottom: 2px solid #0D4A6F; padding-bottom: 5px; display: inline-block;">Platform login credentials</h3>
+                    <p style="margin: 10px 0; font-size: 14px; color: #333333;">
+                      <strong>Email:</strong> test@example.com<br>
+                      <strong>Password:</strong> TestPass123!
                     </p>
                   </td>
                 </tr>
                 
                 <tr>
-                  <td style="padding: 0 30px 10px 30px;">
-                    <img src="${qrCodeUrl}" alt="Volunteer QR Code" width="150" height="150" style="display: block;" />
-                  </td>
-                </tr>
-                
-                <tr>
-                  <td style="padding: 0 30px 25px 30px;">
-                    <p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: VOL-TEST-1234</p>
+                  <td style="padding: 15px 30px 25px 30px;">
+                    <a href="https://gif.thesurpluss.com/auth" style="display: inline-block; background-color: #0D4A6F; color: #ffffff; padding: 12px 24px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 4px;">Login to the platform</a>
                   </td>
                 </tr>
                 
                 <!-- Training Section -->
                 <tr>
                   <td style="padding: 0 30px 25px 30px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
                       <tr>
-                        <td width="50%" valign="top">
-                          <img src="${trainingImageUrl}" alt="Your Role in the Circular Economy" width="270" style="display: block; width: 100%; height: auto;" />
+                        <td width="45%" valign="top">
+                          <img src="${trainingImageUrl}" alt="Circular Economy Training" width="250" style="display: block; width: 100%; height: auto;" />
                         </td>
-                        <td width="50%" valign="top" style="padding: 20px;">
-                          <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Mandatory Sustainability Training</h3>
+                        <td width="55%" valign="middle" style="padding: 20px;">
+                          <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Circular Economy Training Module</h3>
                           <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                            Before attending your first marketplace, all volunteers are required to complete a short sustainability training.
+                            Please complete this short training before your first volunteer shift.
                           </p>
-                          <a href="https://gif.thesurpluss.com/training" style="display: inline-block; background-color: #0D4A6F; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
+                          <a href="https://gif.thesurpluss.com/training" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
                         </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
                 
-                <!-- Login Credentials -->
-                <tr>
-                  <td style="padding: 0 30px 10px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">On-site Marketplace App Access</h3>
-                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #333333;">Your login credentials are as follows:</p>
-                    <p style="margin: 0; font-size: 13px; color: #333333;">Email: test@example.com</p>
-                    <p style="margin: 0; font-size: 13px; color: #333333;">Temporary Password: TestPass123!</p>
-                  </td>
-                </tr>
-                
-                <tr>
-                  <td style="padding: 15px 30px 25px 30px;">
-                    <a href="https://gif.thesurpluss.com/auth" style="display: inline-block; background-color: #B8860B; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the App</a>
-                  </td>
-                </tr>
-                
                 <!-- What's Next -->
                 <tr>
                   <td style="padding: 0 30px 20px 30px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What's Next?</h3>
-                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
-                      <li>Mark your calendar</li>
-                      <li>Look out for reminder emails and WhatsApp notifications closer to each event</li>
-                      <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a></li>
+                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What's next?</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+                      <li>Complete the training module above</li>
+                      <li>Save this email with your QR code</li>
+                      <li>Mark your calendar for ${marketplaceDate}</li>
+                      <li>Look out for reminder notifications</li>
                     </ul>
                   </td>
                 </tr>
                 
                 <!-- Closing -->
                 <tr>
-                  <td style="padding: 0 30px 20px 30px;">
-                    <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                      Thank you for being part of this meaningful initiative. We look forward to welcoming you on-site.
+                  <td style="padding: 0 30px 25px 30px;">
+                    <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.5;">
+                      If you have any questions, please contact us at <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a>
                     </p>
-                    <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best Regards,</p>
-                    <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                    <p style="margin: 0 0 3px 0; font-size: 14px; color: #333333;">Best regards,</p>
+                    <p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: 600;">Gift It Forward team</p>
                   </td>
                 </tr>
                 
@@ -568,7 +614,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { email_type, recipient_email, test_mode, provider = 'resend' }: SendTestEmailRequest = body;
+    const { email_type, recipient_email, test_mode, provider = 'resend', volunteer_data }: SendTestEmailRequest = body;
 
     if (!email_type || !recipient_email) {
       return new Response(
@@ -578,15 +624,19 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log(`Sending test ${email_type} email to ${recipient_email} via ${provider}`);
+    if (volunteer_data) {
+      console.log("Using custom volunteer data:", JSON.stringify(volunteer_data));
+    }
 
-    const firstName = "Test Volunteer";
+    // Use volunteer data if provided, otherwise default
+    const firstName = volunteer_data?.first_name || "Test Volunteer";
     const emailSubjects: Record<string, string> = {
-      welcome: "[TEST] Thank you for Registering as a Gift It Forward Volunteer!",
+      welcome: "[TEST] Thank you for registering as a Gift It Forward volunteer",
       survey: "[TEST] Thank You for Volunteering! Share Your Feedback",
       certificate: "[TEST] Your Circular Economy Training Certificate",
     };
 
-    const html = generateEmailHTML(email_type, firstName, supabaseUrl);
+    const html = generateEmailHTML(email_type, firstName, supabaseUrl, volunteer_data);
     const subject = emailSubjects[email_type] || `[TEST] ${email_type} Email`;
 
     // Handle Microsoft Graph provider
