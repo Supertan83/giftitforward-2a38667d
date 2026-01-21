@@ -251,11 +251,6 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
               <h1 className="font-display font-bold text-base md:text-lg truncate">Marketplace Events</h1>
               <p className="text-xs md:text-sm text-muted-foreground">Manage distribution events</p>
             </div>
-            <Button onClick={() => setShowCreateModal(true)} size="sm" className="shrink-0">
-              <Plus className="w-4 h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Add Event</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
           </div>
         </div>
       </header>
