@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ClipboardList, Save, Package, AlertCircle, ChevronsUpDown, Check, Search } from 'lucide-react';
+import { ClipboardList, Save, Package, AlertCircle, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useManualCounts, useManualCountOperations } from '@/hooks/useManualCounts';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
 
 interface ItemAllocation {
   id: string;
@@ -32,8 +29,6 @@ export const ManualCountZone = () => {
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const [subcategoryOpen, setSubcategoryOpen] = useState(false);
   const [counts, setCounts] = useState<Record<string, { distributed: number; remaining: number; notes: string }>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -127,7 +122,6 @@ export const ManualCountZone = () => {
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
     setSelectedSubcategory('');
-    setCategoryOpen(false);
   };
 
   // Initialize counts from existing data
@@ -263,98 +257,44 @@ export const ManualCountZone = () => {
             {/* Category Dropdown */}
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
-              <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={categoryOpen}
-                    className="w-full justify-between"
-                  >
-                    {selectedCategory || "All categories"}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-0 z-50 bg-background" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search category..." />
-                    <CommandList>
-                      <CommandEmpty>No category found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value=""
-                          onSelect={() => handleCategoryChange('')}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", !selectedCategory ? "opacity-100" : "opacity-0")} />
-                          All categories
-                        </CommandItem>
-                        {categories.map((cat) => (
-                          <CommandItem
-                            key={cat}
-                            value={cat}
-                            onSelect={() => handleCategoryChange(cat)}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", selectedCategory === cat ? "opacity-100" : "opacity-0")} />
-                            {cat}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <Select
+                value={selectedCategory}
+                onValueChange={(value) => handleCategoryChange(value === 'all' ? '' : value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-background">
+                  <SelectItem value="all">All categories</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Subcategory Dropdown */}
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Subcategory</Label>
-              <Popover open={subcategoryOpen} onOpenChange={setSubcategoryOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={subcategoryOpen}
-                    className="w-full justify-between"
-                    disabled={!selectedCategory}
-                  >
-                    {selectedSubcategory || "All subcategories"}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-0 z-50 bg-background" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search subcategory..." />
-                    <CommandList>
-                      <CommandEmpty>No subcategory found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value=""
-                          onSelect={() => {
-                            setSelectedSubcategory('');
-                            setSubcategoryOpen(false);
-                          }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", !selectedSubcategory ? "opacity-100" : "opacity-0")} />
-                          All subcategories
-                        </CommandItem>
-                        {subcategories.map((sub) => (
-                          <CommandItem
-                            key={sub}
-                            value={sub}
-                            onSelect={() => {
-                              setSelectedSubcategory(sub);
-                              setSubcategoryOpen(false);
-                            }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", selectedSubcategory === sub ? "opacity-100" : "opacity-0")} />
-                            {sub}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <Select
+                value={selectedSubcategory || 'all'}
+                onValueChange={(value) => setSelectedSubcategory(value === 'all' ? '' : value)}
+                disabled={!selectedCategory}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All subcategories" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-background">
+                  <SelectItem value="all">All subcategories</SelectItem>
+                  {subcategories.map((sub) => (
+                    <SelectItem key={sub} value={sub}>
+                      {sub}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
