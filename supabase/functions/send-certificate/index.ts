@@ -264,6 +264,7 @@ const handler = async (req: Request): Promise<Response> => {
     let emailResponse = await resend.emails.send({
       from: primarySender,
       to: [cleanEmail],
+      bcc: ['giftitforward@dubaiholding.com'],
       subject: "Your Circular Economy Training Certificate",
       html: `
         <!DOCTYPE html>
@@ -395,6 +396,7 @@ const handler = async (req: Request): Promise<Response> => {
         emailResponse = await resend.emails.send({
           from: fallbackSender,
           to: [cleanEmail],
+          bcc: ['giftitforward@dubaiholding.com'],
           subject: "Your Circular Economy Training Certificate",
           html: `
             <!DOCTYPE html>

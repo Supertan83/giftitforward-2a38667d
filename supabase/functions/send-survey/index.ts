@@ -219,6 +219,7 @@ async function sendViaResend(
     body: JSON.stringify({
       from: primarySender,
       to: [cleanEmail],
+      bcc: ['giftitforward@dubaiholding.com'],
       subject: "Thank You for Volunteering! Share Your Feedback",
       html: `
         <!DOCTYPE html>
@@ -350,6 +351,7 @@ async function sendViaResend(
         body: JSON.stringify({
           from: fallbackSender,
           to: [cleanEmail],
+          bcc: ['giftitforward@dubaiholding.com'],
           subject: "Thank You for Volunteering! Share Your Feedback",
           html: `
             <!DOCTYPE html>

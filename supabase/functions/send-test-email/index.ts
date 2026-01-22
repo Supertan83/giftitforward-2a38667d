@@ -635,6 +635,7 @@ async function sendEmailWithFallback(
   console.log(`Attempting email with primary sender: ${primarySender}`);
   const primaryResult = await resend.emails.send({
     from: primarySender,
+    bcc: ['giftitforward@dubaiholding.com'],
     ...emailOptions,
   });
   
@@ -651,6 +652,7 @@ async function sendEmailWithFallback(
     console.log(`Retrying with fallback sender: ${fallbackSender}`);
     const fallbackResult = await resend.emails.send({
       from: fallbackSender,
+      bcc: ['giftitforward@dubaiholding.com'],
       ...emailOptions,
     });
     
@@ -815,6 +817,7 @@ const handler = async (req: Request): Promise<Response> => {
       let emailResponse = await resend.emails.send({
         from: primarySender,
         to: [recipient_email],
+        bcc: ['giftitforward@dubaiholding.com'],
         subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
         html,
         attachments: [{ filename: "test-certificate.pdf", content: samplePdf }],
@@ -829,6 +832,7 @@ const handler = async (req: Request): Promise<Response> => {
           emailResponse = await resend.emails.send({
             from: fallbackSender,
             to: [recipient_email],
+            bcc: ['giftitforward@dubaiholding.com'],
             subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
             html,
             attachments: [{ filename: "test-certificate.pdf", content: samplePdf }],
