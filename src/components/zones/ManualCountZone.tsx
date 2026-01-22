@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -29,7 +29,7 @@ export const ManualCountZone = () => {
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
-  const [counts, setCounts] = useState<Record<string, { distributed: number; remaining: number; notes: string }>>({});
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   const { data: existingCounts = [], isLoading: loadingCounts } = useManualCounts(selectedMarketplaceId);
@@ -127,42 +127,20 @@ export const ManualCountZone = () => {
   // Initialize counts from existing data
   useMemo(() => {
     if (existingCounts.length > 0 && allocations.length > 0) {
-      const initialCounts: Record<string, { distributed: number; remaining: number; notes: string }> = {};
+      const initialCounts: Record<string, number> = {};
       
       existingCounts.forEach((count: any) => {
-        initialCounts[count.item_type_id] = {
-          distributed: count.actual_distributed,
-          remaining: count.actual_remaining,
-          notes: count.notes || '',
-        };
+        initialCounts[count.item_type_id] = count.actual_remaining;
       });
       
       setCounts(initialCounts);
     }
   }, [existingCounts, allocations]);
 
-  const handleCountChange = (itemTypeId: string, field: 'distributed' | 'remaining', value: number) => {
+  const handleCountChange = (itemTypeId: string, value: number) => {
     setCounts(prev => ({
       ...prev,
-      [itemTypeId]: {
-        ...prev[itemTypeId],
-        distributed: prev[itemTypeId]?.distributed || 0,
-        remaining: prev[itemTypeId]?.remaining || 0,
-        notes: prev[itemTypeId]?.notes || '',
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleNotesChange = (itemTypeId: string, notes: string) => {
-    setCounts(prev => ({
-      ...prev,
-      [itemTypeId]: {
-        ...prev[itemTypeId],
-        distributed: prev[itemTypeId]?.distributed || 0,
-        remaining: prev[itemTypeId]?.remaining || 0,
-        notes,
-      },
+      [itemTypeId]: value,
     }));
   };
 
@@ -172,15 +150,16 @@ export const ManualCountZone = () => {
     setIsSaving(true);
     try {
       const allocationMap = new Map(allocations.map(a => [a.item_type_id, a.id]));
+      const allocationDistMap = new Map(allocations.map(a => [a.item_type_id, a.distributed_quantity]));
       
-      for (const [itemTypeId, countData] of Object.entries(counts)) {
+      for (const [itemTypeId, remaining] of Object.entries(counts)) {
         await saveCount.mutateAsync({
           marketplace_id: selectedMarketplaceId,
           item_type_id: itemTypeId,
           allocation_id: allocationMap.get(itemTypeId) || null,
-          actual_distributed: countData.distributed,
-          actual_remaining: countData.remaining,
-          notes: countData.notes || null,
+          actual_distributed: allocationDistMap.get(itemTypeId) || 0,
+          actual_remaining: remaining,
+          notes: null,
         });
       }
       
@@ -340,59 +319,29 @@ export const ManualCountZone = () => {
                 return (
                   <div
                     key={item.id}
-                    className="p-3 rounded-lg bg-muted/50 space-y-3"
+                    className="p-3 rounded-lg bg-muted/50 space-y-2"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">{item.item_name}</span>
-                      <div className="text-xs text-muted-foreground">
-                        System: {systemDistributed} / {systemAllocated}
-                      </div>
+                      <span className="font-medium text-sm">{item.item_name}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {systemDistributed} / {systemAllocated}
+                      </Badge>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">
-                          Actual Distributed
-                        </Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={currentCount?.distributed ?? ''}
-                          onChange={(e) => handleCountChange(
-                            item.item_type_id,
-                            'distributed',
-                            parseInt(e.target.value) || 0
-                          )}
-                          placeholder={String(systemDistributed)}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">
-                          Actual Remaining
-                        </Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={currentCount?.remaining ?? ''}
-                          onChange={(e) => handleCountChange(
-                            item.item_type_id,
-                            'remaining',
-                            parseInt(e.target.value) || 0
-                          )}
-                          placeholder="0"
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
-                      <Textarea
-                        value={currentCount?.notes ?? ''}
-                        onChange={(e) => handleNotesChange(item.item_type_id, e.target.value)}
-                        placeholder="Any discrepancies or observations..."
-                        className="mt-1 h-16 resize-none"
+                    <div className="flex items-center gap-3">
+                      <Label className="text-xs text-muted-foreground whitespace-nowrap">
+                        Remaining:
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={currentCount ?? ''}
+                        onChange={(e) => handleCountChange(
+                          item.item_type_id,
+                          parseInt(e.target.value) || 0
+                        )}
+                        placeholder="0"
+                        className="h-9"
                       />
                     </div>
                   </div>
