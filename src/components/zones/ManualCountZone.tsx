@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ClipboardList, Save, Check, Package, AlertCircle } from 'lucide-react';
+import { ClipboardList, Save, Package, AlertCircle, ChevronsUpDown, Check, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,11 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useManualCounts, useManualCountOperations } from '@/hooks/useManualCounts';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 
 interface ItemAllocation {
   id: string;
@@ -27,6 +30,10 @@ export const ManualCountZone = () => {
   const { toast } = useToast();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [subcategoryOpen, setSubcategoryOpen] = useState(false);
   const [counts, setCounts] = useState<Record<string, { distributed: number; remaining: number; notes: string }>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -67,20 +74,61 @@ export const ManualCountZone = () => {
     enabled: !!selectedMarketplaceId,
   });
 
-  // Group allocations by category
-  const groupedAllocations = useMemo(() => {
-    const groups: Record<string, ItemAllocation[]> = {};
-    
-    allocations.forEach(allocation => {
-      const category = allocation.category || 'Uncategorized';
-      if (!groups[category]) {
-        groups[category] = [];
-      }
-      groups[category].push(allocation);
+  // Extract unique categories
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    allocations.forEach(a => {
+      if (a.category) cats.add(a.category);
     });
-
-    return groups;
+    return Array.from(cats).sort();
   }, [allocations]);
+
+  // Extract subcategories (derived from item names - first word or prefix before dash/colon)
+  const subcategories = useMemo(() => {
+    if (!selectedCategory) return [];
+    
+    const subs = new Set<string>();
+    allocations
+      .filter(a => a.category === selectedCategory)
+      .forEach(a => {
+        // Try to extract subcategory from item name
+        const name = a.item_name;
+        const match = name.match(/^([^-:]+)[-:]/);
+        if (match) {
+          subs.add(match[1].trim());
+        } else {
+          // Use first two words as subcategory if no delimiter
+          const words = name.split(' ').slice(0, 2).join(' ');
+          subs.add(words);
+        }
+      });
+    return Array.from(subs).sort();
+  }, [allocations, selectedCategory]);
+
+  // Filter allocations based on selected category and subcategory
+  const filteredAllocations = useMemo(() => {
+    let filtered = allocations;
+    
+    if (selectedCategory) {
+      filtered = filtered.filter(a => a.category === selectedCategory);
+    }
+    
+    if (selectedSubcategory) {
+      filtered = filtered.filter(a => {
+        const name = a.item_name;
+        return name.startsWith(selectedSubcategory) || name.includes(selectedSubcategory);
+      });
+    }
+    
+    return filtered;
+  }, [allocations, selectedCategory, selectedSubcategory]);
+
+  // Reset subcategory when category changes
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setSelectedSubcategory('');
+    setCategoryOpen(false);
+  };
 
   // Initialize counts from existing data
   useMemo(() => {
@@ -209,6 +257,108 @@ export const ManualCountZone = () => {
           </CardContent>
         </Card>
 
+        {/* Category & Subcategory Filters */}
+        {selectedMarketplaceId && allocations.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {/* Category Dropdown */}
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
+              <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={categoryOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedCategory || "All categories"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0 z-50 bg-background" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search category..." />
+                    <CommandList>
+                      <CommandEmpty>No category found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => handleCategoryChange('')}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", !selectedCategory ? "opacity-100" : "opacity-0")} />
+                          All categories
+                        </CommandItem>
+                        {categories.map((cat) => (
+                          <CommandItem
+                            key={cat}
+                            value={cat}
+                            onSelect={() => handleCategoryChange(cat)}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", selectedCategory === cat ? "opacity-100" : "opacity-0")} />
+                            {cat}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Subcategory Dropdown */}
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Subcategory</Label>
+              <Popover open={subcategoryOpen} onOpenChange={setSubcategoryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={subcategoryOpen}
+                    className="w-full justify-between"
+                    disabled={!selectedCategory}
+                  >
+                    {selectedSubcategory || "All subcategories"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0 z-50 bg-background" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search subcategory..." />
+                    <CommandList>
+                      <CommandEmpty>No subcategory found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => {
+                            setSelectedSubcategory('');
+                            setSubcategoryOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", !selectedSubcategory ? "opacity-100" : "opacity-0")} />
+                          All subcategories
+                        </CommandItem>
+                        {subcategories.map((sub) => (
+                          <CommandItem
+                            key={sub}
+                            value={sub}
+                            onSelect={() => {
+                              setSelectedSubcategory(sub);
+                              setSubcategoryOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", selectedSubcategory === sub ? "opacity-100" : "opacity-0")} />
+                            {sub}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        )}
+
         {/* Loading State */}
         {(loadingAllocations || loadingCounts) && selectedMarketplaceId && (
           <div className="text-center py-8 text-muted-foreground">
@@ -228,20 +378,21 @@ export const ManualCountZone = () => {
           </Card>
         )}
 
-        {/* Item Count Forms by Category */}
-        {Object.entries(groupedAllocations).map(([category, items]) => (
-          <Card key={category}>
+        {/* Filtered Items List */}
+        {filteredAllocations.length > 0 && (
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Package className="w-4 h-4" />
-                {category}
+                {selectedCategory || 'All Items'}
+                {selectedSubcategory && ` / ${selectedSubcategory}`}
                 <Badge variant="secondary" className="ml-auto">
-                  {items.length} item{items.length !== 1 ? 's' : ''}
+                  {filteredAllocations.length} item{filteredAllocations.length !== 1 ? 's' : ''}
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {items.map(item => {
+              {filteredAllocations.map(item => {
                 const currentCount = counts[item.item_type_id];
                 const systemDistributed = item.distributed_quantity;
                 const systemAllocated = item.allocated_quantity;
@@ -309,7 +460,19 @@ export const ManualCountZone = () => {
               })}
             </CardContent>
           </Card>
-        ))}
+        )}
+
+        {/* No Results After Filtering */}
+        {selectedMarketplaceId && !loadingAllocations && allocations.length > 0 && filteredAllocations.length === 0 && (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <Search className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-muted-foreground">
+                No items match the selected filters.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Save Button */}
         {selectedMarketplaceId && allocations.length > 0 && (
