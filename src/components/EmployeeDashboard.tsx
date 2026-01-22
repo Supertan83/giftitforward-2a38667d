@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { User, UserCheck, BarChart3, LogOut, Unlock } from 'lucide-react';
+import { User, UserCheck, BarChart3, LogOut, Unlock, ClipboardList } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { VolunteerZone } from '@/components/zones/VolunteerZone';
 import { StatsDashboardZone } from '@/components/zones/StatsDashboardZone';
 import { UnblockCardsZone } from '@/components/zones/UnblockCardsZone';
+import { ManualCountZone } from '@/components/zones/ManualCountZone';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQRCards } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
@@ -20,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Zone = 'volunteers' | 'unblock' | 'stats';
+type Zone = 'volunteers' | 'unblock' | 'stats' | 'count';
 
 export const EmployeeDashboard = () => {
   const [activeZone, setActiveZone] = useState<Zone>('volunteers');
@@ -40,6 +41,7 @@ export const EmployeeDashboard = () => {
   const zones = [
     { id: 'volunteers' as Zone, label: 'Volunteers', icon: UserCheck, color: 'text-success', badge: 0 },
     { id: 'unblock' as Zone, label: 'Unblock', icon: Unlock, color: 'text-warning', badge: previousDayBlockedCount },
+    { id: 'count' as Zone, label: 'Count', icon: ClipboardList, color: 'text-accent', badge: 0 },
     { id: 'stats' as Zone, label: 'Stats', icon: BarChart3, color: 'text-primary', badge: 0 },
   ];
 
@@ -49,6 +51,8 @@ export const EmployeeDashboard = () => {
         return <VolunteerZone />;
       case 'unblock':
         return <UnblockCardsZone />;
+      case 'count':
+        return <ManualCountZone />;
       case 'stats':
         return <StatsDashboardZone />;
     }
