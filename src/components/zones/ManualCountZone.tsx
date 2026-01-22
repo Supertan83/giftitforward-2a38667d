@@ -101,12 +101,11 @@ export const ManualCountZone = () => {
   }, [allocations, selectedCategory]);
 
   // Filter allocations based on selected category and subcategory
+  // Only show items after a category is selected
   const filteredAllocations = useMemo(() => {
-    let filtered = allocations;
+    if (!selectedCategory) return [];
     
-    if (selectedCategory) {
-      filtered = filtered.filter(a => a.category === selectedCategory);
-    }
+    let filtered = allocations.filter(a => a.category === selectedCategory);
     
     if (selectedSubcategory) {
       filtered = filtered.filter(a => {
