@@ -689,6 +689,70 @@ export type Database = {
           },
         ]
       }
+      marketplace_manual_counts: {
+        Row: {
+          actual_distributed: number
+          actual_remaining: number
+          allocation_id: string | null
+          counted_at: string
+          counted_by: string | null
+          created_at: string
+          id: string
+          item_type_id: string
+          marketplace_id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          actual_distributed?: number
+          actual_remaining?: number
+          allocation_id?: string | null
+          counted_at?: string
+          counted_by?: string | null
+          created_at?: string
+          id?: string
+          item_type_id: string
+          marketplace_id: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actual_distributed?: number
+          actual_remaining?: number
+          allocation_id?: string | null
+          counted_at?: string
+          counted_by?: string | null
+          created_at?: string
+          id?: string
+          item_type_id?: string
+          marketplace_id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_manual_counts_allocation_id_fkey"
+            columns: ["allocation_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_item_allocations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_manual_counts_item_type_id_fkey"
+            columns: ["item_type_id"]
+            isOneToOne: false
+            referencedRelation: "item_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_manual_counts_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_registrations: {
         Row: {
           created_at: string
