@@ -958,6 +958,7 @@ async function sendWelcomeEmailWithQR(
     let resendResult = await resend.emails.send({
       from: resendPrimarySender,
       to: [email],
+      bcc: ['giftitforward@dubaiholding.com'],
       subject: emailSubject,
       html: `
         <!DOCTYPE html>
@@ -1202,6 +1203,7 @@ async function sendWelcomeEmailWithQR(
         resendResult = await resend.emails.send({
           from: resendFallbackSender,
           to: [email],
+          bcc: ['giftitforward@dubaiholding.com'],
           subject: emailSubject,
           html: `
             <!DOCTYPE html>

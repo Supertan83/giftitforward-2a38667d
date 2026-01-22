@@ -152,6 +152,7 @@ serve(async (req: Request) => {
       let emailResult = await resend.emails.send({
         from: primarySender,
         to: [volunteer.email],
+        bcc: ['giftitforward@dubaiholding.com'],
         subject: emailSubject,
         html: `
           <!DOCTYPE html>
@@ -345,6 +346,7 @@ serve(async (req: Request) => {
           emailResult = await resend.emails.send({
             from: fallbackSender,
             to: [volunteer.email],
+            bcc: ['giftitforward@dubaiholding.com'],
             subject: emailSubject,
             html: `
               <!DOCTYPE html>

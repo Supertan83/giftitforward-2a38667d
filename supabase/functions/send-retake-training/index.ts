@@ -263,6 +263,7 @@ const handler = async (req: Request): Promise<Response> => {
       let emailResponse = await resend.emails.send({
         from: primarySender,
         to: [cleanEmail],
+        bcc: ['giftitforward@dubaiholding.com'],
         subject: emailSubject,
         html: `
           <!DOCTYPE html>
@@ -315,6 +316,7 @@ const handler = async (req: Request): Promise<Response> => {
           emailResponse = await resend.emails.send({
             from: fallbackSender,
             to: [cleanEmail],
+            bcc: ['giftitforward@dubaiholding.com'],
             subject: emailSubject,
             html: `
               <!DOCTYPE html>
