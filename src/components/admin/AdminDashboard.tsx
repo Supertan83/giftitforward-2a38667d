@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight, CloudUpload, Mail } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Users, Store, Webhook, ClipboardList, Database, UserPlus, GraduationCap, FileQuestion, Award, RefreshCw, UserCheck, PieChart, Pencil, Trash2, Unlock, ChevronDown, ChevronRight, CloudUpload, Mail, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -37,7 +37,8 @@ import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/u
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
 import { EmailManagement } from '@/components/admin/EmailManagement';
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management';
+import { BulkVolunteerUpload } from '@/components/admin/BulkVolunteerUpload';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload';
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
   const [expandedCategory, setExpandedCategory] = useState<'volunteer' | 'beneficiary' | 'admin' | null>(null);
@@ -361,6 +362,11 @@ export const AdminDashboard = () => {
   if (currentView === 'email-management') {
     return <EmailManagement onBack={() => setCurrentView('dashboard')} />;
   }
+
+  // Show Bulk Volunteer Upload view
+  if (currentView === 'bulk-volunteer-upload') {
+    return <BulkVolunteerUpload onBack={() => setCurrentView('dashboard')} />;
+  }
   if (isLoading || allocationsLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -667,7 +673,7 @@ export const AdminDashboard = () => {
             }} transition={{
               duration: 0.2
             }} className="overflow-hidden">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 pt-0">
                     <motion.button initial={{
                   opacity: 0,
                   y: 10
@@ -681,6 +687,21 @@ export const AdminDashboard = () => {
                         <UserPlus className="w-5 h-5 text-orange-500" />
                       </div>
                       <h3 className="font-medium text-xs md:text-sm">Volunteers Added</h3>
+                    </motion.button>
+
+                    <motion.button initial={{
+                  opacity: 0,
+                  y: 10
+                }} animate={{
+                  opacity: 1,
+                  y: 0
+                }} transition={{
+                  delay: 0.08
+                }} onClick={() => setCurrentView('bulk-volunteer-upload')} className="bg-muted/50 rounded-xl p-3 md:p-4 text-center hover:bg-muted transition-colors group">
+                      <div className="w-10 h-10 mx-auto rounded-lg bg-teal-500/10 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors mb-2">
+                        <Upload className="w-5 h-5 text-teal-500" />
+                      </div>
+                      <h3 className="font-medium text-xs md:text-sm">Bulk Upload</h3>
                     </motion.button>
 
                     <motion.button initial={{
