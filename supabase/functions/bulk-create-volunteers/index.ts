@@ -339,10 +339,10 @@ Deno.serve(async (req) => {
             email,
             first_name: firstName,
             last_name: lastName,
-            qr_code_id: qrCodeId,
             temp_password: tempPassword,
             status: 'approved',
             email_sent: false,
+            source: 'bulk_upload',
           })
 
         // Send welcome email

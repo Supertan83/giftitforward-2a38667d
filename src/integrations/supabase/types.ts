@@ -883,6 +883,7 @@ export type Database = {
           medical_condition_details: string | null
           phone_number: string | null
           rejection_reason: string | null
+          source: string | null
           source_data: Json | null
           status: string
           temp_password: string | null
@@ -922,6 +923,7 @@ export type Database = {
           medical_condition_details?: string | null
           phone_number?: string | null
           rejection_reason?: string | null
+          source?: string | null
           source_data?: Json | null
           status?: string
           temp_password?: string | null
@@ -961,6 +963,7 @@ export type Database = {
           medical_condition_details?: string | null
           phone_number?: string | null
           rejection_reason?: string | null
+          source?: string | null
           source_data?: Json | null
           status?: string
           temp_password?: string | null
