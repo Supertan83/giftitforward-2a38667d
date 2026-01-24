@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -343,6 +343,99 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  // Delete mutation for bulk uploaded volunteers
+  const deleteMutation = useMutation({
+    mutationFn: async (pendingId: string) => {
+      const volunteer = volunteers.find(v => v.id === pendingId);
+      if (!volunteer) throw new Error('Volunteer not found');
+
+      // Delete associated user account if exists
+      if (volunteer.created_user_id) {
+        const { error: deleteUserError } = await supabase.functions.invoke('delete-user', {
+          body: { userId: volunteer.created_user_id }
+        });
+        // Ignore "user not found" errors
+        if (deleteUserError && !deleteUserError.message?.includes('not found')) {
+          console.error('Error deleting user:', deleteUserError);
+        }
+      }
+
+      // Delete the pending volunteer record
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .delete()
+        .eq('id', pendingId);
+
+      if (error) throw error;
+      return { email: volunteer.email };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      queryClient.invalidateQueries({ queryKey: ['bulk-uploaded-volunteers-count'] });
+      toast({
+        title: 'Volunteer Deleted',
+        description: `${data.email} has been removed`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Delete Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const volunteersToDelete = volunteers.filter(v => ids.includes(v.id));
+      let deletedCount = 0;
+      let failedCount = 0;
+
+      for (const volunteer of volunteersToDelete) {
+        try {
+          // Delete user account if exists
+          if (volunteer.created_user_id) {
+            await supabase.functions.invoke('delete-user', {
+              body: { userId: volunteer.created_user_id }
+            });
+          }
+
+          // Delete the pending volunteer record
+          const { error } = await supabase
+            .from('pending_volunteers')
+            .delete()
+            .eq('id', volunteer.id);
+
+          if (error) throw error;
+          deletedCount++;
+        } catch (error) {
+          console.error(`Failed to delete ${volunteer.email}:`, error);
+          failedCount++;
+        }
+      }
+
+      return { deletedCount, failedCount };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      queryClient.invalidateQueries({ queryKey: ['bulk-uploaded-volunteers-count'] });
+      setSelectedIds(new Set());
+      toast({
+        title: 'Bulk Delete Complete',
+        description: `${data.deletedCount} deleted, ${data.failedCount} failed`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Bulk Delete Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
   const handleApprove = (volunteer: PendingVolunteer) => {
     approveMutation.mutate(volunteer.id);
   };
@@ -350,6 +443,17 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const handleBulkResend = () => {
     if (selectedIds.size === 0) return;
     bulkResendMutation.mutate(Array.from(selectedIds));
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} volunteer(s)? This will also delete their user accounts.`)) return;
+    bulkDeleteMutation.mutate(Array.from(selectedIds));
+  };
+
+  const handleDelete = (volunteer: PendingVolunteer) => {
+    if (!confirm(`Are you sure you want to delete ${volunteer.first_name} ${volunteer.last_name}? This will also delete their user account.`)) return;
+    deleteMutation.mutate(volunteer.id);
   };
 
   const toggleSelect = (id: string) => {
@@ -520,19 +624,37 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                         </span>
                       </div>
                       {selectedIds.size > 0 && (
-                        <Button
-                          size="sm"
-                          onClick={handleBulkResend}
-                          disabled={bulkResendMutation.isPending}
-                          className="gap-2"
-                        >
-                          {bulkResendMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Send className="w-4 h-4" />
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={handleBulkResend}
+                            disabled={bulkResendMutation.isPending || bulkDeleteMutation.isPending}
+                            className="gap-2"
+                          >
+                            {bulkResendMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Send className="w-4 h-4" />
+                            )}
+                            Send Emails ({selectedIds.size})
+                          </Button>
+                          {activeTab === 'bulk_uploaded' && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={handleBulkDelete}
+                              disabled={bulkDeleteMutation.isPending || bulkResendMutation.isPending}
+                              className="gap-2"
+                            >
+                              {bulkDeleteMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                              Delete ({selectedIds.size})
+                            </Button>
                           )}
-                          Send Emails ({selectedIds.size})
-                        </Button>
+                        </>
                       )}
                     </div>
                   )}
@@ -669,7 +791,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                         size="icon"
                                         className="h-7 w-7"
                                         onClick={() => resendEmailMutation.mutate(volunteer.id)}
-                                        disabled={resendEmailMutation.isPending}
+                                        disabled={resendEmailMutation.isPending || deleteMutation.isPending}
                                       >
                                         {resendEmailMutation.isPending ? (
                                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -680,6 +802,26 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     </TooltipTrigger>
                                     <TooltipContent>Resend Email</TooltipContent>
                                   </Tooltip>
+                                  {activeTab === 'bulk_uploaded' && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-destructive hover:text-destructive"
+                                          onClick={() => handleDelete(volunteer)}
+                                          disabled={deleteMutation.isPending}
+                                        >
+                                          {deleteMutation.isPending ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                          ) : (
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Delete</TooltipContent>
+                                    </Tooltip>
+                                  )}
                                 </div>
                               </TooltipProvider>
                             </TableCell>
