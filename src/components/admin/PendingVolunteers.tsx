@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -74,6 +74,7 @@ interface PendingVolunteer {
   email_opened_at: string | null;
   created_at: string;
   source_data: unknown;
+  source: string | null;
   training_completed: boolean | null;
   training_completed_at: string | null;
   certificate_sent_at: string | null;
@@ -135,7 +136,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'approved'>('approved');
+  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [eventFilter, setEventFilter] = useState<string>('all');
   
@@ -145,7 +146,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['pending-volunteers', activeTab],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('pending_volunteers')
         .select(`
           *,
@@ -154,8 +155,17 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             status
           )
         `)
-        .eq('status', activeTab)
-        .order('created_at', { ascending: false });
+        .eq('status', 'approved');
+
+      // Filter by source based on active tab
+      if (activeTab === 'bulk_uploaded') {
+        query = query.eq('source', 'bulk_upload');
+      } else {
+        // Show webhook/manual (non-bulk) in the approved tab
+        query = query.or('source.is.null,source.neq.bulk_upload');
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as PendingVolunteer[];
@@ -404,6 +414,19 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  const bulkUploadedCount = useQuery({
+    queryKey: ['bulk-uploaded-volunteers-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('pending_volunteers')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'approved')
+        .eq('source', 'bulk_upload');
+      if (error) throw error;
+      return count || 0;
+    }
+  });
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -455,11 +478,20 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'approved')}>
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded'); setSelectedIds(new Set()); }}>
           <TabsList className="mb-4">
             <TabsTrigger value="approved" className="gap-2">
               <Check className="w-4 h-4" />
-              Approved Volunteers
+              Partner Volunteers
+            </TabsTrigger>
+            <TabsTrigger value="bulk_uploaded" className="gap-2">
+              <Upload className="w-4 h-4" />
+              Bulk Uploaded
+              {(bulkUploadedCount.data ?? 0) > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {bulkUploadedCount.data}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -472,7 +504,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               ) : filteredVolunteers.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>{eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers'}</p>
+                  <p>{activeTab === 'bulk_uploaded' ? 'No bulk uploaded volunteers' : (eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers')}</p>
                 </div>
               ) : (
                 <div>
