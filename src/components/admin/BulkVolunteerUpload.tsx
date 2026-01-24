@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Upload, Download, Search, Users, Loader2, CheckCircle, XCircle, AlertCircle, Trash2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Upload, Download, Search, Users, Loader2, CheckCircle, XCircle, AlertCircle, Trash2, UserPlus, Pencil, Check, X } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,13 @@ interface VolunteerEntry {
   errorMessage?: string;
 }
 
+interface EditingState {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
 const ITEMS_PER_PAGE = 10;
 
 const SAMPLE_CSV_CONTENT = `first_name,last_name,email
@@ -43,6 +50,7 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingEntry, setEditingEntry] = useState<EditingState | null>(null);
   const { toast } = useToast();
   const { signOut } = useAuth();
 
@@ -239,12 +247,67 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
     setVolunteers(prev => prev.filter(v => v.id !== id));
   };
 
+  // Start editing an entry
+  const startEditing = (volunteer: VolunteerEntry) => {
+    setEditingEntry({
+      id: volunteer.id,
+      firstName: volunteer.firstName,
+      lastName: volunteer.lastName,
+      email: volunteer.email,
+    });
+  };
+
+  // Cancel editing
+  const cancelEditing = () => {
+    setEditingEntry(null);
+  };
+
+  // Save edited entry
+  const saveEditing = () => {
+    if (!editingEntry) return;
+
+    // Validate email
+    if (!isValidEmail(editingEntry.email)) {
+      toast({
+        title: 'Invalid Email',
+        description: 'Please enter a valid email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check for duplicate email (excluding current entry)
+    const isDuplicate = volunteers.some(
+      v => v.id !== editingEntry.id && v.email.toLowerCase() === editingEntry.email.toLowerCase()
+    );
+    if (isDuplicate) {
+      toast({
+        title: 'Duplicate Email',
+        description: 'This email already exists in the list',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setVolunteers(prev => prev.map(v => 
+      v.id === editingEntry.id
+        ? { ...v, firstName: editingEntry.firstName.trim(), lastName: editingEntry.lastName.trim(), email: editingEntry.email.trim().toLowerCase() }
+        : v
+    ));
+    setEditingEntry(null);
+    toast({
+      title: 'Entry Updated',
+      description: 'Volunteer entry has been updated',
+    });
+  };
+
   // Clear all
   const clearAll = () => {
     setVolunteers([]);
     setCurrentPage(1);
     setSearchQuery('');
     setStatusFilter('all');
+    setEditingEntry(null);
   };
 
   // Filter and search
@@ -491,41 +554,108 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
                   </TableHeader>
                   <TableBody>
                     <AnimatePresence mode="popLayout">
-                      {paginatedVolunteers.map((volunteer) => (
-                        <motion.tr
-                          key={volunteer.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          className="border-b"
-                        >
-                          <TableCell className="font-medium">
-                            {volunteer.firstName} {volunteer.lastName}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {volunteer.email}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {getStatusBadge(volunteer.status)}
-                              {volunteer.errorMessage && (
-                                <span className="text-xs text-destructive">{volunteer.errorMessage}</span>
+                      {paginatedVolunteers.map((volunteer) => {
+                        const isEditing = editingEntry?.id === volunteer.id;
+                        const canEdit = volunteer.status === 'pending' || volunteer.status === 'error';
+
+                        return (
+                          <motion.tr
+                            key={volunteer.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            className="border-b"
+                          >
+                            <TableCell className="font-medium">
+                              {isEditing ? (
+                                <div className="flex gap-2">
+                                  <Input
+                                    value={editingEntry.firstName}
+                                    onChange={(e) => setEditingEntry({ ...editingEntry, firstName: e.target.value })}
+                                    placeholder="First name"
+                                    className="h-8 w-24"
+                                  />
+                                  <Input
+                                    value={editingEntry.lastName}
+                                    onChange={(e) => setEditingEntry({ ...editingEntry, lastName: e.target.value })}
+                                    placeholder="Last name"
+                                    className="h-8 w-24"
+                                  />
+                                </div>
+                              ) : (
+                                <>{volunteer.firstName} {volunteer.lastName}</>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeEntry(volunteer.id)}
-                              disabled={volunteer.status === 'creating'}
-                              className="h-8 w-8"
-                            >
-                              <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </motion.tr>
-                      ))}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {isEditing ? (
+                                <Input
+                                  value={editingEntry.email}
+                                  onChange={(e) => setEditingEntry({ ...editingEntry, email: e.target.value })}
+                                  placeholder="Email"
+                                  className="h-8 w-48"
+                                />
+                              ) : (
+                                volunteer.email
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {getStatusBadge(volunteer.status)}
+                                {volunteer.errorMessage && (
+                                  <span className="text-xs text-destructive">{volunteer.errorMessage}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                {isEditing ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={saveEditing}
+                                      className="h-8 w-8"
+                                    >
+                                      <Check className="w-4 h-4 text-success" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={cancelEditing}
+                                      className="h-8 w-8"
+                                    >
+                                      <X className="w-4 h-4 text-muted-foreground" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {canEdit && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => startEditing(volunteer)}
+                                        disabled={volunteer.status === 'creating'}
+                                        className="h-8 w-8"
+                                      >
+                                        <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeEntry(volunteer.id)}
+                                      disabled={volunteer.status === 'creating'}
+                                      className="h-8 w-8"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </motion.tr>
+                        );
+                      })}
                     </AnimatePresence>
                     {paginatedVolunteers.length === 0 && (
                       <TableRow>
