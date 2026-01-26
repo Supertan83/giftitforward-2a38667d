@@ -47,7 +47,7 @@ export const generateCertificateImageURL = async ({
     ctx.font = 'bold 42px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#54585A'; // DH Grey
     ctx.textAlign = 'left';
-    ctx.fillText(fullName, 200, 520);
+    ctx.fillText(fullName, 200, 550);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     ctx.font = 'bold 72px Helvetica, Arial, sans-serif';
@@ -95,7 +95,7 @@ export const generateCertificatePDFBlob = async ({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(42);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 200, 520);
+    doc.text(fullName, 200, 550);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
@@ -134,7 +134,7 @@ export const generateCertificatePDF = async ({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(42);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 200, 520);
+    doc.text(fullName, 200, 550);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');

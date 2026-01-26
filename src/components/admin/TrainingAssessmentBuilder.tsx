@@ -359,7 +359,7 @@ export const TrainingAssessmentBuilder = ({ onBack }: TrainingAssessmentBuilderP
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(42);
       doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-      doc.text(volunteerName || 'Volunteer Name', 200, 520);
+      doc.text(volunteerName || 'Volunteer Name', 200, 550);
 
       // Save the PDF
       doc.save(`certificate-of-completion-${volunteerName.replace(/\s+/g, '-').toLowerCase() || 'volunteer'}.pdf`);
