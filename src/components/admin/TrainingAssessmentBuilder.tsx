@@ -343,8 +343,8 @@ export const TrainingAssessmentBuilder = ({ onBack }: TrainingAssessmentBuilderP
     const pageHeight = doc.internal.pageSize.getHeight();
 
     try {
-      // Load background image
-      const bgResponse = await fetch('/images/certificate-background.png');
+      // Load background image - use the new completion certificate background
+      const bgResponse = await fetch('/images/certificate-completion-background.jpg');
       const bgBlob = await bgResponse.blob();
       const bgBase64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -353,16 +353,16 @@ export const TrainingAssessmentBuilder = ({ onBack }: TrainingAssessmentBuilderP
       });
       
       // Add background image (full page) - background already contains logos
-      doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+      doc.addImage(bgBase64, 'JPEG', 0, 0, pageWidth, pageHeight);
 
-      // Add volunteer name in the middle (on the name line area)
+      // Add volunteer name below "THIS CERTIFIES THAT" - matching CertificateGenerator positioning
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(28);
-      doc.setTextColor(0, 0, 0); // Black text for light background
-      doc.text(volunteerName || 'Volunteer Name', pageWidth / 2, 100, { align: 'center' });
+      doc.setFontSize(48);
+      doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+      doc.text(volunteerName || 'Volunteer Name', 110, 420);
 
       // Save the PDF
-      doc.save(`certificate-of-attendance-${volunteerName.replace(/\s+/g, '-').toLowerCase() || 'volunteer'}.pdf`);
+      doc.save(`certificate-of-completion-${volunteerName.replace(/\s+/g, '-').toLowerCase() || 'volunteer'}.pdf`);
       
       toast({
         title: 'Certificate Downloaded',
