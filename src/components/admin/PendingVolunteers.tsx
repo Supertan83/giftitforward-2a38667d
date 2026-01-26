@@ -638,22 +638,20 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             )}
                             Send Emails ({selectedIds.size})
                           </Button>
-                          {activeTab === 'bulk_uploaded' && (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={handleBulkDelete}
-                              disabled={bulkDeleteMutation.isPending || bulkResendMutation.isPending}
-                              className="gap-2"
-                            >
-                              {bulkDeleteMutation.isPending ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                              Delete ({selectedIds.size})
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={handleBulkDelete}
+                            disabled={bulkDeleteMutation.isPending || bulkResendMutation.isPending}
+                            className="gap-2"
+                          >
+                            {bulkDeleteMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                            Delete ({selectedIds.size})
+                          </Button>
                         </>
                       )}
                     </div>
@@ -802,26 +800,24 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     </TooltipTrigger>
                                     <TooltipContent>Resend Email</TooltipContent>
                                   </Tooltip>
-                                  {activeTab === 'bulk_uploaded' && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7 text-destructive hover:text-destructive"
-                                          onClick={() => handleDelete(volunteer)}
-                                          disabled={deleteMutation.isPending}
-                                        >
-                                          {deleteMutation.isPending ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                          ) : (
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          )}
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Delete</TooltipContent>
-                                    </Tooltip>
-                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        onClick={() => handleDelete(volunteer)}
+                                        disabled={deleteMutation.isPending}
+                                      >
+                                        {deleteMutation.isPending ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Delete</TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </TooltipProvider>
                             </TableCell>
