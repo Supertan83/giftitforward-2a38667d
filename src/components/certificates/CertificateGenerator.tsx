@@ -43,15 +43,15 @@ export const generateCertificateImageURL = async ({
   const fullName = `${firstName} ${lastName}`;
 
   if (type === 'completion') {
-    // Cover the "(First Name) (Last Name)" placeholder with white rectangle - larger area
+    // Cover the "(First Name) (Last Name)" placeholder with white rectangle - extended coverage
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(280, 355, 750, 80);
+    ctx.fillRect(240, 330, 850, 110);
     
-    // Write volunteer name over the covered area - moved lower
-    ctx.font = 'bold 36px Helvetica, Arial, sans-serif';
+    // Write volunteer name over the covered area - centered vertically
+    ctx.font = 'bold 38px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#54585A'; // DH Grey
     ctx.textAlign = 'left';
-    ctx.fillText(fullName, 310, 420);
+    ctx.fillText(fullName, 310, 395);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     ctx.font = 'bold 72px Helvetica, Arial, sans-serif';
@@ -95,15 +95,15 @@ export const generateCertificatePDFBlob = async ({
   const fullName = `${firstName} ${lastName}`;
 
   if (type === 'completion') {
-    // Cover the "(First Name) (Last Name)" placeholder with white rectangle - larger area
+    // Cover the "(First Name) (Last Name)" placeholder with white rectangle - extended coverage
     doc.setFillColor(255, 255, 255);
-    doc.rect(280, 355, 750, 80, 'F');
+    doc.rect(240, 330, 850, 110, 'F');
     
-    // Write volunteer name over the covered area - moved lower
+    // Write volunteer name over the covered area - centered vertically
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(36);
+    doc.setFontSize(38);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 310, 420);
+    doc.text(fullName, 310, 395);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
@@ -138,15 +138,15 @@ export const generateCertificatePDF = async ({
   const fullName = `${firstName} ${lastName}`;
 
   if (type === 'completion') {
-    // Cover the "(First Name) (Last Name)" placeholder with white rectangle - larger area
+    // Cover the "(First Name) (Last Name)" placeholder with white rectangle - extended coverage
     doc.setFillColor(255, 255, 255);
-    doc.rect(280, 355, 750, 80, 'F');
+    doc.rect(240, 330, 850, 110, 'F');
     
-    // Write volunteer name over the covered area - moved lower
+    // Write volunteer name over the covered area - centered vertically
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(36);
+    doc.setFontSize(38);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 310, 420);
+    doc.text(fullName, 310, 395);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
