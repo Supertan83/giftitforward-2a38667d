@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Loader2, Award, Download, Mail, Check, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
-import jsPDF from 'jspdf';
+import { generateCertificatePDF, generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
 
 interface SurveyData {
   id: string;
@@ -171,34 +171,12 @@ export default function VolunteerSurveyPage() {
     }
   };
 
-  const generateCertificatePDF = async (): Promise<string> => {
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'px',
-      format: [1920, 1080],
-    });
-
-    const fullName = surveyData?.volunteer_name || 'Volunteer';
-
-    // Load attendance certificate background
-    const bgResponse = await fetch('/images/certificate-attendance-background.jpg');
-    const bgBlob = await bgResponse.blob();
-    const bgBase64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(bgBlob);
-    });
-
-    // Add background image (full page)
-    doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
-
-    // Add volunteer name under "PRESENTED TO"
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(72);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 960, 540, { align: 'center' });
-
-    return doc.output('datauristring');
+  // Helper to parse volunteer name into first and last name
+  const parseVolunteerName = () => {
+    const nameParts = (surveyData?.volunteer_name || 'Volunteer').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    return { firstName, lastName };
   };
 
   const downloadCertificate = async () => {
@@ -206,29 +184,18 @@ export default function VolunteerSurveyPage() {
     
     setIsGenerating(true);
     try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [1920, 1080],
-      });
-
-      const fullName = surveyData.volunteer_name;
-
-      const bgResponse = await fetch('/images/certificate-attendance-background.jpg');
-      const bgBlob = await bgResponse.blob();
-      const bgBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(bgBlob);
-      });
-
-      doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(72);
-      doc.setTextColor(84, 88, 90);
-      doc.text(fullName, 960, 540, { align: 'center' });
-
-      doc.save(`attendance-certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      const { firstName, lastName } = parseVolunteerName();
+      const blob = await generateCertificatePDFBlob({ firstName, lastName, type: 'attendance' });
+      
+      // Create download link from blob
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `attendance-certificate-${surveyData.volunteer_name.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       toast({
         title: 'Certificate Downloaded',
@@ -251,12 +218,8 @@ export default function VolunteerSurveyPage() {
 
     setIsSendingEmail(true);
     try {
-      const pdfDataUri = await generateCertificatePDF();
-      const base64Data = pdfDataUri.split(',')[1];
-
-      const nameParts = surveyData.volunteer_name.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      const { firstName, lastName } = parseVolunteerName();
+      const base64Data = await generateCertificatePDF({ firstName, lastName, type: 'attendance' });
 
       const { data, error } = await supabase.functions.invoke('send-certificate', {
         body: {
