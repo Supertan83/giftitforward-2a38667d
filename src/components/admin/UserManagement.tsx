@@ -47,6 +47,8 @@ const createUserSchema = z.object({
 
 type VolunteerZone = 'entrance' | 'marketplace' | 'exit';
 
+type RoleFilter = 'all' | 'admin' | 'employee' | 'volunteer';
+
 export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editUser, setEditUser] = useState<UserWithRole | null>(null);
@@ -61,6 +63,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [editAssignedZone, setEditAssignedZone] = useState<VolunteerZone | 'none'>('none');
   const [editMarketplaceId, setEditMarketplaceId] = useState<string>('none');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
   const { data: users = [], isLoading } = useUsers();
   const { data: marketplaces = [] } = useMarketplaces();
@@ -72,6 +75,11 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const { toast } = useToast();
 
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
+  
+  // Filter users based on selected role
+  const filteredUsers = roleFilter === 'all' 
+    ? users 
+    : users.filter(u => u.role === roleFilter);
 
   const handleGenerateAndPreviewQR = async (user: UserWithRole) => {
     try {
@@ -227,49 +235,58 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
-          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
-                <Shield className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{adminCount}</p>
-                <p className="text-sm text-muted-foreground">Admins</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{employeeCount}</p>
-                <p className="text-sm text-muted-foreground">Employees</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent-soft flex items-center justify-center">
-                <User className="w-5 h-5 text-accent-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{volunteerCount}</p>
-                <p className="text-sm text-muted-foreground">Volunteers</p>
-              </div>
-            </div>
-          </div>
+        {/* Role Filter Tabs */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          <Button
+            variant={roleFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setRoleFilter('all')}
+            className="gap-2"
+          >
+            <Users className="w-4 h-4" />
+            All Users
+            <Badge variant="secondary" className="ml-1 bg-background/50">{users.length}</Badge>
+          </Button>
+          <Button
+            variant={roleFilter === 'admin' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setRoleFilter('admin')}
+            className="gap-2"
+          >
+            <Shield className="w-4 h-4" />
+            Admins
+            <Badge variant="secondary" className="ml-1 bg-background/50">{adminCount}</Badge>
+          </Button>
+          <Button
+            variant={roleFilter === 'employee' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setRoleFilter('employee')}
+            className="gap-2"
+          >
+            <Briefcase className="w-4 h-4" />
+            Employees
+            <Badge variant="secondary" className="ml-1 bg-background/50">{employeeCount}</Badge>
+          </Button>
+          <Button
+            variant={roleFilter === 'volunteer' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setRoleFilter('volunteer')}
+            className="gap-2"
+          >
+            <User className="w-4 h-4" />
+            Volunteers
+            <Badge variant="secondary" className="ml-1 bg-background/50">{volunteerCount}</Badge>
+          </Button>
         </div>
 
         {/* Users List */}
         <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
           <div className="p-4 md:p-6 border-b border-border">
-            <h2 className="font-display font-bold text-lg">All Users</h2>
+            <h2 className="font-display font-bold text-lg">
+              {roleFilter === 'all' ? 'All Users' : `${roleFilter.charAt(0).toUpperCase() + roleFilter.slice(1)}s`}
+            </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {users.length} total users
+              {filteredUsers.length} {roleFilter === 'all' ? 'total' : roleFilter} user{filteredUsers.length !== 1 ? 's' : ''}
             </p>
           </div>
 
@@ -277,14 +294,14 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
             <div className="p-8 text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
             </div>
-          ) : users.length === 0 ? (
+          ) : filteredUsers.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No users found</p>
+              <p>No {roleFilter === 'all' ? 'users' : `${roleFilter}s`} found</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {users.map((user, index) => (
+              {filteredUsers.map((user, index) => (
                 <motion.div
                   key={user.id}
                   initial={{ opacity: 0, y: 10 }}
