@@ -30,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "submit";
+    const action = url.searchParams.get("action") || (req.method === "GET" ? "get" : "submit");
 
     if (action === "get") {
       // Get survey by token - read-only access
