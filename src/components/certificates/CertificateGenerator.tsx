@@ -44,16 +44,16 @@ export const generateCertificateImageURL = async ({
 
   if (type === 'completion') {
     // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    ctx.font = 'bold 42px Helvetica, Arial, sans-serif';
+    ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#54585A'; // DH Grey
     ctx.textAlign = 'left';
-    ctx.fillText(fullName, 200, 550);
+    ctx.fillText(fullName, 100, 480);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
-    ctx.font = 'bold 72px Helvetica, Arial, sans-serif';
+    ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#54585A'; // DH Grey
-    ctx.textAlign = 'center';
-    ctx.fillText(fullName, 960, 540);
+    ctx.textAlign = 'left';
+    ctx.fillText(fullName, 100, 500);
   }
 
   // Return as blob URL
@@ -93,15 +93,15 @@ export const generateCertificatePDFBlob = async ({
   if (type === 'completion') {
     // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(42);
+    doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 200, 550);
+    doc.text(fullName, 100, 480);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(72);
+    doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 960, 540, { align: 'center' });
+    doc.text(fullName, 100, 500);
   }
 
   return doc.output('blob');
@@ -132,15 +132,15 @@ export const generateCertificatePDF = async ({
   if (type === 'completion') {
     // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(42);
+    doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 200, 550);
+    doc.text(fullName, 100, 480);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(72);
+    doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 960, 540, { align: 'center' });
+    doc.text(fullName, 100, 500);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
