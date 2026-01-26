@@ -22,6 +22,13 @@ interface VolunteerEntry {
   firstName: string;
   lastName: string;
   email: string;
+  eventName?: string;
+  eventDate?: string;
+  eventTime?: string;
+  eventLocation?: string;
+  gender?: string;
+  companyName?: string;
+  isDhEmployee?: boolean;
   status: 'pending' | 'creating' | 'success' | 'error' | 'exists';
   errorMessage?: string;
 }
@@ -35,12 +42,10 @@ interface EditingState {
 
 const ITEMS_PER_PAGE = 10;
 
-const SAMPLE_CSV_CONTENT = `first_name,last_name,email
-John,Doe,john.doe@company.com
-Jane,Smith,jane.smith@company.com
-Ahmed,Ali,ahmed.ali@company.com
-Sarah,Johnson,sarah.johnson@company.com
-Mohammed,Hassan,mohammed.hassan@company.com`;
+const SAMPLE_CSV_CONTENT = `first_name,last_name,email,event_name,event_date,event_time,event_location,gender,company_name,is_dh_employee
+John,Doe,john.doe@company.com,Stronger Together Marketplace,Saturday February 21 2026,7:30AM - 11:30AM,Dubai Al Twar,Male,Tech Corp,No
+Jane,Smith,jane.smith@company.com,Community Give Back,Sunday February 22 2026,9:00AM - 1:00PM,Abu Dhabi,Female,Dubai Holding,Yes
+Ahmed,Ali,ahmed.ali@company.com,Stronger Together Marketplace,Saturday February 21 2026,7:30AM - 11:30AM,Dubai Al Twar,Male,External Partner,No`;
 
 export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
   const [volunteers, setVolunteers] = useState<VolunteerEntry[]>([]);
@@ -63,15 +68,43 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
     return emailRegex.test(email);
   };
 
-  // Parse CSV content
+  // Parse CSV content with proper handling of quoted fields
   const parseCSV = useCallback((content: string): VolunteerEntry[] => {
     const lines = content.trim().split('\n');
     if (lines.length < 2) return [];
 
-    const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+    // Parse CSV line handling quoted fields with commas
+    const parseCSVLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim().replace(/^["']|["']$/g, ''));
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim().replace(/^["']|["']$/g, ''));
+      return result;
+    };
+
+    const headers = parseCSVLine(lines[0].toLowerCase());
     const firstNameIdx = headers.findIndex(h => h.includes('first') && h.includes('name') || h === 'firstname' || h === 'first_name');
     const lastNameIdx = headers.findIndex(h => h.includes('last') && h.includes('name') || h === 'lastname' || h === 'last_name');
     const emailIdx = headers.findIndex(h => h.includes('email') || h === 'e-mail');
+    const eventNameIdx = headers.findIndex(h => h.includes('event') && h.includes('name') || h === 'event_name');
+    const eventDateIdx = headers.findIndex(h => h.includes('event') && h.includes('date') || h === 'event_date');
+    const eventTimeIdx = headers.findIndex(h => h.includes('event') && h.includes('time') || h === 'event_time');
+    const eventLocationIdx = headers.findIndex(h => h.includes('event') && h.includes('location') || h === 'event_location' || h === 'location');
+    const genderIdx = headers.findIndex(h => h === 'gender' || h.includes('gender'));
+    const companyNameIdx = headers.findIndex(h => h.includes('company') && h.includes('name') || h === 'company_name' || h === 'company');
+    const isDhEmployeeIdx = headers.findIndex(h => h.includes('dh_employee') || h.includes('is_employee') || h === 'is_dh_employee');
 
     if (emailIdx === -1) {
       toast({
@@ -86,11 +119,14 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
     const seenEmails = new Set<string>();
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
-      const email = values[emailIdx]?.toLowerCase();
+      const values = parseCSVLine(lines[i]);
+      const email = values[emailIdx]?.toLowerCase().trim();
 
       if (!email || !isValidEmail(email)) continue;
       if (seenEmails.has(email)) continue;
+
+      const isDhEmployeeValue = isDhEmployeeIdx >= 0 ? values[isDhEmployeeIdx]?.toLowerCase() : '';
+      const isDhEmployee = isDhEmployeeValue === 'yes' || isDhEmployeeValue === 'true' || isDhEmployeeValue === '1';
 
       seenEmails.add(email);
       entries.push({
@@ -98,6 +134,13 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
         firstName: firstNameIdx >= 0 ? values[firstNameIdx] || '' : '',
         lastName: lastNameIdx >= 0 ? values[lastNameIdx] || '' : '',
         email,
+        eventName: eventNameIdx >= 0 ? values[eventNameIdx] || undefined : undefined,
+        eventDate: eventDateIdx >= 0 ? values[eventDateIdx] || undefined : undefined,
+        eventTime: eventTimeIdx >= 0 ? values[eventTimeIdx] || undefined : undefined,
+        eventLocation: eventLocationIdx >= 0 ? values[eventLocationIdx] || undefined : undefined,
+        gender: genderIdx >= 0 ? values[genderIdx] || undefined : undefined,
+        companyName: companyNameIdx >= 0 ? values[companyNameIdx] || undefined : undefined,
+        isDhEmployee,
         status: 'pending',
       });
     }
@@ -198,6 +241,13 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
             email: v.email,
             firstName: v.firstName,
             lastName: v.lastName,
+            eventName: v.eventName,
+            eventDate: v.eventDate,
+            eventTime: v.eventTime,
+            eventLocation: v.eventLocation,
+            gender: v.gender,
+            companyName: v.companyName,
+            isDhEmployee: v.isDhEmployee,
           })),
         },
       });

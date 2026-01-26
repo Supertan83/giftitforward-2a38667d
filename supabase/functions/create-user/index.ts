@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, password, role, firstName, lastName } = body;
+    const { email, password, role, firstName, lastName, gender, companyName, isDhEmployee, eventName } = body;
 
     // Comprehensive input validation
     if (!email || typeof email !== 'string') {
@@ -192,6 +192,26 @@ Deno.serve(async (req) => {
         console.error('QR card creation error:', qrError);
         // Don't fail the whole operation, just log the error
         volunteerQRCode = null;
+      }
+
+      // Also create pending_volunteers record for tracking
+      const { error: pvError } = await supabaseAdmin
+        .from('pending_volunteers')
+        .insert({
+          email: email.trim().toLowerCase(),
+          first_name: firstName?.trim() || '',
+          last_name: lastName?.trim() || '',
+          status: 'approved',
+          source: 'manual',
+          created_user_id: newUser.user.id,
+          gender: gender?.trim() || null,
+          external_company: companyName?.trim() || null,
+          is_employee: isDhEmployee === true || String(isDhEmployee ?? '').toLowerCase() === 'yes',
+          events_list: eventName?.trim() || null,
+        });
+
+      if (pvError) {
+        console.error('Pending volunteer creation error:', pvError);
       }
     }
 
