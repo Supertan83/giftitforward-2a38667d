@@ -94,6 +94,40 @@ Deno.serve(async (req) => {
     
     console.log(`Deleted ${deletedRolesCount ?? 'unknown'} role(s) for user ${userId}`);
 
+    // Delete volunteer_qr_cards associated with this user via pending_volunteers
+    // First, get the pending_volunteer record for this user
+    const { data: pendingVolunteer } = await supabaseAdmin
+      .from('pending_volunteers')
+      .select('id')
+      .eq('created_user_id', userId)
+      .maybeSingle()
+
+    if (pendingVolunteer) {
+      // Delete volunteer_qr_cards linked to this pending_volunteer
+      const { error: qrDeleteError, count: deletedQrCount } = await supabaseAdmin
+        .from('volunteer_qr_cards')
+        .delete()
+        .eq('volunteer_id', pendingVolunteer.id)
+
+      if (qrDeleteError) {
+        console.error('QR card deletion error:', qrDeleteError);
+      } else {
+        console.log(`Deleted ${deletedQrCount ?? 0} QR card(s) for pending volunteer ${pendingVolunteer.id}`);
+      }
+
+      // Delete the pending_volunteers record
+      const { error: pvDeleteError } = await supabaseAdmin
+        .from('pending_volunteers')
+        .delete()
+        .eq('id', pendingVolunteer.id)
+
+      if (pvDeleteError) {
+        console.error('Pending volunteer deletion error:', pvDeleteError);
+      } else {
+        console.log(`Deleted pending volunteer record ${pendingVolunteer.id}`);
+      }
+    }
+
     // Delete user from auth
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
 

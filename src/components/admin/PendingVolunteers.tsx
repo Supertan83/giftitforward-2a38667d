@@ -18,6 +18,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -142,6 +152,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [eventFilter, setEventFilter] = useState<string>('all');
   const [showCertificatePreview, setShowCertificatePreview] = useState(false);
   const [certificatePreviewVolunteer, setCertificatePreviewVolunteer] = useState<PendingVolunteer | null>(null);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [volunteerToDelete, setVolunteerToDelete] = useState<PendingVolunteer | null>(null);
+  const [showBulkDeleteConfirmDialog, setShowBulkDeleteConfirmDialog] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -450,13 +463,25 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.size} volunteer(s)? This will also delete their user accounts.`)) return;
+    setShowBulkDeleteConfirmDialog(true);
+  };
+
+  const confirmBulkDelete = () => {
+    setShowBulkDeleteConfirmDialog(false);
     bulkDeleteMutation.mutate(Array.from(selectedIds));
   };
 
   const handleDelete = (volunteer: PendingVolunteer) => {
-    if (!confirm(`Are you sure you want to delete ${volunteer.first_name} ${volunteer.last_name}? This will also delete their user account.`)) return;
-    deleteMutation.mutate(volunteer.id);
+    setVolunteerToDelete(volunteer);
+    setShowDeleteConfirmDialog(true);
+  };
+
+  const confirmDelete = () => {
+    if (volunteerToDelete) {
+      deleteMutation.mutate(volunteerToDelete.id);
+    }
+    setShowDeleteConfirmDialog(false);
+    setVolunteerToDelete(null);
   };
 
   const toggleSelect = (id: string) => {
@@ -1243,6 +1268,52 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           surveyCompleted={!!certificatePreviewVolunteer.certificate_sent_at}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this volunteer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete{' '}
+              <span className="font-semibold">
+                {volunteerToDelete?.first_name} {volunteerToDelete?.last_name}
+              </span>{' '}
+              ({volunteerToDelete?.email}) and their user account from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setVolunteerToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={showBulkDeleteConfirmDialog} onOpenChange={setShowBulkDeleteConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete {selectedIds.size} volunteer(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the selected volunteers and their user accounts from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete {selectedIds.size} volunteer(s)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
