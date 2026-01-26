@@ -47,13 +47,13 @@ export const generateCertificateImageURL = async ({
     ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#54585A'; // DH Grey
     ctx.textAlign = 'left';
-    ctx.fillText(fullName, 60, 620);
+    ctx.fillText(fullName, 160, 600);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#54585A'; // DH Grey
     ctx.textAlign = 'left';
-    ctx.fillText(fullName, 60, 640);
+    ctx.fillText(fullName, 160, 620);
   }
 
   // Return as blob URL
@@ -95,13 +95,13 @@ export const generateCertificatePDFBlob = async ({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 60, 620);
+    doc.text(fullName, 160, 600);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 60, 640);
+    doc.text(fullName, 160, 620);
   }
 
   return doc.output('blob');
@@ -134,13 +134,13 @@ export const generateCertificatePDF = async ({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 60, 620);
+    doc.text(fullName, 160, 600);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(48);
     doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 60, 640);
+    doc.text(fullName, 160, 620);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
