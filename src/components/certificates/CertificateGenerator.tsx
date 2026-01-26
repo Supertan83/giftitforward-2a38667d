@@ -32,29 +32,21 @@ export const generateCertificateImageURL = async ({
   
   if (!ctx) throw new Error('Could not get canvas context');
 
-  // Load background image
+  // Load background image with cache busting
   const backgroundPath = type === 'completion' 
-    ? '/images/certificate-completion-background.jpg'
-    : '/images/certificate-attendance-background.jpg';
+    ? '/images/certificate-completion-background.jpg?v=3'
+    : '/images/certificate-attendance-background.jpg?v=3';
   
   const img = await loadImage(backgroundPath);
   ctx.drawImage(img, 0, 0, 1920, 1080);
 
   const fullName = `${firstName} ${lastName}`;
 
-  if (type === 'completion') {
-    // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    ctx.font = 'bold 42px Helvetica, Arial, sans-serif';
-    ctx.fillStyle = '#54585A'; // DH Grey
-    ctx.textAlign = 'left';
-    ctx.fillText(fullName, 200, 550);
-  } else {
-    // For attendance certificate - place name under "PRESENTED TO"
-    ctx.font = 'bold 72px Helvetica, Arial, sans-serif';
-    ctx.fillStyle = '#54585A'; // DH Grey
-    ctx.textAlign = 'center';
-    ctx.fillText(fullName, 960, 540);
-  }
+  // Both certificate types now use centered name placement under "PRESENTED TO"
+  ctx.font = 'bold 60px Helvetica, Arial, sans-serif';
+  ctx.fillStyle = '#FFFFFF'; // White text on dark background
+  ctx.textAlign = 'center';
+  ctx.fillText(fullName, 960, 390);
 
   // Return as blob URL
   return new Promise((resolve, reject) => {
@@ -80,29 +72,21 @@ export const generateCertificatePDFBlob = async ({
     format: [1920, 1080],
   });
 
-  // Load background image
+  // Load background image with cache busting
   const backgroundPath = type === 'completion' 
-    ? '/images/certificate-completion-background.jpg'
-    : '/images/certificate-attendance-background.jpg';
+    ? '/images/certificate-completion-background.jpg?v=3'
+    : '/images/certificate-attendance-background.jpg?v=3';
   
   const img = await loadImage(backgroundPath);
   doc.addImage(img, 'JPEG', 0, 0, 1920, 1080);
 
   const fullName = `${firstName} ${lastName}`;
 
-  if (type === 'completion') {
-    // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(42);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 200, 550);
-  } else {
-    // For attendance certificate - place name under "PRESENTED TO"
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(72);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 960, 540, { align: 'center' });
-  }
+  // Both certificate types now use centered name placement under "PRESENTED TO"
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(60);
+  doc.setTextColor(255, 255, 255); // White text on dark background
+  doc.text(fullName, 960, 390, { align: 'center' });
 
   return doc.output('blob');
 };
@@ -119,29 +103,21 @@ export const generateCertificatePDF = async ({
     format: [1920, 1080],
   });
 
-  // Load background image
+  // Load background image with cache busting
   const backgroundPath = type === 'completion' 
-    ? '/images/certificate-completion-background.jpg'
-    : '/images/certificate-attendance-background.jpg';
+    ? '/images/certificate-completion-background.jpg?v=3'
+    : '/images/certificate-attendance-background.jpg?v=3';
   
   const img = await loadImage(backgroundPath);
   doc.addImage(img, 'JPEG', 0, 0, 1920, 1080);
 
   const fullName = `${firstName} ${lastName}`;
 
-  if (type === 'completion') {
-    // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(42);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 200, 550);
-  } else {
-    // For attendance certificate - place name under "PRESENTED TO"
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(72);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 960, 540, { align: 'center' });
-  }
+  // Both certificate types now use centered name placement under "PRESENTED TO"
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(60);
+  doc.setTextColor(255, 255, 255); // White text on dark background
+  doc.text(fullName, 960, 390, { align: 'center' });
 
   // Return base64 string (without data:application/pdf;base64, prefix)
   return doc.output('datauristring').split(',')[1];
