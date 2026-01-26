@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -37,6 +37,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { CertificatePreviewDialog } from '@/components/certificates/CertificatePreviewDialog';
 
 interface VolunteerQRCard {
   unique_id: string;
@@ -139,6 +140,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [eventFilter, setEventFilter] = useState<string>('all');
+  const [showCertificatePreview, setShowCertificatePreview] = useState(false);
+  const [certificatePreviewVolunteer, setCertificatePreviewVolunteer] = useState<PendingVolunteer | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -760,6 +763,22 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     </TooltipTrigger>
                                     <TooltipContent>View Details</TooltipContent>
                                   </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => {
+                                          setCertificatePreviewVolunteer(volunteer);
+                                          setShowCertificatePreview(true);
+                                        }}
+                                      >
+                                        <Award className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>View Certificates</TooltipContent>
+                                  </Tooltip>
                                   {volunteer.temp_password && (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -1212,6 +1231,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Certificate Preview Dialog */}
+      {certificatePreviewVolunteer && (
+        <CertificatePreviewDialog
+          open={showCertificatePreview}
+          onOpenChange={setShowCertificatePreview}
+          firstName={certificatePreviewVolunteer.first_name}
+          lastName={certificatePreviewVolunteer.last_name}
+          trainingCompleted={certificatePreviewVolunteer.training_completed ?? false}
+          surveyCompleted={!!certificatePreviewVolunteer.certificate_sent_at}
+        />
+      )}
     </div>
   );
 };

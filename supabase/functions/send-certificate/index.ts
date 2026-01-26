@@ -11,11 +11,14 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+type CertificateType = 'completion' | 'attendance';
+
 interface SendCertificateRequest {
   firstName: string;
   lastName: string;
   email: string;
   certificateBase64: string;
+  certificateType?: CertificateType;
   marketplaceId?: string;
   hoursWorked?: number;
 }
@@ -94,95 +97,234 @@ async function getMarketplaceInfo(marketplaceId: string | null | undefined): Pro
   }
 }
 
-// Send email via HubSpot transactional API (no attachment support)
-async function sendViaHubSpot(
-  templateId: string,
-  recipientEmail: string,
-  customProperties: Record<string, string>
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // First, ensure contact exists in HubSpot
-    const searchResponse = await fetch(
-      'https://api.hubapi.com/crm/v3/objects/contacts/search',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          filterGroups: [{
-            filters: [{
-              propertyName: 'email',
-              operator: 'EQ',
-              value: recipientEmail,
-            }]
-          }]
-        })
-      }
-    );
+// Generate email HTML for completion certificate
+function getCompletionEmailHtml(
+  cleanFirstName: string,
+  heroImageUrl: string,
+  dubaiHoldingLogoUrl: string,
+  participationDetails: string
+): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+        <tr>
+          <td align="center" style="padding: 20px 0;">
+            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+              
+              <!-- Hero Image -->
+              <tr>
+                <td>
+                  <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                </td>
+              </tr>
+              
+              <!-- Execution Partner Label -->
+              <tr>
+                <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                  <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                </td>
+              </tr>
+              
+              <!-- Main Title -->
+              <tr>
+                <td style="padding: 0 30px 20px 30px; text-align: center;">
+                  <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                    Congratulations, ${cleanFirstName}!
+                  </h1>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding: 0 30px 15px 30px;">
+                  <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                    You've successfully completed the <strong>Circular Economy Training Module</strong>.
+                  </p>
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 0 30px 20px 30px;">
+                  <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                    Your Certificate of Completion is attached to this email. This certificate recognizes your commitment to understanding circular economy principles.
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- What You've Learned -->
+              <tr>
+                <td style="padding: 0 30px 20px 30px;">
+                  <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What You've Learned:</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
+                      <li>The fundamentals of the Circular Economy</li>
+                      <li>How Gift It Forward redistributes surplus items</li>
+                      <li>The impact of avoided emissions</li>
+                      <li>Your role as a Circular Economy advocate</li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Closing -->
+              <tr>
+                <td style="padding: 0 30px 20px 30px;">
+                  <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                    Thank you for taking the time to learn about sustainable practices. We look forward to seeing you at our upcoming Gift It Forward events!
+                  </p>
+                  <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p>
+                  <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="50%" valign="middle">
+                        <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                      </td>
+                      <td width="50%" valign="middle" style="text-align: right;">
+                        <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}
 
-    const searchData = await searchResponse.json();
-    
-    // Create contact if doesn't exist
-    if (!searchData.results || searchData.results.length === 0) {
-      const createResponse = await fetch(
-        'https://api.hubapi.com/crm/v3/objects/contacts',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            properties: {
-              email: recipientEmail,
-              firstname: customProperties.first_name || '',
-              lastname: customProperties.last_name || '',
-            }
-          })
-        }
-      );
-      
-      if (!createResponse.ok) {
-        const errorData = await createResponse.json();
-        console.error('Failed to create HubSpot contact:', errorData);
-      }
-    }
-
-    // Send transactional email
-    const emailResponse = await fetch(
-      'https://api.hubapi.com/marketing/v3/transactional/single-email/send',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${HUBSPOT_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          emailId: parseInt(templateId),
-          message: {
-            to: recipientEmail,
-          },
-          customProperties: customProperties,
-          contactProperties: customProperties
-        })
-      }
-    );
-
-    if (!emailResponse.ok) {
-      const errorData = await emailResponse.json();
-      console.error('HubSpot email send failed:', errorData);
-      return { success: false, error: errorData.message || 'HubSpot email failed' };
-    }
-
-    const result = await emailResponse.json();
-    console.log('HubSpot email sent successfully:', result);
-    return { success: true };
-  } catch (error) {
-    console.error('HubSpot email error:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown HubSpot error' };
-  }
+// Generate email HTML for attendance certificate
+function getAttendanceEmailHtml(
+  cleanFirstName: string,
+  heroImageUrl: string,
+  dubaiHoldingLogoUrl: string,
+  participationDetails: string
+): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+        <tr>
+          <td align="center" style="padding: 20px 0;">
+            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+              
+              <!-- Hero Image -->
+              <tr>
+                <td>
+                  <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                </td>
+              </tr>
+              
+              <!-- Execution Partner Label -->
+              <tr>
+                <td style="padding: 20px 30px 10px 30px; text-align: center;">
+                  <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                </td>
+              </tr>
+              
+              <!-- Main Title -->
+              <tr>
+                <td style="padding: 0 30px 20px 30px; text-align: center;">
+                  <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
+                    Thank You, ${cleanFirstName}!
+                  </h1>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding: 0 30px 15px 30px;">
+                  <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                    Thank you for your dedication as a <strong>Gift It Forward volunteer</strong>. Your time and effort have made a meaningful impact on our community.
+                  </p>
+                </td>
+              </tr>
+              
+              ${participationDetails ? `
+              <tr>
+                <td style="padding: 0 30px 15px 30px;">
+                  ${participationDetails}
+                </td>
+              </tr>
+              ` : ''}
+              
+              <tr>
+                <td style="padding: 0 30px 20px 30px;">
+                  <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                    Your Certificate of Attendance is attached to this email. This certificate recognizes your commitment to sustainability and giving back to the community.
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Impact Box -->
+              <tr>
+                <td style="padding: 0 30px 20px 30px;">
+                  <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Impact:</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
+                      <li>Helped redistribute surplus items to those in need</li>
+                      <li>Contributed to waste reduction and sustainability</li>
+                      <li>Supported our community outreach efforts</li>
+                      <li>Made a positive difference in someone's life</li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Closing -->
+              <tr>
+                <td style="padding: 0 30px 20px 30px;">
+                  <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
+                    We hope to see you again at future Gift It Forward events. Together, we're making a positive impact on communities and the environment.
+                  </p>
+                  <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p>
+                  <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="50%" valign="middle">
+                        <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
+                      </td>
+                      <td width="50%" valign="middle" style="text-align: right;">
+                        <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -192,14 +334,22 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { firstName, lastName, email, certificateBase64, marketplaceId, hoursWorked }: SendCertificateRequest = await req.json();
+    const { 
+      firstName, 
+      lastName, 
+      email, 
+      certificateBase64, 
+      certificateType = 'completion',
+      marketplaceId, 
+      hoursWorked 
+    }: SendCertificateRequest = await req.json();
 
     // Trim whitespace from names
     const cleanFirstName = (firstName || '').trim();
     const cleanLastName = (lastName || '').trim();
     const cleanEmail = (email || '').trim();
 
-    console.log(`Sending certificate to ${cleanEmail} for ${cleanFirstName} ${cleanLastName}, marketplace: ${marketplaceId}`);
+    console.log(`Sending ${certificateType} certificate to ${cleanEmail} for ${cleanFirstName} ${cleanLastName}, marketplace: ${marketplaceId}`);
 
     // Validate inputs
     if (!cleanFirstName || !cleanEmail || !certificateBase64) {
@@ -218,7 +368,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Marketplace info for certificate:', marketplace);
 
     const fullName = cleanLastName ? `${cleanFirstName} ${cleanLastName}` : cleanFirstName;
-    const filename = `certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+    const filename = `${certificateType}-certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
 
     // Get Supabase URL for email assets
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -245,17 +395,17 @@ const handler = async (req: Request): Promise<Response> => {
       participationDetails += `.</p>`;
     }
 
-    // Check email configuration
-    const emailConfig = await getEmailConfig('certificate');
-    const useHubSpot = emailConfig?.enabled && emailConfig?.template_id && HUBSPOT_API_KEY;
+    // Get email HTML based on certificate type
+    const emailHtml = certificateType === 'attendance'
+      ? getAttendanceEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails)
+      : getCompletionEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails);
 
-    // Note: HubSpot doesn't support attachments, so we always use Resend for certificate emails
-    if (useHubSpot) {
-      console.log('Note: HubSpot is configured for certificate emails, but attachments require Resend');
-      console.log('Falling back to Resend for certificate email with PDF attachment');
-    }
+    // Email subject based on certificate type
+    const emailSubject = certificateType === 'attendance'
+      ? 'Your Gift It Forward Certificate of Attendance'
+      : 'Your Circular Economy Training Certificate of Completion';
 
-    console.log(`Attempting to send email to ${cleanEmail} with filename ${filename}`);
+    console.log(`Attempting to send ${certificateType} certificate email to ${cleanEmail} with filename ${filename}`);
 
     // Try primary sender first, fallback if domain not verified
     const primarySender = "Gift It Forward <giftitforward@dubaiholding.com>";
@@ -265,117 +415,8 @@ const handler = async (req: Request): Promise<Response> => {
       from: primarySender,
       to: [cleanEmail],
       bcc: ['giftitforward@dubaiholding.com'],
-      subject: "Your Circular Economy Training Certificate",
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
-            <tr>
-              <td align="center" style="padding: 20px 0;">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
-                  
-                  <!-- Hero Image -->
-                  <tr>
-                    <td>
-                      <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
-                    </td>
-                  </tr>
-                  
-                  <!-- Execution Partner Label -->
-                  <tr>
-                    <td style="padding: 20px 30px 10px 30px; text-align: center;">
-                      <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Main Title -->
-                  <tr>
-                    <td style="padding: 0 30px 20px 30px; text-align: center;">
-                      <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
-                        Congratulations, ${cleanFirstName}!
-                      </h1>
-                    </td>
-                  </tr>
-                  
-                  <!-- Content -->
-                  <tr>
-                    <td style="padding: 0 30px 15px 30px;">
-                      <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                        You've successfully completed the <strong>Circular Economy Training Module</strong> and served as a valued Gift It Forward volunteer.
-                      </p>
-                    </td>
-                  </tr>
-                  
-                  ${participationDetails ? `
-                  <tr>
-                    <td style="padding: 0 30px 15px 30px;">
-                      ${participationDetails}
-                    </td>
-                  </tr>
-                  ` : ''}
-                  
-                  <tr>
-                    <td style="padding: 0 30px 20px 30px;">
-                      <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                        Your certificate of completion is attached to this email. This certificate recognizes your commitment to understanding circular economy principles and your contribution as a Gift It Forward volunteer.
-                      </p>
-                    </td>
-                  </tr>
-                  
-                  <!-- What You've Learned -->
-                  <tr>
-                    <td style="padding: 0 30px 20px 30px;">
-                      <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
-                        <h3 style="margin: 0 0 12px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What You've Learned:</h3>
-                        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
-                          <li>The fundamentals of the Circular Economy</li>
-                          <li>How Gift It Forward redistributes surplus items</li>
-                          <li>The impact of avoided emissions</li>
-                          <li>Your role as a Circular Economy advocate</li>
-                        </ul>
-                      </div>
-                    </td>
-                  </tr>
-                  
-                  <!-- Closing -->
-                  <tr>
-                    <td style="padding: 0 30px 20px 30px;">
-                      <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                        Thank you for being part of this important initiative. Together, we're making a positive impact on communities and the environment.
-                      </p>
-                      <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p>
-                      <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Footer -->
-                  <tr>
-                    <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
-                      <table width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                          <td width="50%" valign="middle">
-                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
-                          </td>
-                          <td width="50%" valign="middle" style="text-align: right;">
-                            <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                  
-                </table>
-              </td>
-            </tr>
-          </table>
-        </body>
-        </html>
-      `,
+      subject: emailSubject,
+      html: emailHtml,
       attachments: [
         {
           filename: filename,
@@ -397,77 +438,8 @@ const handler = async (req: Request): Promise<Response> => {
           from: fallbackSender,
           to: [cleanEmail],
           bcc: ['giftitforward@dubaiholding.com'],
-          subject: "Your Circular Economy Training Certificate",
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
-                <tr>
-                  <td align="center" style="padding: 20px 0;">
-                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
-                      <!-- Hero Image -->
-                      <tr>
-                        <td>
-                          <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
-                        </td>
-                      </tr>
-                      <!-- Execution Partner Label -->
-                      <tr>
-                        <td style="padding: 20px 30px 10px 30px; text-align: center;">
-                          <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
-                        </td>
-                      </tr>
-                      <!-- Main Title -->
-                      <tr>
-                        <td style="padding: 0 30px 20px 30px; text-align: center;">
-                          <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
-                            Congratulations, ${cleanFirstName}!
-                          </h1>
-                        </td>
-                      </tr>
-                      <!-- Content -->
-                      <tr>
-                        <td style="padding: 0 30px 15px 30px;">
-                          <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                            You've successfully completed the <strong>Circular Economy Training Module</strong> and served as a valued Gift It Forward volunteer.
-                          </p>
-                        </td>
-                      </tr>
-                      ${participationDetails ? `<tr><td style="padding: 0 30px 15px 30px;">${participationDetails}</td></tr>` : ''}
-                      <tr>
-                        <td style="padding: 0 30px 20px 30px;">
-                          <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                            Your certificate of completion is attached to this email.
-                          </p>
-                        </td>
-                      </tr>
-                      <!-- Footer -->
-                      <tr>
-                        <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
-                          <table width="100%" cellpadding="0" cellspacing="0">
-                            <tr>
-                              <td width="50%" valign="middle">
-                                <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="30" style="display: block;" />
-                              </td>
-                              <td width="50%" valign="middle" style="text-align: right;">
-                                <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-            </body>
-            </html>
-          `,
+          subject: emailSubject,
+          html: emailHtml,
           attachments: [{ filename: filename, content: certificateBase64 }],
         });
       }
@@ -489,7 +461,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Email sent successfully:", emailResponse.data?.id);
 
     return new Response(
-      JSON.stringify({ success: true, id: emailResponse.data?.id, provider: 'resend' }),
+      JSON.stringify({ success: true, id: emailResponse.data?.id, provider: 'resend', certificateType }),
       {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },

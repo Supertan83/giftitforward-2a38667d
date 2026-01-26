@@ -174,16 +174,14 @@ export default function VolunteerSurveyPage() {
   const generateCertificatePDF = async (): Promise<string> => {
     const doc = new jsPDF({
       orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4',
+      unit: 'px',
+      format: [1920, 1080],
     });
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
     const fullName = surveyData?.volunteer_name || 'Volunteer';
 
-    // Load background image
-    const bgResponse = await fetch('/images/certificate-background.png');
+    // Load attendance certificate background
+    const bgResponse = await fetch('/images/certificate-attendance-background.jpg');
     const bgBlob = await bgResponse.blob();
     const bgBase64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
@@ -192,13 +190,13 @@ export default function VolunteerSurveyPage() {
     });
 
     // Add background image (full page)
-    doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+    doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
 
-    // Add volunteer name in the middle
+    // Add volunteer name under "PRESENTED TO"
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(0, 0, 0);
-    doc.text(fullName, pageWidth / 2, 100, { align: 'center' });
+    doc.setFontSize(72);
+    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+    doc.text(fullName, 960, 540, { align: 'center' });
 
     return doc.output('datauristring');
   };
@@ -210,15 +208,13 @@ export default function VolunteerSurveyPage() {
     try {
       const doc = new jsPDF({
         orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
+        unit: 'px',
+        format: [1920, 1080],
       });
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
       const fullName = surveyData.volunteer_name;
 
-      const bgResponse = await fetch('/images/certificate-background.png');
+      const bgResponse = await fetch('/images/certificate-attendance-background.jpg');
       const bgBlob = await bgResponse.blob();
       const bgBase64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -226,13 +222,13 @@ export default function VolunteerSurveyPage() {
         reader.readAsDataURL(bgBlob);
       });
 
-      doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+      doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(28);
-      doc.setTextColor(0, 0, 0);
-      doc.text(fullName, pageWidth / 2, 100, { align: 'center' });
+      doc.setFontSize(72);
+      doc.setTextColor(84, 88, 90);
+      doc.text(fullName, 960, 540, { align: 'center' });
 
-      doc.save(`certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      doc.save(`attendance-certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`);
 
       toast({
         title: 'Certificate Downloaded',
@@ -268,6 +264,7 @@ export default function VolunteerSurveyPage() {
           lastName: lastName.trim(),
           email: surveyData.volunteer_email.trim(),
           certificateBase64: base64Data,
+          certificateType: 'attendance', // Attendance certificate sent after survey completion
         },
       });
 
