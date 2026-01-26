@@ -40,18 +40,23 @@ export const generateCertificateImageURL = async ({
   const img = await loadImage(backgroundPath);
   ctx.drawImage(img, 0, 0, 1920, 1080);
 
-  // Set font for name
-  ctx.font = 'bold 72px Helvetica, Arial, sans-serif';
-  ctx.fillStyle = '#54585A'; // DH Grey
-  ctx.textAlign = 'center';
-
   const fullName = `${firstName} ${lastName}`;
 
   if (type === 'completion') {
-    // For completion certificate - place name where "(First Name) (Last Name)" placeholder is
-    ctx.fillText(fullName, 960, 460);
+    // Cover the "(First Name) (Last Name)" placeholder with white rectangle
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(300, 365, 700, 60);
+    
+    // Write volunteer name over the covered area
+    ctx.font = 'bold 36px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#54585A'; // DH Grey
+    ctx.textAlign = 'left';
+    ctx.fillText(fullName, 310, 405);
   } else {
     // For attendance certificate - place name under "PRESENTED TO"
+    ctx.font = 'bold 72px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#54585A'; // DH Grey
+    ctx.textAlign = 'center';
     ctx.fillText(fullName, 960, 540);
   }
 
@@ -87,16 +92,23 @@ export const generateCertificatePDFBlob = async ({
   const img = await loadImage(backgroundPath);
   doc.addImage(img, 'JPEG', 0, 0, 1920, 1080);
 
-  // Set font for name
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(72);
-  doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-
   const fullName = `${firstName} ${lastName}`;
 
   if (type === 'completion') {
-    doc.text(fullName, 960, 460, { align: 'center' });
+    // Cover the "(First Name) (Last Name)" placeholder with white rectangle
+    doc.setFillColor(255, 255, 255);
+    doc.rect(300, 365, 700, 60, 'F');
+    
+    // Write volunteer name over the covered area
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(36);
+    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+    doc.text(fullName, 310, 405);
   } else {
+    // For attendance certificate - place name under "PRESENTED TO"
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(72);
+    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
     doc.text(fullName, 960, 540, { align: 'center' });
   }
 
@@ -123,16 +135,23 @@ export const generateCertificatePDF = async ({
   const img = await loadImage(backgroundPath);
   doc.addImage(img, 'JPEG', 0, 0, 1920, 1080);
 
-  // Set font for name
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(72);
-  doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-
   const fullName = `${firstName} ${lastName}`;
 
   if (type === 'completion') {
-    doc.text(fullName, 960, 460, { align: 'center' });
+    // Cover the "(First Name) (Last Name)" placeholder with white rectangle
+    doc.setFillColor(255, 255, 255);
+    doc.rect(300, 365, 700, 60, 'F');
+    
+    // Write volunteer name over the covered area
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(36);
+    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+    doc.text(fullName, 310, 405);
   } else {
+    // For attendance certificate - place name under "PRESENTED TO"
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(72);
+    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
     doc.text(fullName, 960, 540, { align: 'center' });
   }
 
