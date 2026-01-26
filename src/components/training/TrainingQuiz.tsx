@@ -138,16 +138,14 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
   const generateCertificatePDF = async (): Promise<string> => {
     const doc = new jsPDF({
       orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4',
+      unit: 'px',
+      format: [1920, 1080],
     });
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
     const fullName = `${userInfo.firstName} ${userInfo.lastName}`;
 
-    // Load background image
-    const bgResponse = await fetch('/images/certificate-background.png');
+    // Load background image - use completion certificate background
+    const bgResponse = await fetch('/images/certificate-completion-background.jpg');
     const bgBlob = await bgResponse.blob();
     const bgBase64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
@@ -156,13 +154,13 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     });
     
     // Add background image (full page)
-    doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+    doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
 
-    // Add volunteer name in the middle
+    // Add volunteer name where "(First Name) (Last Name)" placeholder is
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(0, 0, 0);
-    doc.text(fullName, pageWidth / 2, 100, { align: 'center' });
+    doc.setFontSize(72);
+    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+    doc.text(fullName, 960, 460, { align: 'center' });
 
     return doc.output('datauristring');
   };
@@ -172,15 +170,13 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     try {
       const doc = new jsPDF({
         orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
+        unit: 'px',
+        format: [1920, 1080],
       });
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
       const fullName = `${userInfo.firstName} ${userInfo.lastName}`;
 
-      const bgResponse = await fetch('/images/certificate-background.png');
+      const bgResponse = await fetch('/images/certificate-completion-background.jpg');
       const bgBlob = await bgResponse.blob();
       const bgBase64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -188,13 +184,13 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
         reader.readAsDataURL(bgBlob);
       });
       
-      doc.addImage(bgBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+      doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(28);
-      doc.setTextColor(0, 0, 0);
-      doc.text(fullName, pageWidth / 2, 100, { align: 'center' });
+      doc.setFontSize(72);
+      doc.setTextColor(84, 88, 90);
+      doc.text(fullName, 960, 460, { align: 'center' });
 
-      doc.save(`certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      doc.save(`completion-certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`);
 
       toast({
         title: 'Certificate Downloaded',
@@ -225,6 +221,7 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
           lastName: userInfo.lastName?.trim() || '',
           email: userInfo.email?.trim() || '',
           certificateBase64: base64Data,
+          certificateType: 'completion', // Completion certificate sent after training
         },
       });
 
