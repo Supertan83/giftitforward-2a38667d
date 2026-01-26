@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { ArrowLeft, QrCode, Users, Search, Loader2, User, Clock, MapPin, Plus, UserPlus, Printer } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -34,6 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 
 interface VolunteerQRCard {
   id: string;
@@ -197,6 +199,14 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
       return matchesSearch && matchesStatus;
     });
   }, [qrCards, searchQuery, statusFilter]);
+
+  // Pagination
+  const pagination = usePagination(filteredCards, { defaultPageSize: 25 });
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    pagination.setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -462,29 +472,44 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
               <p>No QR cards found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={filteredCards.length > 0 && selectedCardIds.size === filteredCards.length}
-                        onCheckedChange={toggleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead>QR Card ID</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Volunteer</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Marketplace</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCards.map((card) => {
-                    const isFamily = isFamilyCard(card.unique_id);
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={pagination.paginatedItems.length > 0 && pagination.paginatedItems.every(c => selectedCardIds.has(c.id))}
+                          onCheckedChange={() => {
+                            const pageCardIds = pagination.paginatedItems.map(c => c.id);
+                            const allSelected = pageCardIds.every(id => selectedCardIds.has(id));
+                            setSelectedCardIds(prev => {
+                              const next = new Set(prev);
+                              pageCardIds.forEach(id => {
+                                if (allSelected) {
+                                  next.delete(id);
+                                } else {
+                                  next.add(id);
+                                }
+                              });
+                              return next;
+                            });
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead>QR Card ID</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Volunteer</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Marketplace</TableHead>
+                      <TableHead>Hours</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagination.paginatedItems.map((card) => {
+                      const isFamily = isFamilyCard(card.unique_id);
                     
                     return (
                       <TableRow key={card.id}>
@@ -573,6 +598,26 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
                 </TableBody>
               </Table>
             </div>
+            <div className="border-t border-border">
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                startIndex={pagination.startIndex}
+                endIndex={pagination.endIndex}
+                pageSize={pagination.pageSize}
+                pageSizeOptions={pagination.pageSizeOptions}
+                canGoNext={pagination.canGoNext}
+                canGoPrevious={pagination.canGoPrevious}
+                onPageChange={pagination.setCurrentPage}
+                onPageSizeChange={pagination.setPageSize}
+                onGoToFirst={pagination.goToFirstPage}
+                onGoToLast={pagination.goToLastPage}
+                onGoToNext={pagination.goToNextPage}
+                onGoToPrevious={pagination.goToPreviousPage}
+              />
+            </div>
+          </>
           )}
         </div>
       </main>

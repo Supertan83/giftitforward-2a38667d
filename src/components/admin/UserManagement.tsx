@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, useUpdateVolunteerAssignment, useMarketplaces, UserWithRole } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 
@@ -80,6 +82,14 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const filteredUsers = roleFilter === 'all' 
     ? users 
     : users.filter(u => u.role === roleFilter);
+
+  // Pagination
+  const pagination = usePagination(filteredUsers, { defaultPageSize: 10 });
+  
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    pagination.setCurrentPage(1);
+  }, [roleFilter]);
 
   const handleGenerateAndPreviewQR = async (user: UserWithRole) => {
     try {
@@ -300,90 +310,111 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
               <p>No {roleFilter === 'all' ? 'users' : `${roleFilter}s`} found</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
-              {filteredUsers.map((user, index) => (
-                <motion.div
-                  key={user.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="p-4 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                      user.role === 'admin' ? 'bg-primary-soft' : user.role === 'employee' ? 'bg-warning/10' : 'bg-muted'
-                    }`}>
-                      {user.role === 'admin' ? (
-                        <Shield className="w-5 h-5 text-primary" />
-                      ) : user.role === 'employee' ? (
-                        <Briefcase className="w-5 h-5 text-warning" />
-                      ) : (
-                        <User className="w-5 h-5 text-muted-foreground" />
+            <>
+              <div className="divide-y divide-border">
+                {pagination.paginatedItems.map((user, index) => (
+                  <motion.div
+                    key={user.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="p-4 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                        user.role === 'admin' ? 'bg-primary-soft' : user.role === 'employee' ? 'bg-warning/10' : 'bg-muted'
+                      }`}>
+                        {user.role === 'admin' ? (
+                          <Shield className="w-5 h-5 text-primary" />
+                        ) : user.role === 'employee' ? (
+                          <Briefcase className="w-5 h-5 text-warning" />
+                        ) : (
+                          <User className="w-5 h-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">
+                          {user.first_name || user.last_name 
+                            ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                            : user.email}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {user.first_name || user.last_name ? user.email : `Added ${new Date(user.created_at).toLocaleDateString()}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {user.role === 'volunteer' && user.qr_codes.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => setQrPreviewUser(user)}
+                          title="View QR codes"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </Button>
                       )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">
-                        {user.first_name || user.last_name 
-                          ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                          : user.email}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {user.first_name || user.last_name ? user.email : `Added ${new Date(user.created_at).toLocaleDateString()}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {user.role === 'volunteer' && user.qr_codes.length > 0 && (
+                      {user.role === 'volunteer' && user.qr_codes.length === 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs text-muted-foreground hover:text-primary"
+                          onClick={() => handleGenerateAndPreviewQR(user)}
+                          disabled={generateQR.isPending}
+                          title="Generate and preview QR code"
+                        >
+                          {generateQR.isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                          ) : (
+                            <Plus className="w-3 h-3 mr-1" />
+                          )}
+                          QR
+                        </Button>
+                      )}
+                      <Badge variant={user.role === 'admin' ? 'default' : user.role === 'employee' ? 'outline' : 'secondary'}>
+                        {user.role}
+                      </Badge>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => setQrPreviewUser(user)}
-                        title="View QR codes"
+                        onClick={() => handleEditUser(user)}
                       >
-                        <QrCode className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" />
                       </Button>
-                    )}
-                    {user.role === 'volunteer' && user.qr_codes.length === 0 && (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs text-muted-foreground hover:text-primary"
-                        onClick={() => handleGenerateAndPreviewQR(user)}
-                        disabled={generateQR.isPending}
-                        title="Generate and preview QR code"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteConfirmUser({ id: user.id, email: user.email })}
                       >
-                        {generateQR.isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                        ) : (
-                          <Plus className="w-3 h-3 mr-1" />
-                        )}
-                        QR
+                        <Trash2 className="w-4 h-4" />
                       </Button>
-                    )}
-                    <Badge variant={user.role === 'admin' ? 'default' : user.role === 'employee' ? 'outline' : 'secondary'}>
-                      {user.role}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditUser(user)}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeleteConfirmUser({ id: user.id, email: user.email })}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="border-t border-border">
+                <PaginationControls
+                  currentPage={pagination.currentPage}
+                  totalPages={pagination.totalPages}
+                  totalItems={pagination.totalItems}
+                  startIndex={pagination.startIndex}
+                  endIndex={pagination.endIndex}
+                  pageSize={pagination.pageSize}
+                  pageSizeOptions={pagination.pageSizeOptions}
+                  canGoNext={pagination.canGoNext}
+                  canGoPrevious={pagination.canGoPrevious}
+                  onPageChange={pagination.setCurrentPage}
+                  onPageSizeChange={pagination.setPageSize}
+                  onGoToFirst={pagination.goToFirstPage}
+                  onGoToLast={pagination.goToLastPage}
+                  onGoToNext={pagination.goToNextPage}
+                  onGoToPrevious={pagination.goToPreviousPage}
+                />
+              </div>
+            </>
           )}
         </div>
       </main>
