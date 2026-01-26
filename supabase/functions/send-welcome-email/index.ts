@@ -98,10 +98,10 @@ function buildEmailHtml(
   const trainingUrl = 'https://gif.thesurpluss.com/training';
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   
-  // Email assets URLs
-  const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
-  const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
-  const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+  // Email assets URLs - v2 cache bust for updated hero banner
+  const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg?v=2`;
+  const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg?v=2`;
+  const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png?v=2`;
 
   // Format marketplace details
   const eventDate = formatDate(marketplace?.event_date);
