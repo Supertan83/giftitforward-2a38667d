@@ -24,10 +24,7 @@ const PROVIDERS = [
   { value: 'resend', label: 'Resend', icon: '📤' },
 ];
 
-const RESEND_SENDERS = [
-  { value: 'mgif', label: 'noreply@mgif.thesurpluss.com', description: 'Verified domain (fallback)' },
-  { value: 'dubaiholding', label: 'giftitforward@dubaiholding.com', description: 'Primary domain (requires verification)' },
-];
+// All emails are sent from giftitforward@dubaiholding.com - no fallback sender options needed
 
 const EMAIL_TYPES = [
   { value: 'welcome', label: 'Welcome Email', description: 'Sent to new volunteers with credentials and QR code' },
@@ -159,7 +156,7 @@ export function EmailProviderConfig() {
               </div>
 
               {config ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor={`provider-${emailType.value}`}>Primary Provider</Label>
                     <Select
@@ -180,35 +177,6 @@ export function EmailProviderConfig() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor={`resend-sender-${emailType.value}`}>Resend Sender</Label>
-                    <Select
-                      value={config.resend_sender || 'mgif'}
-                      onValueChange={(value) =>
-                        updateConfig(emailType.value, { resend_sender: value })
-                      }
-                      disabled={isSaving}
-                    >
-                      <SelectTrigger id={`resend-sender-${emailType.value}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RESEND_SENDERS.map(sender => (
-                          <SelectItem key={sender.value} value={sender.value}>
-                            <div className="flex flex-col">
-                              <span>{sender.label}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {config.resend_sender === 'dubaiholding' 
-                        ? 'Will fallback to mgif if domain not verified' 
-                        : 'Verified sender domain'}
-                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -234,6 +202,9 @@ export function EmailProviderConfig() {
                         )}
                       </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      All emails sent from: giftitforward@dubaiholding.com
+                    </p>
                   </div>
                 </div>
               ) : (

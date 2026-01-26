@@ -173,8 +173,7 @@ async function sendWelcomeEmailViaResend(
   `
 
   try {
-    // Try primary sender first
-    let result = await resend.emails.send({
+    const result = await resend.emails.send({
       from: 'Gift It Forward <giftitforward@dubaiholding.com>',
       to: [recipientEmail],
       bcc: ['giftitforward@dubaiholding.com'],
@@ -182,19 +181,8 @@ async function sendWelcomeEmailViaResend(
       html: htmlContent,
     })
     
-    // If primary fails due to domain issues, try fallback
     if (result.error) {
-      const errorMsg = result.error.message || ''
-      if (errorMsg.includes('domain') || errorMsg.includes('not verified')) {
-        console.log('Primary sender failed, trying fallback...')
-        result = await resend.emails.send({
-          from: 'Gift It Forward <noreply@mgif.thesurpluss.com>',
-          to: [recipientEmail],
-          bcc: ['giftitforward@dubaiholding.com'],
-          subject: 'Welcome to GIF (Gift it Forward) - Your Volunteer Account',
-          html: htmlContent,
-        })
-      }
+      console.error('Resend email error:', result.error.message)
     }
     
     return !result.error
