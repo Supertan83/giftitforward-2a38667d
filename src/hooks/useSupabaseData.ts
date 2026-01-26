@@ -913,6 +913,13 @@ export const useDeleteUser = () => {
         throw new Error('Not authenticated');
       }
 
+      // Delete pending_volunteers record if exists (cleanup volunteer data)
+      await supabase
+        .from('pending_volunteers')
+        .delete()
+        .eq('created_user_id', userId);
+
+      // Delete the auth user via edge function
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
         method: 'POST',
         headers: {
@@ -932,6 +939,8 @@ export const useDeleteUser = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      queryClient.invalidateQueries({ queryKey: ['bulk-uploaded-volunteers-count'] });
     }
   });
 };
