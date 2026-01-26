@@ -31,9 +31,14 @@ export const CertificatePreviewDialog = ({
   const [completionImageUrl, setCompletionImageUrl] = useState<string | null>(null);
   const [attendanceImageUrl, setAttendanceImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && firstName && lastName) {
+      // Reset states when opening
+      setCompletionImageUrl(null);
+      setAttendanceImageUrl(null);
+      setError(null);
       generatePreviews();
     }
     
@@ -46,15 +51,29 @@ export const CertificatePreviewDialog = ({
 
   const generatePreviews = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const [completion, attendance] = await Promise.all([
-        generateCertificateImageURL({ firstName, lastName, type: 'completion' }),
-        generateCertificateImageURL({ firstName, lastName, type: 'attendance' }),
-      ]);
+      // Generate each certificate separately to catch individual errors
+      let completion: string | null = null;
+      let attendance: string | null = null;
+      
+      try {
+        completion = await generateCertificateImageURL({ firstName, lastName, type: 'completion' });
+      } catch (err) {
+        console.error('Error generating completion certificate:', err);
+      }
+      
+      try {
+        attendance = await generateCertificateImageURL({ firstName, lastName, type: 'attendance' });
+      } catch (err) {
+        console.error('Error generating attendance certificate:', err);
+      }
+      
       setCompletionImageUrl(completion);
       setAttendanceImageUrl(attendance);
-    } catch (error) {
-      console.error('Error generating certificate previews:', error);
+    } catch (err) {
+      console.error('Error generating certificate previews:', err);
+      setError('Failed to generate certificate previews');
     } finally {
       setLoading(false);
     }
@@ -93,6 +112,10 @@ export const CertificatePreviewDialog = ({
               src={imageUrl}
               alt={`${type} Certificate Preview`}
               className="w-full h-auto"
+              onError={(e) => {
+                console.error(`Failed to load ${type} certificate image`);
+                e.currentTarget.style.display = 'none';
+              }}
             />
           </div>
           <div className="flex justify-between items-center">
