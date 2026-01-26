@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle, RefreshCw, Copy, ChevronDown, ChevronRight, Filter, RotateCcw, Loader2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 import { format } from 'date-fns';
 
 interface EmailLog {
@@ -61,6 +63,14 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
       return data as EmailLog[];
     }
   });
+
+  // Pagination
+  const pagination = usePagination(logs, { defaultPageSize: 25 });
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    pagination.setCurrentPage(1);
+  }, [filterProvider, filterStatus, filterType]);
 
   const successCount = logs.filter(l => l.success).length;
   const failedCount = logs.filter(l => !l.success).length;
@@ -239,9 +249,9 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
                 No email logs found. Emails will be logged here after they are sent.
               </div>
             ) : (
-              <ScrollArea className="h-[600px]">
+              <>
                 <div className="space-y-3">
-                  {logs.map((log) => (
+                  {pagination.paginatedItems.map((log) => (
                     <Collapsible
                       key={log.id}
                       open={expandedLog === log.id}
@@ -365,7 +375,24 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
                     </Collapsible>
                   ))}
                 </div>
-              </ScrollArea>
+                <PaginationControls
+                  currentPage={pagination.currentPage}
+                  totalPages={pagination.totalPages}
+                  totalItems={pagination.totalItems}
+                  startIndex={pagination.startIndex}
+                  endIndex={pagination.endIndex}
+                  pageSize={pagination.pageSize}
+                  pageSizeOptions={pagination.pageSizeOptions}
+                  canGoNext={pagination.canGoNext}
+                  canGoPrevious={pagination.canGoPrevious}
+                  onPageChange={pagination.setCurrentPage}
+                  onPageSizeChange={pagination.setPageSize}
+                  onGoToFirst={pagination.goToFirstPage}
+                  onGoToLast={pagination.goToLastPage}
+                  onGoToNext={pagination.goToNextPage}
+                  onGoToPrevious={pagination.goToPreviousPage}
+                />
+              </>
             )}
           </CardContent>
         </Card>
