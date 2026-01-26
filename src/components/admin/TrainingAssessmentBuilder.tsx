@@ -357,9 +357,9 @@ export const TrainingAssessmentBuilder = ({ onBack }: TrainingAssessmentBuilderP
 
       // Add volunteer name below "THIS CERTIFIES THAT" - matching CertificateGenerator positioning
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(48);
+      doc.setFontSize(42);
       doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-      doc.text(volunteerName || 'Volunteer Name', 110, 420);
+      doc.text(volunteerName || 'Volunteer Name', 200, 395);
 
       // Save the PDF
       doc.save(`certificate-of-completion-${volunteerName.replace(/\s+/g, '-').toLowerCase() || 'volunteer'}.pdf`);
