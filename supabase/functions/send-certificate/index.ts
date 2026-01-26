@@ -370,10 +370,10 @@ const handler = async (req: Request): Promise<Response> => {
     const fullName = cleanLastName ? `${cleanFirstName} ${cleanLastName}` : cleanFirstName;
     const filename = `${certificateType}-certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
 
-    // Get Supabase URL for email assets - v3 cache bust for updated certificate backgrounds
+    // Get Supabase URL for email assets
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg?v=2`;
-    const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png?v=2`;
+    const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+    const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
 
     // Format marketplace details
     const marketplaceName = marketplace?.name || 'Gift It Forward Marketplace';
