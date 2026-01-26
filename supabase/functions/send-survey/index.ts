@@ -186,7 +186,7 @@ async function sendViaResend(
   marketplace: MarketplaceInfo | null
 ): Promise<{ success: boolean; error?: string }> {
   const firstName = cleanName.split(" ")[0];
-  const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+  const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg?v=2`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
 
   // Format marketplace details
