@@ -10,6 +10,13 @@ interface VolunteerInput {
   email: string
   firstName: string
   lastName: string
+  eventName?: string
+  eventDate?: string
+  eventTime?: string
+  eventLocation?: string
+  gender?: string
+  companyName?: string
+  isDhEmployee?: boolean
 }
 
 interface VolunteerResult {
@@ -281,6 +288,14 @@ Deno.serve(async (req) => {
       const email = volunteer.email?.trim().toLowerCase()
       const firstName = volunteer.firstName?.trim() || ''
       const lastName = volunteer.lastName?.trim() || ''
+      const eventName = volunteer.eventName?.trim() || null
+      const eventDate = volunteer.eventDate?.trim() || null
+      const eventTime = volunteer.eventTime?.trim() || null
+      const eventLocation = volunteer.eventLocation?.trim() || null
+      const gender = volunteer.gender?.trim() || null
+      const companyName = volunteer.companyName?.trim() || null
+      const isDhEmployeeStr = String(volunteer.isDhEmployee ?? '').toLowerCase()
+      const isDhEmployee = volunteer.isDhEmployee === true || isDhEmployeeStr === 'yes' || isDhEmployeeStr === 'true'
 
       // Validate email
       if (!email || !isValidEmail(email)) {
@@ -341,7 +356,7 @@ Deno.serve(async (req) => {
           console.error('Error creating QR card:', qrError)
         }
 
-        // Create pending volunteer record for tracking
+        // Create pending volunteer record for tracking with all available fields
         const { error: pvError } = await supabaseAdmin
           .from('pending_volunteers')
           .insert({
@@ -353,6 +368,16 @@ Deno.serve(async (req) => {
             email_sent: false,
             source: 'bulk_upload',
             created_user_id: newUser.user.id,
+            gender: gender,
+            external_company: companyName,
+            is_employee: isDhEmployee,
+            events_list: eventName ? `${eventName}${eventDate ? ` - ${eventDate}` : ''}${eventTime ? ` (${eventTime})` : ''}` : null,
+            events_json: eventName ? [{ 
+              name: eventName, 
+              date: eventDate, 
+              time: eventTime, 
+              location: eventLocation 
+            }] : null,
           })
 
         // Send welcome email
