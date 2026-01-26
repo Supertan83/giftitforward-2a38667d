@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings, User, Building2, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings, User, Building2, Calendar, MapPin, ClipboardList, ExternalLink, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -108,6 +108,15 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [simulatedVolunteer, setSimulatedVolunteer] = useState<SimulatedVolunteer>(DEFAULT_SIMULATED_VOLUNTEER);
   const [isSimulating, setIsSimulating] = useState(false);
+  
+  // Survey testing state
+  const [surveyTestName, setSurveyTestName] = useState('Test Volunteer');
+  const [surveyTestEmail, setSurveyTestEmail] = useState('');
+  const [isCreatingSurvey, setIsCreatingSurvey] = useState(false);
+  const [createdSurveyToken, setCreatedSurveyToken] = useState<string | null>(null);
+  const [existingSurveys, setExistingSurveys] = useState<Array<{ id: string; volunteer_name: string; survey_token: string; completed_at: string | null }>>([]);
+  const [isLoadingSurveys, setIsLoadingSurveys] = useState(false);
+  
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const { toast } = useToast();
 
@@ -297,10 +306,92 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
     }
   };
 
+  // Load existing surveys for testing
+  const loadExistingSurveys = async () => {
+    setIsLoadingSurveys(true);
+    try {
+      const { data, error } = await supabase
+        .from('volunteer_surveys')
+        .select('id, volunteer_name, survey_token, completed_at')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setExistingSurveys(data || []);
+    } catch (error) {
+      console.error('Error loading surveys:', error);
+    } finally {
+      setIsLoadingSurveys(false);
+    }
+  };
+
+  // Create a test survey for testing the survey page
+  const handleCreateTestSurvey = async () => {
+    if (!surveyTestName.trim() || !surveyTestEmail.trim()) {
+      toast({
+        title: 'Fields Required',
+        description: 'Please enter both name and email for the test survey',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsCreatingSurvey(true);
+    try {
+      const surveyToken = crypto.randomUUID();
+      
+      const { data, error } = await supabase
+        .from('volunteer_surveys')
+        .insert({
+          volunteer_name: surveyTestName.trim(),
+          volunteer_email: surveyTestEmail.trim(),
+          survey_token: surveyToken,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCreatedSurveyToken(surveyToken);
+      loadExistingSurveys(); // Refresh the list
+
+      toast({
+        title: 'Test Survey Created',
+        description: 'You can now test the survey page with this token'
+      });
+    } catch (error) {
+      console.error('Error creating test survey:', error);
+      toast({
+        title: 'Creation Failed',
+        description: error instanceof Error ? error.message : 'Failed to create test survey',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCreatingSurvey(false);
+    }
+  };
+
+  // Copy survey URL to clipboard
+  const copySurveyUrl = (token: string) => {
+    const url = `${window.location.origin}/volunteer-survey?token=${token}`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: 'URL Copied',
+      description: 'Survey URL copied to clipboard'
+    });
+  };
+
+  // Open survey page in new tab
+  const openSurveyPage = (token: string) => {
+    const url = `${window.location.origin}/volunteer-survey?token=${token}`;
+    window.open(url, '_blank');
+  };
+
   // Load asset status on mount
-  useState(() => {
+  useEffect(() => {
     checkExistingAssets();
-  });
+    loadExistingSurveys();
+  }, []);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
@@ -939,6 +1030,170 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                         <li>• Sends the complete welcome email with all sections</li>
                         <li>• Tests the full onboarding flow end-to-end</li>
                       </ul>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Test Survey Flow Card */}
+              <Card className="border-amber-500/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5" />
+                    Test Survey & Certificate Flow
+                  </CardTitle>
+                  <CardDescription>
+                    Create a test survey to verify the survey page and certificate generation
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Create New Test Survey */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-sm">Create New Test Survey</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Volunteer Name</Label>
+                          <Input
+                            value={surveyTestName}
+                            onChange={(e) => setSurveyTestName(e.target.value)}
+                            placeholder="Test Volunteer"
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div>
+                          <Label>Volunteer Email</Label>
+                          <Input
+                            type="email"
+                            value={surveyTestEmail}
+                            onChange={(e) => setSurveyTestEmail(e.target.value)}
+                            placeholder="your.email@example.com"
+                            className="mt-1.5"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleCreateTestSurvey}
+                        disabled={isCreatingSurvey || !surveyTestName.trim() || !surveyTestEmail.trim()}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        {isCreatingSurvey ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardList className="w-4 h-4 mr-2" />
+                            Create Test Survey
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Show created survey token */}
+                    {createdSurveyToken && (
+                      <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle className="w-4 h-4 text-success" />
+                          <span className="font-medium text-sm">Survey Created!</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => openSurveyPage(createdSurveyToken)}
+                          >
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            Open Survey Page
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copySurveyUrl(createdSurveyToken)}
+                          >
+                            <Copy className="w-4 h-4 mr-1" />
+                            Copy URL
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Existing Surveys */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-sm">Recent Surveys</h4>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={loadExistingSurveys}
+                          disabled={isLoadingSurveys}
+                        >
+                          {isLoadingSurveys ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'Refresh'
+                          )}
+                        </Button>
+                      </div>
+                      
+                      {existingSurveys.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-2">No surveys found</p>
+                      ) : (
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {existingSurveys.map((survey) => (
+                            <div
+                              key={survey.id}
+                              className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{survey.volunteer_name}</p>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  {survey.completed_at ? (
+                                    <span className="flex items-center gap-1 text-success">
+                                      <CheckCircle className="w-3 h-3" />
+                                      Completed
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-warning">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Pending
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openSurveyPage(survey.survey_token)}
+                                  title="Open survey page"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => copySurveyUrl(survey.survey_token)}
+                                  title="Copy survey URL"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4 bg-muted rounded-lg">
+                      <h4 className="font-medium mb-2">Testing Flow:</h4>
+                      <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                        <li>Create a test survey with your name and email</li>
+                        <li>Open the survey page and complete the form</li>
+                        <li>Verify the certificate downloads with correct positioning</li>
+                        <li>Check your email for the certificate attachment</li>
+                      </ol>
                     </div>
                   </div>
                 </CardContent>
