@@ -173,12 +173,30 @@ async function sendWelcomeEmailViaResend(
   `
 
   try {
-    const result = await resend.emails.send({
-      from: 'GIF <noreply@thesurpluss.com>',
+    // Try primary sender first
+    let result = await resend.emails.send({
+      from: 'Gift It Forward <giftitforward@dubaiholding.com>',
       to: [recipientEmail],
+      bcc: ['giftitforward@dubaiholding.com'],
       subject: 'Welcome to GIF (Gift it Forward) - Your Volunteer Account',
       html: htmlContent,
     })
+    
+    // If primary fails due to domain issues, try fallback
+    if (result.error) {
+      const errorMsg = result.error.message || ''
+      if (errorMsg.includes('domain') || errorMsg.includes('not verified')) {
+        console.log('Primary sender failed, trying fallback...')
+        result = await resend.emails.send({
+          from: 'Gift It Forward <noreply@mgif.thesurpluss.com>',
+          to: [recipientEmail],
+          bcc: ['giftitforward@dubaiholding.com'],
+          subject: 'Welcome to GIF (Gift it Forward) - Your Volunteer Account',
+          html: htmlContent,
+        })
+      }
+    }
+    
     return !result.error
   } catch (error) {
     console.error('Error sending via Resend:', error)
@@ -324,16 +342,19 @@ Deno.serve(async (req) => {
           .insert({ user_id: newUser.user.id, role: 'volunteer' })
 
         // Create volunteer QR card
-        await supabaseAdmin
+        const { error: qrError } = await supabaseAdmin
           .from('volunteer_qr_cards')
           .insert({
             unique_id: qrCodeId,
-            volunteer_id: newUser.user.id,
             status: 'inactive',
           })
 
+        if (qrError) {
+          console.error('Error creating QR card:', qrError)
+        }
+
         // Create pending volunteer record for tracking
-        await supabaseAdmin
+        const { error: pvError } = await supabaseAdmin
           .from('pending_volunteers')
           .insert({
             email,
@@ -343,6 +364,7 @@ Deno.serve(async (req) => {
             status: 'approved',
             email_sent: false,
             source: 'bulk_upload',
+            created_user_id: newUser.user.id,
           })
 
         // Send welcome email
@@ -378,15 +400,15 @@ Deno.serve(async (req) => {
             .eq('email', email)
         }
 
-        // Log email send
+        // Log email send with correct column names
         await supabaseAdmin
           .from('email_send_logs')
           .insert({
             recipient_email: email,
-            recipient_name: `${firstName} ${lastName}`.trim(),
-            email_type: 'welcome',
-            status: emailSent ? 'sent' : 'failed',
-            error_message: emailSent ? null : 'Failed to send email',
+            email_type: 'bulk_welcome',
+            provider: microsoftToken ? 'microsoft_graph' : 'resend',
+            success: emailSent,
+            error_message: emailSent ? null : 'Failed to send welcome email',
           })
 
         results.push({ email, status: 'created', userId: newUser.user.id })
