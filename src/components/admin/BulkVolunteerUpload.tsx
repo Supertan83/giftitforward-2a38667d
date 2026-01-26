@@ -79,10 +79,21 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
       let current = '';
       let inQuotes = false;
       
-      // Remove leading/trailing quotes if the entire line is quoted
       let cleanLine = line.trim();
-      if (cleanLine.startsWith('"') && cleanLine.endsWith('"') && cleanLine.split('"').length === 3) {
-        cleanLine = cleanLine.slice(1, -1);
+      
+      // Detect if the entire line is wrapped in quotes (common Excel export issue)
+      // Check if it starts and ends with quotes and parsing would yield only 1 field
+      if (cleanLine.startsWith('"') && cleanLine.endsWith('"')) {
+        // Try to unwrap - remove outer quotes and unescape internal quotes
+        const innerContent = cleanLine.slice(1, -1).replace(/""/g, '"');
+        
+        // Check if this looks like a comma-separated list
+        // by testing if it has multiple commas and roughly matches expected field count
+        const commaCount = (innerContent.match(/,/g) || []).length;
+        if (commaCount >= 5) {
+          // Likely the entire row was wrapped in quotes - use inner content
+          cleanLine = innerContent;
+        }
       }
       
       for (let i = 0; i < cleanLine.length; i++) {
@@ -105,6 +116,16 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
         }
       }
       result.push(current.trim().replace(/^["']|["']$/g, ''));
+      
+      // Safety check: if we got exactly 1 result and it contains commas,
+      // it might still be a wrapped line - try parsing it again
+      if (result.length === 1 && result[0].includes(',')) {
+        const innerResult = parseCSVLine(result[0]);
+        if (innerResult.length > 1) {
+          return innerResult;
+        }
+      }
+      
       return result;
     };
 
