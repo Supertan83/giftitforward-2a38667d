@@ -73,16 +73,30 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
     const lines = content.trim().split('\n');
     if (lines.length < 2) return [];
 
-    // Parse CSV line handling quoted fields with commas
+    // Parse CSV line handling quoted fields with commas and escaped quotes
     const parseCSVLine = (line: string): string[] => {
       const result: string[] = [];
       let current = '';
       let inQuotes = false;
       
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
+      // Remove leading/trailing quotes if the entire line is quoted
+      let cleanLine = line.trim();
+      if (cleanLine.startsWith('"') && cleanLine.endsWith('"') && cleanLine.split('"').length === 3) {
+        cleanLine = cleanLine.slice(1, -1);
+      }
+      
+      for (let i = 0; i < cleanLine.length; i++) {
+        const char = cleanLine[i];
+        const nextChar = cleanLine[i + 1];
+        
         if (char === '"') {
-          inQuotes = !inQuotes;
+          // Handle escaped quotes ("") inside quoted fields
+          if (inQuotes && nextChar === '"') {
+            current += '"';
+            i++; // Skip the next quote
+          } else {
+            inQuotes = !inQuotes;
+          }
         } else if (char === ',' && !inQuotes) {
           result.push(current.trim().replace(/^["']|["']$/g, ''));
           current = '';
