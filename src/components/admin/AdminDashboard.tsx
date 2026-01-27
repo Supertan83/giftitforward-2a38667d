@@ -471,7 +471,14 @@ export const AdminDashboard = () => {
                               </tr>
                               {isExpanded && mpAllocations.map(alloc => <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
                                   <td className="py-2 px-3 pl-10">
-                                    <span className="text-muted-foreground">{alloc.itemName || 'Unknown Item'}</span>
+                                    <div>
+                                      <span className="text-muted-foreground">{alloc.itemName || 'Unknown Item'}</span>
+                                      {alloc.externalMaterialId && (
+                                        <span className="text-xs text-muted-foreground/70 ml-2">
+                                          (ID: {alloc.externalMaterialId})
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="text-right py-2 px-3">
                                     {editingAllocation?.id === alloc.id && editingAllocation.field === 'allocated' ? <div className="flex items-center justify-end gap-1">

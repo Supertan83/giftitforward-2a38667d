@@ -9,6 +9,7 @@ export interface MarketplaceAllocation {
   itemTypeId: string;
   itemName?: string;
   itemIcon?: string;
+  externalMaterialId?: number | null;
   allocatedQuantity: number;
   distributedQuantity: number;
 }
@@ -38,6 +39,7 @@ export interface MarketplaceReport {
       itemName: string;
       itemIcon: string;
       category: string | null;
+      externalMaterialId: number | null;
       allocated: number;
       distributed: number;
       remaining: number;
@@ -61,7 +63,7 @@ export const useMarketplaceAllocations = (marketplaceId?: string) => {
         .from('marketplace_item_allocations')
         .select(`
           *,
-          item_types (name, icon)
+          item_types (name, icon, external_material_id)
         `)
         .order('created_at', { ascending: false });
 
@@ -79,6 +81,7 @@ export const useMarketplaceAllocations = (marketplaceId?: string) => {
         itemTypeId: allocation.item_type_id,
         itemName: allocation.item_types?.name,
         itemIcon: allocation.item_types?.icon,
+        externalMaterialId: allocation.item_types?.external_material_id,
         allocatedQuantity: allocation.allocated_quantity,
         distributedQuantity: allocation.distributed_quantity,
       }));
@@ -323,7 +326,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         .from('marketplace_item_allocations')
         .select(`
           *,
-          item_types (id, name, icon, category)
+          item_types (id, name, icon, category, external_material_id)
         `)
         .eq('marketplace_id', marketplaceId);
 
@@ -332,6 +335,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         itemName: alloc.item_types?.name || 'Unknown',
         itemIcon: alloc.item_types?.icon || '📦',
         category: alloc.item_types?.category || null,
+        externalMaterialId: alloc.item_types?.external_material_id || null,
         allocated: alloc.allocated_quantity,
         distributed: alloc.distributed_quantity,
         remaining: alloc.allocated_quantity - alloc.distributed_quantity,
