@@ -19,6 +19,7 @@ interface ItemAllocation {
   item_type_id: string;
   item_name: string;
   category: string | null;
+  external_material_id: number | null;
   allocated_quantity: number;
   distributed_quantity: number;
 }
@@ -50,7 +51,8 @@ export const ManualCountZone = () => {
           distributed_quantity,
           item_types (
             name,
-            category
+            category,
+            external_material_id
           )
         `)
         .eq('marketplace_id', selectedMarketplaceId);
@@ -62,6 +64,7 @@ export const ManualCountZone = () => {
         item_type_id: a.item_type_id,
         item_name: a.item_types?.name || 'Unknown Item',
         category: a.item_types?.category || null,
+        external_material_id: a.item_types?.external_material_id || null,
         allocated_quantity: a.allocated_quantity,
         distributed_quantity: a.distributed_quantity,
       })) as ItemAllocation[];
@@ -322,7 +325,14 @@ export const ManualCountZone = () => {
                     className="p-3 rounded-lg bg-muted/50 space-y-2"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{item.item_name}</span>
+                      <div>
+                        <span className="font-medium text-sm">{item.item_name}</span>
+                        {item.external_material_id && (
+                          <p className="text-xs text-muted-foreground">
+                            Material ID: {item.external_material_id}
+                          </p>
+                        )}
+                      </div>
                       <Badge variant="outline" className="text-xs">
                         {systemDistributed} / {systemAllocated}
                       </Badge>
