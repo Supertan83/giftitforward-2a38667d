@@ -1456,42 +1456,43 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           setNewEmail('');
         }
       }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Email Address</DialogTitle>
-            <DialogDescription>
-              Enter the email address for this volunteer to create their account.
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">Add Email Address</DialogTitle>
+            <DialogDescription className="text-xs">
+              Enter email to create volunteer account.
             </DialogDescription>
           </DialogHeader>
           
           {addEmailVolunteer && (
-            <div className="space-y-4">
-              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+            <div className="space-y-3">
+              <div className="bg-muted/50 rounded-md p-3 space-y-1.5 text-sm">
                 <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-medium">{addEmailVolunteer.first_name} {addEmailVolunteer.last_name}</span>
+                  <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="font-medium truncate">{addEmailVolunteer.first_name} {addEmailVolunteer.last_name}</span>
                 </div>
                 {addEmailVolunteer.phone_number && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Phone className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>{addEmailVolunteer.phone_number}</span>
                   </div>
                 )}
                 {addEmailVolunteer.events_list && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    <span className="truncate">{addEmailVolunteer.events_list.split(',').map(e => formatEventName(e.trim())).join(', ')}</span>
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{addEmailVolunteer.events_list.split(',').map(e => formatEventName(e.trim())).join(', ')}</span>
                   </div>
                 )}
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium">Email Address</label>
                 <Input
                   type="email"
                   placeholder="volunteer@example.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
+                  className="h-9"
                   autoFocus
                 />
               </div>
