@@ -3237,6 +3237,265 @@ serve(async (req) => {
       }
     }
 
+    // Add email to pending volunteer and trigger approval (admin action)
+    // This is for volunteers who submitted forms without email addresses
+    if (payload.action === 'add_volunteer_email') {
+      // Verify authentication
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      
+      const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+      if (authError || !authUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { pending_id, email } = payload;
+      if (!pending_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'pending_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!email || !isValidEmail(email)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Valid email address is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check if email already exists in pending_volunteers (except placeholder emails)
+      const { data: existingPending } = await supabase
+        .from('pending_volunteers')
+        .select('id, email')
+        .eq('email', email)
+        .neq('id', pending_id)
+        .maybeSingle();
+
+      if (existingPending) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'This email is already registered to another volunteer' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check if email already exists in auth.users
+      const { data: usersData } = await supabase.auth.admin.listUsers();
+      const existingAuthUser = usersData?.users.find(u => u.email === email);
+      if (existingAuthUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'An account with this email already exists' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fetch pending volunteer
+      const { data: pendingVolunteer, error: fetchError } = await supabase
+        .from('pending_volunteers')
+        .select('*')
+        .eq('id', pending_id)
+        .eq('status', 'pending')
+        .single();
+
+      if (fetchError || !pendingVolunteer) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Pending volunteer not found or already processed' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Update the pending volunteer with the real email
+      const { error: updateEmailError } = await supabase
+        .from('pending_volunteers')
+        .update({ email: email })
+        .eq('id', pending_id);
+
+      if (updateEmailError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to update email: ' + updateEmailError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Now proceed with the approval flow (same as approve_volunteer)
+      const tempPassword = generateTempPassword();
+      
+      const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+        email: email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: `${pendingVolunteer.first_name} ${pendingVolunteer.last_name}`.trim(),
+          phone: pendingVolunteer.phone_number || '',
+          onboarded_via: 'dh_webhook_email_added'
+        }
+      });
+
+      if (createError) {
+        console.error(`Failed to create user ${email}:`, createError);
+        return new Response(
+          JSON.stringify({ success: false, error: createError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!userData.user) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'User creation returned no user data' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const userId = userData.user.id;
+
+      // Assign volunteer role
+      await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+        
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role: 'volunteer' });
+
+      if (roleError) {
+        console.error(`Failed to assign volunteer role:`, roleError);
+      }
+
+      // Update pending_volunteers record
+      const { error: updateError } = await supabase
+        .from('pending_volunteers')
+        .update({
+          status: 'approved',
+          approved_by: authUser.id,
+          approved_at: new Date().toISOString(),
+          created_user_id: userId,
+          temp_password: tempPassword
+        })
+        .eq('id', pending_id);
+
+      if (updateError) {
+        console.error('Failed to update pending_volunteers:', updateError);
+      }
+
+      // Generate volunteer QR card
+      const qrCardId = generateVolunteerQRId();
+      const { error: qrCardError } = await supabase
+        .from('volunteer_qr_cards')
+        .insert({
+          unique_id: qrCardId,
+          volunteer_id: pending_id,
+          status: 'inactive'
+        });
+
+      if (qrCardError) {
+        console.error('Failed to create volunteer QR card:', qrCardError);
+      }
+
+      // Extract unique dependents and create family member QR cards
+      const dependents = extractUniqueDependents(pendingVolunteer.events_json);
+      const familyQRs: FamilyMemberQR[] = [];
+      
+      for (let i = 0; i < dependents.length; i++) {
+        const dep = dependents[i];
+        const familyQrCardId = generateFamilyQRId(qrCardId, i + 1);
+        
+        const { error: famQrError } = await supabase
+          .from('volunteer_qr_cards')
+          .insert({
+            unique_id: familyQrCardId,
+            volunteer_id: pending_id,
+            status: 'inactive'
+          });
+        
+        if (!famQrError) {
+          familyQRs.push({
+            name: dep.name,
+            type: dep.type,
+            gender: dep.gender,
+            qrCardId: familyQrCardId
+          });
+        }
+      }
+
+      // Send welcome email
+      const appUrl = 'https://gif.thesurpluss.com';
+      const loginUrl = `${appUrl}/auth`;
+      const trainingUrl = `${appUrl}/training`;
+      
+      const emailResult = await sendWelcomeEmailWithQR(
+        supabase,
+        email,
+        pendingVolunteer.first_name,
+        pendingVolunteer.last_name || '',
+        tempPassword,
+        loginUrl,
+        trainingUrl,
+        qrCardId,
+        pending_id,
+        familyQRs,
+        undefined,
+        undefined,
+        undefined,
+        pendingVolunteer.events_json
+      );
+
+      // Update email tracking fields
+      await supabase
+        .from('pending_volunteers')
+        .update({
+          email_sent: emailResult.success,
+          email_sent_at: emailResult.success ? new Date().toISOString() : null,
+          email_send_count: 1
+        })
+        .eq('id', pending_id);
+
+      console.log(`Added email and approved volunteer: ${email}, QR: ${qrCardId}, Family: ${familyQRs.length}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Email added, account created, and welcome email sent',
+          email: email,
+          temp_password: tempPassword,
+          user_id: userId,
+          qr_card_id: qrCardId,
+          family_qr_count: familyQRs.length,
+          email_sent: emailResult.success,
+          email_error: emailResult.error || null
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check for approve_volunteer action (admin action)
     if (payload.action === 'approve_volunteer') {
       // Verify authentication

@@ -147,7 +147,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded'>('approved');
+  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded' | 'pending_missing_email'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [eventFilter, setEventFilter] = useState<string>('all');
   const [showCertificatePreview, setShowCertificatePreview] = useState(false);
@@ -155,6 +155,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [volunteerToDelete, setVolunteerToDelete] = useState<PendingVolunteer | null>(null);
   const [showBulkDeleteConfirmDialog, setShowBulkDeleteConfirmDialog] = useState(false);
+  const [showAddEmailDialog, setShowAddEmailDialog] = useState(false);
+  const [addEmailVolunteer, setAddEmailVolunteer] = useState<PendingVolunteer | null>(null);
+  const [newEmail, setNewEmail] = useState('');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -170,15 +173,19 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             unique_id,
             status
           )
-        `)
-        .eq('status', 'approved');
+        `);
 
-      // Filter by source based on active tab
-      if (activeTab === 'bulk_uploaded') {
-        query = query.eq('source', 'bulk_upload');
+      // Filter by status and source based on active tab
+      if (activeTab === 'pending_missing_email') {
+        query = query.eq('status', 'pending');
       } else {
-        // Show webhook/manual (non-bulk) in the approved tab
-        query = query.or('source.is.null,source.neq.bulk_upload');
+        query = query.eq('status', 'approved');
+        if (activeTab === 'bulk_uploaded') {
+          query = query.eq('source', 'bulk_upload');
+        } else {
+          // Show webhook/manual (non-bulk) in the approved tab
+          query = query.or('source.is.null,source.neq.bulk_upload');
+        }
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -452,6 +459,53 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  // Add email mutation for pending volunteers
+  const addEmailMutation = useMutation({
+    mutationFn: async ({ pendingId, email }: { pendingId: string; email: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await supabase.functions.invoke('webhook-receiver', {
+        body: {
+          action: 'add_volunteer_email',
+          pending_id: pendingId,
+          email: email.trim().toLowerCase()
+        }
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      if (!response.data.success) throw new Error(response.data.error || 'Failed to add email');
+      
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers-count'] });
+      setShowAddEmailDialog(false);
+      setAddEmailVolunteer(null);
+      setNewEmail('');
+      setApprovedCredentials({
+        email: data.email,
+        password: data.temp_password,
+        emailSent: data.email_sent ?? false
+      });
+      setShowCredentialsDialog(true);
+      toast({
+        title: 'Volunteer Approved',
+        description: data.email_sent 
+          ? `Account created and welcome email sent to ${data.email}`
+          : `Account created for ${data.email}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to Add Email',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
   const handleApprove = (volunteer: PendingVolunteer) => {
     approveMutation.mutate(volunteer.id);
   };
@@ -610,7 +664,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded'); setSelectedIds(new Set()); }}>
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded' | 'pending_missing_email'); setSelectedIds(new Set()); }}>
           <TabsList className="mb-4">
             <TabsTrigger value="approved" className="gap-2">
               <Check className="w-4 h-4" />
@@ -625,6 +679,15 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="pending_missing_email" className="gap-2">
+              <AlertCircle className="w-4 h-4" />
+              Missing Email
+              {(pendingCount.data ?? 0) > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  {pendingCount.data}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab}>
@@ -636,7 +699,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               ) : filteredVolunteers.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>{activeTab === 'bulk_uploaded' ? 'No bulk uploaded volunteers' : (eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers')}</p>
+                  <p>
+                    {activeTab === 'pending_missing_email' 
+                      ? 'No pending volunteers with missing emails'
+                      : activeTab === 'bulk_uploaded' 
+                        ? 'No bulk uploaded volunteers' 
+                        : (eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers')}
+                  </p>
                 </div>
               ) : (
                 <div>
@@ -687,15 +756,26 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   <Table className="table-fixed w-full">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-10"></TableHead>
+                        {activeTab !== 'pending_missing_email' && <TableHead className="w-10"></TableHead>}
                         <TableHead className="w-[18%] min-w-[100px]">Name</TableHead>
-                        <TableHead className="w-[22%] min-w-[120px]">Email</TableHead>
-                        <TableHead className="hidden md:table-cell w-[14%]">Company</TableHead>
-                        <TableHead className="hidden lg:table-cell w-[10%]">Family</TableHead>
-                        <TableHead className="hidden lg:table-cell w-[8%]">Events</TableHead>
-                        <TableHead className="hidden sm:table-cell w-[14%]">Submitted</TableHead>
-                        <TableHead className="hidden md:table-cell w-[12%]">Email Status</TableHead>
-                        <TableHead className="text-right w-[14%]">Actions</TableHead>
+                        {activeTab === 'pending_missing_email' ? (
+                          <>
+                            <TableHead className="w-[15%]">Phone</TableHead>
+                            <TableHead className="hidden md:table-cell w-[20%]">Events</TableHead>
+                            <TableHead className="hidden sm:table-cell w-[14%]">Submitted</TableHead>
+                            <TableHead className="text-right w-[20%]">Actions</TableHead>
+                          </>
+                        ) : (
+                          <>
+                            <TableHead className="w-[22%] min-w-[120px]">Email</TableHead>
+                            <TableHead className="hidden md:table-cell w-[14%]">Company</TableHead>
+                            <TableHead className="hidden lg:table-cell w-[10%]">Family</TableHead>
+                            <TableHead className="hidden lg:table-cell w-[8%]">Events</TableHead>
+                            <TableHead className="hidden sm:table-cell w-[14%]">Submitted</TableHead>
+                            <TableHead className="hidden md:table-cell w-[12%]">Email Status</TableHead>
+                            <TableHead className="text-right w-[14%]">Actions</TableHead>
+                          </>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -708,163 +788,216 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             exit={{ opacity: 0 }}
                             className="group"
                           >
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedIds.has(volunteer.id)}
-                                onCheckedChange={() => toggleSelect(volunteer.id)}
-                              />
-                            </TableCell>
-                            <TableCell className="font-medium truncate max-w-[100px]">
-                              {volunteer.first_name} {volunteer.last_name?.charAt(0)}.
-                            </TableCell>
-                            <TableCell className="text-muted-foreground truncate max-w-[120px]" title={volunteer.email}>
-                              {volunteer.email}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <span className="text-sm text-muted-foreground truncate block max-w-[100px]">
-                                {volunteer.is_employee ? 'Dubai Holding' : (volunteer.external_company || 'Not specified')}
-                              </span>
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              {(() => {
-                                const deps = extractUniqueDependents(volunteer.events_json);
-                                if (deps.length === 0) {
-                                  return <span className="text-sm text-muted-foreground">—</span>;
-                                }
-                                return (
-                                  <div className="flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                    <span className="text-sm font-medium">{deps.length}</span>
+                            {activeTab === 'pending_missing_email' ? (
+                              <>
+                                <TableCell className="font-medium">
+                                  {volunteer.first_name} {volunteer.last_name}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {volunteer.phone_number || '—'}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                  <span className="text-sm text-muted-foreground truncate block max-w-[150px]" title={volunteer.events_list || ''}>
+                                    {volunteer.events_list?.split(',').map(e => formatEventName(e.trim())).join(', ') || '—'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                                  {new Date(volunteer.created_at).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        setAddEmailVolunteer(volunteer);
+                                        setNewEmail('');
+                                        setShowAddEmailDialog(true);
+                                      }}
+                                      className="gap-1"
+                                    >
+                                      <Mail className="w-3.5 h-3.5" />
+                                      Add Email
+                                    </Button>
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-destructive hover:text-destructive"
+                                            onClick={() => handleDelete(volunteer)}
+                                            disabled={deleteMutation.isPending}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   </div>
-                                );
-                              })()}
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <span className="text-sm text-muted-foreground">
-                                {volunteer.events_list?.split(',').length || 0}
-                              </span>
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                              {new Date(volunteer.created_at).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <div className="flex flex-col gap-0.5">
-                                {volunteer.email_opened ? (
-                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit text-xs px-1.5 py-0">
-                                    <MailOpen className="w-3 h-3 mr-0.5" />
-                                    Opened
-                                  </Badge>
-                                ) : volunteer.email_sent ? (
-                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit text-xs px-1.5 py-0">
-                                    <Check className="w-3 h-3 mr-0.5" />
-                                    Sent
-                                  </Badge>
-                                ) : volunteer.email_send_count && volunteer.email_send_count > 0 ? (
-                                  <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit text-xs px-1.5 py-0">
-                                    <X className="w-3 h-3 mr-0.5" />
-                                    Failed
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="bg-muted text-muted-foreground w-fit text-xs px-1.5 py-0">
-                                    <Clock className="w-3 h-3 mr-0.5" />
-                                    Not sent
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <TooltipProvider delayDuration={200}>
-                                <div className="flex items-center justify-end gap-1">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() => openDetailsDialog(volunteer)}
-                                      >
-                                        <Eye className="w-3.5 h-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>View Details</TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() => {
-                                          setCertificatePreviewVolunteer(volunteer);
-                                          setShowCertificatePreview(true);
-                                        }}
-                                      >
-                                        <Award className="w-3.5 h-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>View Certificates</TooltipContent>
-                                  </Tooltip>
-                                  {volunteer.temp_password && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7"
-                                          onClick={() => {
-                                            setApprovedCredentials({
-                                              email: volunteer.email,
-                                              password: volunteer.temp_password!,
-                                              emailSent: volunteer.email_sent ?? false
-                                            });
-                                            setShowCredentialsDialog(true);
-                                          }}
-                                        >
-                                          <KeyRound className="w-3.5 h-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>View Credentials</TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() => resendEmailMutation.mutate(volunteer.id)}
-                                        disabled={resendEmailMutation.isPending || deleteMutation.isPending}
-                                      >
-                                        {resendEmailMutation.isPending ? (
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                          <Mail className="w-3.5 h-3.5" />
-                                        )}
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Resend Email</TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 text-destructive hover:text-destructive"
-                                        onClick={() => handleDelete(volunteer)}
-                                        disabled={deleteMutation.isPending}
-                                      >
-                                        {deleteMutation.isPending ? (
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        )}
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Delete</TooltipContent>
-                                  </Tooltip>
-                                </div>
-                              </TooltipProvider>
-                            </TableCell>
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedIds.has(volunteer.id)}
+                                    onCheckedChange={() => toggleSelect(volunteer.id)}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium truncate max-w-[100px]">
+                                  {volunteer.first_name} {volunteer.last_name?.charAt(0)}.
+                                </TableCell>
+                                <TableCell className="text-muted-foreground truncate max-w-[120px]" title={volunteer.email}>
+                                  {volunteer.email}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                  <span className="text-sm text-muted-foreground truncate block max-w-[100px]">
+                                    {volunteer.is_employee ? 'Dubai Holding' : (volunteer.external_company || 'Not specified')}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell">
+                                  {(() => {
+                                    const deps = extractUniqueDependents(volunteer.events_json);
+                                    if (deps.length === 0) {
+                                      return <span className="text-sm text-muted-foreground">—</span>;
+                                    }
+                                    return (
+                                      <div className="flex items-center gap-1">
+                                        <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-sm font-medium">{deps.length}</span>
+                                      </div>
+                                    );
+                                  })()}
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell">
+                                  <span className="text-sm text-muted-foreground">
+                                    {volunteer.events_list?.split(',').length || 0}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                                  {new Date(volunteer.created_at).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                  <div className="flex flex-col gap-0.5">
+                                    {volunteer.email_opened ? (
+                                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 w-fit text-xs px-1.5 py-0">
+                                        <MailOpen className="w-3 h-3 mr-0.5" />
+                                        Opened
+                                      </Badge>
+                                    ) : volunteer.email_sent ? (
+                                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 w-fit text-xs px-1.5 py-0">
+                                        <Check className="w-3 h-3 mr-0.5" />
+                                        Sent
+                                      </Badge>
+                                    ) : volunteer.email_send_count && volunteer.email_send_count > 0 ? (
+                                      <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 w-fit text-xs px-1.5 py-0">
+                                        <X className="w-3 h-3 mr-0.5" />
+                                        Failed
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="bg-muted text-muted-foreground w-fit text-xs px-1.5 py-0">
+                                        <Clock className="w-3 h-3 mr-0.5" />
+                                        Not sent
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <TooltipProvider delayDuration={200}>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => openDetailsDialog(volunteer)}
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>View Details</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => {
+                                              setCertificatePreviewVolunteer(volunteer);
+                                              setShowCertificatePreview(true);
+                                            }}
+                                          >
+                                            <Award className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>View Certificates</TooltipContent>
+                                      </Tooltip>
+                                      {volunteer.temp_password && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7"
+                                              onClick={() => {
+                                                setApprovedCredentials({
+                                                  email: volunteer.email,
+                                                  password: volunteer.temp_password!,
+                                                  emailSent: volunteer.email_sent ?? false
+                                                });
+                                                setShowCredentialsDialog(true);
+                                              }}
+                                            >
+                                              <KeyRound className="w-3.5 h-3.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>View Credentials</TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => resendEmailMutation.mutate(volunteer.id)}
+                                            disabled={resendEmailMutation.isPending || deleteMutation.isPending}
+                                          >
+                                            {resendEmailMutation.isPending ? (
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                              <Mail className="w-3.5 h-3.5" />
+                                            )}
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Resend Email</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-destructive hover:text-destructive"
+                                            onClick={() => handleDelete(volunteer)}
+                                            disabled={deleteMutation.isPending}
+                                          >
+                                            {deleteMutation.isPending ? (
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            )}
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </TooltipProvider>
+                                </TableCell>
+                              </>
+                            )}
                           </motion.tr>
                         ))}
                       </AnimatePresence>
@@ -1314,6 +1447,81 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Email Dialog */}
+      <Dialog open={showAddEmailDialog} onOpenChange={(open) => {
+        setShowAddEmailDialog(open);
+        if (!open) {
+          setAddEmailVolunteer(null);
+          setNewEmail('');
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Email Address</DialogTitle>
+            <DialogDescription>
+              Enter the email address for this volunteer to create their account.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {addEmailVolunteer && (
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">{addEmailVolunteer.first_name} {addEmailVolunteer.last_name}</span>
+                </div>
+                {addEmailVolunteer.phone_number && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="w-4 h-4" />
+                    <span>{addEmailVolunteer.phone_number}</span>
+                  </div>
+                )}
+                {addEmailVolunteer.events_list && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-4 h-4" />
+                    <span className="truncate">{addEmailVolunteer.events_list.split(',').map(e => formatEventName(e.trim())).join(', ')}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email Address</label>
+                <Input
+                  type="email"
+                  placeholder="volunteer@example.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddEmailDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (addEmailVolunteer && newEmail.trim()) {
+                  addEmailMutation.mutate({ pendingId: addEmailVolunteer.id, email: newEmail.trim() });
+                }
+              }}
+              disabled={!newEmail.trim() || !newEmail.includes('@') || addEmailMutation.isPending}
+            >
+              {addEmailMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Add Email & Create Account'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
