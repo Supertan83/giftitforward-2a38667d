@@ -399,6 +399,135 @@ async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promi
   }
 }
 
+// Helper to parse date from various formats (e.g., "February 22, 2026" or "2026-02-22")
+function parseDateToISO(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  
+  try {
+    // Try parsing directly
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0]; // Return YYYY-MM-DD
+    }
+  } catch {
+    // Continue to manual parsing
+  }
+  
+  // Try parsing "Month Day, Year" format
+  const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                      'july', 'august', 'september', 'october', 'november', 'december'];
+  const match = dateStr.toLowerCase().match(/(\w+)\s+(\d+),?\s*(\d{4})/);
+  if (match) {
+    const monthIndex = monthNames.indexOf(match[1]);
+    if (monthIndex !== -1) {
+      const year = parseInt(match[3]);
+      const day = parseInt(match[2]);
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+  
+  return null;
+}
+
+// Helper to parse time from various formats (e.g., "7:30PM" or "7:30PM – 11:30PM")
+function parseTimeRange(timeStr: string | null | undefined): { start: string | null; end: string | null } {
+  if (!timeStr) return { start: null, end: null };
+  
+  const parseTime = (t: string): string | null => {
+    const match = t.trim().match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+    if (!match) return null;
+    
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2] || '0');
+    const period = (match[3] || '').toLowerCase();
+    
+    if (period === 'pm' && hours !== 12) hours += 12;
+    if (period === 'am' && hours === 12) hours = 0;
+    
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+  };
+  
+  // Split by various separators (–, -, to)
+  const parts = timeStr.split(/\s*[–\-]\s*|\s+to\s+/i);
+  
+  if (parts.length >= 2) {
+    return {
+      start: parseTime(parts[0]),
+      end: parseTime(parts[1])
+    };
+  }
+  
+  return {
+    start: parseTime(timeStr),
+    end: null
+  };
+}
+
+// Helper to convert slug to human-readable name
+function slugToName(slug: string): string {
+  return slug
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+    .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
+}
+
+// Helper to create marketplace events from form data if they don't exist
+// deno-lint-ignore no-explicit-any
+async function createMarketplacesFromEvents(supabase: any, eventsJson: unknown): Promise<void> {
+  if (!eventsJson || !Array.isArray(eventsJson)) return;
+  
+  console.log(`Processing ${eventsJson.length} events to check/create marketplaces`);
+  
+  for (const evt of eventsJson as RegisteredEvent[]) {
+    if (!evt.event) continue;
+    
+    try {
+      // Generate a human-readable name from the event slug
+      const eventName = slugToName(evt.event);
+      
+      // Check if marketplace with this name already exists (case-insensitive)
+      const { data: existingMarketplace } = await supabase
+        .from('marketplace_events')
+        .select('id, name')
+        .ilike('name', eventName)
+        .maybeSingle();
+      
+      if (existingMarketplace) {
+        console.log(`Marketplace already exists: "${eventName}" (ID: ${existingMarketplace.id})`);
+        continue;
+      }
+      
+      // Parse date and time from form data
+      const eventDate = parseDateToISO(evt.eventDate);
+      const { start: startTime, end: endTime } = parseTimeRange(evt.eventTime);
+      const location = evt.eventLocation || null;
+      
+      // Create new marketplace event
+      const { data: newMarketplace, error: createError } = await supabase
+        .from('marketplace_events')
+        .insert({
+          name: eventName,
+          event_date: eventDate,
+          start_time: startTime,
+          end_time: endTime,
+          location: location,
+          status: 'upcoming'
+        })
+        .select('id, name')
+        .single();
+      
+      if (createError) {
+        console.error(`Failed to create marketplace "${eventName}":`, createError);
+      } else {
+        console.log(`Created new marketplace: "${eventName}" (ID: ${newMarketplace.id})`);
+      }
+    } catch (err) {
+      console.error(`Error processing event "${evt.event}":`, err);
+    }
+  }
+}
+
 // Generate unique volunteer QR card ID
 function generateVolunteerQRId(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -2913,6 +3042,9 @@ serve(async (req) => {
             }
           }
           
+          // Create marketplace events from form data if they don't exist
+          await createMarketplacesFromEvents(supabase, eventsJson);
+          
           // Create a pending record so admin can see it and contact the volunteer
           const { data: pendingData, error: pendingError } = await supabase
             .from('pending_volunteers')
@@ -2982,6 +3114,9 @@ serve(async (req) => {
               eventsJson = formData.eventsjson;
             }
           }
+
+          // Create marketplace events from form data if they don't exist
+          await createMarketplacesFromEvents(supabase, eventsJson);
 
           const volunteerEmail = extractEmailFromDhFormData(formData);
           const firstName = formData['First Name'];
