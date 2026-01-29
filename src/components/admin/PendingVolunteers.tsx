@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -48,6 +49,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CertificatePreviewDialog } from '@/components/certificates/CertificatePreviewDialog';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface VolunteerQRCard {
   unique_id: string;
@@ -158,6 +162,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showAddEmailDialog, setShowAddEmailDialog] = useState(false);
   const [addEmailVolunteer, setAddEmailVolunteer] = useState<PendingVolunteer | null>(null);
   const [newEmail, setNewEmail] = useState('');
+  
+  // Export report state
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState<Date | undefined>(undefined);
+  const [exportEndDate, setExportEndDate] = useState<Date | undefined>(undefined);
+  const [isExporting, setIsExporting] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -613,6 +623,123 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  // Export report handler
+  const handleExportReport = async () => {
+    if (!exportStartDate || !exportEndDate) {
+      toast({
+        title: 'Select Date Range',
+        description: 'Please select both start and end dates',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Set end date to end of day
+      const endOfDay = new Date(exportEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Query volunteers within date range
+      let query = supabase
+        .from('pending_volunteers')
+        .select('*')
+        .gte('created_at', exportStartDate.toISOString())
+        .lte('created_at', endOfDay.toISOString())
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+
+      // Apply tab filter
+      if (activeTab === 'bulk_uploaded') {
+        query = query.eq('source', 'bulk_upload');
+      } else if (activeTab === 'approved') {
+        query = query.or('source.is.null,source.neq.bulk_upload');
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        toast({
+          title: 'No Data',
+          description: 'No volunteers found in the selected date range',
+          variant: 'destructive',
+        });
+        setIsExporting(false);
+        return;
+      }
+
+      // Create CSV content
+      const headers = [
+        'Full Name',
+        'Email',
+        'Phone Number',
+        'Gender',
+        'Employee',
+        'Company/Vertical',
+        'Events Registered',
+        'Training Completed',
+        'Email Sent',
+        'Created Date'
+      ];
+
+      const rows = data.map(v => [
+        `${v.first_name} ${v.last_name}`,
+        v.email || '',
+        v.phone_number || '',
+        v.gender || '',
+        v.is_employee ? 'Yes' : 'No',
+        v.is_employee ? (v.employee_vertical || 'Dubai Holding') : (v.external_company || ''),
+        v.events_list?.split(',').map((e: string) => formatEventName(e.trim())).join('; ') || '',
+        v.training_completed ? 'Yes' : 'No',
+        v.email_sent ? 'Yes' : 'No',
+        new Date(v.created_at).toLocaleDateString()
+      ]);
+
+      // Escape CSV values
+      const escapeCsvValue = (value: string) => {
+        if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      };
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(escapeCsvValue).join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const startStr = format(exportStartDate, 'yyyy-MM-dd');
+      const endStr = format(exportEndDate, 'yyyy-MM-dd');
+      link.href = url;
+      link.download = `volunteers-report-${startStr}-to-${endStr}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Export Complete',
+        description: `Exported ${data.length} volunteers to CSV`,
+      });
+      setShowExportDialog(false);
+    } catch (error: unknown) {
+      console.error('Export error:', error);
+      toast({
+        title: 'Export Failed',
+        description: error instanceof Error ? error.message : 'Failed to export report',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -631,10 +758,16 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">Refresh</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)} className="gap-2">
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Export</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -1479,7 +1612,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 )}
                 {addEmailVolunteer.events_list && (
                   <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <Calendar className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <CalendarLucide className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{addEmailVolunteer.events_list.split(',').map(e => formatEventName(e.trim())).join(', ')}</span>
                   </div>
                 )}
@@ -1518,6 +1651,102 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </>
               ) : (
                 'Add Email & Create Account'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Report Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Volunteer Report</DialogTitle>
+            <DialogDescription>
+              Select a date range to export volunteer data as CSV
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Start Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !exportStartDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {exportStartDate ? format(exportStartDate, "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={exportStartDate}
+                    onSelect={setExportStartDate}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">End Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !exportEndDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {exportEndDate ? format(exportEndDate, "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={exportEndDate}
+                    onSelect={setExportEndDate}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {exportStartDate && exportEndDate && (
+              <p className="text-sm text-muted-foreground">
+                Export will include volunteers from {format(exportStartDate, "MMM d, yyyy")} to {format(exportEndDate, "MMM d, yyyy")}
+              </p>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleExportReport}
+              disabled={!exportStartDate || !exportEndDate || isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export to Excel
+                </>
               )}
             </Button>
           </DialogFooter>
