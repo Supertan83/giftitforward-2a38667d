@@ -52,8 +52,8 @@ export const generateCertificateImageURL = async ({
     // Position name below "THIS CERTIFIES THAT" header
     ctx.fillText(fullName, 170, 580);
   } else {
-    // Position name below "PRESENTED TO" header
-    ctx.fillText(fullName, 170, 580);
+    // Position name below "PRESENTED TO" header (15px lower)
+    ctx.fillText(fullName, 170, 595);
   }
 
   // Return as blob URL
@@ -99,8 +99,8 @@ export const generateCertificatePDFBlob = async ({
     // Position name below "THIS CERTIFIES THAT" header
     doc.text(fullName, 170, 580);
   } else {
-    // Position name below "PRESENTED TO" header
-    doc.text(fullName, 170, 580);
+    // Position name below "PRESENTED TO" header (15px lower)
+    doc.text(fullName, 170, 595);
   }
 
   return doc.output('blob');
@@ -137,8 +137,8 @@ export const generateCertificatePDF = async ({
     // Position name below "THIS CERTIFIES THAT" header
     doc.text(fullName, 170, 580);
   } else {
-    // Position name below "PRESENTED TO" header
-    doc.text(fullName, 170, 580);
+    // Position name below "PRESENTED TO" header (15px lower)
+    doc.text(fullName, 170, 595);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
