@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -51,7 +52,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { CertificatePreviewDialog } from '@/components/certificates/CertificatePreviewDialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+
+type ExportFormat = 'excel' | 'csv';
 
 interface VolunteerQRCard {
   unique_id: string;
@@ -168,6 +173,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [exportStartDate, setExportStartDate] = useState<Date | undefined>(undefined);
   const [exportEndDate, setExportEndDate] = useState<Date | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -670,7 +676,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         return;
       }
 
-      // Create CSV content
+      // Create data rows
       const headers = [
         'Full Name',
         'Email',
@@ -697,35 +703,60 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         new Date(v.created_at).toLocaleDateString()
       ]);
 
-      // Escape CSV values
-      const escapeCsvValue = (value: string) => {
-        if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-          return `"${value.replace(/"/g, '""')}"`;
-        }
-        return value;
-      };
-
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(escapeCsvValue).join(','))
-      ].join('\n');
-
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
       const startStr = format(exportStartDate, 'yyyy-MM-dd');
       const endStr = format(exportEndDate, 'yyyy-MM-dd');
-      link.href = url;
-      link.download = `volunteers-report-${startStr}-to-${endStr}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const baseFilename = `volunteers-report-${startStr}-to-${endStr}`;
+
+      if (exportFormat === 'excel') {
+        // Create Excel workbook
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        
+        // Set column widths
+        worksheet['!cols'] = [
+          { wch: 25 }, // Full Name
+          { wch: 30 }, // Email
+          { wch: 15 }, // Phone
+          { wch: 10 }, // Gender
+          { wch: 10 }, // Employee
+          { wch: 20 }, // Company
+          { wch: 40 }, // Events
+          { wch: 15 }, // Training
+          { wch: 12 }, // Email Sent
+          { wch: 12 }, // Created Date
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Volunteers');
+        XLSX.writeFile(workbook, `${baseFilename}.xlsx`);
+      } else {
+        // Create CSV content
+        const escapeCsvValue = (value: string) => {
+          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        };
+
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(escapeCsvValue).join(','))
+        ].join('\n');
+
+        // Create and download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${baseFilename}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
 
       toast({
         title: 'Export Complete',
-        description: `Exported ${data.length} volunteers to CSV`,
+        description: `Exported ${data.length} volunteers to ${exportFormat === 'excel' ? 'Excel' : 'CSV'}`,
       });
       setShowExportDialog(false);
     } catch (error: unknown) {
@@ -1663,7 +1694,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           <DialogHeader>
             <DialogTitle>Export Volunteer Report</DialogTitle>
             <DialogDescription>
-              Select a date range to export volunteer data as CSV
+              Select a date range and format to export volunteer data
             </DialogDescription>
           </DialogHeader>
           
@@ -1722,6 +1753,31 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               </Popover>
             </div>
 
+            {/* Export Format Selection */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Export Format</label>
+              <RadioGroup 
+                value={exportFormat} 
+                onValueChange={(value) => setExportFormat(value as ExportFormat)}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="excel" id="format-excel" />
+                  <Label htmlFor="format-excel" className="flex items-center gap-2 cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    Excel (.xlsx)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="csv" id="format-csv" />
+                  <Label htmlFor="format-csv" className="flex items-center gap-2 cursor-pointer">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    CSV (.csv)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
             {exportStartDate && exportEndDate && (
               <p className="text-sm text-muted-foreground">
                 Export will include volunteers from {format(exportStartDate, "MMM d, yyyy")} to {format(exportEndDate, "MMM d, yyyy")}
@@ -1744,8 +1800,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export to Excel
+                  {exportFormat === 'excel' ? <FileSpreadsheet className="w-4 h-4 mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
+                  Export {exportFormat === 'excel' ? 'Excel' : 'CSV'}
                 </>
               )}
             </Button>
