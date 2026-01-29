@@ -42,18 +42,18 @@ export const generateCertificateImageURL = async ({
 
   const fullName = `${firstName} ${lastName}`;
 
+  // Consistent left alignment for both certificate types
+  // X position (150) matches the left margin of background text
+  ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
+  ctx.fillStyle = '#54585A'; // DH Grey
+  ctx.textAlign = 'left';
+  
   if (type === 'completion') {
-    // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
-    ctx.fillStyle = '#54585A'; // DH Grey
-    ctx.textAlign = 'left';
+    // Position name below "THIS CERTIFIES THAT" header
     ctx.fillText(fullName, 150, 580);
   } else {
-    // For attendance certificate - place name under "PRESENTED TO"
-    ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
-    ctx.fillStyle = '#54585A'; // DH Grey
-    ctx.textAlign = 'left';
-    ctx.fillText(fullName, 150, 600);
+    // Position name below "PRESENTED TO" header
+    ctx.fillText(fullName, 150, 580);
   }
 
   // Return as blob URL
@@ -90,18 +90,17 @@ export const generateCertificatePDFBlob = async ({
 
   const fullName = `${firstName} ${lastName}`;
 
+  // Consistent left alignment for both certificate types
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(48);
+  doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+  
   if (type === 'completion') {
-    // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(48);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+    // Position name below "THIS CERTIFIES THAT" header
     doc.text(fullName, 150, 580);
   } else {
-    // For attendance certificate - place name under "PRESENTED TO"
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(48);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 150, 600);
+    // Position name below "PRESENTED TO" header
+    doc.text(fullName, 150, 580);
   }
 
   return doc.output('blob');
@@ -129,18 +128,17 @@ export const generateCertificatePDF = async ({
 
   const fullName = `${firstName} ${lastName}`;
 
+  // Consistent left alignment for both certificate types
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(48);
+  doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+  
   if (type === 'completion') {
-    // Write volunteer name below "THIS CERTIFIES THAT" - positioned in blank area before description
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(48);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
+    // Position name below "THIS CERTIFIES THAT" header
     doc.text(fullName, 150, 580);
   } else {
-    // For attendance certificate - place name under "PRESENTED TO"
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(48);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 150, 600);
+    // Position name below "PRESENTED TO" header
+    doc.text(fullName, 150, 580);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
