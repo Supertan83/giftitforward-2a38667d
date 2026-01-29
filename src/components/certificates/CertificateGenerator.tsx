@@ -19,12 +19,32 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
   });
 };
 
+// Helper to load custom font as base64
+const loadFontAsBase64 = async (fontPath: string): Promise<string> => {
+  const response = await fetch(fontPath);
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = btoa(
+    new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
+  return base64;
+};
+
+// Helper to load custom font for canvas
+const loadFontForCanvas = async (): Promise<void> => {
+  const font = new FontFace('29LT Bukra', 'url(/fonts/29lt-bukra.ttf)');
+  await font.load();
+  document.fonts.add(font);
+};
+
 // Generate certificate as an image URL for preview (avoids Chrome iframe blocking)
 export const generateCertificateImageURL = async ({
   firstName,
   lastName,
   type,
 }: CertificateData): Promise<string> => {
+  // Load custom font for canvas
+  await loadFontForCanvas();
+  
   const canvas = document.createElement('canvas');
   canvas.width = 1920;
   canvas.height = 1080;
@@ -42,9 +62,8 @@ export const generateCertificateImageURL = async ({
 
   const fullName = `${firstName} ${lastName}`;
 
-  // Consistent left alignment for both certificate types
-  // X position (170) - aligned with background text
-  ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
+  // Use custom 29LT Bukra font for the name
+  ctx.font = 'bold 48px "29LT Bukra", Helvetica, Arial, sans-serif';
   ctx.fillStyle = '#54585A'; // DH Grey
   ctx.textAlign = 'left';
   
@@ -80,6 +99,11 @@ export const generateCertificatePDFBlob = async ({
     format: [1920, 1080],
   });
 
+  // Load and add custom font
+  const fontBase64 = await loadFontAsBase64('/fonts/29lt-bukra.ttf');
+  doc.addFileToVFS('29lt-bukra.ttf', fontBase64);
+  doc.addFont('29lt-bukra.ttf', '29LTBukra', 'normal');
+
   // Load background image
   const backgroundPath = type === 'completion' 
     ? '/images/certificate-completion-background.jpg'
@@ -90,8 +114,8 @@ export const generateCertificatePDFBlob = async ({
 
   const fullName = `${firstName} ${lastName}`;
 
-  // Consistent left alignment for both certificate types
-  doc.setFont('helvetica', 'bold');
+  // Use custom 29LT Bukra font for the name
+  doc.setFont('29LTBukra', 'normal');
   doc.setFontSize(48);
   doc.setTextColor(84, 88, 90); // #54585A - DH Grey
   
@@ -118,6 +142,11 @@ export const generateCertificatePDF = async ({
     format: [1920, 1080],
   });
 
+  // Load and add custom font
+  const fontBase64 = await loadFontAsBase64('/fonts/29lt-bukra.ttf');
+  doc.addFileToVFS('29lt-bukra.ttf', fontBase64);
+  doc.addFont('29lt-bukra.ttf', '29LTBukra', 'normal');
+
   // Load background image
   const backgroundPath = type === 'completion' 
     ? '/images/certificate-completion-background.jpg'
@@ -128,8 +157,8 @@ export const generateCertificatePDF = async ({
 
   const fullName = `${firstName} ${lastName}`;
 
-  // Consistent left alignment for both certificate types
-  doc.setFont('helvetica', 'bold');
+  // Use custom 29LT Bukra font for the name
+  doc.setFont('29LTBukra', 'normal');
   doc.setFontSize(48);
   doc.setTextColor(84, 88, 90); // #54585A - DH Grey
   
