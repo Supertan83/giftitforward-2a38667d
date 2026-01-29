@@ -43,17 +43,17 @@ export const generateCertificateImageURL = async ({
   const fullName = `${firstName} ${lastName}`;
 
   // Consistent left alignment for both certificate types
-  // X position (180) - 30px right of the left margin
+  // X position (170) - aligned with background text
   ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
   ctx.fillStyle = '#54585A'; // DH Grey
   ctx.textAlign = 'left';
   
   if (type === 'completion') {
     // Position name below "THIS CERTIFIES THAT" header
-    ctx.fillText(fullName, 180, 580);
+    ctx.fillText(fullName, 170, 580);
   } else {
     // Position name below "PRESENTED TO" header
-    ctx.fillText(fullName, 180, 580);
+    ctx.fillText(fullName, 170, 580);
   }
 
   // Return as blob URL
@@ -97,10 +97,10 @@ export const generateCertificatePDFBlob = async ({
   
   if (type === 'completion') {
     // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 180, 580);
+    doc.text(fullName, 170, 580);
   } else {
     // Position name below "PRESENTED TO" header
-    doc.text(fullName, 180, 580);
+    doc.text(fullName, 170, 580);
   }
 
   return doc.output('blob');
@@ -135,10 +135,10 @@ export const generateCertificatePDF = async ({
   
   if (type === 'completion') {
     // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 180, 580);
+    doc.text(fullName, 170, 580);
   } else {
     // Position name below "PRESENTED TO" header
-    doc.text(fullName, 180, 580);
+    doc.text(fullName, 170, 580);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
