@@ -1,104 +1,99 @@
 
 
-# Plan: Add "Pending (Missing Email)" Tab to Admin Dashboard
+# Plan: Add Export Reports for Volunteers
 
 ## Problem Summary
-Webflow form submissions from Dubai Holding employees are arriving without email addresses. The webhook-receiver creates records in `pending_volunteers` with placeholder emails (e.g., `missing_email_...@placeholder.invalid`) and status = 'pending'. However, the Admin Dashboard's "Volunteers Added" section only shows volunteers with status = 'approved', making these 46 pending records invisible to administrators.
+You need the ability to export volunteer reports from the "Volunteers Added" section. The export should allow you to:
+1. Choose a date or date range
+2. Generate an Excel/CSV report with volunteer data
+3. Download the file
 
 ## Solution Overview
-Add a new "Pending (Missing Email)" tab to the Volunteers Added section that displays volunteers stuck in pending status due to missing emails, and provides functionality to:
-1. View all pending volunteers with their details
-2. Add/edit the missing email address
-3. Trigger account creation, QR code generation, and welcome email sending
+Add an "Export Report" button with a date range picker dialog that generates a downloadable Excel-compatible CSV file containing volunteer data filtered by the selected date range.
 
 ## Implementation Steps
 
-### 1. Update PendingVolunteers Component UI
+### 1. Add Export Dialog State and UI Elements
 **File: `src/components/admin/PendingVolunteers.tsx`**
 
-- Add a third tab called "Pending (Missing Email)" to the existing tabs
-- Update the tab state type to include `'pending_missing_email'`
-- Add query logic to fetch volunteers where `status = 'pending'`
-- Display a count badge on the tab showing how many need attention
-- Render a specialized table for pending volunteers with:
-  - Name, phone, events registered for
-  - "Add Email" action button
-  - Delete action (to remove invalid records if needed)
+- Add new state variables for:
+  - `showExportDialog` - controls dialog visibility
+  - `exportStartDate` - start date for the export range
+  - `exportEndDate` - end date for the export range
+  - `isExporting` - loading state during export
 
-### 2. Create "Add Email" Dialog
+- Add new imports:
+  - `CalendarIcon, Download` from lucide-react
+  - `Calendar` from `@/components/ui/calendar`
+  - `Popover, PopoverContent, PopoverTrigger` from `@/components/ui/popover`
+  - `format` from `date-fns`
+
+### 2. Create Export Report Dialog
 **File: `src/components/admin/PendingVolunteers.tsx`**
 
-- Add a dialog for entering the missing email address
-- Include email validation (proper format)
-- Show volunteer details for context (name, phone, events)
+Add a dialog with:
+- Two date pickers (Start Date and End Date) using the Calendar component
+- Preview of how many volunteers will be included
+- "Export to Excel" button
+- Cancel button
 
-### 3. Create Backend Function to Process Email Addition
-**File: `supabase/functions/webhook-receiver/index.ts`**
-
-- Add new action `add_volunteer_email` that:
-  1. Validates the email format
-  2. Checks if email already exists in the system
-  3. Updates the pending_volunteers record with the real email
-  4. Triggers the auto-approval flow (creates user account, QR code, sends welcome email)
-  5. Updates status from 'pending' to 'approved'
-
-### 4. Add Mutation for Email Addition
+### 3. Implement Export Function
 **File: `src/components/admin/PendingVolunteers.tsx`**
 
-- Create mutation to call the new `add_volunteer_email` action
-- Handle success (refresh list, show credentials)
-- Handle errors (email already exists, invalid format, etc.)
+Create `handleExportReport` function that:
+1. Queries the database for volunteers within the selected date range
+2. Formats data into CSV with columns:
+   - Full Name
+   - Email
+   - Phone Number
+   - Gender
+   - Employee Status (Yes/No)
+   - Company/Vertical
+   - Events Registered
+   - Training Completed (Yes/No)
+   - Email Sent (Yes/No)
+   - Created Date
+3. Triggers file download with proper filename including date range
+4. Shows success/error toast
+
+### 4. Add Export Button to Header
+**File: `src/components/admin/PendingVolunteers.tsx`**
+
+Add an "Export" button next to the existing "Refresh" button in the header that opens the export dialog.
 
 ## Technical Details
 
-### Tab Configuration
+### Date Range Picker UI Layout
 ```text
-+-------------------+------------------+---------------------------+
-| Partner Volunteers | Bulk Uploaded   | Pending (Missing Email)   |
-+-------------------+------------------+---------------------------+
++---------------------------------------+
+|        Export Volunteer Report        |
++---------------------------------------+
+| Start Date:  [Calendar Picker    v]   |
+| End Date:    [Calendar Picker    v]   |
+|                                       |
+| Preview: 45 volunteers in range       |
+|                                       |
+| [Cancel]            [Export to Excel] |
++---------------------------------------+
 ```
 
-### Database Query for Pending Tab
-```sql
-SELECT * FROM pending_volunteers 
-WHERE status = 'pending' 
-ORDER BY created_at DESC
-```
+### CSV Export Format
+| Full Name | Email | Phone | Gender | Employee | Company | Events | Training | Email Sent | Created |
+|-----------|-------|-------|--------|----------|---------|--------|----------|------------|---------|
+| John Doe | john@example.com | +971... | Male | Yes | Dubai Holding | Event 1, Event 2 | Yes | Yes | 2026-01-15 |
 
-### New Edge Function Action Structure
-```text
-Action: add_volunteer_email
-Input:
-  - pending_id: UUID
-  - email: string (validated email address)
+### File Naming Convention
+`volunteers-report-YYYY-MM-DD-to-YYYY-MM-DD.csv`
 
-Process:
-  1. Validate email format
-  2. Check for duplicate email in pending_volunteers and auth.users
-  3. Update pending_volunteers.email with real email
-  4. Call existing auto-approve logic
-  5. Return credentials + QR code
-
-Output:
-  - success: boolean
-  - email: string
-  - temp_password: string
-  - qr_code: string
-  - email_sent: boolean
-```
-
-### UI Table Columns for Pending Tab
-| Name | Phone | Events | Created | Actions |
-|------|-------|--------|---------|---------|
-| First Last | 05xxxxx | Event Name | Date | [Add Email] [Delete] |
+Example: `volunteers-report-2026-01-01-to-2026-01-29.csv`
 
 ## Files to Modify
-1. `src/components/admin/PendingVolunteers.tsx` - Add new tab and UI
-2. `supabase/functions/webhook-receiver/index.ts` - Add email addition action
+1. `src/components/admin/PendingVolunteers.tsx` - Add export dialog, date pickers, and export function
 
 ## Benefits
-- Administrators can now see all 46 pending volunteers that were previously invisible
-- Provides a workflow to manually add missing emails and complete registrations
-- Maintains the existing auto-approval flow for consistency
-- Keeps audit trail through the standard pending_volunteers table
+- Quick access to volunteer data for reporting
+- Filter by date range to get specific periods
+- Excel-compatible CSV format for easy data analysis
+- Includes all relevant volunteer information
+- Works with the existing tab filtering (exports from current tab)
 
