@@ -597,7 +597,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
       {/* Edit User Modal */}
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Edit User</DialogTitle>
             <DialogDescription>
