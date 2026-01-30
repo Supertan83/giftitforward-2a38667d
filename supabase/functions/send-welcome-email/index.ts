@@ -1,9 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { Resend } from 'https://esm.sh/resend@2.0.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Initialize Resend for fallback
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
 interface EventInfo {
   name: string;
@@ -448,6 +452,35 @@ async function sendEmailViaMicrosoftGraph(
   console.log('Email sent successfully via Microsoft Graph');
 }
 
+// Fallback: Send email using Resend
+async function sendEmailViaResend(
+  recipientEmail: string,
+  subject: string,
+  htmlContent: string,
+  bccAddress?: string
+): Promise<void> {
+  const sender = 'Gift It Forward <giftitforward@dubaiholding.com>';
+  
+  const emailData: any = {
+    from: sender,
+    to: [recipientEmail],
+    subject: subject,
+    html: htmlContent,
+  };
+  
+  if (bccAddress) {
+    emailData.bcc = [bccAddress];
+  }
+  
+  const result = await resend.emails.send(emailData);
+  
+  if (result.error) {
+    throw new Error(`Resend error: ${result.error.message}`);
+  }
+  
+  console.log('Email sent successfully via Resend fallback');
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -501,15 +534,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Get Microsoft Graph access token
-    const accessToken = await getMicrosoftAccessToken();
-
-    // Get sender email from environment
-    const senderEmail = Deno.env.get('SENDER_EMAIL');
-    if (!senderEmail) {
-      throw new Error('SENDER_EMAIL not configured');
-    }
-
     // Build email content - pass events array if provided
     const htmlContent = buildEmailHtml(
       firstName,
@@ -523,30 +547,57 @@ Deno.serve(async (req) => {
 
     // HubSpot BCC address for tracking
     const hubspotBcc = Deno.env.get('HUBSPOT_BCC_ADDRESS') || undefined;
+    const emailSubject = 'Thank you for registering as a Gift It Forward volunteer';
+    
+    let provider = 'microsoft_graph';
+    let usedFallback = false;
 
-    // Send email via Microsoft Graph
-    await sendEmailViaMicrosoftGraph(
-      accessToken,
-      senderEmail,
-      email,
-      'Thank you for registering as a Gift It Forward volunteer',
-      htmlContent,
-      hubspotBcc
-    );
+    // Try Microsoft Graph first, fallback to Resend if it fails
+    try {
+      const accessToken = await getMicrosoftAccessToken();
+      const senderEmail = Deno.env.get('SENDER_EMAIL');
+      
+      if (!senderEmail) {
+        throw new Error('SENDER_EMAIL not configured');
+      }
+
+      await sendEmailViaMicrosoftGraph(
+        accessToken,
+        senderEmail,
+        email,
+        emailSubject,
+        htmlContent,
+        hubspotBcc
+      );
+    } catch (msGraphError: any) {
+      console.warn('Microsoft Graph failed, falling back to Resend:', msGraphError.message);
+      
+      // Fallback to Resend
+      await sendEmailViaResend(
+        email,
+        emailSubject,
+        htmlContent,
+        hubspotBcc
+      );
+      
+      provider = 'resend_fallback';
+      usedFallback = true;
+    }
 
     // Log email send
     await supabaseAdmin.from('email_send_logs').insert({
       recipient_email: email,
-      email_type: 'welcome_microsoft',
-      provider: 'microsoft_graph',
+      email_type: 'welcome',
+      provider: provider,
       success: true,
       pending_volunteer_id: volunteerId || null,
-      request_payload: { firstName, lastName, qrCodeId, marketplaceId, eventsCount: events?.length || 0 },
+      request_payload: { firstName, lastName, qrCodeId, marketplaceId, eventsCount: events?.length || 0, usedFallback },
     });
 
     return new Response(JSON.stringify({ 
       success: true, 
-      message: 'Welcome email sent successfully via Microsoft Graph' 
+      message: `Welcome email sent successfully via ${usedFallback ? 'Resend (fallback)' : 'Microsoft Graph'}`,
+      provider: provider
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
