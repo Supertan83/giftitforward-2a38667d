@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import jsPDF from 'jspdf';
 import { Check, X, ChevronLeft, ChevronRight, Award, Download, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -8,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { TrainingUserInfo } from '@/pages/TrainingPage';
 import dubaiHoldingLogo from '@/assets/dubai-holding-logo.png';
+import { generateCertificatePDF, generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
 
 interface QuizOption {
   id: string;
@@ -135,62 +135,23 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
     }
   };
 
-  const generateCertificatePDF = async (): Promise<string> => {
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'px',
-      format: [1920, 1080],
-    });
-
-    const fullName = `${userInfo.firstName} ${userInfo.lastName}`;
-
-    // Load background image - use completion certificate background
-    const bgResponse = await fetch('/images/certificate-completion-background.jpg');
-    const bgBlob = await bgResponse.blob();
-    const bgBase64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(bgBlob);
-    });
-    
-    // Add background image (full page)
-    doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
-
-    // Add volunteer name where "(First Name) (Last Name)" placeholder is
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(72);
-    doc.setTextColor(84, 88, 90); // #54585A - DH Grey
-    doc.text(fullName, 960, 460, { align: 'center' });
-
-    return doc.output('datauristring');
-  };
-
   const downloadCertificate = async () => {
     setIsGenerating(true);
     try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [1920, 1080],
-      });
-
-      const fullName = `${userInfo.firstName} ${userInfo.lastName}`;
-
-      const bgResponse = await fetch('/images/certificate-completion-background.jpg');
-      const bgBlob = await bgResponse.blob();
-      const bgBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(bgBlob);
+      const blob = await generateCertificatePDFBlob({
+        firstName: userInfo.firstName?.trim() || '',
+        lastName: userInfo.lastName?.trim() || '',
+        type: 'completion'
       });
       
-      doc.addImage(bgBase64, 'JPEG', 0, 0, 1920, 1080);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(72);
-      doc.setTextColor(84, 88, 90);
-      doc.text(fullName, 960, 460, { align: 'center' });
-
-      doc.save(`completion-certificate-${fullName.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `completion-certificate-${userInfo.firstName}-${userInfo.lastName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       toast({
         title: 'Certificate Downloaded',
@@ -211,9 +172,12 @@ const TrainingQuiz = ({ userInfo, onComplete }: TrainingQuizProps) => {
   const sendCertificateEmail = async () => {
     setIsSendingEmail(true);
     try {
-      const pdfDataUri = await generateCertificatePDF();
-      // Extract base64 data from data URI
-      const base64Data = pdfDataUri.split(',')[1];
+      // Use centralized certificate generator
+      const base64Data = await generateCertificatePDF({
+        firstName: userInfo.firstName?.trim() || '',
+        lastName: userInfo.lastName?.trim() || '',
+        type: 'completion'
+      });
 
       const { data, error } = await supabase.functions.invoke('send-certificate', {
         body: {
