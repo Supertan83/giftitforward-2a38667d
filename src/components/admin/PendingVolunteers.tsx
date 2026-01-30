@@ -709,7 +709,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       const { count, error } = await supabase
         .from('pending_volunteers')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .like('email', '%@placeholder.invalid');
       if (error) throw error;
       return count || 0;
     }
