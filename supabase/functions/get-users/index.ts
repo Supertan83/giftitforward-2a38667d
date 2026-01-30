@@ -104,10 +104,10 @@ Deno.serve(async (req) => {
       console.error('Error fetching volunteer cards:', cardsError);
     }
 
-    // Get pending_volunteers to map to auth users (including names)
+    // Get pending_volunteers to map to auth users (including all volunteer data)
     const { data: pendingVolunteers, error: pvError } = await supabaseAdmin
       .from('pending_volunteers')
-      .select('id, created_user_id, first_name, last_name')
+      .select('id, created_user_id, first_name, last_name, email, phone_number, gender, events_json, events_list, employee_vertical, employee_number, external_company, is_employee, source')
       .not('created_user_id', 'is', null)
 
     if (pvError) {
@@ -122,13 +122,37 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Create a map of auth_user_id to volunteer names (for edit dialog)
-    const authUserToName = new Map<string, { first_name: string; last_name: string }>();
+    // Define volunteer data interface
+    interface VolunteerData {
+      first_name: string;
+      last_name: string;
+      phone_number: string | null;
+      gender: string | null;
+      events_json: unknown;
+      events_list: string | null;
+      employee_vertical: string | null;
+      employee_number: string | null;
+      external_company: string | null;
+      is_employee: boolean | null;
+      source: string | null;
+    }
+
+    // Create a map of auth_user_id to full volunteer data
+    const authUserToVolunteerData = new Map<string, VolunteerData>();
     pendingVolunteers?.forEach(pv => {
       if (pv.created_user_id) {
-        authUserToName.set(pv.created_user_id, {
+        authUserToVolunteerData.set(pv.created_user_id, {
           first_name: pv.first_name || '',
-          last_name: pv.last_name || ''
+          last_name: pv.last_name || '',
+          phone_number: pv.phone_number || null,
+          gender: pv.gender || null,
+          events_json: pv.events_json || null,
+          events_list: pv.events_list || null,
+          employee_vertical: pv.employee_vertical || null,
+          employee_number: pv.employee_number || null,
+          external_company: pv.external_company || null,
+          is_employee: pv.is_employee || null,
+          source: pv.source || null,
         });
       }
     });
@@ -163,19 +187,30 @@ Deno.serve(async (req) => {
 
     // Map roles to users with emails - deduplicate by user_id, prioritize admin role
     // IMPORTANT: Skip entries where the auth user no longer exists (orphaned records)
-    const userMap = new Map<string, { 
+    interface UserInfo {
       id: string; 
       email: string; 
       role: string; 
       created_at: string; 
       first_name: string | null; 
       last_name: string | null;
+      phone_number: string | null;
+      gender: string | null;
       qr_codes: string[];
       pending_volunteer_id: string | null;
       assigned_zone: string | null;
       marketplace_id: string | null;
+      marketplace_ids: string[];
+      events_json: unknown;
+      events_list: string | null;
       volunteer_status: string | null;
-    }>();
+      employee_vertical: string | null;
+      employee_number: string | null;
+      external_company: string | null;
+      is_employee: boolean | null;
+      source: string | null;
+    }
+    const userMap = new Map<string, UserInfo>();
 
     // Create reverse map: auth_user_id to pending_volunteer_id
     const authUserToPV = new Map<string, string>();
@@ -205,21 +240,36 @@ Deno.serve(async (req) => {
       
       // If user not in map, or if this role is 'admin' (higher priority), add/update
       if (!existing || role.role === 'admin') {
-        // Get volunteer names - prioritize pending_volunteers, fallback to auth metadata
-        const volunteerName = authUserToName.get(role.user_id);
+        // Get volunteer data - prioritize pending_volunteers, fallback to auth metadata
+        const volunteerData = authUserToVolunteerData.get(role.user_id);
+        
+        // Collect all marketplace_ids from QR cards
+        const marketplaceIds = qrCardInfos
+          .map(c => c.marketplace_id)
+          .filter((id): id is string => id !== null);
         
         userMap.set(role.user_id, {
           id: role.user_id, // Use user_id as the id, not role.id
           email: authUser?.email || 'Unknown',
           role: role.role,
           created_at: role.created_at,
-          first_name: volunteerName?.first_name || (authUser?.user_metadata?.first_name as string) || null,
-          last_name: volunteerName?.last_name || (authUser?.user_metadata?.last_name as string) || null,
+          first_name: volunteerData?.first_name || (authUser?.user_metadata?.first_name as string) || null,
+          last_name: volunteerData?.last_name || (authUser?.user_metadata?.last_name as string) || null,
+          phone_number: volunteerData?.phone_number || null,
+          gender: volunteerData?.gender || null,
           qr_codes: qrCodes,
           pending_volunteer_id: pendingVolunteerId,
           assigned_zone: primaryCard?.assigned_zone || null,
           marketplace_id: primaryCard?.marketplace_id || null,
+          marketplace_ids: marketplaceIds,
+          events_json: volunteerData?.events_json || null,
+          events_list: volunteerData?.events_list || null,
           volunteer_status: primaryCard?.status || null,
+          employee_vertical: volunteerData?.employee_vertical || null,
+          employee_number: volunteerData?.employee_number || null,
+          external_company: volunteerData?.external_company || null,
+          is_employee: volunteerData?.is_employee || null,
+          source: volunteerData?.source || null,
         });
       }
     });
