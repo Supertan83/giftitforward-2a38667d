@@ -69,10 +69,10 @@ export const generateCertificateImageURL = async ({
   
   if (type === 'completion') {
     // Position name below "THIS CERTIFIES THAT" header
-    ctx.fillText(fullName, 170, 540);
+    ctx.fillText(fullName, 170, 590);
   } else {
     // Position name below "PRESENTED TO" header (15px lower than completion)
-    ctx.fillText(fullName, 170, 555);
+    ctx.fillText(fullName, 170, 605);
   }
 
   // Return as blob URL
@@ -121,10 +121,10 @@ export const generateCertificatePDFBlob = async ({
   
   if (type === 'completion') {
     // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 170, 540);
+    doc.text(fullName, 170, 590);
   } else {
     // Position name below "PRESENTED TO" header (15px lower than completion)
-    doc.text(fullName, 170, 555);
+    doc.text(fullName, 170, 605);
   }
 
   return doc.output('blob');
@@ -164,10 +164,10 @@ export const generateCertificatePDF = async ({
   
   if (type === 'completion') {
     // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 170, 540);
+    doc.text(fullName, 170, 590);
   } else {
     // Position name below "PRESENTED TO" header (15px lower than completion)
-    doc.text(fullName, 170, 555);
+    doc.text(fullName, 170, 605);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
