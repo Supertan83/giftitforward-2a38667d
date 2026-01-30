@@ -710,44 +710,95 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                   )}
                 </div>
 
-                {/* Events - show either events_list or parsed events_json */}
+                {/* Registered Events from Webhook - with marketplace matching */}
                 {(editUser.events_list || editUser.events_json) && (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> Assigned Events
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                      <Calendar className="w-3 h-3" /> 
+                      Registered Events (from webhook)
+                      <Badge variant="secondary" className="text-[10px] px-1.5">
+                        {editUser.events_list 
+                          ? editUser.events_list.split(',').length 
+                          : Array.isArray(editUser.events_json) 
+                            ? editUser.events_json.length 
+                            : 0}
+                      </Badge>
                     </Label>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="space-y-1.5">
                       {editUser.events_list ? (
-                        editUser.events_list.split(',').map((event, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {event.trim()}
-                          </Badge>
-                        ))
+                        editUser.events_list.split(',').map((eventName, idx) => {
+                          const trimmedName = eventName.trim();
+                          // Try to match to a marketplace by name
+                          const matchedMarketplace = marketplaces.find(m => 
+                            m.name.toLowerCase().includes(trimmedName.toLowerCase()) ||
+                            trimmedName.toLowerCase().includes(m.name.toLowerCase())
+                          );
+                          return (
+                            <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1.5">
+                              <ShoppingBag className="w-3 h-3 text-primary shrink-0" />
+                              <span className="text-sm flex-1 truncate">{trimmedName}</span>
+                              {matchedMarketplace && (
+                                <Badge variant="outline" className="text-[10px] shrink-0">
+                                  {matchedMarketplace.event_date || 'Matched'}
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : editUser.events_json && Array.isArray(editUser.events_json) ? (
-                        (editUser.events_json as Array<{event_name?: string; event_slug?: string}>).map((ev, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {ev.event_name || ev.event_slug || 'Event'}
-                          </Badge>
-                        ))
+                        (editUser.events_json as Array<{event_name?: string; event_slug?: string; event_date?: string; event_time?: string; event_location?: string}>).map((ev, idx) => {
+                          const eventName = ev.event_name || ev.event_slug || 'Event';
+                          // Try to match to a marketplace by name
+                          const matchedMarketplace = marketplaces.find(m => 
+                            m.name.toLowerCase().includes(eventName.toLowerCase()) ||
+                            eventName.toLowerCase().includes(m.name.toLowerCase())
+                          );
+                          return (
+                            <div key={idx} className="bg-muted/50 rounded-md px-2 py-1.5 space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <ShoppingBag className="w-3 h-3 text-primary shrink-0" />
+                                <span className="text-sm font-medium flex-1 truncate">{eventName}</span>
+                                {matchedMarketplace && (
+                                  <Badge variant="default" className="text-[10px] shrink-0">Matched</Badge>
+                                )}
+                              </div>
+                              {(ev.event_date || ev.event_time || ev.event_location) && (
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground pl-5">
+                                  {ev.event_date && <span>📅 {ev.event_date}</span>}
+                                  {ev.event_time && <span>🕐 {ev.event_time}</span>}
+                                  {ev.event_location && <span>📍 {ev.event_location}</span>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
-                        <span className="text-xs text-muted-foreground">No events</span>
+                        <span className="text-xs text-muted-foreground">No events registered</span>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Marketplace IDs */}
+                {/* QR Card Marketplace Assignments */}
                 {editUser.marketplace_ids && editUser.marketplace_ids.length > 0 && (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ShoppingBag className="w-3 h-3" /> Assigned Marketplaces
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                      <QrCode className="w-3 h-3" /> 
+                      QR Card Assignments
+                      <Badge variant="secondary" className="text-[10px] px-1.5">
+                        {editUser.marketplace_ids.length}
+                      </Badge>
                     </Label>
                     <div className="flex flex-wrap gap-1.5">
                       {editUser.marketplace_ids.map((mpId, idx) => {
                         const marketplace = marketplaces.find(m => m.id === mpId);
                         return (
-                          <Badge key={idx} variant="outline" className="text-xs">
+                          <Badge key={idx} variant="outline" className="text-xs gap-1">
+                            <MapPin className="w-2.5 h-2.5" />
                             {marketplace?.name || mpId.slice(0, 8)}
+                            {marketplace?.event_date && (
+                              <span className="text-muted-foreground">({marketplace.event_date})</span>
+                            )}
                           </Badge>
                         );
                       })}
