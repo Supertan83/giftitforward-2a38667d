@@ -167,6 +167,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showAddEmailDialog, setShowAddEmailDialog] = useState(false);
   const [addEmailVolunteer, setAddEmailVolunteer] = useState<PendingVolunteer | null>(null);
   const [newEmail, setNewEmail] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Duplicate handling state
   const [showApplyChangesDialog, setShowApplyChangesDialog] = useState(false);
@@ -246,16 +247,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     return Array.from(eventsSet).sort();
   }, [volunteers]);
 
-  // Filter volunteers by selected event
+  // Filter volunteers by selected event and search query
   const filteredVolunteers = useMemo(() => {
-    if (eventFilter === 'all') return volunteers;
-    return volunteers.filter(v => {
-      if (!v.events_list) return false;
-      return v.events_list.split(',').some(e => 
-        formatEventName(e.trim()) === eventFilter
-      );
-    });
-  }, [volunteers, eventFilter]);
+    let result = volunteers;
+    
+    // Event filter
+    if (eventFilter !== 'all') {
+      result = result.filter(v => {
+        if (!v.events_list) return false;
+        return v.events_list.split(',').some(e => 
+          formatEventName(e.trim()) === eventFilter
+        );
+      });
+    }
+    
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(v => {
+        const fullName = `${v.first_name || ''} ${v.last_name || ''}`.toLowerCase();
+        const email = v.email.toLowerCase();
+        const phone = (v.phone_number || '').toLowerCase();
+        const company = (v.external_company || '').toLowerCase();
+        
+        return fullName.includes(query) || 
+               email.includes(query) || 
+               phone.includes(query) ||
+               company.includes(query);
+      });
+    }
+    
+    return result;
+  }, [volunteers, eventFilter, searchQuery]);
 
   const approveMutation = useMutation({
     mutationFn: async (pendingId: string) => {
@@ -916,12 +939,23 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Event Filter */}
-        <div className="flex items-center gap-3 mb-4">
+        {/* Search and Event Filter */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, phone, company..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          
+          {/* Event Filter */}
           <div className="flex items-center gap-2">
-            <Search className="w-4 h-4 text-muted-foreground" />
             <Select value={eventFilter} onValueChange={setEventFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by event" />
               </SelectTrigger>
               <SelectContent>
@@ -931,12 +965,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 ))}
               </SelectContent>
             </Select>
+            {(eventFilter !== 'all' || searchQuery.trim()) && (
+              <Badge variant="secondary" className="gap-1 shrink-0">
+                {filteredVolunteers.length} result{filteredVolunteers.length !== 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
-          {eventFilter !== 'all' && (
-            <Badge variant="secondary" className="gap-1">
-              {filteredVolunteers.length} volunteer{filteredVolunteers.length !== 1 ? 's' : ''}
-            </Badge>
-          )}
         </div>
 
         {/* Tabs */}

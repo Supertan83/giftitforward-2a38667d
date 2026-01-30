@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash, Phone, Calendar, Building2, Hash, UserCheck } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash, Phone, Calendar, Building2, Hash, UserCheck, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -67,6 +67,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [editMarketplaceId, setEditMarketplaceId] = useState<string>('none');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [orphanScanResult, setOrphanScanResult] = useState<OrphanCleanupResult | null>(null);
 
@@ -82,18 +83,35 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
 
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
   
-  // Filter users based on selected role
-  const filteredUsers = roleFilter === 'all' 
-    ? users 
-    : users.filter(u => u.role === roleFilter);
+  // Filter users based on selected role and search query
+  const filteredUsers = users.filter(u => {
+    // Role filter
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+    
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
+      const email = u.email.toLowerCase();
+      const phone = (u.phone_number || '').toLowerCase();
+      const company = (u.external_company || '').toLowerCase();
+      
+      return fullName.includes(query) || 
+             email.includes(query) || 
+             phone.includes(query) ||
+             company.includes(query);
+    }
+    
+    return true;
+  });
 
   // Pagination
   const pagination = usePagination(filteredUsers, { defaultPageSize: 10 });
   
-  // Reset to page 1 when filter changes
+  // Reset to page 1 when filter or search changes
   useEffect(() => {
     pagination.setCurrentPage(1);
-  }, [roleFilter]);
+  }, [roleFilter, searchQuery]);
 
   const handleGenerateAndPreviewQR = async (user: UserWithRole) => {
     try {
@@ -297,48 +315,62 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Role Filter Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          <Button
-            variant={roleFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setRoleFilter('all')}
-            className="gap-2"
-          >
-            <Users className="w-4 h-4" />
-            All Users
-            <Badge variant="secondary" className="ml-1 bg-background/50">{users.length}</Badge>
-          </Button>
-          <Button
-            variant={roleFilter === 'admin' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setRoleFilter('admin')}
-            className="gap-2"
-          >
-            <Shield className="w-4 h-4" />
-            Admins
-            <Badge variant="secondary" className="ml-1 bg-background/50">{adminCount}</Badge>
-          </Button>
-          <Button
-            variant={roleFilter === 'employee' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setRoleFilter('employee')}
-            className="gap-2"
-          >
-            <Briefcase className="w-4 h-4" />
-            Employees
-            <Badge variant="secondary" className="ml-1 bg-background/50">{employeeCount}</Badge>
-          </Button>
-          <Button
-            variant={roleFilter === 'volunteer' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setRoleFilter('volunteer')}
-            className="gap-2"
-          >
-            <User className="w-4 h-4" />
-            Volunteers
-            <Badge variant="secondary" className="ml-1 bg-background/50">{volunteerCount}</Badge>
-          </Button>
+        {/* Search and Role Filter */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, phone, company..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          
+          {/* Role Filter Tabs */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={roleFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRoleFilter('all')}
+              className="gap-2"
+            >
+              <Users className="w-4 h-4" />
+              All
+              <Badge variant="secondary" className="ml-1 bg-background/50">{users.length}</Badge>
+            </Button>
+            <Button
+              variant={roleFilter === 'admin' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRoleFilter('admin')}
+              className="gap-2"
+            >
+              <Shield className="w-4 h-4" />
+              <span className="hidden sm:inline">Admins</span>
+              <Badge variant="secondary" className="ml-1 bg-background/50">{adminCount}</Badge>
+            </Button>
+            <Button
+              variant={roleFilter === 'employee' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRoleFilter('employee')}
+              className="gap-2"
+            >
+              <Briefcase className="w-4 h-4" />
+              <span className="hidden sm:inline">Employees</span>
+              <Badge variant="secondary" className="ml-1 bg-background/50">{employeeCount}</Badge>
+            </Button>
+            <Button
+              variant={roleFilter === 'volunteer' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRoleFilter('volunteer')}
+              className="gap-2"
+            >
+              <User className="w-4 h-4" />
+              <span className="hidden sm:inline">Volunteers</span>
+              <Badge variant="secondary" className="ml-1 bg-background/50">{volunteerCount}</Badge>
+            </Button>
+          </div>
         </div>
 
         {/* Users List */}
