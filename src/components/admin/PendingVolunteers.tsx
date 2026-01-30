@@ -211,7 +211,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       // Filter by status and source based on active tab
       if (activeTab === 'pending_missing_email') {
-        query = query.eq('status', 'pending');
+        // Only show records with placeholder emails that need the "Add Email" workflow
+        query = query.eq('status', 'pending').like('email', '%@placeholder.invalid');
       } else if (activeTab === 'duplicates') {
         query = query.eq('status', 'duplicate');
       } else {
