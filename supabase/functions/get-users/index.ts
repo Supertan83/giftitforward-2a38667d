@@ -104,10 +104,10 @@ Deno.serve(async (req) => {
       console.error('Error fetching volunteer cards:', cardsError);
     }
 
-    // Get pending_volunteers to map to auth users
+    // Get pending_volunteers to map to auth users (including names)
     const { data: pendingVolunteers, error: pvError } = await supabaseAdmin
       .from('pending_volunteers')
-      .select('id, created_user_id')
+      .select('id, created_user_id, first_name, last_name')
       .not('created_user_id', 'is', null)
 
     if (pvError) {
@@ -119,6 +119,17 @@ Deno.serve(async (req) => {
     pendingVolunteers?.forEach(pv => {
       if (pv.created_user_id) {
         pvToAuthUser.set(pv.id, pv.created_user_id);
+      }
+    });
+
+    // Create a map of auth_user_id to volunteer names (for edit dialog)
+    const authUserToName = new Map<string, { first_name: string; last_name: string }>();
+    pendingVolunteers?.forEach(pv => {
+      if (pv.created_user_id) {
+        authUserToName.set(pv.created_user_id, {
+          first_name: pv.first_name || '',
+          last_name: pv.last_name || ''
+        });
       }
     });
 
@@ -194,13 +205,16 @@ Deno.serve(async (req) => {
       
       // If user not in map, or if this role is 'admin' (higher priority), add/update
       if (!existing || role.role === 'admin') {
+        // Get volunteer names - prioritize pending_volunteers, fallback to auth metadata
+        const volunteerName = authUserToName.get(role.user_id);
+        
         userMap.set(role.user_id, {
           id: role.user_id, // Use user_id as the id, not role.id
           email: authUser?.email || 'Unknown',
           role: role.role,
           created_at: role.created_at,
-          first_name: (authUser?.user_metadata?.first_name as string) || null,
-          last_name: (authUser?.user_metadata?.last_name as string) || null,
+          first_name: volunteerName?.first_name || (authUser?.user_metadata?.first_name as string) || null,
+          last_name: volunteerName?.last_name || (authUser?.user_metadata?.last_name as string) || null,
           qr_codes: qrCodes,
           pending_volunteer_id: pendingVolunteerId,
           assigned_zone: primaryCard?.assigned_zone || null,
