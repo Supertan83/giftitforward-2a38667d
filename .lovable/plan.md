@@ -1,71 +1,67 @@
 
 
-# Fix "Missing Email" Tab and Clean Up Duplicate Data
+# Fix: User Management Not Showing All Volunteers
 
-## The Problem
+## Problem Identified
 
-The "Missing Email" tab currently shows 10 records, but only **3** have actual missing/placeholder emails. The other **7** have valid emails but are stuck with `status = 'pending'` because they're duplicates that weren't merged into existing approved accounts.
+The "User Management" section is only showing **50 users** instead of the expected **128+ users** because the `get-users` edge function uses `supabase.auth.admin.listUsers()` without pagination parameters.
 
-**Example - Paula Mfume has 2 records:**
-- ✅ Approved record (with user account created)
-- ❌ Pending record (duplicate, should have been merged)
+According to Supabase documentation, `listUsers()` **defaults to returning 50 users per page**. Since you have 128 auth users, roughly 78 users are being silently omitted.
 
-## Solution Overview
-
-### Part 1: Fix the Tab Filtering
-Update the "Missing Email" tab to **only** show records with placeholder emails (`@placeholder.invalid`).
-
-### Part 2: Auto-Merge Pending Duplicates
-The 7 records with valid emails need to be merged into their existing approved accounts (adding any new events) and then deleted.
+### Current Data Counts
+| Source | Count |
+|--------|-------|
+| Approved pending_volunteers | 126 |
+| user_roles (volunteer) | 124 |
+| auth.users (total) | 128 |
+| **Currently displayed** | ~50 |
 
 ---
 
-## Technical Implementation
+## Solution
 
-### Step 1: Update Filter Logic
+Update the `get-users` edge function to fetch **all pages** of auth users, not just the first 50.
 
-In `PendingVolunteers.tsx`, modify the query for "Missing Email" tab:
+### Technical Changes
 
-```text
-Current:
-  query.eq('status', 'pending')
+**File:** `supabase/functions/get-users/index.ts`
 
-New:
-  query.eq('status', 'pending')
-       .like('email', '%@placeholder.invalid')
+```typescript
+// Current (broken - only gets first 50)
+const { data: { users: authUsers }, error: usersError } = 
+  await supabaseAdmin.auth.admin.listUsers()
+
+// Fixed - fetch all pages
+const allAuthUsers = [];
+let page = 1;
+const perPage = 1000; // Max per page
+let hasMore = true;
+
+while (hasMore) {
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+    page,
+    perPage
+  });
+  
+  if (error) throw error;
+  
+  allAuthUsers.push(...(data.users || []));
+  hasMore = data.users.length === perPage;
+  page++;
+}
 ```
 
-This ensures only actual missing email cases appear.
-
-### Step 2: Database Cleanup Script
-
-Execute SQL to merge events from pending duplicates into approved records, then delete the duplicates:
-
-```text
-For each pending record with a valid email:
-1. Find matching approved record by email
-2. Merge any new events from pending into approved
-3. Delete the pending duplicate
-```
-
-Affected records (7 duplicates to merge/delete):
-- Paula Mfume (paula.mfume@alshaya.com)
-- Nelleh Orano (nelleh.orano@dhgroupservices.com)
-- Yasmin Nasheeth (yasmin.nasheeth@dhgroupservices.com)
-- John Paul Jesudoss (john.jesudoss@jumeirah.com)
-- TEST LN (testmail@mail.com)
-- Juvelle Villareal (juvelle.villareal-c@dubaiholding.com)
-- Princess Sweena Villaluz (development@thesurpluss.com)
-
-### Step 3: Update Tab Count Badge
-
-Ensure the count badge for "Missing Email" tab reflects only placeholder email records.
+This approach:
+1. Uses the `page` and `perPage` parameters to fetch users in batches
+2. Loops until no more users are returned
+3. Collects all users into a single array for processing
 
 ---
 
 ## Expected Result
 
-After implementation:
-- **"Missing Email" tab** will show only 3 records (Maria Moreno, Manal Essam, Oshin Nicola Menezes) - all with placeholder emails needing the "Add Email" workflow
-- **Duplicate pending records** will be cleaned up, with their event data merged into existing approved accounts
+After this fix:
+- **User Management** will show all 128 users (matching auth.users count)
+- The volunteer filter will show all 124 volunteers
+- No users will be silently dropped from the list
 
