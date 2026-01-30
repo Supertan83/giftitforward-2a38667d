@@ -8,6 +8,20 @@ interface CertificateData {
   type: CertificateType;
 }
 
+// New A4 landscape dimensions
+const PDF_WIDTH = 841.89;
+const PDF_HEIGHT = 595.276;
+
+// Scale factors from original 1920x1080
+const SCALE_X = PDF_WIDTH / 1920;
+const SCALE_Y = PDF_HEIGHT / 1080;
+
+// Scaled positions
+const NAME_X = Math.round(170 * SCALE_X);
+const NAME_Y_COMPLETION = Math.round(590 * SCALE_Y);
+const NAME_Y_ATTENDANCE = Math.round(605 * SCALE_Y);
+const FONT_SIZE = Math.round(48 * SCALE_Y);
+
 // Helper to load image and add to canvas
 const loadImage = (src: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
@@ -45,9 +59,10 @@ export const generateCertificateImageURL = async ({
   // Load custom font for canvas
   await loadFontForCanvas();
   
+  // Use new dimensions for canvas
   const canvas = document.createElement('canvas');
-  canvas.width = 1920;
-  canvas.height = 1080;
+  canvas.width = Math.round(PDF_WIDTH);
+  canvas.height = Math.round(PDF_HEIGHT);
   const ctx = canvas.getContext('2d');
   
   if (!ctx) throw new Error('Could not get canvas context');
@@ -58,21 +73,19 @@ export const generateCertificateImageURL = async ({
     : '/images/certificate-attendance-background.jpg';
   
   const img = await loadImage(backgroundPath);
-  ctx.drawImage(img, 0, 0, 1920, 1080);
+  ctx.drawImage(img, 0, 0, PDF_WIDTH, PDF_HEIGHT);
 
   const fullName = `${firstName} ${lastName}`;
 
-  // Use custom 29LT Bukra font for the name
-  ctx.font = 'bold 48px "29LT Bukra", Helvetica, Arial, sans-serif';
+  // Use custom 29LT Bukra font for the name with scaled size
+  ctx.font = `bold ${FONT_SIZE}px "29LT Bukra", Helvetica, Arial, sans-serif`;
   ctx.fillStyle = '#54585A'; // DH Grey
   ctx.textAlign = 'left';
   
   if (type === 'completion') {
-    // Position name below "THIS CERTIFIES THAT" header
-    ctx.fillText(fullName, 170, 590);
+    ctx.fillText(fullName, NAME_X, NAME_Y_COMPLETION);
   } else {
-    // Position name below "PRESENTED TO" header (15px lower than completion)
-    ctx.fillText(fullName, 170, 605);
+    ctx.fillText(fullName, NAME_X, NAME_Y_ATTENDANCE);
   }
 
   // Return as blob URL
@@ -96,7 +109,7 @@ export const generateCertificatePDFBlob = async ({
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'px',
-    format: [1920, 1080],
+    format: [PDF_WIDTH, PDF_HEIGHT],
   });
 
   // Load and add custom font
@@ -110,21 +123,19 @@ export const generateCertificatePDFBlob = async ({
     : '/images/certificate-attendance-background.jpg';
   
   const img = await loadImage(backgroundPath);
-  doc.addImage(img, 'JPEG', 0, 0, 1920, 1080);
+  doc.addImage(img, 'JPEG', 0, 0, PDF_WIDTH, PDF_HEIGHT);
 
   const fullName = `${firstName} ${lastName}`;
 
   // Use custom 29LT Bukra font for the name
   doc.setFont('29LTBukra', 'normal');
-  doc.setFontSize(48);
+  doc.setFontSize(FONT_SIZE);
   doc.setTextColor(84, 88, 90); // #54585A - DH Grey
   
   if (type === 'completion') {
-    // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 170, 590);
+    doc.text(fullName, NAME_X, NAME_Y_COMPLETION);
   } else {
-    // Position name below "PRESENTED TO" header (15px lower than completion)
-    doc.text(fullName, 170, 605);
+    doc.text(fullName, NAME_X, NAME_Y_ATTENDANCE);
   }
 
   return doc.output('blob');
@@ -139,7 +150,7 @@ export const generateCertificatePDF = async ({
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'px',
-    format: [1920, 1080],
+    format: [PDF_WIDTH, PDF_HEIGHT],
   });
 
   // Load and add custom font
@@ -153,21 +164,19 @@ export const generateCertificatePDF = async ({
     : '/images/certificate-attendance-background.jpg';
   
   const img = await loadImage(backgroundPath);
-  doc.addImage(img, 'JPEG', 0, 0, 1920, 1080);
+  doc.addImage(img, 'JPEG', 0, 0, PDF_WIDTH, PDF_HEIGHT);
 
   const fullName = `${firstName} ${lastName}`;
 
   // Use custom 29LT Bukra font for the name
   doc.setFont('29LTBukra', 'normal');
-  doc.setFontSize(48);
+  doc.setFontSize(FONT_SIZE);
   doc.setTextColor(84, 88, 90); // #54585A - DH Grey
   
   if (type === 'completion') {
-    // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 170, 590);
+    doc.text(fullName, NAME_X, NAME_Y_COMPLETION);
   } else {
-    // Position name below "PRESENTED TO" header (15px lower than completion)
-    doc.text(fullName, 170, 605);
+    doc.text(fullName, NAME_X, NAME_Y_ATTENDANCE);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
