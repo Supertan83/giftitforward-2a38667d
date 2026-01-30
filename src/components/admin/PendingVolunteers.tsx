@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -181,6 +181,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
   
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone_number: '',
+    gender: '',
+    external_company: '',
+    employee_vertical: '',
+    employee_number: '',
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -530,8 +542,86 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  // Edit volunteer mutation
+  const editVolunteerMutation = useMutation({
+    mutationFn: async ({ pendingId, updates }: { 
+      pendingId: string; 
+      updates: {
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        phone_number?: string | null;
+        gender?: string | null;
+        external_company?: string | null;
+        employee_vertical?: string | null;
+        employee_number?: string | null;
+      }
+    }) => {
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .update(updates)
+        .eq('id', pendingId);
+
+      if (error) throw error;
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      setIsEditMode(false);
+      setShowDetailsDialog(false);
+      toast({
+        title: 'Volunteer Updated',
+        description: 'The volunteer information has been updated',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Update Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
   const handleApprove = (volunteer: PendingVolunteer) => {
     approveMutation.mutate(volunteer.id);
+  };
+
+  const handleStartEdit = () => {
+    if (selectedVolunteer) {
+      setEditForm({
+        first_name: selectedVolunteer.first_name || '',
+        last_name: selectedVolunteer.last_name || '',
+        email: selectedVolunteer.email || '',
+        phone_number: selectedVolunteer.phone_number || '',
+        gender: selectedVolunteer.gender || '',
+        external_company: selectedVolunteer.external_company || '',
+        employee_vertical: selectedVolunteer.employee_vertical || '',
+        employee_number: selectedVolunteer.employee_number || '',
+      });
+      setIsEditMode(true);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedVolunteer) return;
+    editVolunteerMutation.mutate({
+      pendingId: selectedVolunteer.id,
+      updates: {
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        email: editForm.email || undefined,
+        phone_number: editForm.phone_number || null,
+        gender: editForm.gender || null,
+        external_company: editForm.external_company || null,
+        employee_vertical: editForm.employee_vertical || null,
+        employee_number: editForm.employee_number || null,
+      }
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
   };
 
   const handleBulkResend = () => {
@@ -1008,7 +1098,22 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                   {new Date(volunteer.created_at).toLocaleDateString()}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <div className="flex items-center justify-end gap-2">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => openDetailsDialog(volunteer)}
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>View Details</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                     <Button
                                       size="sm"
                                       onClick={() => {
@@ -1298,16 +1403,21 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       </main>
 
       {/* Details Dialog */}
-      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+      <Dialog open={showDetailsDialog} onOpenChange={(open) => {
+        setShowDetailsDialog(open);
+        if (!open) setIsEditMode(false);
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Volunteer Application Details</DialogTitle>
+            <DialogTitle>{isEditMode ? 'Edit Volunteer' : 'Volunteer Application Details'}</DialogTitle>
             <DialogDescription>
-              Review the volunteer's information before approving or rejecting
+              {isEditMode 
+                ? 'Update the volunteer information below'
+                : 'Review the volunteer\'s information'}
             </DialogDescription>
           </DialogHeader>
           
-          {selectedVolunteer && (
+          {selectedVolunteer && !isEditMode && (
             <div className="space-y-6">
               {/* Personal Info */}
               <div>
@@ -1319,7 +1429,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm break-all">{selectedVolunteer.email}</span>
+                    <span className="text-sm break-all">{selectedVolunteer.email || '(No email)'}</span>
                   </div>
                   {selectedVolunteer.phone_number && (
                     <div className="flex items-center gap-2">
@@ -1538,8 +1648,109 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             </div>
           )}
 
-          {selectedVolunteer?.status === 'pending' && (
+          {/* Edit Mode Form */}
+          {selectedVolunteer && isEditMode && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input
+                    value={editForm.first_name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, first_name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Last Name</Label>
+                  <Input
+                    value={editForm.last_name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, last_name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input
+                    value={editForm.phone_number}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, phone_number: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Gender</Label>
+                  <Select 
+                    value={editForm.gender || 'none'} 
+                    onValueChange={(v) => setEditForm(prev => ({ ...prev, gender: v === 'none' ? '' : v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Company</Label>
+                  <Input
+                    value={editForm.external_company}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, external_company: e.target.value }))}
+                    placeholder="External company"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Department/Vertical</Label>
+                  <Input
+                    value={editForm.employee_vertical}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, employee_vertical: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Employee Number</Label>
+                  <Input
+                    value={editForm.employee_number}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, employee_number: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dialog Footer - Different based on mode and status */}
+          {selectedVolunteer && isEditMode ? (
             <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={handleCancelEdit}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={editVolunteerMutation.isPending}
+              >
+                {editVolunteerMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          ) : selectedVolunteer?.status === 'pending' ? (
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStartEdit}
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => openRejectDialog(selectedVolunteer)}
@@ -1559,6 +1770,31 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   <Check className="w-4 h-4 mr-2" />
                 )}
                 Approve & Create Account
+              </Button>
+            </DialogFooter>
+          ) : selectedVolunteer && (
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStartEdit}
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => {
+                  setShowDetailsDialog(false);
+                  handleDelete(selectedVolunteer);
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+              <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
+                Close
               </Button>
             </DialogFooter>
           )}
