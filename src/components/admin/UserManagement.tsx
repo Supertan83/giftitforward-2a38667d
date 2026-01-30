@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, useUpdateVolunteerAssignment, useMarketplaces, UserWithRole } from '@/hooks/useSupabaseData';
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, useUpdateVolunteerAssignment, useMarketplaces, UserWithRole, useCleanupOrphans, OrphanCleanupResult } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
@@ -67,6 +67,8 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [editMarketplaceId, setEditMarketplaceId] = useState<string>('none');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
+  const [orphanScanResult, setOrphanScanResult] = useState<OrphanCleanupResult | null>(null);
 
   const { data: users = [], isLoading } = useUsers();
   const { data: marketplaces = [] } = useMarketplaces();
@@ -75,6 +77,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const updateUserRole = useUpdateUserRole();
   const updateVolunteerAssignment = useUpdateVolunteerAssignment();
   const generateQR = useGenerateVolunteerQR();
+  const cleanupOrphans = useCleanupOrphans();
   const { toast } = useToast();
 
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
@@ -225,6 +228,38 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const volunteerCount = users.filter(u => u.role === 'volunteer').length;
   const employeeCount = users.filter(u => u.role === 'employee').length;
 
+  const handleScanOrphans = async () => {
+    try {
+      const result = await cleanupOrphans.mutateAsync(true); // dryRun = true
+      setOrphanScanResult(result);
+      setShowCleanupDialog(true);
+    } catch (error) {
+      toast({
+        title: 'Scan Failed',
+        description: error instanceof Error ? error.message : 'Failed to scan for orphaned records',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCleanupOrphans = async () => {
+    try {
+      const result = await cleanupOrphans.mutateAsync(false); // dryRun = false
+      toast({
+        title: 'Cleanup Complete',
+        description: result.message,
+      });
+      setShowCleanupDialog(false);
+      setOrphanScanResult(null);
+    } catch (error) {
+      toast({
+        title: 'Cleanup Failed',
+        description: error instanceof Error ? error.message : 'Failed to cleanup orphaned records',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -238,6 +273,20 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
               <h1 className="font-display font-bold text-base md:text-lg truncate">User Management</h1>
               <p className="text-xs md:text-sm text-muted-foreground">Manage volunteers and admins</p>
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleScanOrphans}
+              disabled={cleanupOrphans.isPending}
+              className="shrink-0 hidden sm:flex"
+            >
+              {cleanupOrphans.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash className="w-4 h-4 mr-2" />
+              )}
+              Cleanup
+            </Button>
             <Button onClick={() => setShowCreateModal(true)} size="sm" className="shrink-0">
               <UserPlus className="w-4 h-4 mr-1 md:mr-2" />
               <span className="hidden sm:inline">Add User</span>
@@ -781,6 +830,69 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Cleanup Orphans Dialog */}
+      <AlertDialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-warning" />
+              Database Cleanup
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  Found orphaned records that can be safely removed:
+                </p>
+                {orphanScanResult && (
+                  <div className="bg-muted rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Orphaned user roles:</span>
+                      <Badge variant={orphanScanResult.orphanedUserRoles > 0 ? 'destructive' : 'secondary'}>
+                        {orphanScanResult.orphanedUserRoles}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Orphaned QR cards:</span>
+                      <Badge variant={orphanScanResult.orphanedVolunteerQRCards > 0 ? 'destructive' : 'secondary'}>
+                        {orphanScanResult.orphanedVolunteerQRCards}
+                      </Badge>
+                    </div>
+                    <div className="border-t border-border pt-2 flex justify-between text-sm font-medium">
+                      <span>Total to clean:</span>
+                      <span>{orphanScanResult.orphanedUserRoles + orphanScanResult.orphanedVolunteerQRCards}</span>
+                    </div>
+                  </div>
+                )}
+                {orphanScanResult && (orphanScanResult.orphanedUserRoles + orphanScanResult.orphanedVolunteerQRCards) === 0 ? (
+                  <p className="text-success text-sm">✓ No orphaned records found. Database is clean!</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    This will permanently delete these orphaned records. This action cannot be undone.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setOrphanScanResult(null)}>Cancel</AlertDialogCancel>
+            {orphanScanResult && (orphanScanResult.orphanedUserRoles + orphanScanResult.orphanedVolunteerQRCards) > 0 && (
+              <AlertDialogAction
+                onClick={handleCleanupOrphans}
+                disabled={cleanupOrphans.isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {cleanupOrphans.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-2" />
+                )}
+                Delete Orphaned Records
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

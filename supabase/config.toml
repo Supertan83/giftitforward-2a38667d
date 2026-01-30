@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.bulk-create-volunteers]
 verify_jwt = false
+
+[functions.cleanup-orphans]
+verify_jwt = false
