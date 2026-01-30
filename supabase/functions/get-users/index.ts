@@ -67,16 +67,32 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get user emails from auth
-    const { data: { users: authUsers }, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
+    // Get ALL user emails from auth (paginated - default is only 50)
+    const authUsers: Array<{ id: string; email?: string; user_metadata?: Record<string, unknown> }> = [];
+    let page = 1;
+    const perPage = 1000; // Max per page
+    let hasMore = true;
 
-    if (usersError) {
-      console.error('Error fetching auth users:', usersError);
-      return new Response(JSON.stringify({ error: 'Unable to fetch user details' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    while (hasMore) {
+      const { data, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage
+      });
+
+      if (usersError) {
+        console.error('Error fetching auth users page', page, ':', usersError);
+        return new Response(JSON.stringify({ error: 'Unable to fetch user details' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      authUsers.push(...(data.users || []));
+      hasMore = (data.users?.length || 0) === perPage;
+      page++;
     }
+
+    console.log(`Fetched ${authUsers.length} total auth users across ${page - 1} page(s)`);
 
     // Get all volunteer QR cards to map to users (including assignment info)
     const { data: volunteerCards, error: cardsError } = await supabaseAdmin
@@ -183,8 +199,8 @@ Deno.serve(async (req) => {
           email: authUser?.email || 'Unknown',
           role: role.role,
           created_at: role.created_at,
-          first_name: authUser?.user_metadata?.first_name || null,
-          last_name: authUser?.user_metadata?.last_name || null,
+          first_name: (authUser?.user_metadata?.first_name as string) || null,
+          last_name: (authUser?.user_metadata?.last_name as string) || null,
           qr_codes: qrCodes,
           pending_volunteer_id: pendingVolunteerId,
           assigned_zone: primaryCard?.assigned_zone || null,
