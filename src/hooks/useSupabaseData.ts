@@ -779,7 +779,18 @@ export interface UserWithRole {
   pending_volunteer_id: string | null;
   assigned_zone: 'entrance' | 'marketplace' | 'exit' | null;
   marketplace_id: string | null;
+  marketplace_ids: string[];
   volunteer_status: string | null;
+  // Extended volunteer data from pending_volunteers
+  phone_number: string | null;
+  gender: string | null;
+  events_json: unknown;
+  events_list: string | null;
+  employee_vertical: string | null;
+  employee_number: string | null;
+  external_company: string | null;
+  is_employee: boolean | null;
+  source: string | null;
 }
 
 export const useUsers = () => {
@@ -816,7 +827,17 @@ export const useUsers = () => {
         pending_volunteer_id?: string | null;
         assigned_zone?: string | null;
         marketplace_id?: string | null;
+        marketplace_ids?: string[];
         volunteer_status?: string | null;
+        phone_number?: string | null;
+        gender?: string | null;
+        events_json?: unknown;
+        events_list?: string | null;
+        employee_vertical?: string | null;
+        employee_number?: string | null;
+        external_company?: string | null;
+        is_employee?: boolean | null;
+        source?: string | null;
       }) => ({
         id: user.id,
         email: user.email,
@@ -828,7 +849,17 @@ export const useUsers = () => {
         pending_volunteer_id: user.pending_volunteer_id || null,
         assigned_zone: user.assigned_zone as 'entrance' | 'marketplace' | 'exit' | null,
         marketplace_id: user.marketplace_id || null,
+        marketplace_ids: user.marketplace_ids || [],
         volunteer_status: user.volunteer_status || null,
+        phone_number: user.phone_number || null,
+        gender: user.gender || null,
+        events_json: user.events_json || null,
+        events_list: user.events_list || null,
+        employee_vertical: user.employee_vertical || null,
+        employee_number: user.employee_number || null,
+        external_company: user.external_company || null,
+        is_employee: user.is_employee ?? null,
+        source: user.source || null,
       }));
     }
   });

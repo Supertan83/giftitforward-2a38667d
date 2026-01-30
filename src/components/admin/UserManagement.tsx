@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash, Phone, Calendar, Building2, Hash, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -646,6 +646,114 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Volunteer Metadata Section - show for volunteers with extended data */}
+            {editUser && (editUser.phone_number || editUser.gender || editUser.external_company || editUser.employee_vertical || editUser.events_list || editUser.events_json) && (
+              <div className="space-y-3 border-t border-border pt-4">
+                <p className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                  <UserCheck className="w-4 h-4" />
+                  Volunteer Details (Read-only)
+                </p>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  {editUser.phone_number && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> Phone
+                      </Label>
+                      <p className="text-sm bg-muted rounded px-2 py-1.5 truncate">{editUser.phone_number}</p>
+                    </div>
+                  )}
+                  {editUser.gender && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Gender</Label>
+                      <p className="text-sm bg-muted rounded px-2 py-1.5 capitalize">{editUser.gender}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {editUser.external_company && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Building2 className="w-3 h-3" /> Company
+                      </Label>
+                      <p className="text-sm bg-muted rounded px-2 py-1.5 truncate">{editUser.external_company}</p>
+                    </div>
+                  )}
+                  {editUser.employee_vertical && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" /> Vertical
+                      </Label>
+                      <p className="text-sm bg-muted rounded px-2 py-1.5 truncate">{editUser.employee_vertical}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {editUser.employee_number && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Hash className="w-3 h-3" /> Employee #
+                      </Label>
+                      <p className="text-sm bg-muted rounded px-2 py-1.5">{editUser.employee_number}</p>
+                    </div>
+                  )}
+                  {editUser.source && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Source</Label>
+                      <Badge variant="outline" className="text-xs">{editUser.source}</Badge>
+                    </div>
+                  )}
+                </div>
+
+                {/* Events - show either events_list or parsed events_json */}
+                {(editUser.events_list || editUser.events_json) && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> Assigned Events
+                    </Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {editUser.events_list ? (
+                        editUser.events_list.split(',').map((event, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {event.trim()}
+                          </Badge>
+                        ))
+                      ) : editUser.events_json && Array.isArray(editUser.events_json) ? (
+                        (editUser.events_json as Array<{event_name?: string; event_slug?: string}>).map((ev, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {ev.event_name || ev.event_slug || 'Event'}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No events</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Marketplace IDs */}
+                {editUser.marketplace_ids && editUser.marketplace_ids.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <ShoppingBag className="w-3 h-3" /> Assigned Marketplaces
+                    </Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {editUser.marketplace_ids.map((mpId, idx) => {
+                        const marketplace = marketplaces.find(m => m.id === mpId);
+                        return (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {marketplace?.name || mpId.slice(0, 8)}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
