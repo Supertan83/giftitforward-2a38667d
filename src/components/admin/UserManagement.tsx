@@ -60,6 +60,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
   const [editRole, setEditRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
+  const [editEmail, setEditEmail] = useState('');
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editAssignedZone, setEditAssignedZone] = useState<VolunteerZone | 'none'>('none');
@@ -174,6 +175,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const handleEditUser = (user: UserWithRole) => {
     setEditUser(user);
     setEditRole(user.role);
+    setEditEmail(user.email);
     setEditFirstName(user.first_name || '');
     setEditLastName(user.last_name || '');
     setEditAssignedZone(user.assigned_zone || 'none');
@@ -184,12 +186,13 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     if (!editUser) return;
     
     try {
-      // Update user role and name
+      // Update user role, name, and email
       await updateUserRole.mutateAsync({ 
         userId: editUser.id, 
         role: editRole,
         firstName: editFirstName.trim() || undefined,
         lastName: editLastName.trim() || undefined,
+        email: editEmail.trim() !== editUser.email ? editEmail.trim() : undefined,
       });
 
       // If volunteer and has a pending_volunteer_id, update zone/marketplace assignment
@@ -546,16 +549,56 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
             </div>
 
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label htmlFor="editEmail">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  value={editUser?.email || ''}
-                  disabled
-                  className="pl-10 bg-muted"
+                  id="editEmail"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="pl-10"
+                  placeholder="user@example.com"
                 />
               </div>
             </div>
+
+            {/* QR Code ID Section - show for volunteers with QR codes */}
+            {editUser?.qr_codes && editUser.qr_codes.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <QrCode className="w-4 h-4 text-primary" />
+                  QR Code ID
+                </Label>
+                <div className="space-y-2">
+                  {editUser.qr_codes.map((qrId, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={qrId}
+                        readOnly
+                        className="bg-muted font-mono text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => {
+                          navigator.clipboard.writeText(qrId);
+                          toast({
+                            title: 'Copied',
+                            description: 'QR Code ID copied to clipboard',
+                          });
+                        }}
+                      >
+                        <span className="sr-only">Copy</span>
+                        📋
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Role</Label>

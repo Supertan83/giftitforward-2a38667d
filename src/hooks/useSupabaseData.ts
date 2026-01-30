@@ -872,7 +872,7 @@ export const useUpdateUserRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, role, firstName, lastName }: { userId: string; role: 'admin' | 'volunteer' | 'employee'; firstName?: string; lastName?: string }) => {
+    mutationFn: async ({ userId, role, firstName, lastName, email }: { userId: string; role: 'admin' | 'volunteer' | 'employee'; firstName?: string; lastName?: string; email?: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {
@@ -885,7 +885,7 @@ export const useUpdateUserRole = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ userId, role, firstName, lastName }),
+        body: JSON.stringify({ userId, role, firstName, lastName, email }),
       });
 
       const data = await response.json();
