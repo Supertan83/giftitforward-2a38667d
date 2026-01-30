@@ -1597,6 +1597,213 @@ async function sendDuplicateNotificationEmail(
   }
 }
 
+// Helper function to send confirmation email when new events are added to existing volunteer
+// deno-lint-ignore no-explicit-any
+async function sendEventAddedConfirmationEmail(
+  supabaseClient: any,
+  email: string,
+  firstName: string,
+  newEvents: RegisteredEvent[],
+  volunteerId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabaseProjectUrl = Deno.env.get('SUPABASE_URL') || '';
+    const heroImageUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+    const dubaiHoldingLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    
+    const emailSubject = "Gift It Forward - New Event Registration Confirmed";
+    
+    // Build event list HTML
+    const eventListHtml = newEvents.map(evt => {
+      const eventName = slugToName(evt.event);
+      const eventDate = evt.eventDate || '';
+      const eventTime = evt.eventTime || '';
+      const eventLocation = evt.eventLocation || '';
+      
+      return `
+        <tr>
+          <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+            <p style="margin: 0 0 5px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">${eventName}</p>
+            ${eventDate ? `<p style="margin: 0 0 3px 0; font-size: 13px; color: #666666;">📅 ${eventDate}</p>` : ''}
+            ${eventTime ? `<p style="margin: 0 0 3px 0; font-size: 13px; color: #666666;">🕐 ${eventTime}</p>` : ''}
+            ${eventLocation ? `<p style="margin: 0; font-size: 13px; color: #666666;">📍 ${eventLocation}</p>` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
+    
+    console.log(`Sending event added confirmation email to ${email} for ${newEvents.length} new event(s)`);
+    
+    const resendResult = await resend.emails.send({
+      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      to: [email],
+      bcc: ['giftitforward@dubaiholding.com'],
+      subject: emailSubject,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+            <tr>
+              <td align="center" style="padding: 20px 0;">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                  
+                  <!-- Hero Image -->
+                  <tr>
+                    <td>
+                      <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Main Title -->
+                  <tr>
+                    <td style="padding: 30px 30px 20px 30px; text-align: center;">
+                      <h1 style="margin: 0; font-size: 28px; color: #1a1a1a; font-weight: normal; line-height: 1.3;">
+                        New Event Registration Confirmed!
+                      </h1>
+                    </td>
+                  </tr>
+                  
+                  <!-- Greeting -->
+                  <tr>
+                    <td style="padding: 0 30px 15px 30px;">
+                      <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Message -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        Great news! You've been registered for ${newEvents.length > 1 ? 'additional events' : 'an additional event'} as a Gift It Forward volunteer.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <!-- New Events List -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0f4f8; border-radius: 8px; border-left: 4px solid #28a745;">
+                        <tr>
+                          <td style="padding: 15px 20px;">
+                            <p style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">
+                              New Event${newEvents.length > 1 ? 's' : ''} Added:
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                              ${eventListHtml}
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                  <!-- Info Box -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        <tr>
+                          <td style="padding: 15px 20px;">
+                            <p style="margin: 0; font-size: 14px; color: #856404; line-height: 1.6;">
+                              <strong>Note:</strong> Your existing volunteer QR code and login credentials remain the same. No new account has been created.
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                  <!-- Closing -->
+                  <tr>
+                    <td style="padding: 0 30px 30px 30px;">
+                      <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        We look forward to seeing you at ${newEvents.length > 1 ? 'the marketplaces' : 'the marketplace'}!
+                      </p>
+                      <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Warm regards,</p>
+                      <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td width="50%" valign="middle">
+                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="40" style="display: block;" />
+                          </td>
+                          <td width="50%" valign="middle" style="text-align: right;">
+                            <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `,
+    });
+
+    if (resendResult.error) {
+      console.error("Failed to send event added confirmation email:", resendResult.error);
+      
+      // Log the failed attempt
+      try {
+        await supabaseClient
+          .from('email_send_logs')
+          .insert({
+            pending_volunteer_id: volunteerId,
+            email_type: 'event_added_confirmation',
+            provider: 'resend',
+            recipient_email: email,
+            success: false,
+            error_message: resendResult.error.message,
+            request_payload: { to: email, subject: emailSubject, events: newEvents.map(e => e.event) },
+            response_data: { error: resendResult.error.message }
+          });
+      } catch (logError) {
+        console.error('Failed to log email attempt:', logError);
+      }
+      
+      return { success: false, error: resendResult.error.message };
+    }
+
+    console.log(`Event added confirmation email sent successfully to ${email}`);
+    
+    // Log successful attempt
+    try {
+      await supabaseClient
+        .from('email_send_logs')
+        .insert({
+          pending_volunteer_id: volunteerId,
+          email_type: 'event_added_confirmation',
+          provider: 'resend',
+          recipient_email: email,
+          success: true,
+          error_message: null,
+          request_payload: { to: email, subject: emailSubject, events: newEvents.map(e => e.event) },
+          response_data: { status: 'sent' }
+        });
+    } catch (logError) {
+      console.error('Failed to log email attempt:', logError);
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error("Error sending event added confirmation email:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 // Legacy helper function for backwards compatibility
 // deno-lint-ignore no-explicit-any
 async function sendWelcomeEmail(
@@ -3305,54 +3512,74 @@ serve(async (req) => {
           // Check if this email already has an approved volunteer record (duplicate detection)
           const { data: existingApproved } = await supabase
             .from('pending_volunteers')
-            .select('id, first_name, last_name, email, created_user_id')
+            .select('id, first_name, last_name, email, created_user_id, events_json, events_list')
             .eq('email', volunteerEmail.toLowerCase())
             .eq('status', 'approved')
             .maybeSingle();
 
           if (existingApproved) {
-            console.log(`Duplicate submission detected for ${volunteerEmail} - original volunteer ID: ${existingApproved.id}`);
+            console.log(`Existing volunteer found for ${volunteerEmail} - merging events into original record ID: ${existingApproved.id}`);
             
-            // Create duplicate record with reference to original
-            const { data: duplicateData, error: duplicateError } = await supabase
-              .from('pending_volunteers')
-              .insert({
-                webhook_event_id: eventData?.id || null,
-                email: volunteerEmail,
-                first_name: firstName,
-                last_name: lastName,
-                phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
-                gender: formData.Gender || null,
-                is_employee: formData['Dubai Holding Employee'] === 'Yes',
-                employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
-                employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
-                employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
-                external_company: formData['Not Employee - Company'] || null,
-                has_medical_condition: formData['Medical Condition'] === 'Yes',
-                medical_condition_details: formData['Medical Condition Details'] || null,
-                emergency_contact_name: formData['Emergency Contact Name'] || null,
-                emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
-                emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
-                is_fasting: formData['Fasting during event'] === 'Yes',
-                events_list: formData.eventslist || null,
-                events_json: eventsJson,
-                source_data: {
-                  ...formData,
-                  original_volunteer_id: existingApproved.id,
-                  original_volunteer_name: `${existingApproved.first_name} ${existingApproved.last_name}`.trim()
-                },
-                status: 'duplicate' // Mark as duplicate for admin review
-              })
-              .select()
-              .single();
-
-            if (duplicateError) {
-              console.error('Failed to create duplicate record:', duplicateError);
-            } else {
-              console.log(`Duplicate record created: ${duplicateData?.id}`);
+            // Merge new events into existing volunteer's events
+            const existingEventsJson = existingApproved.events_json as RegisteredEvent[] || [];
+            const existingEventsList = existingApproved.events_list || '';
+            
+            // Add new events that aren't already in the existing list
+            let mergedEventsJson = [...existingEventsJson];
+            let mergedEventsList = existingEventsList;
+            let newEventsAdded: RegisteredEvent[] = [];
+            
+            if (eventsJson && Array.isArray(eventsJson)) {
+              for (const newEvent of eventsJson as RegisteredEvent[]) {
+                // Check if this event slug already exists
+                const eventExists = existingEventsJson.some(
+                  (existing) => existing.event === newEvent.event
+                );
+                
+                if (!eventExists) {
+                  mergedEventsJson.push(newEvent);
+                  newEventsAdded.push(newEvent);
+                  
+                  // Add to events_list if not already there
+                  if (!mergedEventsList.includes(newEvent.event)) {
+                    mergedEventsList = mergedEventsList 
+                      ? `${mergedEventsList}, ${newEvent.event}` 
+                      : newEvent.event;
+                  }
+                }
+              }
+            }
+            
+            if (newEventsAdded.length > 0) {
+              // Update the existing volunteer record with merged events
+              const { error: updateError } = await supabase
+                .from('pending_volunteers')
+                .update({
+                  events_json: mergedEventsJson,
+                  events_list: mergedEventsList,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingApproved.id);
               
-              // Send duplicate notification email to the user
-              await sendDuplicateNotificationEmail(supabase, volunteerEmail, firstName, duplicateData?.id);
+              if (updateError) {
+                console.error('Failed to merge events into existing record:', updateError);
+              } else {
+                console.log(`Merged ${newEventsAdded.length} new event(s) into volunteer ${existingApproved.id}`);
+                
+                // Send confirmation email about new events added
+                await sendEventAddedConfirmationEmail(
+                  supabase, 
+                  volunteerEmail, 
+                  existingApproved.first_name,
+                  newEventsAdded,
+                  existingApproved.id
+                );
+              }
+            } else {
+              console.log(`No new events to add for ${volunteerEmail} - already registered for same events`);
+              
+              // Send duplicate notification for exact same events
+              await sendDuplicateNotificationEmail(supabase, volunteerEmail, firstName, existingApproved.id);
             }
 
             // Mark webhook as processed
@@ -3363,9 +3590,11 @@ serve(async (req) => {
             return new Response(
               JSON.stringify({
                 success: true,
-                message: 'Duplicate submission stored for admin review',
-                duplicate_id: duplicateData?.id,
-                original_volunteer_id: existingApproved.id,
+                message: newEventsAdded.length > 0 
+                  ? `Added ${newEventsAdded.length} new event(s) to existing volunteer`
+                  : 'Volunteer already registered for these events',
+                volunteer_id: existingApproved.id,
+                events_added: newEventsAdded.length,
                 email: volunteerEmail
               }),
               { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -3393,68 +3622,83 @@ serve(async (req) => {
                                      (createError as { code?: string }).code === 'email_exists';
             
             if (isDuplicateError) {
-              console.log(`User creation failed due to existing account for ${volunteerEmail} - creating duplicate record`);
+              console.log(`User creation failed due to existing account for ${volunteerEmail} - merging events`);
               
-              // Find the existing approved record
+              // Find the existing approved record with events data
               const { data: existingRecord } = await supabase
                 .from('pending_volunteers')
-                .select('id, first_name, last_name')
+                .select('id, first_name, last_name, events_json, events_list')
                 .eq('email', volunteerEmail.toLowerCase())
                 .eq('status', 'approved')
                 .maybeSingle();
 
-              // Create duplicate record
-              const { data: duplicateData } = await supabase
-                .from('pending_volunteers')
-                .insert({
-                  webhook_event_id: eventData?.id || null,
-                  email: volunteerEmail,
-                  first_name: firstName,
-                  last_name: lastName,
-                  phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
-                  gender: formData.Gender || null,
-                  is_employee: formData['Dubai Holding Employee'] === 'Yes',
-                  employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
-                  employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
-                  employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
-                  external_company: formData['Not Employee - Company'] || null,
-                  has_medical_condition: formData['Medical Condition'] === 'Yes',
-                  medical_condition_details: formData['Medical Condition Details'] || null,
-                  emergency_contact_name: formData['Emergency Contact Name'] || null,
-                  emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
-                  emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
-                  is_fasting: formData['Fasting during event'] === 'Yes',
-                  events_list: formData.eventslist || null,
-                  events_json: eventsJson,
-                  source_data: {
-                    ...formData,
-                    original_volunteer_id: existingRecord?.id || null,
-                    original_volunteer_name: existingRecord ? `${existingRecord.first_name} ${existingRecord.last_name}`.trim() : null
-                  },
-                  status: 'duplicate'
-                })
-                .select()
-                .single();
+              if (existingRecord) {
+                // Merge new events into existing volunteer's events
+                const existingEventsJson = existingRecord.events_json as RegisteredEvent[] || [];
+                const existingEventsList = existingRecord.events_list || '';
+                
+                let mergedEventsJson = [...existingEventsJson];
+                let mergedEventsList = existingEventsList;
+                let newEventsAdded: RegisteredEvent[] = [];
+                
+                if (eventsJson && Array.isArray(eventsJson)) {
+                  for (const newEvent of eventsJson as RegisteredEvent[]) {
+                    const eventExists = existingEventsJson.some(
+                      (existing) => existing.event === newEvent.event
+                    );
+                    
+                    if (!eventExists) {
+                      mergedEventsJson.push(newEvent);
+                      newEventsAdded.push(newEvent);
+                      
+                      if (!mergedEventsList.includes(newEvent.event)) {
+                        mergedEventsList = mergedEventsList 
+                          ? `${mergedEventsList}, ${newEvent.event}` 
+                          : newEvent.event;
+                      }
+                    }
+                  }
+                }
+                
+                if (newEventsAdded.length > 0) {
+                  const { error: updateError } = await supabase
+                    .from('pending_volunteers')
+                    .update({
+                      events_json: mergedEventsJson,
+                      events_list: mergedEventsList,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingRecord.id);
+                  
+                  if (updateError) {
+                    console.error('Failed to merge events into existing record:', updateError);
+                  } else {
+                    console.log(`Merged ${newEventsAdded.length} new event(s) into volunteer ${existingRecord.id}`);
+                    await sendEventAddedConfirmationEmail(supabase, volunteerEmail, existingRecord.first_name, newEventsAdded, existingRecord.id);
+                  }
+                } else {
+                  console.log(`No new events to add for ${volunteerEmail} - already registered for same events`);
+                  await sendDuplicateNotificationEmail(supabase, volunteerEmail, firstName, existingRecord.id);
+                }
 
-              // Send duplicate notification email
-              if (duplicateData) {
-                await sendDuplicateNotificationEmail(supabase, volunteerEmail, firstName, duplicateData.id);
+                // Mark webhook as processed
+                if (eventData?.id) {
+                  await supabase.from('webhook_events').update({ processed: true }).eq('id', eventData.id);
+                }
+
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    message: newEventsAdded.length > 0 
+                      ? `Added ${newEventsAdded.length} new event(s) to existing volunteer`
+                      : 'Volunteer already registered for these events',
+                    volunteer_id: existingRecord.id,
+                    events_added: newEventsAdded.length,
+                    email: volunteerEmail
+                  }),
+                  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
               }
-
-              // Mark webhook as processed
-              if (eventData?.id) {
-                await supabase.from('webhook_events').update({ processed: true }).eq('id', eventData.id);
-              }
-
-              return new Response(
-                JSON.stringify({
-                  success: true,
-                  message: 'Duplicate submission stored for admin review (user already exists)',
-                  duplicate_id: duplicateData?.id,
-                  email: volunteerEmail
-                }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
             }
             
             console.error(`Failed to create user ${volunteerEmail}:`, createError);
