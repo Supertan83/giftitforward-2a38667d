@@ -10,7 +10,6 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import TrainingPage from "./pages/TrainingPage";
 import TrainingCompletePage from "./pages/TrainingCompletePage";
 import VolunteerSurveyPage from "./pages/VolunteerSurveyPage";
-import CertificateSamplePage from "./pages/CertificateSamplePage";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
@@ -28,7 +27,6 @@ const App = () => (
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/training/complete" element={<TrainingCompletePage />} />
             <Route path="/volunteer-survey" element={<VolunteerSurveyPage />} />
-            <Route path="/certificate-sample" element={<CertificateSamplePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
