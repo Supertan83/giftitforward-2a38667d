@@ -83,7 +83,7 @@ interface PendingVolunteer {
   is_fasting: boolean;
   events_list: string | null;
   events_json: unknown;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'duplicate';
   approved_at: string | null;
   rejection_reason: string | null;
   temp_password: string | null;
@@ -156,7 +156,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded' | 'pending_missing_email'>('approved');
+  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded' | 'pending_missing_email' | 'duplicates'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [eventFilter, setEventFilter] = useState<string>('all');
   const [showCertificatePreview, setShowCertificatePreview] = useState(false);
@@ -167,6 +167,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showAddEmailDialog, setShowAddEmailDialog] = useState(false);
   const [addEmailVolunteer, setAddEmailVolunteer] = useState<PendingVolunteer | null>(null);
   const [newEmail, setNewEmail] = useState('');
+  
+  // Duplicate handling state
+  const [showApplyChangesDialog, setShowApplyChangesDialog] = useState(false);
+  const [duplicateToApply, setDuplicateToApply] = useState<PendingVolunteer | null>(null);
+  const [originalVolunteer, setOriginalVolunteer] = useState<PendingVolunteer | null>(null);
+  const [applyingChanges, setApplyingChanges] = useState(false);
   
   // Export report state
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -194,6 +200,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       // Filter by status and source based on active tab
       if (activeTab === 'pending_missing_email') {
         query = query.eq('status', 'pending');
+      } else if (activeTab === 'duplicates') {
+        query = query.eq('status', 'duplicate');
       } else {
         query = query.eq('status', 'approved');
         if (activeTab === 'bulk_uploaded') {
@@ -629,6 +637,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  const duplicatesCount = useQuery({
+    queryKey: ['duplicate-volunteers-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('pending_volunteers')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'duplicate');
+      if (error) throw error;
+      return count || 0;
+    }
+  });
+
   // Export report handler
   const handleExportReport = async () => {
     if (!exportStartDate || !exportEndDate) {
@@ -828,8 +848,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded' | 'pending_missing_email'); setSelectedIds(new Set()); }}>
-          <TabsList className="mb-4">
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded' | 'pending_missing_email' | 'duplicates'); setSelectedIds(new Set()); }}>
+          <TabsList className="mb-4 flex-wrap h-auto gap-1">
             <TabsTrigger value="approved" className="gap-2">
               <Check className="w-4 h-4" />
               Partner Volunteers
@@ -852,6 +872,15 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="duplicates" className="gap-2">
+              <Users className="w-4 h-4" />
+              Duplicates
+              {(duplicatesCount.data ?? 0) > 0 && (
+                <Badge variant="outline" className="ml-1 h-5 px-1.5 text-xs bg-amber-500/10 text-amber-600 border-amber-500/30">
+                  {duplicatesCount.data}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab}>
@@ -868,7 +897,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       ? 'No pending volunteers with missing emails'
                       : activeTab === 'bulk_uploaded' 
                         ? 'No bulk uploaded volunteers' 
-                        : (eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers')}
+                        : activeTab === 'duplicates'
+                          ? 'No duplicate submissions to review'
+                          : (eventFilter !== 'all' ? 'No volunteers for this event' : 'No approved volunteers')}
                   </p>
                 </div>
               ) : (
@@ -920,7 +951,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   <Table className="table-fixed w-full">
                     <TableHeader>
                       <TableRow>
-                        {activeTab !== 'pending_missing_email' && <TableHead className="w-10"></TableHead>}
+                        {activeTab !== 'pending_missing_email' && activeTab !== 'duplicates' && <TableHead className="w-10"></TableHead>}
                         <TableHead className="w-[18%] min-w-[100px]">Name</TableHead>
                         {activeTab === 'pending_missing_email' ? (
                           <>
@@ -928,6 +959,14 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             <TableHead className="hidden md:table-cell w-[20%]">Events</TableHead>
                             <TableHead className="hidden sm:table-cell w-[14%]">Submitted</TableHead>
                             <TableHead className="text-right w-[20%]">Actions</TableHead>
+                          </>
+                        ) : activeTab === 'duplicates' ? (
+                          <>
+                            <TableHead className="w-[22%] min-w-[120px]">Email</TableHead>
+                            <TableHead className="hidden md:table-cell w-[18%]">Original Volunteer</TableHead>
+                            <TableHead className="hidden lg:table-cell w-[15%]">New Events</TableHead>
+                            <TableHead className="hidden sm:table-cell w-[12%]">Submitted</TableHead>
+                            <TableHead className="text-right w-[18%]">Actions</TableHead>
                           </>
                         ) : (
                           <>
@@ -999,6 +1038,90 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                       </Tooltip>
                                     </TooltipProvider>
                                   </div>
+                                </TableCell>
+                              </>
+                            ) : activeTab === 'duplicates' ? (
+                              <>
+                                <TableCell className="font-medium">
+                                  {volunteer.first_name} {volunteer.last_name}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground truncate max-w-[120px]" title={volunteer.email}>
+                                  {volunteer.email}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                  {(() => {
+                                    const sourceData = volunteer.source_data as { original_volunteer_name?: string; original_volunteer_id?: string } | null;
+                                    return sourceData?.original_volunteer_name ? (
+                                      <span className="text-sm text-muted-foreground truncate block max-w-[150px]" title={sourceData.original_volunteer_name}>
+                                        {sourceData.original_volunteer_name}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">—</span>
+                                    );
+                                  })()}
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell">
+                                  <span className="text-sm text-muted-foreground truncate block max-w-[100px]" title={volunteer.events_list || ''}>
+                                    {volunteer.events_list?.split(',').map(e => formatEventName(e.trim())).join(', ') || '—'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                                  {new Date(volunteer.created_at).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <TooltipProvider delayDuration={200}>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => openDetailsDialog(volunteer)}
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>View Details</TooltipContent>
+                                      </Tooltip>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1 text-xs"
+                                        onClick={async () => {
+                                          setDuplicateToApply(volunteer);
+                                          // Fetch original volunteer
+                                          const sourceData = volunteer.source_data as { original_volunteer_id?: string } | null;
+                                          if (sourceData?.original_volunteer_id) {
+                                            const { data } = await supabase
+                                              .from('pending_volunteers')
+                                              .select('*')
+                                              .eq('id', sourceData.original_volunteer_id)
+                                              .single();
+                                            setOriginalVolunteer(data as PendingVolunteer | null);
+                                          }
+                                          setShowApplyChangesDialog(true);
+                                        }}
+                                      >
+                                        <Check className="w-3 h-3" />
+                                        Apply
+                                      </Button>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-destructive hover:text-destructive"
+                                            onClick={() => handleDelete(volunteer)}
+                                            disabled={deleteMutation.isPending}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </TooltipProvider>
                                 </TableCell>
                               </>
                             ) : (
@@ -1802,6 +1925,194 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 <>
                   {exportFormat === 'excel' ? <FileSpreadsheet className="w-4 h-4 mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
                   Export {exportFormat === 'excel' ? 'Excel' : 'CSV'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Apply Changes Dialog for Duplicates */}
+      <Dialog open={showApplyChangesDialog} onOpenChange={(open) => {
+        setShowApplyChangesDialog(open);
+        if (!open) {
+          setDuplicateToApply(null);
+          setOriginalVolunteer(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Apply Changes from Duplicate Submission</DialogTitle>
+            <DialogDescription>
+              Review and apply changes from the new submission to the original volunteer record.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateToApply && (
+            <div className="space-y-4">
+              {/* Comparison Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm text-muted-foreground">Original Record</h4>
+                  <div className="bg-muted/50 rounded-md p-3 space-y-2 text-sm">
+                    {originalVolunteer ? (
+                      <>
+                        <p><strong>Name:</strong> {originalVolunteer.first_name} {originalVolunteer.last_name}</p>
+                        <p><strong>Email:</strong> {originalVolunteer.email}</p>
+                        <p><strong>Phone:</strong> {originalVolunteer.phone_number || '—'}</p>
+                        <p><strong>Gender:</strong> {originalVolunteer.gender || '—'}</p>
+                        <p><strong>Employee:</strong> {originalVolunteer.is_employee ? 'Yes' : 'No'}</p>
+                        <p><strong>Events:</strong> {originalVolunteer.events_list?.split(',').map(e => formatEventName(e.trim())).join(', ') || '—'}</p>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground italic">Loading original record...</p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm text-amber-600">New Submission</h4>
+                  <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md p-3 space-y-2 text-sm">
+                    <p><strong>Name:</strong> {duplicateToApply.first_name} {duplicateToApply.last_name}</p>
+                    <p><strong>Email:</strong> {duplicateToApply.email}</p>
+                    <p><strong>Phone:</strong> {duplicateToApply.phone_number || '—'}</p>
+                    <p><strong>Gender:</strong> {duplicateToApply.gender || '—'}</p>
+                    <p><strong>Employee:</strong> {duplicateToApply.is_employee ? 'Yes' : 'No'}</p>
+                    <p><strong>Events:</strong> {duplicateToApply.events_list?.split(',').map(e => formatEventName(e.trim())).join(', ') || '—'}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Changes Summary */}
+              {originalVolunteer && (
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                  <h4 className="font-medium text-sm text-blue-700 dark:text-blue-400 mb-2">Changes that will be applied:</h4>
+                  <ul className="text-sm text-blue-600 dark:text-blue-300 space-y-1">
+                    {duplicateToApply.phone_number !== originalVolunteer.phone_number && duplicateToApply.phone_number && (
+                      <li>• Phone: {originalVolunteer.phone_number || 'empty'} → {duplicateToApply.phone_number}</li>
+                    )}
+                    {duplicateToApply.gender !== originalVolunteer.gender && duplicateToApply.gender && (
+                      <li>• Gender: {originalVolunteer.gender || 'empty'} → {duplicateToApply.gender}</li>
+                    )}
+                    {duplicateToApply.events_list !== originalVolunteer.events_list && duplicateToApply.events_list && (
+                      <li>• Events will be updated with new registrations</li>
+                    )}
+                    {duplicateToApply.emergency_contact_name !== originalVolunteer.emergency_contact_name && duplicateToApply.emergency_contact_name && (
+                      <li>• Emergency contact will be updated</li>
+                    )}
+                    {!duplicateToApply.phone_number && duplicateToApply.phone_number === originalVolunteer.phone_number &&
+                     !duplicateToApply.gender && duplicateToApply.gender === originalVolunteer.gender &&
+                     duplicateToApply.events_list === originalVolunteer.events_list && (
+                      <li className="italic">No significant changes detected</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowApplyChangesDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (duplicateToApply) {
+                  deleteMutation.mutate(duplicateToApply.id);
+                  setShowApplyChangesDialog(false);
+                }
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Discard Duplicate
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!duplicateToApply || !originalVolunteer) return;
+                setApplyingChanges(true);
+                
+                try {
+                  // Update original volunteer with new data
+                  const updateData: Record<string, unknown> = {};
+                  
+                  if (duplicateToApply.phone_number && duplicateToApply.phone_number !== originalVolunteer.phone_number) {
+                    updateData.phone_number = duplicateToApply.phone_number;
+                  }
+                  if (duplicateToApply.gender && duplicateToApply.gender !== originalVolunteer.gender) {
+                    updateData.gender = duplicateToApply.gender;
+                  }
+                  if (duplicateToApply.emergency_contact_name) {
+                    updateData.emergency_contact_name = duplicateToApply.emergency_contact_name;
+                    updateData.emergency_contact_number = duplicateToApply.emergency_contact_number;
+                    updateData.emergency_contact_relationship = duplicateToApply.emergency_contact_relationship;
+                  }
+                  
+                  // Merge events lists
+                  if (duplicateToApply.events_list && duplicateToApply.events_list !== originalVolunteer.events_list) {
+                    const originalEvents = new Set((originalVolunteer.events_list || '').split(',').map(e => e.trim()).filter(Boolean));
+                    const newEvents = duplicateToApply.events_list.split(',').map(e => e.trim()).filter(Boolean);
+                    newEvents.forEach(e => originalEvents.add(e));
+                    updateData.events_list = Array.from(originalEvents).join(',');
+                    
+                    // Merge events_json if present
+                    if (duplicateToApply.events_json && Array.isArray(duplicateToApply.events_json)) {
+                      const originalEventsJson = Array.isArray(originalVolunteer.events_json) ? originalVolunteer.events_json : [];
+                      const existingSlugs = new Set(originalEventsJson.map((e: { event?: string }) => e.event));
+                      const newEventsToAdd = (duplicateToApply.events_json as Array<{ event?: string }>).filter(e => !existingSlugs.has(e.event));
+                      updateData.events_json = [...originalEventsJson, ...newEventsToAdd];
+                    }
+                  }
+                  
+                  if (Object.keys(updateData).length > 0) {
+                    const { error: updateError } = await supabase
+                      .from('pending_volunteers')
+                      .update(updateData)
+                      .eq('id', originalVolunteer.id);
+                    
+                    if (updateError) throw updateError;
+                  }
+                  
+                  // Delete the duplicate record
+                  const { error: deleteError } = await supabase
+                    .from('pending_volunteers')
+                    .delete()
+                    .eq('id', duplicateToApply.id);
+                  
+                  if (deleteError) throw deleteError;
+                  
+                  queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+                  queryClient.invalidateQueries({ queryKey: ['duplicate-volunteers-count'] });
+                  
+                  toast({
+                    title: 'Changes Applied',
+                    description: `Updated ${originalVolunteer.first_name}'s record and removed the duplicate.`,
+                  });
+                  
+                  setShowApplyChangesDialog(false);
+                  setDuplicateToApply(null);
+                  setOriginalVolunteer(null);
+                } catch (error) {
+                  toast({
+                    title: 'Failed to Apply Changes',
+                    description: error instanceof Error ? error.message : 'Unknown error',
+                    variant: 'destructive',
+                  });
+                } finally {
+                  setApplyingChanges(false);
+                }
+              }}
+              disabled={applyingChanges || !originalVolunteer}
+            >
+              {applyingChanges ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Apply Changes
                 </>
               )}
             </Button>
