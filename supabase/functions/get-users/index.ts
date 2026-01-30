@@ -131,7 +131,11 @@ Deno.serve(async (req) => {
       }
     });
 
+    // Create a set of valid auth user IDs for quick lookup
+    const validAuthUserIds = new Set(authUsers.map(u => u.id));
+
     // Map roles to users with emails - deduplicate by user_id, prioritize admin role
+    // IMPORTANT: Skip entries where the auth user no longer exists (orphaned records)
     const userMap = new Map<string, { 
       id: string; 
       email: string; 
@@ -153,8 +157,18 @@ Deno.serve(async (req) => {
         authUserToPV.set(pv.created_user_id, pv.id);
       }
     });
+
+    // Track orphaned user_roles entries for reporting
+    const orphanedRoleIds: string[] = [];
     
     roles?.forEach(role => {
+      // Skip orphaned records where auth user no longer exists
+      if (!validAuthUserIds.has(role.user_id)) {
+        orphanedRoleIds.push(role.id);
+        console.log(`Skipping orphaned user_role: ${role.id} for user_id: ${role.user_id}`);
+        return;
+      }
+
       const authUser = authUsers.find(u => u.id === role.user_id);
       const existing = userMap.get(role.user_id);
       const qrCardInfos = userQRCards.get(role.user_id) || [];
@@ -179,6 +193,10 @@ Deno.serve(async (req) => {
         });
       }
     });
+
+    if (orphanedRoleIds.length > 0) {
+      console.log(`Found ${orphanedRoleIds.length} orphaned user_roles entries`);
+    }
     
     const usersWithRoles = Array.from(userMap.values());
 

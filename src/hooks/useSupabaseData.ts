@@ -1605,3 +1605,39 @@ export const useArchivedCardData = (marketplaceId?: string) => {
     }
   });
 };
+
+// Orphan Cleanup
+export interface OrphanCleanupResult {
+  success: boolean;
+  dryRun: boolean;
+  orphanedUserRoles: number;
+  orphanedVolunteerQRCards: number;
+  totalCleaned: number;
+  message: string;
+}
+
+export const useCleanupOrphans = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (dryRun: boolean = true): Promise<OrphanCleanupResult> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new SafeError('Not authenticated');
+
+      const { data, error } = await supabase.functions.invoke('cleanup-orphans', {
+        body: { dryRun },
+      });
+
+      if (error) throw new SafeError(error.message || 'Failed to cleanup orphans');
+      if (!data.success) throw new SafeError(data.error || 'Cleanup failed');
+
+      return data as OrphanCleanupResult;
+    },
+    onSuccess: (data) => {
+      if (!data.dryRun) {
+        // Invalidate users list after actual cleanup
+        queryClient.invalidateQueries({ queryKey: ['users'] });
+      }
+    }
+  });
+};
