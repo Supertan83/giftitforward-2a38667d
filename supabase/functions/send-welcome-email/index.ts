@@ -143,7 +143,7 @@ function buildEmailHtml(
               <!-- Greeting -->
               <tr>
                 <td style="padding: 0 30px 15px 30px;">
-                  <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear [Volunteer Name],</strong></p>
+                  <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p>
                 </td>
               </tr>
               

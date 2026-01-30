@@ -3311,6 +3311,52 @@ serve(async (req) => {
           const loginUrl = `${appUrl}/auth`;
           const trainingUrl = `${appUrl}/training`;
 
+          // Look up first event's marketplace info from database (if eventsJson provided)
+          let firstEventMarketplace: MarketplaceInfo | null = null;
+          let firstEventMarketplaceId: string | null = null;
+          
+          if (eventsJson && Array.isArray(eventsJson) && eventsJson.length > 0) {
+            const firstEvent = eventsJson[0] as RegisteredEvent;
+            if (firstEvent.event) {
+              // Try to find matching marketplace in database
+              const eventSlugs = [firstEvent.event];
+              const marketplaceDetails = await getMarketplacesBySlug(supabase, eventSlugs);
+              const matchedMarketplace = marketplaceDetails.get(firstEvent.event);
+              
+              if (matchedMarketplace) {
+                console.log(`Found matching marketplace for first event: ${matchedMarketplace.name}`);
+                firstEventMarketplace = {
+                  name: matchedMarketplace.name,
+                  location: matchedMarketplace.location,
+                  event_date: matchedMarketplace.event_date,
+                  start_time: matchedMarketplace.start_time,
+                  end_time: matchedMarketplace.end_time
+                };
+                
+                // Also try to get the marketplace ID for MS Graph email
+                const { data: mpWithId } = await supabase
+                  .from('marketplace_events')
+                  .select('id')
+                  .eq('name', matchedMarketplace.name)
+                  .maybeSingle();
+                if (mpWithId) {
+                  firstEventMarketplaceId = mpWithId.id;
+                }
+              } else {
+                // Use form data directly if no database match
+                console.log(`No database match for event slug: ${firstEvent.event}, using form data`);
+                const { start: startTime, end: endTime } = parseTimeRange(firstEvent.eventTime);
+                firstEventMarketplace = {
+                  name: slugToName(firstEvent.event),
+                  location: firstEvent.eventLocation || null,
+                  event_date: parseDateToISO(firstEvent.eventDate),
+                  start_time: startTime,
+                  end_time: endTime
+                };
+              }
+            }
+          }
+
           // Send welcome email with all QR codes (volunteer + family members)
           const emailResult = await sendWelcomeEmailWithQR(
             supabase,
@@ -3324,9 +3370,9 @@ serve(async (req) => {
             pendingData.id,
             familyQRs,
             undefined, // customization
-            undefined, // marketplace info
-            undefined, // marketplaceId
-            eventsJson // Pass events data for times in email
+            firstEventMarketplace, // marketplace info from first registered event
+            firstEventMarketplaceId, // marketplaceId for MS Graph
+            eventsJson // Pass all events data for multi-event emails
           );
 
           // Update pending volunteer with email status
