@@ -581,6 +581,17 @@ interface EmailCustomization {
   message?: string;
 }
 
+// Interface for event info passed to email
+interface EmailEventInfo {
+  name: string;
+  date: string;
+  time: string;
+  location: string;
+  rawStartTime?: string | null;
+  rawEndTime?: string | null;
+  rawDate?: string | null;
+}
+
 // Helper function to send welcome email via Microsoft Graph edge function
 async function sendWelcomeEmailViaMicrosoftGraph(
   supabaseUrl: string,
@@ -591,10 +602,12 @@ async function sendWelcomeEmailViaMicrosoftGraph(
   lastName: string,
   tempPassword: string,
   qrCardId: string,
-  marketplaceId?: string | null
+  marketplaceId?: string | null,
+  events?: EmailEventInfo[]
 ): Promise<{ success: boolean; error?: string; provider: string }> {
   try {
     console.log(`Calling send-welcome-email edge function for ${email}`);
+    console.log(`Passing ${events?.length || 0} events to email function`);
     
     const response = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
       method: 'POST',
@@ -610,6 +623,7 @@ async function sendWelcomeEmailViaMicrosoftGraph(
         tempPassword,
         qrCodeId: qrCardId,
         marketplaceId: marketplaceId || undefined,
+        events: events || undefined,
       }),
     });
 
@@ -723,6 +737,61 @@ async function sendWelcomeEmailWithQR(
     
     console.log(`Welcome email config: primary=${primaryProvider}, MS Graph configured=${microsoftGraphConfigured}`);
     
+    // Parse eventsJson and look up marketplace times BEFORE sending any email
+    // This is used by both Microsoft Graph and Resend providers
+    let registeredEvents: EmailEventInfo[] = [];
+    
+    if (eventsJson && Array.isArray(eventsJson)) {
+      // Extract event slugs from eventsJson
+      const eventSlugs = eventsJson
+        .map((e: RegisteredEvent) => e.event)
+        .filter((slug): slug is string => !!slug);
+      
+      console.log(`Looking up marketplace times for ${eventSlugs.length} events:`, eventSlugs);
+      
+      // Look up marketplace details from database
+      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
+      
+      // Build registered events list with times from DB or form data
+      for (const evt of eventsJson as RegisteredEvent[]) {
+        const dbMarketplace = marketplaceDetails.get(evt.event);
+        
+        // Use DB data if available, otherwise fall back to form data
+        const eventDateFormatted = dbMarketplace?.event_date 
+          ? formatDate(dbMarketplace.event_date) 
+          : (evt.eventDate || '');
+        
+        // For time: prefer DB times, fall back to form eventTime
+        const startTimeFormatted = formatTime(dbMarketplace?.start_time);
+        const endTimeFormatted = formatTime(dbMarketplace?.end_time);
+        const timeRange = startTimeFormatted && endTimeFormatted 
+          ? `${startTimeFormatted} - ${endTimeFormatted}` 
+          : (startTimeFormatted || endTimeFormatted || evt.eventTime || '');
+        
+        // For location: prefer DB location, fall back to form eventLocation
+        const eventLocation = dbMarketplace?.location || evt.eventLocation || '';
+        
+        // Get name from DB or generate from slug
+        const eventName = dbMarketplace?.name || evt.event
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+          .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
+        
+        registeredEvents.push({
+          name: eventName,
+          date: eventDateFormatted,
+          time: timeRange,
+          location: eventLocation,
+          rawStartTime: dbMarketplace?.start_time || null,
+          rawEndTime: dbMarketplace?.end_time || null,
+          rawDate: dbMarketplace?.event_date || null
+        });
+      }
+      
+      console.log(`Built ${registeredEvents.length} events with times:`, registeredEvents);
+    }
+    
     // Try Microsoft Graph if it's the primary provider and configured
     if (primaryProvider === 'microsoft_graph' && microsoftGraphConfigured) {
       console.log('Sending welcome email via Microsoft Graph (primary)');
@@ -736,7 +805,8 @@ async function sendWelcomeEmailWithQR(
         lastName,
         tempPassword,
         qrCardId,
-        marketplaceId
+        marketplaceId,
+        registeredEvents.length > 0 ? registeredEvents : undefined
       );
       
       // Log the Microsoft Graph email attempt
@@ -744,7 +814,7 @@ async function sendWelcomeEmailWithQR(
         'microsoft_graph',
         msGraphResult.success,
         msGraphResult.error || null,
-        { to: email, qrCardId, marketplaceId },
+        { to: email, qrCardId, marketplaceId, eventsCount: registeredEvents.length },
         { provider: 'microsoft_graph', success: msGraphResult.success }
       );
       
@@ -863,68 +933,7 @@ async function sendWelcomeEmailWithQR(
     
     console.log(`Sending welcome email via Resend${isFallback ? ' (fallback)' : primaryProvider === 'resend' ? ' (primary)' : ''}`);
     
-    
-    // Parse eventsJson and look up marketplace times
-    let registeredEvents: Array<{ 
-      name: string; 
-      date: string; 
-      time: string; 
-      location: string;
-      rawStartTime: string | null;
-      rawEndTime: string | null;
-      rawDate: string | null;
-    }> = [];
-    
-    if (eventsJson && Array.isArray(eventsJson)) {
-      // Extract event slugs from eventsJson
-      const eventSlugs = eventsJson
-        .map((e: RegisteredEvent) => e.event)
-        .filter((slug): slug is string => !!slug);
-      
-      console.log(`Looking up marketplace times for ${eventSlugs.length} events:`, eventSlugs);
-      
-      // Look up marketplace details from database
-      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
-      
-      // Build registered events list with times from DB or form data
-      for (const evt of eventsJson as RegisteredEvent[]) {
-        const dbMarketplace = marketplaceDetails.get(evt.event);
-        
-        // Use DB data if available, otherwise fall back to form data
-        const eventDateFormatted = dbMarketplace?.event_date 
-          ? formatDate(dbMarketplace.event_date) 
-          : (evt.eventDate || '');
-        
-        // For time: prefer DB times, fall back to form eventTime
-        const startTimeFormatted = formatTime(dbMarketplace?.start_time);
-        const endTimeFormatted = formatTime(dbMarketplace?.end_time);
-        const timeRange = startTimeFormatted && endTimeFormatted 
-          ? `${startTimeFormatted} - ${endTimeFormatted}` 
-          : (startTimeFormatted || endTimeFormatted || evt.eventTime || '');
-        
-        // For location: prefer DB location, fall back to form eventLocation
-        const eventLocation = dbMarketplace?.location || evt.eventLocation || '';
-        
-        // Get name from DB or generate from slug
-        const eventName = dbMarketplace?.name || evt.event
-          .split('-')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ')
-          .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
-        
-        registeredEvents.push({
-          name: eventName,
-          date: eventDateFormatted,
-          time: timeRange,
-          location: eventLocation,
-          rawStartTime: dbMarketplace?.start_time || null,
-          rawEndTime: dbMarketplace?.end_time || null,
-          rawDate: dbMarketplace?.event_date || null
-        });
-      }
-      
-      console.log(`Built ${registeredEvents.length} events with times:`, registeredEvents);
-    }
+    // registeredEvents was already parsed earlier before Microsoft Graph call
     
     // Format single marketplace details for Resend email (fallback if no eventsJson)
     const eventDate = formatDate(marketplace?.event_date);
@@ -960,8 +969,8 @@ async function sendWelcomeEmailWithQR(
                   const calLinks = generateCalendarLinks({
                     name: evt.name,
                     date: evt.rawDate || evt.date,
-                    startTime: evt.rawStartTime,
-                    endTime: evt.rawEndTime,
+                    startTime: evt.rawStartTime ?? null,
+                    endTime: evt.rawEndTime ?? null,
                     location: evt.location
                   });
                   
