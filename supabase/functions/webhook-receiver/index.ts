@@ -1422,6 +1422,181 @@ async function sendWelcomeEmailWithQR(
   }
 }
 
+// Helper function to send duplicate registration notification email
+// deno-lint-ignore no-explicit-any
+async function sendDuplicateNotificationEmail(
+  supabaseClient: any,
+  email: string,
+  firstName: string,
+  duplicatePendingId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabaseProjectUrl = Deno.env.get('SUPABASE_URL') || '';
+    const heroImageUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+    const dubaiHoldingLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    
+    const emailSubject = "Gift It Forward - Registration Update";
+    
+    console.log(`Sending duplicate notification email to ${email}`);
+    
+    const resendResult = await resend.emails.send({
+      from: "Gift It Forward <giftitforward@dubaiholding.com>",
+      to: [email],
+      bcc: ['giftitforward@dubaiholding.com'],
+      subject: emailSubject,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+            <tr>
+              <td align="center" style="padding: 20px 0;">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+                  
+                  <!-- Hero Image -->
+                  <tr>
+                    <td>
+                      <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Main Title -->
+                  <tr>
+                    <td style="padding: 30px 30px 20px 30px; text-align: center;">
+                      <h1 style="margin: 0; font-size: 28px; color: #1a1a1a; font-weight: normal; line-height: 1.3;">
+                        Registration Update
+                      </h1>
+                    </td>
+                  </tr>
+                  
+                  <!-- Greeting -->
+                  <tr>
+                    <td style="padding: 0 30px 15px 30px;">
+                      <p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Message -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        Thank you for your interest in volunteering with Gift It Forward.
+                      </p>
+                      <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        Our records show that you already have a volunteer profile registered with this email address.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Info Box -->
+                  <tr>
+                    <td style="padding: 0 30px 20px 30px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0f4f8; border-radius: 8px; border-left: 4px solid #DA291C;">
+                        <tr>
+                          <td style="padding: 15px 20px;">
+                            <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                              If you need to update your registration details or have any questions, please contact us at:
+                            </p>
+                            <p style="margin: 10px 0 0 0;">
+                              <a href="mailto:giftitforward@dubaiholding.com" style="color: #DA291C; text-decoration: none; font-weight: bold; font-size: 14px;">giftitforward@dubaiholding.com</a>
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                  <!-- Closing -->
+                  <tr>
+                    <td style="padding: 0 30px 30px 30px;">
+                      <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                        We look forward to seeing you at the marketplace!
+                      </p>
+                      <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Warm regards,</p>
+                      <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td width="50%" valign="middle">
+                            <img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="40" style="display: block;" />
+                          </td>
+                          <td width="50%" valign="middle" style="text-align: right;">
+                            <p style="margin: 0; font-size: 12px; color: #666666; font-style: italic;">For the Good of Tomorrow</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `,
+    });
+
+    if (resendResult.error) {
+      console.error("Failed to send duplicate notification email:", resendResult.error);
+      
+      // Log the failed attempt
+      try {
+        await supabaseClient
+          .from('email_send_logs')
+          .insert({
+            pending_volunteer_id: duplicatePendingId,
+            email_type: 'duplicate_notification',
+            provider: 'resend',
+            recipient_email: email,
+            success: false,
+            error_message: resendResult.error.message,
+            request_payload: { to: email, subject: emailSubject },
+            response_data: { error: resendResult.error.message }
+          });
+      } catch (logError) {
+        console.error('Failed to log email attempt:', logError);
+      }
+      
+      return { success: false, error: resendResult.error.message };
+    }
+
+    console.log(`Duplicate notification email sent successfully to ${email}`);
+    
+    // Log successful attempt
+    try {
+      await supabaseClient
+        .from('email_send_logs')
+        .insert({
+          pending_volunteer_id: duplicatePendingId,
+          email_type: 'duplicate_notification',
+          provider: 'resend',
+          recipient_email: email,
+          success: true,
+          error_message: null,
+          request_payload: { to: email, subject: emailSubject },
+          response_data: { status: 'sent' }
+        });
+    } catch (logError) {
+      console.error('Failed to log email attempt:', logError);
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error("Error sending duplicate notification email:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 // Legacy helper function for backwards compatibility
 // deno-lint-ignore no-explicit-any
 async function sendWelcomeEmail(
@@ -3127,6 +3302,76 @@ serve(async (req) => {
             throw new Error('Email is missing from the form submission');
           }
 
+          // Check if this email already has an approved volunteer record (duplicate detection)
+          const { data: existingApproved } = await supabase
+            .from('pending_volunteers')
+            .select('id, first_name, last_name, email, created_user_id')
+            .eq('email', volunteerEmail.toLowerCase())
+            .eq('status', 'approved')
+            .maybeSingle();
+
+          if (existingApproved) {
+            console.log(`Duplicate submission detected for ${volunteerEmail} - original volunteer ID: ${existingApproved.id}`);
+            
+            // Create duplicate record with reference to original
+            const { data: duplicateData, error: duplicateError } = await supabase
+              .from('pending_volunteers')
+              .insert({
+                webhook_event_id: eventData?.id || null,
+                email: volunteerEmail,
+                first_name: firstName,
+                last_name: lastName,
+                phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
+                gender: formData.Gender || null,
+                is_employee: formData['Dubai Holding Employee'] === 'Yes',
+                employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
+                employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
+                employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
+                external_company: formData['Not Employee - Company'] || null,
+                has_medical_condition: formData['Medical Condition'] === 'Yes',
+                medical_condition_details: formData['Medical Condition Details'] || null,
+                emergency_contact_name: formData['Emergency Contact Name'] || null,
+                emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
+                emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
+                is_fasting: formData['Fasting during event'] === 'Yes',
+                events_list: formData.eventslist || null,
+                events_json: eventsJson,
+                source_data: {
+                  ...formData,
+                  original_volunteer_id: existingApproved.id,
+                  original_volunteer_name: `${existingApproved.first_name} ${existingApproved.last_name}`.trim()
+                },
+                status: 'duplicate' // Mark as duplicate for admin review
+              })
+              .select()
+              .single();
+
+            if (duplicateError) {
+              console.error('Failed to create duplicate record:', duplicateError);
+            } else {
+              console.log(`Duplicate record created: ${duplicateData?.id}`);
+              
+              // Send duplicate notification email to the user
+              await sendDuplicateNotificationEmail(supabase, volunteerEmail, firstName, duplicateData?.id);
+            }
+
+            // Mark webhook as processed
+            if (eventData?.id) {
+              await supabase.from('webhook_events').update({ processed: true }).eq('id', eventData.id);
+            }
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: 'Duplicate submission stored for admin review',
+                duplicate_id: duplicateData?.id,
+                original_volunteer_id: existingApproved.id,
+                email: volunteerEmail
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
           // Generate temp password and create user account immediately
           const tempPassword = generateTempPassword();
           
@@ -3142,6 +3387,76 @@ serve(async (req) => {
           });
 
           if (createError) {
+            // Check if this is a duplicate email error
+            const isDuplicateError = createError.message?.includes('already been registered') || 
+                                     createError.message?.includes('already exists') ||
+                                     (createError as { code?: string }).code === 'email_exists';
+            
+            if (isDuplicateError) {
+              console.log(`User creation failed due to existing account for ${volunteerEmail} - creating duplicate record`);
+              
+              // Find the existing approved record
+              const { data: existingRecord } = await supabase
+                .from('pending_volunteers')
+                .select('id, first_name, last_name')
+                .eq('email', volunteerEmail.toLowerCase())
+                .eq('status', 'approved')
+                .maybeSingle();
+
+              // Create duplicate record
+              const { data: duplicateData } = await supabase
+                .from('pending_volunteers')
+                .insert({
+                  webhook_event_id: eventData?.id || null,
+                  email: volunteerEmail,
+                  first_name: firstName,
+                  last_name: lastName,
+                  phone_number: formData['Phone Number']?.replace(/'/g, '').trim() || null,
+                  gender: formData.Gender || null,
+                  is_employee: formData['Dubai Holding Employee'] === 'Yes',
+                  employee_vertical: formData['Dubai Holding Employee - Vertical'] || null,
+                  employee_join_date: formData['Dubai Holding Employee - Date of Joining'] || null,
+                  employee_number: formData['Dubai Holding Employee - Number']?.toString() || null,
+                  external_company: formData['Not Employee - Company'] || null,
+                  has_medical_condition: formData['Medical Condition'] === 'Yes',
+                  medical_condition_details: formData['Medical Condition Details'] || null,
+                  emergency_contact_name: formData['Emergency Contact Name'] || null,
+                  emergency_contact_relationship: formData['Emergency Contact Relationship'] || null,
+                  emergency_contact_number: formData['Emergency Contact Number']?.toString() || null,
+                  is_fasting: formData['Fasting during event'] === 'Yes',
+                  events_list: formData.eventslist || null,
+                  events_json: eventsJson,
+                  source_data: {
+                    ...formData,
+                    original_volunteer_id: existingRecord?.id || null,
+                    original_volunteer_name: existingRecord ? `${existingRecord.first_name} ${existingRecord.last_name}`.trim() : null
+                  },
+                  status: 'duplicate'
+                })
+                .select()
+                .single();
+
+              // Send duplicate notification email
+              if (duplicateData) {
+                await sendDuplicateNotificationEmail(supabase, volunteerEmail, firstName, duplicateData.id);
+              }
+
+              // Mark webhook as processed
+              if (eventData?.id) {
+                await supabase.from('webhook_events').update({ processed: true }).eq('id', eventData.id);
+              }
+
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  message: 'Duplicate submission stored for admin review (user already exists)',
+                  duplicate_id: duplicateData?.id,
+                  email: volunteerEmail
+                }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
             console.error(`Failed to create user ${volunteerEmail}:`, createError);
             // Still create the pending record so admin can see it, but mark as failed
             const { data: pendingData } = await supabase
