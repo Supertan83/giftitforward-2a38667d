@@ -5,6 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface EventInfo {
+  name: string;
+  date: string;
+  time: string;
+  location: string;
+  rawStartTime?: string | null;
+  rawEndTime?: string | null;
+  rawDate?: string | null;
+}
+
 interface WelcomeEmailRequest {
   volunteerId: string;
   email: string;
@@ -13,6 +23,7 @@ interface WelcomeEmailRequest {
   tempPassword: string;
   qrCodeId: string;
   marketplaceId?: string;
+  events?: EventInfo[]; // Array of registered events
 }
 
 interface MarketplaceEvent {
@@ -84,6 +95,28 @@ function generateQRCodeUrl(qrCodeId: string): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCodeId)}`;
 }
 
+// Build HTML for a single event block with red left border
+function buildEventBlock(event: EventInfo): string {
+  return `
+    <tr>
+      <td style="padding: 0 30px 15px 30px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-left: 3px solid #DA291C; padding-left: 15px;">
+          <tr>
+            <td>
+              <p style="margin: 0 0 8px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">${event.name}</p>
+              <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+                ${event.date ? `<li><strong>Date:</strong> ${event.date}</li>` : ''}
+                ${event.location ? `<li><strong>Location:</strong> ${event.location}</li>` : ''}
+                ${event.time ? `<li><strong>Timings:</strong> ${event.time}</li>` : ''}
+              </ul>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `;
+}
+
 // Build email HTML content - Marketing Approved Design
 function buildEmailHtml(
   firstName: string,
@@ -91,7 +124,8 @@ function buildEmailHtml(
   email: string,
   tempPassword: string,
   qrCodeId: string,
-  marketplace?: MarketplaceEvent | null
+  marketplace?: MarketplaceEvent | null,
+  events?: EventInfo[]
 ): string {
   const qrCodeUrl = generateQRCodeUrl(qrCodeId);
   const loginUrl = 'https://gif.thesurpluss.com/auth';
@@ -103,13 +137,33 @@ function buildEmailHtml(
   const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg?v=2`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png?v=2`;
 
-  // Format marketplace details
-  const eventDate = formatDate(marketplace?.event_date);
-  const startTime = formatTime(marketplace?.start_time);
-  const endTime = formatTime(marketplace?.end_time);
-  const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
-  const marketplaceName = marketplace?.name || 'Gift It Forward marketplace';
-  const marketplaceLocation = marketplace?.location || '';
+  // Build events HTML: prefer the events array, fall back to single marketplace
+  let eventsHtml = '';
+  
+  if (events && events.length > 0) {
+    // Multiple events with red border styling
+    eventsHtml = events.map(event => buildEventBlock(event)).join('');
+  } else if (marketplace) {
+    // Single marketplace fallback (legacy behavior)
+    const eventDate = formatDate(marketplace.event_date);
+    const startTime = formatTime(marketplace.start_time);
+    const endTime = formatTime(marketplace.end_time);
+    const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+    const marketplaceName = marketplace.name || 'Gift It Forward marketplace';
+    const marketplaceLocation = marketplace.location || '';
+    
+    eventsHtml = `
+      <tr>
+        <td style="padding: 0 30px 20px 30px;">
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+            ${eventDate ? `<li><strong>Date:</strong> ${eventDate}</li>` : ''}
+            ${marketplaceLocation ? `<li><strong>Location:</strong> ${marketplaceLocation}</li>` : ''}
+            ${timeRange ? `<li><strong>Timings:</strong> ${timeRange}</li>` : ''}
+          </ul>
+        </td>
+      </tr>
+    `;
+  }
 
   return `
     <!DOCTYPE html>
@@ -156,16 +210,8 @@ function buildEmailHtml(
                 </td>
               </tr>
               
-              <!-- Event Details -->
-              <tr>
-                <td style="padding: 0 30px 20px 30px;">
-                  <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
-                    ${eventDate ? `<li><strong>Date:</strong> ${eventDate}</li>` : ''}
-                    ${marketplaceLocation ? `<li><strong>Location:</strong> ${marketplaceLocation}</li>` : ''}
-                    ${timeRange ? `<li><strong>Timings:</strong> ${timeRange}</li>` : ''}
-                  </ul>
-                </td>
-              </tr>
+              <!-- Event Details (single or multiple) -->
+              ${eventsHtml}
               
               <!-- Helpful Reminders -->
               <tr>
@@ -215,7 +261,7 @@ function buildEmailHtml(
               
               <tr>
                 <td style="padding: 0 30px 15px 30px; background-color: #f8f8f8;">
-                  <p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: {{ custom.qr_card_id }}</p>
+                  <p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: ${qrCodeId}</p>
                 </td>
               </tr>
               
@@ -426,7 +472,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { volunteerId, email, firstName, lastName, tempPassword, qrCodeId, marketplaceId } = body;
+    const { volunteerId, email, firstName, lastName, tempPassword, qrCodeId, marketplaceId, events } = body;
 
     // Validate required fields
     if (!email || !firstName || !lastName || !tempPassword || !qrCodeId) {
@@ -437,10 +483,11 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Sending welcome email to ${email} (Volunteer: ${firstName} ${lastName})`);
+    console.log(`Events provided: ${events?.length || 0}, MarketplaceId: ${marketplaceId || 'none'}`);
 
-    // Fetch marketplace details if marketplaceId is provided
+    // Fetch marketplace details if marketplaceId is provided and no events array
     let marketplace: MarketplaceEvent | null = null;
-    if (marketplaceId) {
+    if (marketplaceId && (!events || events.length === 0)) {
       const { data: marketplaceData, error: marketplaceError } = await supabaseAdmin
         .from('marketplace_events')
         .select('name, event_date, start_time, end_time, location')
@@ -463,14 +510,15 @@ Deno.serve(async (req) => {
       throw new Error('SENDER_EMAIL not configured');
     }
 
-    // Build email content
+    // Build email content - pass events array if provided
     const htmlContent = buildEmailHtml(
       firstName,
       lastName,
       email,
       tempPassword,
       qrCodeId,
-      marketplace
+      marketplace,
+      events
     );
 
     // HubSpot BCC address for tracking
@@ -493,7 +541,7 @@ Deno.serve(async (req) => {
       provider: 'microsoft_graph',
       success: true,
       pending_volunteer_id: volunteerId || null,
-      request_payload: { firstName, lastName, qrCodeId, marketplaceId },
+      request_payload: { firstName, lastName, qrCodeId, marketplaceId, eventsCount: events?.length || 0 },
     });
 
     return new Response(JSON.stringify({ 
