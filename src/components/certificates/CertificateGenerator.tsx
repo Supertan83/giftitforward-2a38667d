@@ -68,11 +68,11 @@ export const generateCertificateImageURL = async ({
   ctx.textAlign = 'left';
   
   if (type === 'completion') {
-    // Position name below "THIS CERTIFIES THAT" header
-    ctx.fillText(fullName, 170, 580);
+    // Position name below "THIS CERTIFIES THAT" header - adjusted Y to be lower (was 580)
+    ctx.fillText(fullName, 170, 480);
   } else {
-    // Position name below "PRESENTED TO" header (15px lower)
-    ctx.fillText(fullName, 170, 595);
+    // Position name below "PRESENTED TO" header (15px lower than completion)
+    ctx.fillText(fullName, 170, 495);
   }
 
   // Return as blob URL
@@ -120,11 +120,11 @@ export const generateCertificatePDFBlob = async ({
   doc.setTextColor(84, 88, 90); // #54585A - DH Grey
   
   if (type === 'completion') {
-    // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 170, 580);
+    // Position name below "THIS CERTIFIES THAT" header - adjusted Y to be lower (was 580)
+    doc.text(fullName, 170, 480);
   } else {
-    // Position name below "PRESENTED TO" header (15px lower)
-    doc.text(fullName, 170, 595);
+    // Position name below "PRESENTED TO" header (15px lower than completion)
+    doc.text(fullName, 170, 495);
   }
 
   return doc.output('blob');
@@ -163,11 +163,11 @@ export const generateCertificatePDF = async ({
   doc.setTextColor(84, 88, 90); // #54585A - DH Grey
   
   if (type === 'completion') {
-    // Position name below "THIS CERTIFIES THAT" header
-    doc.text(fullName, 170, 580);
+    // Position name below "THIS CERTIFIES THAT" header - adjusted Y to be lower (was 580)
+    doc.text(fullName, 170, 480);
   } else {
-    // Position name below "PRESENTED TO" header (15px lower)
-    doc.text(fullName, 170, 595);
+    // Position name below "PRESENTED TO" header (15px lower than completion)
+    doc.text(fullName, 170, 495);
   }
 
   // Return base64 string (without data:application/pdf;base64, prefix)
