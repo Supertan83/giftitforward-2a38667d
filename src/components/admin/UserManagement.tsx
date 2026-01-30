@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash, Phone, Calendar, Building2, Hash, UserCheck, Search } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Loader2, Shield, User, Mail, Lock, Trash2, Pencil, Briefcase, QrCode, MapPin, LogIn, ShoppingBag, LogOut, AlertTriangle, Trash, Phone, Calendar, Building2, Hash, UserCheck, Search, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,7 @@ import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateV
 import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
+import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 
@@ -70,6 +71,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [orphanScanResult, setOrphanScanResult] = useState<OrphanCleanupResult | null>(null);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   const { data: users = [], isLoading } = useUsers();
   const { data: marketplaces = [] } = useMarketplaces();
@@ -274,6 +276,92 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
         description: error instanceof Error ? error.message : 'Failed to cleanup orphaned records',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!editUser) return;
+    
+    setSendingTestEmail(true);
+    try {
+      // Build events array from user's registered events
+      const events: Array<{name: string; date: string; time: string; location: string}> = [];
+      
+      if (editUser.events_json && Array.isArray(editUser.events_json)) {
+        for (const ev of editUser.events_json as Array<{event?: string; event_name?: string; event_slug?: string; eventDate?: string; eventTime?: string; eventLocation?: string}>) {
+          const eventName = ev.event_name || ev.event_slug || ev.event || 'Event';
+          events.push({
+            name: eventName.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+            date: ev.eventDate || '',
+            time: ev.eventTime || '',
+            location: ev.eventLocation || '',
+          });
+        }
+      } else if (editUser.events_list) {
+        // Parse from comma-separated list
+        const eventNames = editUser.events_list.split(',').map(e => e.trim());
+        for (const name of eventNames) {
+          // Try to match to marketplace for details
+          const matched = marketplaces.find(m => 
+            m.name.toLowerCase().includes(name.toLowerCase()) ||
+            name.toLowerCase().includes(m.name.toLowerCase())
+          );
+          events.push({
+            name: matched?.name || name,
+            date: matched?.event_date || '',
+            time: matched?.start_time && matched?.end_time 
+              ? `${matched.start_time} - ${matched.end_time}` 
+              : '',
+            location: matched?.location || '',
+          });
+        }
+      }
+      
+      // If no events, try to use assigned marketplaces
+      if (events.length === 0 && editUser.marketplace_ids && editUser.marketplace_ids.length > 0) {
+        for (const mpId of editUser.marketplace_ids) {
+          const mp = marketplaces.find(m => m.id === mpId);
+          if (mp) {
+            events.push({
+              name: mp.name,
+              date: mp.event_date || '',
+              time: mp.start_time && mp.end_time 
+                ? `${mp.start_time} - ${mp.end_time}` 
+                : '',
+              location: mp.location || '',
+            });
+          }
+        }
+      }
+
+      // Call the send-welcome-email edge function
+      const { data, error } = await supabase.functions.invoke('send-welcome-email', {
+        body: {
+          volunteerId: editUser.pending_volunteer_id || editUser.id,
+          email: editUser.email,
+          firstName: editUser.first_name || 'Volunteer',
+          lastName: editUser.last_name || '',
+          tempPassword: '********', // Masked for test emails
+          qrCodeId: editUser.qr_codes?.[0] || 'TEST-QR-CODE',
+          marketplaceId: editUser.marketplace_id || undefined,
+          events: events.length > 0 ? events : undefined,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Test Email Sent',
+        description: `Welcome email sent to ${editUser.email} with ${events.length} event(s)`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Send Email',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingTestEmail(false);
     }
   };
 
@@ -951,17 +1039,37 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
             )}
           </div>
 
-          <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setEditUser(null)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleUpdateRole} 
-              disabled={updateUserRole.isPending || updateVolunteerAssignment.isPending}
-            >
-              {(updateUserRole.isPending || updateVolunteerAssignment.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save Changes
-            </Button>
+          <div className="flex flex-wrap gap-3 justify-between items-center">
+            {/* Send Test Email button - only for volunteers */}
+            {editRole === 'volunteer' && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleSendTestEmail}
+                disabled={sendingTestEmail}
+                className="gap-2"
+              >
+                {sendingTestEmail ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                Send Test Email
+              </Button>
+            )}
+            
+            <div className="flex gap-3 ml-auto">
+              <Button variant="outline" onClick={() => setEditUser(null)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUpdateRole} 
+                disabled={updateUserRole.isPending || updateVolunteerAssignment.isPending}
+              >
+                {(updateUserRole.isPending || updateVolunteerAssignment.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
