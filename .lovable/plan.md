@@ -1,206 +1,140 @@
 
-# Duplicate Volunteer Handling System
+# Fix Certificate Name Alignment Consistency
 
-## Overview
-When a volunteer tries to register with an email that already exists in the system, instead of silently ignoring the submission, we will:
-1. Store the new submission data in a "Duplicate Volunteers" section (for admin review)
-2. Send an informational email to the user explaining they already have a profile
-3. Allow admins to manually review and update user information from the duplicate submissions
+## Problem Identified
 
----
+The system generates certificates in **two different ways** with **different name positions**:
 
-## Technical Implementation
+| Location | Position | Alignment | Font | Font Size |
+|----------|----------|-----------|------|-----------|
+| TrainingQuiz.tsx (email after training) | (960, 460) | Center | Helvetica | 72px |
+| CertificateGenerator.tsx (admin preview + survey) | (170, 480) | Left | 29LT Bukra | 48px |
 
-### Part 1: Database Changes
-
-**Add new status value for duplicates**
-
-We need to add a new status value `duplicate` to track these submissions. The `pending_volunteers` table already has a `status` column (text type), so we can simply insert records with `status = 'duplicate'`.
-
-No schema changes needed - we'll use the existing table structure with:
-- `status = 'duplicate'`
-- Store the `original_volunteer_id` reference in `source_data` JSON field
+**Result**: When users complete training, the certificate they receive via email has the name in a different position than what admins see in the preview.
 
 ---
 
-### Part 2: Edge Function Changes
+## Solution
 
-**File: `supabase/functions/webhook-receiver/index.ts`**
-
-Modify the duplicate detection logic (around line 3144) to:
-
-1. **Before user creation** - Check if email already exists:
-   ```text
-   Check pending_volunteers for approved record with same email
-   If found → Handle as duplicate
-   ```
-
-2. **On "already registered" error** - Handle gracefully:
-   ```text
-   Instead of creating a pending record:
-   - Create record with status = 'duplicate'
-   - Store reference to original volunteer
-   - Send duplicate notification email
-   - Return success (don't fail the webhook)
-   ```
-
-3. **Create a new helper function** `handleDuplicateSubmission()`:
-   - Creates duplicate record with all new form data
-   - Links to original volunteer via `source_data.original_volunteer_id`
-   - Triggers duplicate notification email
+Remove the duplicate certificate generation code from `TrainingQuiz.tsx` and use the centralized `CertificateGenerator.tsx` instead. This ensures all certificates (email, download, admin preview) use identical positioning.
 
 ---
 
-### Part 3: Duplicate Notification Email
+## Technical Changes
 
-**Create new email template in webhook-receiver**
+### File: `src/components/training/TrainingQuiz.tsx`
 
-Following the existing Dubai Holding email structure with:
-- Same branding (hero image, colors, footer)
-- Same sender: `giftitforward@dubaiholding.com`
-- Same BCC tracking
+**1. Add import for centralized certificate generator**
+```typescript
+import { generateCertificatePDF } from '@/components/certificates/CertificateGenerator';
+```
 
-**Email Content:**
-```text
-Subject: Gift It Forward - Registration Update
+**2. Remove duplicate `generateCertificatePDF` function (lines 138-166)**
 
-Dear [First Name],
+Delete this entire local function that has the wrong positioning.
 
-Thank you for your interest in volunteering with Gift It Forward.
+**3. Update `sendCertificateEmail` function (around line 211)**
 
-Our records show that you already have a volunteer profile registered 
-with this email address.
+Change from:
+```typescript
+const pdfDataUri = await generateCertificatePDF();
+const base64Data = pdfDataUri.split(',')[1];
+```
 
-If you need to update your registration details or have any questions, 
-please contact us at:
-giftitforward@dubaiholding.com
+To:
+```typescript
+const base64Data = await generateCertificatePDF({ 
+  firstName: userInfo.firstName?.trim() || '', 
+  lastName: userInfo.lastName?.trim() || '', 
+  type: 'completion' 
+});
+```
 
-We look forward to seeing you at the marketplace!
+**4. Update `downloadCertificate` function (lines 168-209)**
 
-Warm regards,
-Gift It Forward Team
+Replace the inline jsPDF code with the centralized generator:
+```typescript
+import { generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
+
+const downloadCertificate = async () => {
+  setIsGenerating(true);
+  try {
+    const blob = await generateCertificatePDFBlob({
+      firstName: userInfo.firstName?.trim() || '',
+      lastName: userInfo.lastName?.trim() || '',
+      type: 'completion'
+    });
+    
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `completion-certificate-${userInfo.firstName}-${userInfo.lastName}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Certificate Downloaded',
+      description: 'Your certificate has been saved to your device.',
+    });
+  } catch (error) {
+    console.error('Error generating certificate:', error);
+    toast({
+      title: 'Download Failed',
+      description: 'Failed to generate certificate. Please try again.',
+      variant: 'destructive',
+    });
+  } finally {
+    setIsGenerating(false);
+  }
+};
+```
+
+**5. Remove unused jsPDF import**
+
+Delete the direct import since we now use the centralized generator:
+```typescript
+// Remove this line:
+import jsPDF from 'jspdf';
 ```
 
 ---
 
-### Part 4: Admin UI Changes
+## Certificate Position Specifications
 
-**File: `src/components/admin/PendingVolunteers.tsx`**
+After this fix, ALL certificates will use these consistent settings:
 
-1. **Add new tab**: "Duplicate Submissions"
-   ```
-   [Partner Volunteers] [Bulk Uploaded] [Missing Email] [Duplicates]
-   ```
+| Certificate Type | X Position | Y Position | Alignment | Font | Size |
+|-----------------|------------|------------|-----------|------|------|
+| Completion | 170 | 480 | Left | 29LT Bukra | 48px |
+| Attendance | 170 | 495 | Left | 29LT Bukra | 48px |
 
-2. **Add count query** for duplicates:
-   ```typescript
-   const duplicateCount = useQuery({
-     queryKey: ['duplicate-volunteers-count'],
-     queryFn: async () => {
-       const { count } = await supabase
-         .from('pending_volunteers')
-         .select('*', { count: 'exact', head: true })
-         .eq('status', 'duplicate');
-       return count || 0;
-     }
-   });
-   ```
-
-3. **Update tab filtering**:
-   - New tab value: `'duplicates'`
-   - Query filter: `.eq('status', 'duplicate')`
-
-4. **Add "View Original" button** in the table:
-   - Shows link to the original approved volunteer record
-   - Allows quick comparison of data differences
-
-5. **Add "Apply Changes" action**:
-   - Button to merge updated data to the original volunteer record
-   - Confirmation dialog showing what will change
-   - After applying, delete the duplicate record
-
-6. **Table columns for Duplicates tab**:
-   - Name (from new submission)
-   - Email
-   - Original Volunteer (link)
-   - Events Registered (new submission)
-   - Submitted At
-   - Actions (View Details, Apply Changes, Delete)
+The name will appear directly below "THIS CERTIFIES THAT" header, left-aligned to match the background design.
 
 ---
 
-### Part 5: Merge/Apply Changes Flow
+## Files Changed
 
-**New webhook action: `apply_duplicate_changes`**
-
-When admin clicks "Apply Changes":
-1. Fetch original volunteer record by `created_user_id`
-2. Show side-by-side comparison dialog
-3. Admin selects which fields to update
-4. Update the original `pending_volunteers` record
-5. Optionally update `events_list` / `events_json` to add new events
-6. Delete the duplicate record
-7. Show success message
+| File | Change |
+|------|--------|
+| `src/components/training/TrainingQuiz.tsx` | Remove duplicate certificate code, use centralized generator |
 
 ---
 
-## Data Flow Diagram
+## Benefits
 
-```text
-User submits form with existing email
-            │
-            ▼
-   ┌─────────────────────┐
-   │ webhook-receiver    │
-   │ checks for existing │
-   │ approved record     │
-   └─────────────────────┘
-            │
-    ┌───────┴───────┐
-    ▼               ▼
- New User      Duplicate
-    │               │
-    ▼               ▼
- Create         Store with
- account        status='duplicate'
-    │               │
-    ▼               ▼
- Welcome       Duplicate
- Email         Notification Email
-    │               │
-    ▼               ▼
- Partner       Duplicates Tab
- Volunteers    (for admin review)
- Tab
-```
+1. **Single source of truth** - All certificate generation uses one component
+2. **Consistent positioning** - Email, download, and preview all match
+3. **Easier maintenance** - Future position changes only need one edit
+4. **Correct font** - Uses the proper 29LT Bukra brand font
+5. **Proper alignment** - Left-aligned under "THIS CERTIFIES THAT" as designed
 
 ---
 
-## Files to Modify
+## Testing After Implementation
 
-| File | Changes |
-|------|---------|
-| `supabase/functions/webhook-receiver/index.ts` | Add duplicate detection logic, duplicate record creation, duplicate email function |
-| `src/components/admin/PendingVolunteers.tsx` | Add "Duplicates" tab, count query, apply changes dialog, merge functionality |
-
----
-
-## Edge Cases Handled
-
-1. **Same email, different events**: Store new events for admin to merge
-2. **Same email, updated phone/contact info**: Admin can apply changes
-3. **Multiple duplicate submissions**: Each creates a separate duplicate record
-4. **User receives confirmation**: Always gets an email explaining the situation
-
----
-
-## Testing Checklist
-
-After implementation:
-- [ ] Submit form with new email → Creates approved record, sends welcome email
-- [ ] Submit same email again → Creates duplicate record, sends notification email
-- [ ] Admin can see duplicate in new tab with count badge
-- [ ] Admin can view original volunteer from duplicate record
-- [ ] Admin can apply changes from duplicate to original
-- [ ] Duplicate record is deleted after applying changes
-- [ ] Email notification follows DH branding guidelines
+1. Complete training as a volunteer and receive email - verify name position
+2. Download certificate from training completion screen - verify matches email
+3. Check admin "View Certificate" preview - verify all three match
+4. Compare side-by-side: email attachment vs admin preview
