@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { userId, role, firstName, lastName } = body;
+    const { userId, role, firstName, lastName, email } = body;
 
     // Validate inputs
     if (!userId || typeof userId !== 'string') {
@@ -104,6 +104,17 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Validate email if provided
+    if (email !== undefined && typeof email === 'string' && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return new Response(JSON.stringify({ error: 'Invalid email format' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     // Prevent self-demotion from admin
     if (requestingUser.id === userId && role !== 'admin') {
       return new Response(JSON.stringify({ error: 'Cannot remove your own admin privileges' }), {
@@ -112,21 +123,44 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Update user metadata (name) if provided
+    // Update user metadata (name) and email if provided
+    const updateData: { user_metadata?: object; email?: string } = {};
+    
     if (firstName !== undefined || lastName !== undefined) {
-      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        user_metadata: {
-          first_name: firstName?.trim() || null,
-          last_name: lastName?.trim() || null,
-        }
-      })
+      updateData.user_metadata = {
+        first_name: firstName?.trim() || null,
+        last_name: lastName?.trim() || null,
+      };
+    }
+    
+    if (email !== undefined && typeof email === 'string' && email.trim()) {
+      updateData.email = email.trim();
+    }
+    
+    if (Object.keys(updateData).length > 0) {
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, updateData);
 
       if (updateError) {
-        console.error('User metadata update error:', updateError);
+        console.error('User update error:', updateError);
+        // Check for email already exists error
+        if (updateError.message?.includes('email') || updateError.message?.includes('unique')) {
+          return new Response(JSON.stringify({ error: 'Email already in use by another account' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         return new Response(JSON.stringify({ error: 'Unable to update user information. Please try again.' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        });
+      }
+      
+      // If email was updated, also update pending_volunteers table
+      if (email !== undefined && typeof email === 'string' && email.trim()) {
+        await supabaseAdmin
+          .from('pending_volunteers')
+          .update({ email: email.trim() })
+          .eq('created_user_id', userId);
       }
     }
 
