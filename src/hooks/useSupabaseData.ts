@@ -1045,7 +1045,7 @@ export const useGenerateVolunteerQR = () => {
   });
 };
 
-// Update volunteer assignment (zone and marketplace)
+// Update volunteer assignment (zone and marketplaces - supports multiple)
 export const useUpdateVolunteerAssignment = () => {
   const queryClient = useQueryClient();
 
@@ -1053,40 +1053,90 @@ export const useUpdateVolunteerAssignment = () => {
     mutationFn: async ({ 
       pendingVolunteerId, 
       assignedZone, 
-      marketplaceId,
+      marketplaceIds,
       status
     }: { 
       pendingVolunteerId: string; 
       assignedZone?: 'entrance' | 'marketplace' | 'exit' | null; 
-      marketplaceId?: string | null;
+      marketplaceIds?: string[];
       status?: 'inactive' | 'checked_in' | 'checked_out';
     }) => {
-      // Find the volunteer QR card for this pending volunteer
-      const { data: qrCard, error: findError } = await supabase
+      // Get all existing QR cards for this volunteer
+      const { data: existingCards, error: findError } = await supabase
         .from('volunteer_qr_cards')
-        .select('id')
-        .eq('volunteer_id', pendingVolunteerId)
-        .maybeSingle();
+        .select('id, marketplace_id, unique_id')
+        .eq('volunteer_id', pendingVolunteerId);
 
       if (findError) throw new SafeError(mapDatabaseError(findError), findError);
-      if (!qrCard) throw new SafeError('No QR card found for this volunteer');
 
-      // Build update object
-      const updateData: Record<string, unknown> = {};
-      if (assignedZone !== undefined) updateData.assigned_zone = assignedZone;
-      if (marketplaceId !== undefined) updateData.marketplace_id = marketplaceId;
-      if (status !== undefined) updateData.status = status;
+      const existingMarketplaceIds = new Set(existingCards?.map(c => c.marketplace_id).filter(Boolean) || []);
+      const newMarketplaceIds = new Set(marketplaceIds || []);
 
-      // Update the QR card
-      const { data, error } = await supabase
-        .from('volunteer_qr_cards')
-        .update(updateData)
-        .eq('id', qrCard.id)
-        .select()
-        .single();
+      // Cards to update (existing that should remain)
+      const cardsToUpdate = existingCards?.filter(c => 
+        c.marketplace_id && newMarketplaceIds.has(c.marketplace_id)
+      ) || [];
 
-      if (error) throw new SafeError(mapDatabaseError(error), error);
-      return data;
+      // Cards to remove marketplace from (existing that are no longer selected)
+      const cardsToUnassign = existingCards?.filter(c => 
+        c.marketplace_id && !newMarketplaceIds.has(c.marketplace_id)
+      ) || [];
+
+      // Marketplaces to add (new selections not in existing)
+      const marketplacesToAdd = [...newMarketplaceIds].filter(id => !existingMarketplaceIds.has(id));
+
+      // Update zone on all existing cards
+      if (existingCards && existingCards.length > 0 && assignedZone !== undefined) {
+        const updateData: Record<string, unknown> = { assigned_zone: assignedZone };
+        if (status !== undefined) updateData.status = status;
+
+        for (const card of existingCards) {
+          await supabase
+            .from('volunteer_qr_cards')
+            .update(updateData)
+            .eq('id', card.id);
+        }
+      }
+
+      // Unassign marketplace from cards that should no longer have it
+      for (const card of cardsToUnassign) {
+        await supabase
+          .from('volunteer_qr_cards')
+          .update({ marketplace_id: null })
+          .eq('id', card.id);
+      }
+
+      // For new marketplaces, either reuse an unassigned card or create a new one
+      const unassignedCards = existingCards?.filter(c => !c.marketplace_id) || [];
+      let unassignedIndex = 0;
+
+      for (const marketplaceId of marketplacesToAdd) {
+        if (unassignedIndex < unassignedCards.length) {
+          // Reuse an unassigned card
+          await supabase
+            .from('volunteer_qr_cards')
+            .update({ 
+              marketplace_id: marketplaceId,
+              assigned_zone: assignedZone || null 
+            })
+            .eq('id', unassignedCards[unassignedIndex].id);
+          unassignedIndex++;
+        } else {
+          // Create a new QR card for this marketplace
+          const uniqueId = `VOL-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          await supabase
+            .from('volunteer_qr_cards')
+            .insert({
+              volunteer_id: pendingVolunteerId,
+              unique_id: uniqueId,
+              marketplace_id: marketplaceId,
+              assigned_zone: assignedZone || null,
+              status: status || 'inactive'
+            });
+        }
+      }
+
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });

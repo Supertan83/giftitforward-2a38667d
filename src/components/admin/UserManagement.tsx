@@ -64,7 +64,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editAssignedZone, setEditAssignedZone] = useState<VolunteerZone | 'none'>('none');
-  const [editMarketplaceId, setEditMarketplaceId] = useState<string>('none');
+  const [editMarketplaceIds, setEditMarketplaceIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,7 +200,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     setEditFirstName(user.first_name || '');
     setEditLastName(user.last_name || '');
     setEditAssignedZone(user.assigned_zone || 'none');
-    setEditMarketplaceId(user.marketplace_id || 'none');
+    setEditMarketplaceIds(user.marketplace_ids || (user.marketplace_id ? [user.marketplace_id] : []));
   };
 
   const handleUpdateRole = async () => {
@@ -216,15 +216,14 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
         email: editEmail.trim() !== editUser.email ? editEmail.trim() : undefined,
       });
 
-      // If volunteer and has a pending_volunteer_id, update zone/marketplace assignment
+      // If volunteer and has a pending_volunteer_id, update zone/marketplace assignments
       if (editRole === 'volunteer' && editUser.pending_volunteer_id) {
         const zoneValue = editAssignedZone === 'none' ? null : editAssignedZone;
-        const marketplaceValue = editMarketplaceId === 'none' ? null : editMarketplaceId;
         
         await updateVolunteerAssignment.mutateAsync({
           pendingVolunteerId: editUser.pending_volunteer_id,
           assignedZone: zoneValue,
-          marketplaceId: marketplaceValue,
+          marketplaceIds: editMarketplaceIds,
         });
       }
 
@@ -912,25 +911,41 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Assigned Marketplace</Label>
-                  <Select value={editMarketplaceId} onValueChange={setEditMarketplaceId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select marketplace" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        <span className="text-muted-foreground">Not assigned</span>
-                      </SelectItem>
-                      {availableMarketplaces.map((mp) => (
-                        <SelectItem key={mp.id} value={mp.id}>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            {mp.name}
+                  <Label>Assigned Marketplaces</Label>
+                  <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto bg-background">
+                    {availableMarketplaces.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No marketplaces available</p>
+                    ) : (
+                      availableMarketplaces.map((mp) => (
+                        <label 
+                          key={mp.id} 
+                          className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={editMarketplaceIds.includes(mp.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditMarketplaceIds([...editMarketplaceIds, mp.id]);
+                              } else {
+                                setEditMarketplaceIds(editMarketplaceIds.filter(id => id !== mp.id));
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-input accent-primary"
+                          />
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm truncate">{mp.name}</span>
                           </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {editMarketplaceIds.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {editMarketplaceIds.length} marketplace{editMarketplaceIds.length > 1 ? 's' : ''} selected
+                    </p>
+                  )}
                 </div>
               </>
             )}
