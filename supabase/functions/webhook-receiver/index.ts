@@ -1073,14 +1073,17 @@ async function sendWelcomeEmailWithQR(
         </div>
       `).join('');
     } else if (registeredEvents.length === 1) {
-      // Single event - simple bullet list
+      // Single event - use same red-bordered design as multiple events for consistency
       const evt = registeredEvents[0];
       eventDetailsHtml = `
-        <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
-          ${evt.date ? `<li><strong>Date:</strong> ${evt.date}</li>` : ''}
-          ${evt.location ? `<li><strong>Location:</strong> ${evt.location}</li>` : ''}
-          ${evt.time ? `<li><strong>Timings:</strong> ${evt.time}</li>` : ''}
-        </ul>
+        <div style="margin-bottom: 15px; padding: 12px 15px; background-color: #f9fafb; border-left: 3px solid #DA291C; border-radius: 0 4px 4px 0;">
+          <p style="margin: 0 0 8px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">${evt.name}</p>
+          <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.6;">
+            ${evt.date ? `<li><strong>Date:</strong> ${evt.date}</li>` : ''}
+            ${evt.location ? `<li><strong>Location:</strong> ${evt.location}</li>` : ''}
+            ${evt.time ? `<li><strong>Timings:</strong> ${evt.time}</li>` : ''}
+          </ul>
+        </div>
       `;
     } else {
       // Fallback to marketplace info

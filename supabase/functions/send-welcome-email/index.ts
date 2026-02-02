@@ -148,25 +148,18 @@ function buildEmailHtml(
     // Multiple events with red border styling
     eventsHtml = events.map(event => buildEventBlock(event)).join('');
   } else if (marketplace) {
-    // Single marketplace fallback (legacy behavior)
+    // Single marketplace - use same red-bordered design for consistency
     const eventDate = formatDate(marketplace.event_date);
     const startTime = formatTime(marketplace.start_time);
     const endTime = formatTime(marketplace.end_time);
     const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
-    const marketplaceName = marketplace.name || 'Gift It Forward marketplace';
-    const marketplaceLocation = marketplace.location || '';
     
-    eventsHtml = `
-      <tr>
-        <td style="padding: 0 30px 20px 30px;">
-          <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
-            ${eventDate ? `<li><strong>Date:</strong> ${eventDate}</li>` : ''}
-            ${marketplaceLocation ? `<li><strong>Location:</strong> ${marketplaceLocation}</li>` : ''}
-            ${timeRange ? `<li><strong>Timings:</strong> ${timeRange}</li>` : ''}
-          </ul>
-        </td>
-      </tr>
-    `;
+    eventsHtml = buildEventBlock({
+      name: marketplace.name || 'Gift It Forward marketplace',
+      date: eventDate,
+      time: timeRange,
+      location: marketplace.location || '',
+    });
   }
 
   return `
