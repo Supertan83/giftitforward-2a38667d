@@ -1,75 +1,102 @@
 
-# Fix: User Management Edit Dialog Not Showing Names
 
-## Problem Identified
+## Fix Welcome Email - Missing Event Name for Single Event Registrations
 
-When clicking "Edit" on a user in User Management, the First Name and Last Name fields appear empty.
+### Problem Identified
+Volunteers who register for **only one event** receive welcome emails without the event name and red border styling. This is because the `webhook-receiver` edge function uses a different template for single events vs. multiple events:
 
-### Root Cause
-The `get-users` edge function fetches names from **auth user metadata** (`authUser.user_metadata.first_name`), but most volunteers were created via webhooks where names are stored in the **`pending_volunteers` table** instead.
+- **Multiple events**: Shows event name with red left border styling (correct format as in image 1)
+- **Single event**: Shows only date/location/timings as a simple bullet list (incorrect format as in image 2)
 
-Currently, the edge function queries `pending_volunteers` but only selects:
-```sql
-SELECT id, created_user_id FROM pending_volunteers
+### Root Cause Location
+**File**: `supabase/functions/webhook-receiver/index.ts` (lines 1063-1094)
+
+```typescript
+// Current problematic code:
+if (registeredEvents.length > 1) {
+  // Multiple events - shows name with red border ✓
+  eventDetailsHtml = registeredEvents.map((evt) => `
+    <div style="...border-left: 3px solid #DA291C;...">
+      <p style="...font-weight: bold;">${evt.name}</p>
+      ...
+    </div>
+  `).join('');
+} else if (registeredEvents.length === 1) {
+  // Single event - NO name, NO red border ✗
+  const evt = registeredEvents[0];
+  eventDetailsHtml = `
+    <ul style="...">
+      <li>Date: ${evt.date}</li>
+      <li>Location: ${evt.location}</li>
+      <li>Timings: ${evt.time}</li>
+    </ul>
+  `;
+}
 ```
 
-It doesn't include `first_name` or `last_name`, so those values are never returned.
+### Solution
+Update the single-event branch to use the **same** red-bordered design with event name, matching the multi-event format. This ensures all volunteers see consistent email formatting regardless of how many events they registered for.
 
 ---
 
-## Solution
+### Technical Implementation
 
-Update the `get-users` edge function to:
-1. Fetch `first_name` and `last_name` from `pending_volunteers`
-2. Create a map of auth user ID to volunteer names
-3. Use `pending_volunteers` names as the primary source, falling back to auth metadata if not available
+#### Step 1: Update `webhook-receiver/index.ts`
+Modify the single-event template (lines 1075-1084) to include the event name with red left border styling:
+
+```typescript
+// Fixed code:
+} else if (registeredEvents.length === 1) {
+  // Single event - NOW includes name with red border ✓
+  const evt = registeredEvents[0];
+  eventDetailsHtml = `
+    <div style="margin-bottom: 15px; padding: 12px 15px; background-color: #f9fafb; border-left: 3px solid #DA291C; border-radius: 0 4px 4px 0;">
+      <p style="margin: 0 0 8px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">${evt.name}</p>
+      <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.6;">
+        ${evt.date ? `<li><strong>Date:</strong> ${evt.date}</li>` : ''}
+        ${evt.location ? `<li><strong>Location:</strong> ${evt.location}</li>` : ''}
+        ${evt.time ? `<li><strong>Timings:</strong> ${evt.time}</li>` : ''}
+      </ul>
+    </div>
+  `;
+}
+```
+
+#### Step 2: Also Update `send-welcome-email/index.ts`
+The same issue exists in the fallback template in the `send-welcome-email` edge function (lines 150-169). When only a `marketplace` object is provided (without events array), it shows date/location/timings without the event name.
+
+Update the single marketplace fallback to use the `buildEventBlock` function:
+
+```typescript
+// Fixed code:
+} else if (marketplace) {
+  // Single marketplace - use the same red-bordered design
+  const eventDate = formatDate(marketplace.event_date);
+  const startTime = formatTime(marketplace.start_time);
+  const endTime = formatTime(marketplace.end_time);
+  const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+  
+  eventsHtml = buildEventBlock({
+    name: marketplace.name || 'Gift It Forward marketplace',
+    date: eventDate,
+    time: timeRange,
+    location: marketplace.location || '',
+  });
+}
+```
+
+#### Step 3: Redeploy Edge Functions
+Both `webhook-receiver` and `send-welcome-email` will need to be redeployed.
 
 ---
 
-## Technical Changes
-
-**File:** `supabase/functions/get-users/index.ts`
-
-### Change 1: Update pending_volunteers query
-```typescript
-// Current (missing names)
-.select('id, created_user_id')
-
-// Fixed
-.select('id, created_user_id, first_name, last_name')
-```
-
-### Change 2: Create a name lookup map
-```typescript
-// Map auth_user_id to volunteer name info
-const authUserToName = new Map<string, { first_name: string; last_name: string }>();
-pendingVolunteers?.forEach(pv => {
-  if (pv.created_user_id) {
-    authUserToName.set(pv.created_user_id, {
-      first_name: pv.first_name || '',
-      last_name: pv.last_name || ''
-    });
-  }
-});
-```
-
-### Change 3: Use volunteer names with auth metadata fallback
-```typescript
-// Current
-first_name: (authUser?.user_metadata?.first_name as string) || null,
-last_name: (authUser?.user_metadata?.last_name as string) || null,
-
-// Fixed - prioritize pending_volunteers, fallback to auth metadata
-const volunteerName = authUserToName.get(role.user_id);
-first_name: volunteerName?.first_name || (authUser?.user_metadata?.first_name as string) || null,
-last_name: volunteerName?.last_name || (authUser?.user_metadata?.last_name as string) || null,
-```
-
----
-
-## Expected Result
-
+### Expected Outcome
 After this fix:
-- Clicking "Edit" on any user will show their First Name and Last Name pre-populated
-- Names will come from `pending_volunteers` for webhook-created volunteers
-- Names will fall back to auth user metadata for manually created users
+- Single-event volunteers will see their event name with the red left border styling
+- Multi-event volunteers will continue to see all events with the same format
+- All welcome emails will have consistent, branded formatting
+
+### Files to Modify
+1. `supabase/functions/webhook-receiver/index.ts` - Single event template
+2. `supabase/functions/send-welcome-email/index.ts` - Marketplace fallback template
+
