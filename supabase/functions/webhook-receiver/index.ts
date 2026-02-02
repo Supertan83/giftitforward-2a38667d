@@ -360,7 +360,23 @@ function generateCalendarLinks(event: {
   };
 }
 
-// Helper to look up marketplace events by slug/name pattern
+// Helper to extract date from slug (e.g., "february-23" -> { month: 2, day: 23 })
+function extractDateFromSlug(slug: string): { month: number; day: number } | null {
+  const months = ['january', 'february', 'march', 'april', 'may', 'june', 
+                  'july', 'august', 'september', 'october', 'november', 'december'];
+  const slugLower = slug.toLowerCase();
+  
+  for (let i = 0; i < months.length; i++) {
+    // Match patterns like "february-23", "february23", "february--23"
+    const monthMatch = slugLower.match(new RegExp(`${months[i]}[-]*?(\\d{1,2})`));
+    if (monthMatch) {
+      return { month: i + 1, day: parseInt(monthMatch[1]) };
+    }
+  }
+  return null;
+}
+
+// Helper to look up marketplace events by slug/name pattern WITH date matching
 // deno-lint-ignore no-explicit-any
 async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promise<Map<string, MarketplaceEventDetails>> {
   const result = new Map<string, MarketplaceEventDetails>();
@@ -376,25 +392,56 @@ async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promi
     if (error || !marketplaces) return result;
     
     for (const slug of eventSlugs) {
+      // Extract date from slug for precise matching
+      const slugDate = extractDateFromSlug(slug);
+      console.log(`Slug "${slug}" extracted date:`, slugDate);
+      
       // Convert slug to searchable pattern
       // e.g., "emirati-family-support-marketplace-february-22" -> "emirati", "family", "support"
       const slugParts = slug.toLowerCase().split('-').filter(p => 
         p.length > 2 && !['the', 'and', 'for', 'marketplace'].includes(p)
       );
       
+      let bestMatch: typeof marketplaces[0] | null = null;
+      
       for (const mp of marketplaces) {
         const mpNameLower = mp.name.toLowerCase();
         // Check if marketplace name contains key parts of the slug
         const matchCount = slugParts.filter(part => mpNameLower.includes(part)).length;
-        if (matchCount >= 2 || (slugParts.length === 1 && mpNameLower.includes(slugParts[0]))) {
-          result.set(slug, { ...mp, slug });
+        const nameMatches = matchCount >= 2 || (slugParts.length === 1 && mpNameLower.includes(slugParts[0]));
+        
+        if (!nameMatches) continue;
+        
+        // If we extracted a date from the slug, require it to match the DB date
+        if (slugDate && mp.event_date) {
+          const dbDate = new Date(mp.event_date);
+          const dateMatches = (dbDate.getMonth() + 1) === slugDate.month && 
+                              dbDate.getDate() === slugDate.day;
+          
+          if (dateMatches) {
+            console.log(`✓ Matched slug "${slug}" to "${mp.name}" (date ${mp.event_date})`);
+            bestMatch = mp;
+            break; // Exact name + date match found
+          }
+          // Name matches but date doesn't - keep looking for exact match
+          console.log(`✗ Name match but date mismatch for slug "${slug}": DB has ${mp.event_date}, slug has month=${slugDate.month} day=${slugDate.day}`);
+        } else {
+          // No date in slug, use first name match (fallback to old behavior)
+          bestMatch = mp;
           break;
         }
+      }
+      
+      if (bestMatch) {
+        result.set(slug, { ...bestMatch, slug });
+      } else {
+        console.log(`⚠ No match found for slug "${slug}"`);
       }
     }
     
     return result;
-  } catch {
+  } catch (err) {
+    console.error('Error in getMarketplacesBySlug:', err);
     return result;
   }
 }
@@ -753,23 +800,25 @@ async function sendWelcomeEmailWithQR(
       const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
       
       // Build registered events list with times from DB or form data
+      // IMPORTANT: Prioritize form data for date/time/location as it's the source of truth
       for (const evt of eventsJson as RegisteredEvent[]) {
         const dbMarketplace = marketplaceDetails.get(evt.event);
         
-        // Use DB data if available, otherwise fall back to form data
-        const eventDateFormatted = dbMarketplace?.event_date 
-          ? formatDate(dbMarketplace.event_date) 
-          : (evt.eventDate || '');
+        // PRIORITIZE FORM DATA for date - it's submitted by the user and always correct
+        // Only use DB date if form data is missing
+        const eventDateFormatted = evt.eventDate || 
+          (dbMarketplace?.event_date ? formatDate(dbMarketplace.event_date) : '');
         
-        // For time: prefer DB times, fall back to form eventTime
+        // For time: prefer form eventTime, fall back to DB times
         const startTimeFormatted = formatTime(dbMarketplace?.start_time);
         const endTimeFormatted = formatTime(dbMarketplace?.end_time);
-        const timeRange = startTimeFormatted && endTimeFormatted 
+        const dbTimeRange = startTimeFormatted && endTimeFormatted 
           ? `${startTimeFormatted} - ${endTimeFormatted}` 
-          : (startTimeFormatted || endTimeFormatted || evt.eventTime || '');
+          : (startTimeFormatted || endTimeFormatted || '');
+        const timeRange = evt.eventTime || dbTimeRange;
         
-        // For location: prefer DB location, fall back to form eventLocation
-        const eventLocation = dbMarketplace?.location || evt.eventLocation || '';
+        // For location: prefer form eventLocation, fall back to DB location
+        const eventLocation = evt.eventLocation || dbMarketplace?.location || '';
         
         // Get name from DB or generate from slug
         const eventName = dbMarketplace?.name || evt.event
@@ -777,6 +826,8 @@ async function sendWelcomeEmailWithQR(
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ')
           .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
+        
+        console.log(`Event "${evt.event}": Using date="${eventDateFormatted}" (form: ${evt.eventDate}, db: ${dbMarketplace?.event_date})`);
         
         registeredEvents.push({
           name: eventName,
