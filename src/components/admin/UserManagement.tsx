@@ -30,7 +30,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, useUpdateVolunteerAssignment, useMarketplaces, UserWithRole, useCleanupOrphans, OrphanCleanupResult } from '@/hooks/useSupabaseData';
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole, useGenerateVolunteerQR, useUpdateVolunteerAssignment, useMarketplaces, UserWithRole, useCleanupOrphans, OrphanCleanupResult, useUpdateVolunteerEvents } from '@/hooks/useSupabaseData';
+import { Checkbox } from '@/components/ui/checkbox';
+import { X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
@@ -72,6 +74,8 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [orphanScanResult, setOrphanScanResult] = useState<OrphanCleanupResult | null>(null);
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [editEventsJson, setEditEventsJson] = useState<any[]>([]);
+  const [eventsToRemove, setEventsToRemove] = useState<Set<number>>(new Set());
 
   const { data: users = [], isLoading } = useUsers();
   const { data: marketplaces = [] } = useMarketplaces();
@@ -79,6 +83,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const deleteUser = useDeleteUser();
   const updateUserRole = useUpdateUserRole();
   const updateVolunteerAssignment = useUpdateVolunteerAssignment();
+  const updateVolunteerEvents = useUpdateVolunteerEvents();
   const generateQR = useGenerateVolunteerQR();
   const cleanupOrphans = useCleanupOrphans();
   const { toast } = useToast();
@@ -203,6 +208,14 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     setEditLastName(user.last_name || '');
     setEditAssignedZone(user.assigned_zone || 'none');
     setEditMarketplaceIds(user.marketplace_ids || (user.marketplace_id ? [user.marketplace_id] : []));
+    
+    // Initialize events for editing
+    if (user.events_json && Array.isArray(user.events_json)) {
+      setEditEventsJson([...user.events_json]);
+    } else {
+      setEditEventsJson([]);
+    }
+    setEventsToRemove(new Set());
   };
 
   const handleUpdateRole = async () => {
@@ -227,11 +240,45 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
           assignedZone: zoneValue,
           marketplaceIds: editMarketplaceIds,
         });
+
+        // If events were removed, update the pending_volunteers record
+        if (eventsToRemove.size > 0) {
+          const remainingEvents = editEventsJson.filter((_, idx) => !eventsToRemove.has(idx));
+          const newEventsList = remainingEvents.map(ev => ev.event || ev.event_slug || '').filter(Boolean).join(',');
+          
+          await updateVolunteerEvents.mutateAsync({
+            pendingVolunteerId: editUser.pending_volunteer_id,
+            eventsJson: remainingEvents,
+            eventsList: newEventsList
+          });
+
+          // Also cleanup QR card assignments for removed events
+          const removedEventSlugs = editEventsJson
+            .filter((_, idx) => eventsToRemove.has(idx))
+            .map(ev => (ev.event || ev.event_slug || '').toLowerCase());
+
+          for (const slug of removedEventSlugs) {
+            // Find matching marketplace by slug
+            const matchedMarketplace = marketplaces.find(m => 
+              slug.includes(m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')) ||
+              m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').includes(slug.split('---')[0])
+            );
+            
+            if (matchedMarketplace) {
+              // Remove this marketplace from user's QR cards
+              await supabase
+                .from('volunteer_qr_cards')
+                .update({ marketplace_id: null })
+                .eq('volunteer_id', editUser.pending_volunteer_id)
+                .eq('marketplace_id', matchedMarketplace.id);
+            }
+          }
+        }
       }
 
       toast({
         title: 'User Updated',
-        description: `${editFirstName || editUser.email} has been updated`,
+        description: `${editFirstName || editUser.email} has been updated${eventsToRemove.size > 0 ? ` (${eventsToRemove.size} event(s) removed)` : ''}`,
       });
       setEditUser(null);
     } catch (error) {
@@ -829,72 +876,109 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                   )}
                 </div>
 
-                {/* Registered Events from Webhook - with marketplace matching */}
-                {(editUser.events_list || editUser.events_json) && (
+                {/* Registered Events from Webhook - Editable with removal */}
+                {(editEventsJson.length > 0 || editUser.events_list) && (
                   <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-2">
-                      <Calendar className="w-3 h-3" /> 
-                      Registered Events (from webhook)
-                      <Badge variant="secondary" className="text-[10px] px-1.5">
-                        {editUser.events_list 
-                          ? editUser.events_list.split(',').length 
-                          : Array.isArray(editUser.events_json) 
-                            ? editUser.events_json.length 
-                            : 0}
-                      </Badge>
-                    </Label>
-                    <div className="space-y-1.5">
-                      {editUser.events_list ? (
-                        editUser.events_list.split(',').map((eventName, idx) => {
-                          const trimmedName = eventName.trim();
-                          // Try to match to a marketplace by name
-                          const matchedMarketplace = marketplaces.find(m => 
-                            m.name.toLowerCase().includes(trimmedName.toLowerCase()) ||
-                            trimmedName.toLowerCase().includes(m.name.toLowerCase())
-                          );
-                          return (
-                            <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1.5">
-                              <ShoppingBag className="w-3 h-3 text-primary shrink-0" />
-                              <span className="text-sm flex-1 truncate">{trimmedName}</span>
-                              {matchedMarketplace && (
-                                <Badge variant="outline" className="text-[10px] shrink-0">
-                                  {matchedMarketplace.event_date || 'Matched'}
-                                </Badge>
-                              )}
-                            </div>
-                          );
-                        })
-                      ) : editUser.events_json && Array.isArray(editUser.events_json) ? (
-                        (editUser.events_json as Array<{event_name?: string; event_slug?: string; event_date?: string; event_time?: string; event_location?: string}>).map((ev, idx) => {
-                          const eventName = ev.event_name || ev.event_slug || 'Event';
-                          // Try to match to a marketplace by name
-                          const matchedMarketplace = marketplaces.find(m => 
-                            m.name.toLowerCase().includes(eventName.toLowerCase()) ||
-                            eventName.toLowerCase().includes(m.name.toLowerCase())
-                          );
-                          return (
-                            <div key={idx} className="bg-muted/50 rounded-md px-2 py-1.5 space-y-0.5">
-                              <div className="flex items-center gap-2">
-                                <ShoppingBag className="w-3 h-3 text-primary shrink-0" />
-                                <span className="text-sm font-medium flex-1 truncate">{eventName}</span>
-                                {matchedMarketplace && (
-                                  <Badge variant="default" className="text-[10px] shrink-0">Matched</Badge>
-                                )}
-                              </div>
-                              {(ev.event_date || ev.event_time || ev.event_location) && (
-                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground pl-5">
-                                  {ev.event_date && <span>📅 {ev.event_date}</span>}
-                                  {ev.event_time && <span>🕐 {ev.event_time}</span>}
-                                  {ev.event_location && <span>📍 {ev.event_location}</span>}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No events registered</span>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                        <Calendar className="w-3 h-3" /> 
+                        Registered Events
+                        <Badge variant="secondary" className="text-[10px] px-1.5">
+                          {editEventsJson.length - eventsToRemove.size} / {editEventsJson.length}
+                        </Badge>
+                      </Label>
+                      {eventsToRemove.size > 0 && (
+                        <Badge variant="destructive" className="text-[10px]">
+                          {eventsToRemove.size} to remove
+                        </Badge>
                       )}
                     </div>
+                    
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {editEventsJson.map((ev, idx) => {
+                        const eventName = ev.event_name || ev.event_slug || ev.event || 'Event';
+                        const displayName = eventName.split('---')[0].split('-').map((w: string) => 
+                          w.charAt(0).toUpperCase() + w.slice(1)
+                        ).join(' ');
+                        const isMarkedForRemoval = eventsToRemove.has(idx);
+                        
+                        // Try to match to a marketplace by name
+                        const matchedMarketplace = marketplaces.find(m => 
+                          m.name.toLowerCase().includes(eventName.toLowerCase()) ||
+                          eventName.toLowerCase().includes(m.name.toLowerCase()) ||
+                          displayName.toLowerCase().includes(m.name.toLowerCase())
+                        );
+                        
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`rounded-md px-2 py-2 border transition-colors ${
+                              isMarkedForRemoval 
+                                ? 'bg-destructive/10 border-destructive/30 opacity-60' 
+                                : 'bg-muted/50 border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <Checkbox
+                                checked={isMarkedForRemoval}
+                                onCheckedChange={(checked) => {
+                                  const newSet = new Set(eventsToRemove);
+                                  if (checked) {
+                                    newSet.add(idx);
+                                  } else {
+                                    newSet.delete(idx);
+                                  }
+                                  setEventsToRemove(newSet);
+                                }}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <ShoppingBag className="w-3 h-3 text-primary shrink-0" />
+                                  <span className={`text-sm font-medium flex-1 truncate ${isMarkedForRemoval ? 'line-through' : ''}`}>
+                                    {displayName}
+                                  </span>
+                                  {matchedMarketplace && !isMarkedForRemoval && (
+                                    <Badge variant="default" className="text-[10px] shrink-0">Matched</Badge>
+                                  )}
+                                </div>
+                                {(ev.eventDate || ev.eventTime || ev.eventLocation) && (
+                                  <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground pl-5 ${isMarkedForRemoval ? 'line-through' : ''}`}>
+                                    {ev.eventDate && <span>📅 {ev.eventDate}</span>}
+                                    {ev.eventTime && <span>🕐 {ev.eventTime}</span>}
+                                    {ev.eventLocation && <span>📍 {ev.eventLocation}</span>}
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 hover:bg-destructive/20 hover:text-destructive"
+                                onClick={() => {
+                                  const newSet = new Set(eventsToRemove);
+                                  if (isMarkedForRemoval) {
+                                    newSet.delete(idx);
+                                  } else {
+                                    newSet.add(idx);
+                                  }
+                                  setEventsToRemove(newSet);
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {eventsToRemove.size > 0 && eventsToRemove.size === editEventsJson.length && (
+                      <div className="flex items-center gap-2 text-xs text-warning bg-warning/10 rounded px-2 py-1.5">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>All events will be removed. Volunteer will have no registrations.</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
