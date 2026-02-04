@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -18,7 +20,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace, useUpdateMarketplace } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
@@ -48,9 +61,15 @@ const formatTime = (time: string | null | undefined) => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
+type StatusFilter = 'all' | 'upcoming' | 'active' | 'completed';
+
 export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [editingMarketplace, setEditingMarketplace] = useState<{ 
     id: string; 
     name: string; 
@@ -75,6 +94,73 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const deleteMarketplace = useDeleteMarketplace();
   const updateMarketplace = useUpdateMarketplace();
   const { toast } = useToast();
+
+  // Filter marketplaces based on status filter
+  const filteredMarketplaces = useMemo(() => {
+    if (statusFilter === 'all') return marketplaces;
+    return marketplaces.filter(m => m.status === statusFilter);
+  }, [marketplaces, statusFilter]);
+
+  // Toggle selection for a single marketplace
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  // Toggle select all (for filtered list)
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredMarketplaces.length && filteredMarketplaces.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredMarketplaces.map(m => m.id)));
+    }
+  };
+
+  // Get selected marketplaces for display in confirmation dialog
+  const selectedMarketplaces = useMemo(() => {
+    return marketplaces.filter(m => selectedIds.has(m.id));
+  }, [marketplaces, selectedIds]);
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setIsDeletingBulk(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const id of selectedIds) {
+      try {
+        await deleteMarketplace.mutateAsync(id);
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        console.error(`Failed to delete marketplace ${id}:`, error);
+      }
+    }
+
+    setIsDeletingBulk(false);
+    setShowBulkDeleteDialog(false);
+    setSelectedIds(new Set());
+
+    if (errorCount === 0) {
+      toast({
+        title: 'Events Deleted',
+        description: `Successfully deleted ${successCount} event${successCount > 1 ? 's' : ''}`,
+      });
+    } else {
+      toast({
+        title: 'Partial Deletion',
+        description: `Deleted ${successCount} events, ${errorCount} failed`,
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleEdit = (marketplace: { 
     id: string; 
@@ -238,6 +324,9 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     }
   };
 
+  const isAllSelected = filteredMarketplaces.length > 0 && selectedIds.size === filteredMarketplaces.length;
+  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < filteredMarketplaces.length;
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -296,33 +385,80 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         {/* Marketplaces List */}
         <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
           <div className="p-4 md:p-6 border-b border-border">
-            <h2 className="font-display font-bold text-lg">All Events</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {marketplaces.length} total events
-            </p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="font-display font-bold text-lg">All Events</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {marketplaces.length} total events
+                </p>
+              </div>
+              
+              {/* Status Filter Tabs */}
+              <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v as StatusFilter); setSelectedIds(new Set()); }}>
+                <TabsList>
+                  <TabsTrigger value="all">All ({marketplaces.length})</TabsTrigger>
+                  <TabsTrigger value="upcoming">Upcoming ({upcomingCount})</TabsTrigger>
+                  <TabsTrigger value="active">Active ({activeCount})</TabsTrigger>
+                  <TabsTrigger value="completed">Completed ({completedCount})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {/* Bulk Actions Bar */}
+            {filteredMarketplaces.length > 0 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                  </span>
+                </div>
+                
+                {selectedIds.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowBulkDeleteDialog(true)}
+                    disabled={isDeletingBulk}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Selected ({selectedIds.size})
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {isLoading ? (
             <div className="p-8 text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
             </div>
-          ) : marketplaces.length === 0 ? (
+          ) : filteredMarketplaces.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No marketplace events yet</p>
-              <p className="text-sm">Create your first event to get started</p>
+              <p>No marketplace events {statusFilter !== 'all' ? `with status "${statusFilter}"` : 'yet'}</p>
+              {statusFilter === 'all' && <p className="text-sm">Create your first event to get started</p>}
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {marketplaces.map((marketplace, index) => (
+              {filteredMarketplaces.map((marketplace, index) => (
                 <motion.div
                   key={marketplace.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="p-4 flex items-center justify-between gap-3"
+                  transition={{ delay: index * 0.02 }}
+                  className={`p-4 flex items-center justify-between gap-3 ${selectedIds.has(marketplace.id) ? 'bg-primary/5' : ''}`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
+                    <Checkbox
+                      checked={selectedIds.has(marketplace.id)}
+                      onCheckedChange={() => toggleSelection(marketplace.id)}
+                      aria-label={`Select ${marketplace.name}`}
+                    />
                     <div className="w-10 h-10 rounded-full bg-primary-soft flex items-center justify-center shrink-0">
                       <Store className="w-5 h-5 text-primary" />
                     </div>
@@ -382,6 +518,50 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
           )}
         </div>
       </main>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete {selectedIds.size} Event{selectedIds.size > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>This action cannot be undone. The following events will be permanently deleted:</p>
+              <div className="max-h-48 overflow-y-auto bg-muted rounded-lg p-3 space-y-1">
+                {selectedMarketplaces.map(m => (
+                  <div key={m.id} className="text-sm flex items-center gap-2">
+                    <span className="font-medium">{m.name}</span>
+                    {m.event_date && (
+                      <span className="text-muted-foreground">
+                        ({new Date(m.event_date).toLocaleDateString()})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingBulk}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={isDeletingBulk}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingBulk ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete {selectedIds.size} Event{selectedIds.size > 1 ? 's' : ''}
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Marketplace Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
