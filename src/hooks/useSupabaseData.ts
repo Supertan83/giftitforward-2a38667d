@@ -1722,3 +1722,35 @@ export const useCleanupOrphans = () => {
     }
   });
 };
+
+// Update volunteer events (remove events from registration)
+export const useUpdateVolunteerEvents = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      pendingVolunteerId, 
+      eventsJson,
+      eventsList 
+    }: { 
+      pendingVolunteerId: string; 
+      eventsJson: Json[];
+      eventsList: string;
+    }) => {
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .update({ 
+          events_json: eventsJson,
+          events_list: eventsList
+        })
+        .eq('id', pendingVolunteerId);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+    }
+  });
+};
