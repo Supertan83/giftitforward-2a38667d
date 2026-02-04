@@ -1,140 +1,230 @@
 
+## Remove Marketplaces from Volunteer Registrations
 
-## Marketplace Events Cleanup Plan
+### Problem Statement
+Volunteers register for events through the DH form, and their event data is stored in `pending_volunteers.events_json`. Some volunteers are requesting changes to their registrations - they want to:
+- Remove specific marketplace events they originally registered for
+- Change from one marketplace date to another
 
-### Events from Official Document (DH_20260116_-_GIF_Volunteer_Events_-_Final.docx)
-
-Here are the **official 24 event sessions** from the Dubai Holding document:
-
-| # | Event Name | Date | Time Slot | Location |
-|---|------------|------|-----------|----------|
-| 1 | Young Dreamers: Boys' Community School Marketplace | Feb 19, 2026 | 7:00AM – 1:30PM | Ajman, Al Hamidya |
-| 2 | Stronger Together: Emirati Family Community Marketplace | Feb 21, 2026 | 7:30PM – 11:30PM | Dubai, Al Twar |
-| 3 | Stronger Together: Emirati Family Community Marketplace | Feb 22, 2026 | 7:30PM – 11:30PM | Dubai, Al Twar |
-| 4 | Stronger Together: Emirati Family Community Marketplace | Feb 23, 2026 | 7:30PM – 11:30PM | Dubai, Al Twar |
-| 5 | Stronger Together: Emirati Family Community Marketplace | Feb 24, 2026 | 7:30PM – 11:30PM | Dubai, Al Twar |
-| 6 | Stronger Together: Emirati Family Community Marketplace | Feb 25, 2026 | 7:30PM – 11:30PM | Dubai, Al Twar |
-| 7 | Stronger Together: Emirati Family Community Marketplace | Feb 26, 2026 | 7:30PM – 11:30PM | Dubai, Al Twar |
-| 8 | She Thrives: Women Workers Marketplace | Feb 28, 2026 | 7:30AM – 4:30PM | Dubai, Muhaisnah 2 |
-| 9 | She Thrives: Women Workers Marketplace | Feb 28, 2026 | 7:30PM – 11:30PM | Dubai, Muhaisnah 2 |
-| 10 | Hard Hat Heroes: Men's Construction and Facility Workers Marketplace | Mar 1, 2026 | 7:30AM – 4:30PM | Dubai, Muhaisnah 2 |
-| 11 | Hard Hat Heroes: Men's Construction and Facility Workers Marketplace | Mar 1, 2026 | 7:30PM – 11:30PM | Dubai, Muhaisnah 2 |
-| 12 | Bright Futures: Girls' Community School Marketplace | Mar 4, 2026 | 7:00AM – 1:30PM | Sharjah, Al Azra |
-| 13 | Supporting Our Driving Force: Taxi Drivers' Marketplace | Mar 4, 2026 | 7:30PM – 11:30PM | Dubai, Muhaisnah 4 |
-| 14 | Supporting Our Driving Force: Taxi Drivers' Marketplace | Mar 5, 2026 | 7:30AM – 4:30PM | Dubai, Muhaisnah 4 |
-| 15 | Supporting Our Driving Force: Taxi Drivers' Marketplace | Mar 5, 2026 | 7:30PM – 11:30PM | Dubai, Muhaisnah 4 |
-| 16 | She Thrives: Women Workers Marketplace | Mar 7, 2026 | 7:30AM – 4:30PM | Dubai, Al Quoz |
-| 17 | She Thrives: Women Workers Marketplace | Mar 7, 2026 | 7:30PM – 11:30PM | Dubai, Al Quoz |
-| 18 | Hard Hat Heroes: Men's Factory Workers Marketplace | Mar 8, 2026 | 8:00AM – 4:30PM | Ras Al Khaimah |
-| 19 | Hard Hat Heroes: Men's Factory Workers Marketplace | Mar 8, 2026 | 8:00PM – 11:30PM | Ras Al Khaimah |
-| 20 | Strong Foundations: Construction Workers Community Marketplace | Mar 10, 2026 | 7:30AM – 4:30PM | Dubai, Jebel Ali |
-| 21 | Strong Foundations: Construction Workers Community Marketplace | Mar 11, 2026 | 7:30AM – 4:30PM | Dubai, Jebel Ali |
-| 22 | Strong Foundations: Construction Workers Community Marketplace | Mar 12, 2026 | 7:30AM – 4:30PM | Dubai, Jebel Ali |
-| 23 | Inclusive Community: Family and People of Determination Marketplace | Mar 12, 2026 | 7:30PM – 11:30PM | Dubai, Muhaisnah 2 |
-| 24 | Stronger Together: Single Mothers and Household Workers Marketplace | Mar 14, 2026 | 7:30AM – 4:30PM | Dubai, Al Qusais 3 |
-| 25 | Stronger Together: Single Mothers and Household Workers Marketplace | Mar 14, 2026 | 7:30PM – 11:30PM | Dubai, Al Qusais 3 |
-| 26 | Stronger Together: Single Mothers and Household Workers Marketplace | Mar 15, 2026 | 7:30AM – 4:30PM | Dubai, Al Qusais 3 |
-| 27 | Stronger Together: Single Mothers and Household Workers Marketplace | Mar 15, 2026 | 7:30PM – 11:30PM | Dubai, Al Qusais 3 |
+Currently, admins have no way to edit or remove events from a volunteer's registration data.
 
 ---
 
-### Current Events in Database (To Be Cleaned Up)
+### Current Data Structure
 
-Some events that appear **unnecessary** or are duplicates/old:
+Volunteer event data is stored in two places:
+1. **`pending_volunteers.events_json`** - Array of registered events from webhook
+2. **`pending_volunteers.events_list`** - Comma-separated slugs (derived from events_json)
 
-- **CDA Day 1** / **CDA Day 2** - Old naming, should be renamed or removed
-- **Ejadah** - Generic name, incomplete
-- **Twar Hall** - Generic name, incomplete
-- **Smartlife** - Generic name, incomplete
-- **PJA** - Generic name, incomplete
-- **Lea's Marketplace** - Test data?
-- **Tala's Marketplace** - Test data?
-- **National Charity School for Boys** (2025) - Old event, already completed
-- **FSC** (2025) - Old event, already completed
+Example `events_json`:
+```json
+[
+  {
+    "event": "stronger-together-emirati-family-community-marketplace---february-23",
+    "eventDate": "February 23, 2026",
+    "eventLocation": "Dubai, Al Twar",
+    "eventTime": "7:30PM – 11:30PM",
+    "family-members-joining": "No"
+  },
+  {
+    "event": "she-thrives-women-workers-marketplace---march-7",
+    "eventDate": "March 7, 2026",
+    "eventLocation": "Dubai, Al Quoz", 
+    "eventTime": "7:30AM – 4:30PM"
+  }
+]
+```
 
 ---
 
-### Implementation Plan
+### Solution: Add Event Removal UI
 
-#### Step 1: Add Bulk Delete Feature to Marketplace Management
+#### Location: User Management Edit Dialog
+The "Edit User" dialog already displays registered events (read-only). We will make these events removable with an "X" button next to each event.
 
-Enhance the existing `MarketplaceManagement.tsx` component to support:
-- **Checkbox selection** for multiple events
-- **"Delete Selected" button** for bulk deletion
-- **Status filter** to easily find events to clean up
-
-#### Step 2: UI Changes
-
-**File:** `src/components/admin/MarketplaceManagement.tsx`
-
-Add:
-1. State for selected marketplace IDs
-2. Checkbox column in the list
-3. "Select All" checkbox in header
-4. "Delete Selected" button with count badge
-5. Filter tabs (All / Upcoming / Active / Completed)
+#### UI Changes
 
 ```text
 +------------------------------------------+
-| Marketplace Events                       |
+| Edit User                                |
 |------------------------------------------|
-| [Filter: All | Upcoming | Active | Done] |
+| ...existing fields...                    |
 |------------------------------------------|
-| [x] Select All    [ Delete Selected (3) ]|
-|------------------------------------------|
-| [ ] Young Dreamers: Boys'...  Feb 19     |
-| [x] CDA Day 1                 Feb 19 [x] |
-| [x] Ejadah                    Jan 6  [x] |
-| [x] Smartlife                 Jan 6  [x] |
+| Registered Events (from webhook)      [2]|
+| +--------------------------------------+ |
+| | [ ] Stronger Together: Feb 23        [x]
+| |     📅 Feb 23  🕐 7:30PM  📍 Al Twar  |
+| +--------------------------------------+ |
+| | [ ] She Thrives: Mar 7               [x]
+| |     📅 Mar 7  🕐 7:30AM  📍 Al Quoz   |
+| +--------------------------------------+ |
+|                                          |
+| [Delete checked events] (appears when    |
+| one or more events are checked)          |
 +------------------------------------------+
 ```
 
-#### Step 3: Confirmation Dialog
-
-Before bulk deletion, show a confirmation dialog listing all selected events to prevent accidental deletion.
-
 ---
 
-### Technical Details
+### Technical Implementation
 
-**New state variables:**
+#### Step 1: Add State for Event Removal
+**File:** `src/components/admin/UserManagement.tsx`
+
+Add new state variables:
 ```typescript
-const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-const [statusFilter, setStatusFilter] = useState<'all' | 'upcoming' | 'active' | 'completed'>('all');
+const [editEventsJson, setEditEventsJson] = useState<any[]>([]);
+const [eventsToRemove, setEventsToRemove] = useState<Set<number>>(new Set());
 ```
 
-**Checkbox toggle handler:**
+Initialize in `handleEditUser`:
 ```typescript
-const toggleSelection = (id: string) => {
-  const newSet = new Set(selectedIds);
-  if (newSet.has(id)) {
-    newSet.delete(id);
-  } else {
-    newSet.add(id);
-  }
-  setSelectedIds(newSet);
+if (user.events_json && Array.isArray(user.events_json)) {
+  setEditEventsJson([...user.events_json]);
+}
+setEventsToRemove(new Set());
+```
+
+#### Step 2: Make Events Editable in UI
+Replace the read-only events display with a checklist that allows selection for removal:
+
+```typescript
+{editEventsJson.map((ev, idx) => (
+  <div key={idx} className="...">
+    <Checkbox
+      checked={eventsToRemove.has(idx)}
+      onCheckedChange={(checked) => {
+        const newSet = new Set(eventsToRemove);
+        if (checked) newSet.add(idx);
+        else newSet.delete(idx);
+        setEventsToRemove(newSet);
+      }}
+    />
+    <div className="flex-1">
+      <span>{ev.event_name || ev.event}</span>
+      <div>{ev.eventDate} | {ev.eventTime} | {ev.eventLocation}</div>
+    </div>
+    <Button variant="ghost" size="icon" onClick={() => {/* toggle removal */}}>
+      <X />
+    </Button>
+  </div>
+))}
+```
+
+#### Step 3: Create Update Mutation
+**File:** `src/hooks/useSupabaseData.ts`
+
+Add a new mutation `useUpdateVolunteerEvents`:
+```typescript
+export const useUpdateVolunteerEvents = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      pendingVolunteerId, 
+      eventsJson,
+      eventsList 
+    }: { 
+      pendingVolunteerId: string; 
+      eventsJson: any[];
+      eventsList: string;
+    }) => {
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .update({ 
+          events_json: eventsJson,
+          events_list: eventsList
+        })
+        .eq('id', pendingVolunteerId);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users_with_roles'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+    }
+  });
 };
 ```
 
-**Bulk delete handler:**
+#### Step 4: Handle Event Removal on Save
+In `handleUpdateRole`, after updating role and assignments, also update events if any were removed:
+
 ```typescript
-const handleBulkDelete = async () => {
-  if (!confirm(`Delete ${selectedIds.size} events?`)) return;
+// If events were removed, update the pending_volunteers record
+if (eventsToRemove.size > 0 && editUser?.pending_volunteer_id) {
+  const remainingEvents = editEventsJson.filter((_, idx) => !eventsToRemove.has(idx));
+  const newEventsList = remainingEvents.map(ev => ev.event).join(',');
   
-  for (const id of selectedIds) {
-    await deleteMarketplace.mutateAsync(id);
+  await updateVolunteerEvents.mutateAsync({
+    pendingVolunteerId: editUser.pending_volunteer_id,
+    eventsJson: remainingEvents,
+    eventsList: newEventsList
+  });
+}
+```
+
+#### Step 5: Also Update volunteer_qr_cards
+When events are removed, we should also clean up the corresponding QR card assignments:
+
+```typescript
+// Find marketplace IDs that correspond to removed events
+const removedEventSlugs = editEventsJson
+  .filter((_, idx) => eventsToRemove.has(idx))
+  .map(ev => ev.event);
+
+// Match to marketplace IDs and remove those assignments
+for (const slug of removedEventSlugs) {
+  const matched = marketplaces.find(m => /* fuzzy match slug to marketplace */);
+  if (matched) {
+    // Remove this marketplace from user's QR cards
+    await supabase
+      .from('volunteer_qr_cards')
+      .update({ marketplace_id: null })
+      .eq('volunteer_id', editUser.pending_volunteer_id)
+      .eq('marketplace_id', matched.id);
   }
-  setSelectedIds(new Set());
-};
+}
 ```
 
 ---
 
 ### Files to Modify
 
-1. **`src/components/admin/MarketplaceManagement.tsx`**
-   - Add checkbox selection UI
-   - Add status filter tabs
-   - Add bulk delete button and handler
-   - Add confirmation dialog for bulk actions
+1. **`src/components/admin/UserManagement.tsx`**
+   - Add state for tracking events to remove
+   - Update events display UI to allow selection/removal
+   - Update `handleUpdateRole` to persist event changes
+
+2. **`src/hooks/useSupabaseData.ts`**
+   - Add `useUpdateVolunteerEvents` mutation
+
+---
+
+### User Experience Flow
+
+1. Admin searches for volunteer by name/email
+2. Clicks "Edit" button to open edit dialog
+3. Sees list of registered events with checkboxes
+4. Checks events they want to remove
+5. Clicks "Remove Selected Events" button (or individual X buttons)
+6. Events are immediately removed from the list (visual feedback)
+7. On "Save Changes", the updated events are persisted to database
+8. Related QR card assignments are also cleaned up
+
+---
+
+### Edge Cases Handled
+
+- **Single event removal**: Volunteer has one event left after removal
+- **All events removed**: Show warning that volunteer will have no events
+- **Already has QR cards**: Cleanup marketplace assignments when events removed
+- **Confirm before save**: Changes only persist when "Save Changes" is clicked
+
+---
+
+### Alternative: Also Add to PendingVolunteers.tsx
+
+The same functionality could be added to the "Volunteers Added" section (`PendingVolunteers.tsx`) which already has inline editing capabilities. This would allow editing events from that view as well.
 
