@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil, Users } from 'lucide-react';
+import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil, Users, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace, useUpdateMarketplace } from '@/hooks/useSupabaseData';
+import { useOutreachPartners } from '@/hooks/useOutreachPartners';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -48,6 +49,7 @@ const createMarketplaceSchema = z.object({
   outreach_partner: z.string().max(200).optional(),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
+  beneficiary_credit_limit: z.number().min(15).max(25).optional(),
 });
 
 // Helper to format time for display
@@ -79,6 +81,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     outreachPartner: string;
     startTime: string;
     endTime: string;
+    beneficiaryCreditLimit: number;
   } | null>(null);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
@@ -87,9 +90,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const [outreachPartner, setOutreachPartner] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [beneficiaryCreditLimit, setBeneficiaryCreditLimit] = useState<number>(15);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: marketplaces = [], isLoading } = useMarketplaces();
+  const { data: outreachPartners = [] } = useOutreachPartners(true);
   const createMarketplace = useCreateMarketplace();
   const deleteMarketplace = useDeleteMarketplace();
   const updateMarketplace = useUpdateMarketplace();
@@ -171,6 +176,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     outreach_partner: string | null;
     start_time?: string | null;
     end_time?: string | null;
+    beneficiary_credit_limit?: number;
   }) => {
     setEditingMarketplace({
       id: marketplace.id,
@@ -181,6 +187,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       outreachPartner: marketplace.outreach_partner || '',
       startTime: marketplace.start_time || '',
       endTime: marketplace.end_time || '',
+      beneficiaryCreditLimit: marketplace.beneficiary_credit_limit ?? 15,
     });
     setShowEditModal(true);
   };
@@ -196,7 +203,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       status: editingMarketplace.status,
       outreach_partner: editingMarketplace.outreachPartner || undefined,
       start_time: editingMarketplace.startTime || undefined,
-      end_time: editingMarketplace.endTime || undefined
+      end_time: editingMarketplace.endTime || undefined,
+      beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit,
     });
     
     if (!result.success) {
@@ -220,6 +228,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         outreach_partner: editingMarketplace.outreachPartner || null,
         start_time: editingMarketplace.startTime || null,
         end_time: editingMarketplace.endTime || null,
+        beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit,
       });
       toast({
         title: 'Marketplace Updated',
@@ -246,7 +255,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       status,
       outreach_partner: outreachPartner || undefined,
       start_time: startTime || undefined,
-      end_time: endTime || undefined
+      end_time: endTime || undefined,
+      beneficiary_credit_limit: beneficiaryCreditLimit,
     });
     
     if (!result.success) {
@@ -269,6 +279,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         outreach_partner: outreachPartner || null,
         start_time: startTime || null,
         end_time: endTime || null,
+        beneficiary_credit_limit: beneficiaryCreditLimit,
       });
       toast({
         title: 'Marketplace Created',
@@ -282,6 +293,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       setOutreachPartner('');
       setStartTime('');
       setEndTime('');
+      setBeneficiaryCreditLimit(15);
     } catch (error) {
       toast({
         title: 'Failed to Create Marketplace',
@@ -642,16 +654,38 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
 
             <div className="space-y-2">
               <Label htmlFor="outreach_partner">Outreach Partner</Label>
-              <div className="relative">
-                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="outreach_partner"
-                  placeholder="e.g., Partner Organization Name"
-                  value={outreachPartner}
-                  onChange={(e) => setOutreachPartner(e.target.value)}
-                  className="pl-10"
-                />
+              <Select value={outreachPartner} onValueChange={setOutreachPartner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select partner..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {outreachPartners.map(partner => (
+                    <SelectItem key={partner.id} value={partner.name}>
+                      {partner.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="beneficiary_credit_limit">Beneficiary Credit Limit</Label>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="beneficiary_credit_limit"
+                    type="number"
+                    min={15}
+                    max={25}
+                    value={beneficiaryCreditLimit}
+                    onChange={(e) => setBeneficiaryCreditLimit(parseInt(e.target.value) || 15)}
+                    className="pl-10"
+                  />
+                </div>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
               </div>
+              <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
             </div>
 
             <div className="space-y-2">
@@ -761,16 +795,41 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
 
               <div className="space-y-2">
                 <Label htmlFor="edit-outreach_partner">Outreach Partner</Label>
-                <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="edit-outreach_partner"
-                    placeholder="e.g., Partner Organization Name"
-                    value={editingMarketplace.outreachPartner}
-                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, outreachPartner: e.target.value })}
-                    className="pl-10"
-                  />
+                <Select 
+                  value={editingMarketplace.outreachPartner} 
+                  onValueChange={(v) => setEditingMarketplace({ ...editingMarketplace, outreachPartner: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select partner..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {outreachPartners.map(partner => (
+                      <SelectItem key={partner.id} value={partner.name}>
+                        {partner.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-beneficiary_credit_limit">Beneficiary Credit Limit</Label>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="edit-beneficiary_credit_limit"
+                      type="number"
+                      min={15}
+                      max={25}
+                      value={editingMarketplace.beneficiaryCreditLimit}
+                      onChange={(e) => setEditingMarketplace({ ...editingMarketplace, beneficiaryCreditLimit: parseInt(e.target.value) || 15 })}
+                      className="pl-10"
+                    />
+                  </div>
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
                 </div>
+                <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
               </div>
 
               <div className="space-y-2">

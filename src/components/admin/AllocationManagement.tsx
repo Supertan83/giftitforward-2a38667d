@@ -7,7 +7,10 @@ import {
   Loader2, 
   Trash2, 
   MapPin,
-  Warehouse
+  Warehouse,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,12 +43,17 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [modalMarketplaceId, setModalMarketplaceId] = useState<string>('');
   const [quantity, setQuantity] = useState('');
 
+  // Inline editing state
+  const [editingAllocationId, setEditingAllocationId] = useState<string | null>(null);
+  const [editAllocated, setEditAllocated] = useState<number>(0);
+  const [editDistributed, setEditDistributed] = useState<number>(0);
+
   const { data: itemTypes = [], isLoading: loadingItems } = useItemTypes();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(
     selectedMarketplaceId || undefined
   );
-  const { allocateToMarketplace, deleteAllocation } = useAllocationOperations();
+  const { allocateToMarketplace, deleteAllocation, updateAllocationQuantities } = useAllocationOperations();
   const { toast } = useToast();
 
   // Get the warehouse stock item
@@ -120,6 +128,44 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     } catch (error) {
       toast({
         title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Start editing an allocation
+  const handleStartEdit = (alloc: { id: string; allocatedQuantity: number; distributedQuantity: number }) => {
+    setEditingAllocationId(alloc.id);
+    setEditAllocated(alloc.allocatedQuantity);
+    setEditDistributed(alloc.distributedQuantity);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingAllocationId(null);
+    setEditAllocated(0);
+    setEditDistributed(0);
+  };
+
+  // Save edited allocation
+  const handleSaveEdit = async () => {
+    if (!editingAllocationId) return;
+
+    try {
+      await updateAllocationQuantities.mutateAsync({
+        allocationId: editingAllocationId,
+        allocatedQuantity: editAllocated,
+        distributedQuantity: editDistributed,
+      });
+      toast({
+        title: 'Allocation Updated',
+        description: 'Quantities have been saved',
+      });
+      handleCancelEdit();
+    } catch (error) {
+      toast({
+        title: 'Update Failed',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -254,45 +300,129 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                   <p className="text-sm">Click "Allocate" to add items</p>
                 </div>
               ) : (
-                <div className="p-6">
+                <div className="p-6 space-y-4">
                   {allocations.map((alloc) => (
                     <motion.div
                       key={alloc.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-between gap-4"
+                      className="border border-border rounded-lg p-4"
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-muted-foreground">Distribution Progress</span>
-                          <span className="text-sm font-medium">
-                            {alloc.distributedQuantity.toLocaleString()} / {alloc.allocatedQuantity.toLocaleString()}
-                          </span>
+                      {editingAllocationId === alloc.id ? (
+                        // Edit Mode
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">Edit Allocation</span>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={handleCancelEdit}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="default"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={handleSaveEdit}
+                                disabled={updateAllocationQuantities.isPending}
+                              >
+                                {updateAllocationQuantities.isPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Check className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="edit-allocated">Allocated Quantity</Label>
+                              <Input
+                                id="edit-allocated"
+                                type="number"
+                                min={0}
+                                value={editAllocated}
+                                onChange={(e) => setEditAllocated(parseInt(e.target.value) || 0)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="edit-distributed">Distributed Quantity</Label>
+                              <Input
+                                id="edit-distributed"
+                                type="number"
+                                min={0}
+                                max={editAllocated}
+                                value={editDistributed}
+                                onChange={(e) => setEditDistributed(parseInt(e.target.value) || 0)}
+                              />
+                            </div>
+                          </div>
+                          {editDistributed > editAllocated && (
+                            <p className="text-sm text-destructive">
+                              Warning: Distributed cannot exceed allocated
+                            </p>
+                          )}
                         </div>
-                        <div className="h-3 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-500 rounded-full transition-all"
-                            style={{ width: `${alloc.allocatedQuantity > 0 ? (alloc.distributedQuantity / alloc.allocatedQuantity) * 100 : 0}%` }}
-                          />
+                      ) : (
+                        // Display Mode
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm text-muted-foreground">Distribution Progress</span>
+                              <span className="text-sm font-medium">
+                                {alloc.distributedQuantity.toLocaleString()} / {alloc.allocatedQuantity.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="h-3 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all ${
+                                  alloc.distributedQuantity > alloc.allocatedQuantity 
+                                    ? 'bg-destructive' 
+                                    : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${alloc.allocatedQuantity > 0 ? Math.min((alloc.distributedQuantity / alloc.allocatedQuantity) * 100, 100) : 0}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between mt-2 text-sm">
+                              <span className={alloc.distributedQuantity > alloc.allocatedQuantity ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                                {alloc.allocatedQuantity > 0 
+                                  ? `${((alloc.distributedQuantity / alloc.allocatedQuantity) * 100).toFixed(1)}% complete`
+                                  : '0% complete'
+                                }
+                              </span>
+                              <span className={`font-medium ${
+                                alloc.allocatedQuantity - alloc.distributedQuantity < 0 
+                                  ? 'text-destructive' 
+                                  : 'text-amber-600'
+                              }`}>
+                                {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()} remaining
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary"
+                              onClick={() => handleStartEdit(alloc)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDelete(alloc.id)}
+                              disabled={deleteAllocation.isPending}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex justify-between mt-2 text-sm">
-                          <span className="text-muted-foreground">
-                            {((alloc.distributedQuantity / alloc.allocatedQuantity) * 100).toFixed(1)}% complete
-                          </span>
-                          <span className="font-medium text-amber-600">
-                            {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()} remaining
-                          </span>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                        onClick={() => handleDelete(alloc.id)}
-                        disabled={deleteAllocation.isPending}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      )}
                     </motion.div>
                   ))}
                 </div>

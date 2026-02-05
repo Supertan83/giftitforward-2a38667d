@@ -1157,6 +1157,7 @@ interface MarketplaceEvent {
   start_time: string | null;
   end_time: string | null;
   created_at: string;
+  beneficiary_credit_limit: number;
 }
 
 export const useMarketplaces = () => {
@@ -1206,6 +1207,7 @@ export const useCreateMarketplace = () => {
       outreach_partner?: string | null;
       start_time?: string | null;
       end_time?: string | null;
+      beneficiary_credit_limit?: number;
     }) => {
       const { error } = await supabase
         .from('marketplace_events')
@@ -1252,6 +1254,7 @@ export const useUpdateMarketplace = () => {
       outreach_partner?: string | null;
       start_time?: string | null;
       end_time?: string | null;
+      beneficiary_credit_limit?: number;
     }) => {
       const { id, ...updates } = marketplace;
       const { error } = await supabase

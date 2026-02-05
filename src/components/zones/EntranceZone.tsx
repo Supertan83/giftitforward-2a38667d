@@ -29,6 +29,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
 
   // Get selected marketplace details
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
+  const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
 
   // Calculate stats - all cards and marketplace-specific
   const stats = useMemo(() => {
@@ -86,8 +87,8 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
         setFeedback({
           type: 'success',
           title: 'Card Activated!',
-          subtitle: '15 Credits Assigned',
-          credits: 15,
+          subtitle: `${creditLimit} Credits Assigned`,
+          credits: creditLimit,
         });
       }
     } catch (error) {
@@ -176,7 +177,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
             Ready to Check-In
           </h2>
           <p className="text-xs md:text-sm text-muted-foreground">
-            Scan the beneficiary's QR card to activate it with 15 credits
+            Scan the beneficiary's QR card to activate it with {creditLimit} credits
           </p>
         </div>
 
