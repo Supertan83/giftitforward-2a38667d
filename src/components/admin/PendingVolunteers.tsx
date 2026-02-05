@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil } from 'lucide-react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -194,8 +195,15 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     employee_vertical: '',
     employee_number: '',
   });
+  // Add event state
+  const [showAddEventDialog, setShowAddEventDialog] = useState(false);
+  const [selectedEventToAdd, setSelectedEventToAdd] = useState<string>('');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Fetch marketplaces for adding events
+  const { data: marketplaces = [] } = useMarketplaces();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['pending-volunteers', activeTab],
@@ -601,6 +609,69 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     onError: (error: Error) => {
       toast({
         title: 'Update Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
+  // Add event mutation
+  const addEventMutation = useMutation({
+    mutationFn: async ({ pendingId, eventName }: { pendingId: string; eventName: string }) => {
+      // Get the current volunteer to update their events
+      const volunteer = volunteers.find(v => v.id === pendingId);
+      if (!volunteer) throw new Error('Volunteer not found');
+
+      // Convert marketplace name to event slug format
+      const eventSlug = eventName.toLowerCase().replace(/\s+/g, '-');
+      
+      // Update events_list (comma-separated string)
+      const currentEvents = volunteer.events_list ? volunteer.events_list.split(',').map(e => e.trim()) : [];
+      if (!currentEvents.some(e => formatEventName(e) === eventName)) {
+        currentEvents.push(eventSlug);
+      }
+      const newEventsList = currentEvents.join(',');
+
+      // Update events_json (array of event objects)
+      const currentEventsJson = Array.isArray(volunteer.events_json) ? volunteer.events_json : [];
+      const newEventJson = {
+        event: eventSlug,
+        eventDate: null,
+        addedManually: true,
+        addedAt: new Date().toISOString()
+      };
+      const newEventsJson = [...currentEventsJson, newEventJson];
+
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .update({
+          events_list: newEventsList,
+          events_json: newEventsJson
+        })
+        .eq('id', pendingId);
+
+      if (error) throw error;
+      return { success: true, eventName };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      setShowAddEventDialog(false);
+      setSelectedEventToAdd('');
+      // Update local selected volunteer with new event
+      if (selectedVolunteer) {
+        const updatedVolunteer = volunteers.find(v => v.id === selectedVolunteer.id);
+        if (updatedVolunteer) {
+          setSelectedVolunteer(updatedVolunteer);
+        }
+      }
+      toast({
+        title: 'Event Added',
+        description: `${data.eventName} has been added to the volunteer's registration`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to Add Event',
         description: error.message,
         variant: 'destructive',
       });
@@ -1645,16 +1716,32 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               </div>
 
               {/* Events */}
-              {selectedVolunteer.events_list && (
-                <div>
-                  <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide">Registered Events</h3>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <CalendarLucide className="w-4 h-4" />
+                    Registered Events ({selectedVolunteer.events_list?.split(',').filter(e => e.trim()).length || 0})
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddEventDialog(true)}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Event
+                  </Button>
+                </div>
+                {selectedVolunteer.events_list ? (
                   <div className="flex flex-wrap gap-2">
                     {selectedVolunteer.events_list.split(',').map((event, idx) => (
                       <Badge key={idx} variant="secondary">{formatEventName(event.trim())}</Badge>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-muted-foreground">No events registered</p>
+                )}
+              </div>
 
               {/* Raw Webhook Data - Collapsible */}
               {selectedVolunteer.source_data && (
@@ -2385,6 +2472,93 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 <>
                   <Check className="w-4 h-4 mr-2" />
                   Apply Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Event Dialog */}
+      <Dialog open={showAddEventDialog} onOpenChange={(open) => {
+        setShowAddEventDialog(open);
+        if (!open) setSelectedEventToAdd('');
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Event to Registration</DialogTitle>
+            <DialogDescription>
+              Select an event to add to {selectedVolunteer?.first_name}'s registration.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Event</Label>
+              <Select value={selectedEventToAdd} onValueChange={setSelectedEventToAdd}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose an event..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(() => {
+                    // Get current registered events
+                    const currentEvents = selectedVolunteer?.events_list
+                      ?.split(',')
+                      .map(e => formatEventName(e.trim())) || [];
+                    
+                    // Filter marketplaces to show only those not already registered
+                    const availableMarketplaces = marketplaces.filter(m => 
+                      !currentEvents.includes(m.name)
+                    );
+                    
+                    if (availableMarketplaces.length === 0) {
+                      return (
+                        <SelectItem value="none" disabled>
+                          No additional events available
+                        </SelectItem>
+                      );
+                    }
+                    
+                    return availableMarketplaces.map(marketplace => (
+                      <SelectItem key={marketplace.id} value={marketplace.name}>
+                        {marketplace.name}
+                        {marketplace.event_date && (
+                          <span className="text-muted-foreground ml-2">
+                            ({new Date(marketplace.event_date).toLocaleDateString()})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddEventDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedVolunteer && selectedEventToAdd) {
+                  addEventMutation.mutate({
+                    pendingId: selectedVolunteer.id,
+                    eventName: selectedEventToAdd
+                  });
+                }
+              }}
+              disabled={!selectedEventToAdd || addEventMutation.isPending}
+            >
+              {addEventMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Add Event
                 </>
               )}
             </Button>
