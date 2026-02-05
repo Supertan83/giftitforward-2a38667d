@@ -249,27 +249,7 @@ export const MarketplaceReports = ({
                       </div>
 
                       {/* Category Summary */}
-                      {Object.keys(report.items.byCategory).length > 0 && <div className="mb-6">
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                            <Tags className="w-4 h-4" />
-                            By Category
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {Object.entries(report.items.byCategory).map(([category, data]) => <div key={category} className="bg-muted/30 rounded-lg p-3">
-                                <p className="font-medium text-sm mb-2">{category}</p>
-                                <div className="flex items-center gap-2 text-xs">
-                                  <span className="text-muted-foreground">Allocated: <span className="font-semibold text-foreground">{data.allocated}</span></span>
-                                  
-                                  <span className="text-amber-600">Left: {data.remaining}</span>
-                                </div>
-                                <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
-                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{
-                        width: `${data.allocated > 0 ? data.distributed / data.allocated * 100 : 0}%`
-                      }} />
-                                </div>
-                              </div>)}
-                          </div>
-                        </div>}
+                      {Object.keys(report.items.byCategory).length > 0}
 
                       {/* Item Type Breakdown */}
                       {report.items.byItemType.length > 0 ? <>
@@ -280,11 +260,9 @@ export const MarketplaceReports = ({
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <p className="font-medium">{item.itemName}</p>
-                                    {item.externalMaterialId && (
-                                      <span className="text-xs text-muted-foreground">
+                                    {item.externalMaterialId && <span className="text-xs text-muted-foreground">
                                         (ID: {item.externalMaterialId})
-                                      </span>
-                                    )}
+                                      </span>}
                                     {item.category && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
                                         {item.category}
                                       </span>}
