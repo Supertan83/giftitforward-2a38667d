@@ -253,7 +253,7 @@ export const MarketplaceReports = ({
 
                       {/* Item Type Breakdown */}
                       {report.items.byItemType.length > 0 ? <>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3">By Item Type</h4>
+                          <h4 className="text-sm font-medium text-muted-foreground mb-3">20</h4>
                           <div className="space-y-3">
                             {report.items.byItemType.map(item => <div key={item.itemId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                                 <span className="text-2xl">{item.itemIcon}</span>
