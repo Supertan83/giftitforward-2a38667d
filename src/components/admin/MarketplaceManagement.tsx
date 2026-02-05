@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil, Users, CreditCard } from 'lucide-react';
+import { ArrowLeft, Store, Plus, Loader2, MapPin, Calendar, Clock, Trash2, Pencil, Users, CreditCard, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace, useUpdateMarketplace } from '@/hooks/useSupabaseData';
 import { useOutreachPartners } from '@/hooks/useOutreachPartners';
+import { OutreachPartnerManager } from '@/components/admin/OutreachPartnerManager';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -69,10 +70,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [showPartnerManager, setShowPartnerManager] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
-  const [editingMarketplace, setEditingMarketplace] = useState<{ 
+  const [editingMarketplace, setEditingMarketplace] = useState<{
     id: string; 
     name: string; 
     location: string; 
@@ -352,6 +354,23 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
               <h1 className="font-display font-bold text-base md:text-lg truncate">Marketplace Events</h1>
               <p className="text-xs md:text-sm text-muted-foreground">Manage distribution events</p>
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowPartnerManager(true)}
+              className="hidden md:flex"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Manage Partners
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => setShowPartnerManager(true)}
+              className="md:hidden"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </header>
@@ -862,6 +881,12 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Outreach Partner Manager Modal */}
+      <OutreachPartnerManager 
+        isOpen={showPartnerManager} 
+        onClose={() => setShowPartnerManager(false)} 
+      />
     </div>
   );
 };
