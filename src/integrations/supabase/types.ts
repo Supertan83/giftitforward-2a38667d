@@ -568,6 +568,7 @@ export type Database = {
       }
       marketplace_events: {
         Row: {
+          beneficiary_credit_limit: number
           created_at: string
           demographics_female_adults: number | null
           demographics_female_children: number | null
@@ -593,6 +594,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          beneficiary_credit_limit?: number
           created_at?: string
           demographics_female_adults?: number | null
           demographics_female_children?: number | null
@@ -618,6 +620,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          beneficiary_credit_limit?: number
           created_at?: string
           demographics_female_adults?: number | null
           demographics_female_children?: number | null
@@ -752,6 +755,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      outreach_partners: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
       }
       partner_registrations: {
         Row: {
@@ -1396,6 +1420,67 @@ export type Database = {
             columns: ["volunteer_id"]
             isOneToOne: false
             referencedRelation: "pending_volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_returns: {
+        Row: {
+          allocation_id: string | null
+          created_at: string | null
+          id: string
+          item_type_id: string
+          marketplace_id: string
+          notes: string | null
+          quantity_returned: number
+          return_batch_code: string | null
+          returned_at: string | null
+          returned_by: string | null
+        }
+        Insert: {
+          allocation_id?: string | null
+          created_at?: string | null
+          id?: string
+          item_type_id: string
+          marketplace_id: string
+          notes?: string | null
+          quantity_returned?: number
+          return_batch_code?: string | null
+          returned_at?: string | null
+          returned_by?: string | null
+        }
+        Update: {
+          allocation_id?: string | null
+          created_at?: string | null
+          id?: string
+          item_type_id?: string
+          marketplace_id?: string
+          notes?: string | null
+          quantity_returned?: number
+          return_batch_code?: string | null
+          returned_at?: string | null
+          returned_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_returns_allocation_id_fkey"
+            columns: ["allocation_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_item_allocations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_returns_item_type_id_fkey"
+            columns: ["item_type_id"]
+            isOneToOne: false
+            referencedRelation: "item_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_returns_marketplace_id_fkey"
+            columns: ["marketplace_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
             referencedColumns: ["id"]
           },
         ]

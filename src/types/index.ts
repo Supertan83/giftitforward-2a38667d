@@ -67,6 +67,7 @@ export interface MarketplaceEvent {
   outreach_partner?: string | null;
   start_time?: string | null;
   end_time?: string | null;
+  beneficiary_credit_limit?: number;
 }
 
 export interface VolunteerQRCard {

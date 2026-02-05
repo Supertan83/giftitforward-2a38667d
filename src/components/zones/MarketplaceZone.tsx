@@ -84,7 +84,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
         setFeedback({
           type: 'success',
           title: 'Item Distributed!',
-          subtitle: `Items collected: ${result.creditBalance}/15`,
+          subtitle: `Items collected: ${result.creditBalance}`,
           credits: result.creditBalance,
         });
       } else {
@@ -106,7 +106,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
         setFeedback({
           type: 'success',
           title: 'Item Returned!',
-          subtitle: `Items collected: ${result.creditBalance}/15`,
+          subtitle: `Items collected: ${result.creditBalance}`,
           credits: result.creditBalance,
         });
       }
