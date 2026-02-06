@@ -421,18 +421,18 @@ export const AdminDashboard = () => {
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="bg-card border-b border-border sticky top-0 z-10">
-            <div className="py-3 md:py-4 px-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 md:gap-3">
-                  <SidebarTrigger />
-                  <BrandLogo size="md" />
-                  <div>
-                    <h1 className="font-display font-bold text-base md:text-lg">GIF (Gift it Forward)</h1>
+          <header className="bg-card border-b border-border sticky top-0 z-20">
+            <div className="py-2 md:py-4 px-3 md:px-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                  <SidebarTrigger className="shrink-0" />
+                  <BrandLogo size="md" className="hidden sm:block" />
+                  <div className="min-w-0">
+                    <h1 className="font-display font-bold text-sm md:text-lg truncate">GIF (Gift it Forward)</h1>
                     <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Admin Dashboard</p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={signOut} className="text-xs md:text-sm">
+                <Button variant="outline" size="sm" onClick={signOut} className="text-xs md:text-sm shrink-0">
                   Sign Out
                 </Button>
               </div>
