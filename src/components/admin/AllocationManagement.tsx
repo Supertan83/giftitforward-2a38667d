@@ -10,7 +10,9 @@ import {
   Warehouse,
   Pencil,
   Check,
-  X
+  X,
+  Undo2,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +49,15 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [editingAllocationId, setEditingAllocationId] = useState<string | null>(null);
   const [editAllocated, setEditAllocated] = useState<number>(0);
   const [editDistributed, setEditDistributed] = useState<number>(0);
+
+  // Undo / return-to-warehouse state
+  const [undoAllocation, setUndoAllocation] = useState<{ id: string; allocated: number; distributed: number } | null>(null);
+  const [undoQuantity, setUndoQuantity] = useState('');
+
+  // Re-allocate state
+  const [reallocAllocation, setReallocAllocation] = useState<{ id: string; allocated: number; distributed: number } | null>(null);
+  const [reallocTargetMarketplace, setReallocTargetMarketplace] = useState('');
+  const [reallocQuantity, setReallocQuantity] = useState('');
 
   const { data: itemTypes = [], isLoading: loadingItems } = useItemTypes();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
@@ -169,6 +180,76 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
+    }
+  };
+
+  // Handle undo / return to warehouse
+  const handleUndo = async () => {
+    if (!undoAllocation || !warehouseItem) return;
+    const qty = parseInt(undoQuantity);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: 'Invalid Quantity', description: 'Enter a valid quantity to return', variant: 'destructive' });
+      return;
+    }
+    const maxReturnable = undoAllocation.allocated - undoAllocation.distributed;
+    if (qty > maxReturnable) {
+      toast({ title: 'Too Many', description: `Only ${maxReturnable} undistributed items can be returned`, variant: 'destructive' });
+      return;
+    }
+    try {
+      const newAllocated = undoAllocation.allocated - qty;
+      if (newAllocated <= 0 && undoAllocation.distributed <= 0) {
+        await deleteAllocation.mutateAsync(undoAllocation.id);
+      } else {
+        await updateAllocationQuantities.mutateAsync({
+          allocationId: undoAllocation.id,
+          allocatedQuantity: newAllocated,
+        });
+      }
+      toast({ title: 'Items Returned', description: `${qty.toLocaleString()} items returned to warehouse pool` });
+      setUndoAllocation(null);
+      setUndoQuantity('');
+    } catch (error) {
+      toast({ title: 'Undo Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+    }
+  };
+
+  // Handle re-allocate to another marketplace
+  const handleReallocate = async () => {
+    if (!reallocAllocation || !reallocTargetMarketplace || !warehouseItem) return;
+    const qty = parseInt(reallocQuantity);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: 'Invalid Quantity', description: 'Enter a valid quantity', variant: 'destructive' });
+      return;
+    }
+    const maxMovable = reallocAllocation.allocated - reallocAllocation.distributed;
+    if (qty > maxMovable) {
+      toast({ title: 'Too Many', description: `Only ${maxMovable} undistributed items can be moved`, variant: 'destructive' });
+      return;
+    }
+    try {
+      // Reduce from source
+      const newAllocated = reallocAllocation.allocated - qty;
+      if (newAllocated <= 0 && reallocAllocation.distributed <= 0) {
+        await deleteAllocation.mutateAsync(reallocAllocation.id);
+      } else {
+        await updateAllocationQuantities.mutateAsync({
+          allocationId: reallocAllocation.id,
+          allocatedQuantity: newAllocated,
+        });
+      }
+      // Add to target
+      await allocateToMarketplace.mutateAsync({
+        marketplaceId: reallocTargetMarketplace,
+        itemTypeId: warehouseItem.id,
+        quantity: qty,
+      });
+      toast({ title: 'Items Re-allocated', description: `${qty.toLocaleString()} items moved to new marketplace` });
+      setReallocAllocation(null);
+      setReallocTargetMarketplace('');
+      setReallocQuantity('');
+    } catch (error) {
+      toast({ title: 'Re-allocation Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
     }
   };
 
@@ -402,24 +483,56 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                               </span>
                             </div>
                           </div>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-primary"
-                              onClick={() => handleStartEdit(alloc)}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDelete(alloc.id)}
-                              disabled={deleteAllocation.isPending}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                onClick={() => handleStartEdit(alloc)}
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-amber-600"
+                                onClick={() => {
+                                  const maxReturnable = alloc.allocatedQuantity - alloc.distributedQuantity;
+                                  setUndoAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
+                                  setUndoQuantity(maxReturnable > 0 ? String(maxReturnable) : '');
+                                }}
+                                disabled={alloc.allocatedQuantity - alloc.distributedQuantity <= 0}
+                                title="Return to Warehouse"
+                              >
+                                <Undo2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                                onClick={() => {
+                                  const maxMovable = alloc.allocatedQuantity - alloc.distributedQuantity;
+                                  setReallocAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
+                                  setReallocQuantity(maxMovable > 0 ? String(maxMovable) : '');
+                                }}
+                                disabled={alloc.allocatedQuantity - alloc.distributedQuantity <= 0}
+                                title="Re-allocate to Another Marketplace"
+                              >
+                                <ArrowRightLeft className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDelete(alloc.id)}
+                                disabled={deleteAllocation.isPending}
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -510,6 +623,124 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             >
               {allocateToMarketplace.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Allocate Items
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Undo / Return to Warehouse Modal */}
+      <Dialog open={!!undoAllocation} onOpenChange={(open) => { if (!open) { setUndoAllocation(null); setUndoQuantity(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl flex items-center gap-2">
+              <Undo2 className="w-5 h-5" /> Return to Warehouse
+            </DialogTitle>
+            <DialogDescription>
+              Return undistributed items back to the unallocated warehouse pool
+            </DialogDescription>
+          </DialogHeader>
+          {undoAllocation && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-muted rounded-lg space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Currently Allocated</span>
+                  <span className="font-medium">{undoAllocation.allocated.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Already Distributed</span>
+                  <span className="font-medium">{undoAllocation.distributed.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
+                  <span className="text-muted-foreground">Max Returnable</span>
+                  <span className="font-semibold text-primary">{(undoAllocation.allocated - undoAllocation.distributed).toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Quantity to Return</Label>
+                <Input
+                  type="number"
+                  value={undoQuantity}
+                  onChange={(e) => setUndoQuantity(e.target.value)}
+                  min={1}
+                  max={undoAllocation.allocated - undoAllocation.distributed}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => { setUndoAllocation(null); setUndoQuantity(''); }}>Cancel</Button>
+            <Button variant="warning" onClick={handleUndo} disabled={updateAllocationQuantities.isPending || deleteAllocation.isPending}>
+              {(updateAllocationQuantities.isPending || deleteAllocation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Return Items
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-allocate Modal */}
+      <Dialog open={!!reallocAllocation} onOpenChange={(open) => { if (!open) { setReallocAllocation(null); setReallocTargetMarketplace(''); setReallocQuantity(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5" /> Re-allocate Items
+            </DialogTitle>
+            <DialogDescription>
+              Move undistributed items from this marketplace to another
+            </DialogDescription>
+          </DialogHeader>
+          {reallocAllocation && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-muted rounded-lg space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Currently Allocated</span>
+                  <span className="font-medium">{reallocAllocation.allocated.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Already Distributed</span>
+                  <span className="font-medium">{reallocAllocation.distributed.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
+                  <span className="text-muted-foreground">Max Movable</span>
+                  <span className="font-semibold text-primary">{(reallocAllocation.allocated - reallocAllocation.distributed).toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Target Marketplace</Label>
+                <Select value={reallocTargetMarketplace} onValueChange={setReallocTargetMarketplace}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select target marketplace..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeMarketplaces
+                      .filter(mp => mp.id !== selectedMarketplaceId)
+                      .map(mp => (
+                        <SelectItem key={mp.id} value={mp.id}>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            {mp.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Quantity to Move</Label>
+                <Input
+                  type="number"
+                  value={reallocQuantity}
+                  onChange={(e) => setReallocQuantity(e.target.value)}
+                  min={1}
+                  max={reallocAllocation.allocated - reallocAllocation.distributed}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => { setReallocAllocation(null); setReallocTargetMarketplace(''); setReallocQuantity(''); }}>Cancel</Button>
+            <Button onClick={handleReallocate} disabled={allocateToMarketplace.isPending || updateAllocationQuantities.isPending || !reallocTargetMarketplace}>
+              {(allocateToMarketplace.isPending || updateAllocationQuantities.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Move Items
             </Button>
           </div>
         </DialogContent>
