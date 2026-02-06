@@ -340,6 +340,51 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     return syncResults.find(r => r.allocation_id === allocationId);
   };
 
+  const deleteSyncedItem = async (donation: SurplussDonation) => {
+    try {
+      // Delete external_item by external_id
+      const { data: item } = await supabase
+        .from('external_items')
+        .select('id')
+        .eq('external_id', donation.id)
+        .maybeSingle();
+
+      if (item) {
+        // Delete SDG goal links first
+        await supabase.from('external_item_sdg_goals').delete().eq('item_id', item.id);
+        // Delete the item
+        await supabase.from('external_items').delete().eq('id', item.id);
+      }
+
+      // Delete sync tracking record
+      await supabase
+        .from('surpluss_allocation_sync')
+        .delete()
+        .eq('allocation_id', donation.id)
+        .eq('environment', environment);
+
+      // Update local state
+      setSyncedAllocationIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(donation.id);
+        return newSet;
+      });
+      setSyncResults(prev => prev.filter(r => r.allocation_id !== donation.id));
+
+      toast({
+        title: 'Item Deleted',
+        description: `Removed synced item "${donation.title}" and its tracking record`
+      });
+    } catch (error) {
+      console.error('Error deleting synced item:', error);
+      toast({
+        title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Failed to delete item',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const clearFilters = () => {
     setEventId('');
     setFromDate('');
@@ -659,24 +704,40 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            {isAlreadySynced && showAlreadySynced ? (
-                              <Button size="sm" variant="ghost" disabled className="opacity-50">
-                                Synced
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => syncSingleAllocation(donation)}
-                                disabled={isSyncing}
-                              >
-                                {isSyncing ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  'Sync'
-                                )}
-                              </Button>
-                            )}
+                            <div className="flex items-center justify-end gap-1">
+                              {isAlreadySynced && showAlreadySynced ? (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteSyncedItem(donation)}
+                                >
+                                  <Trash2 className="w-3 h-3 mr-1" />
+                                  Delete
+                                </Button>
+                              ) : syncStatus?.status === 'success' ? (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteSyncedItem(donation)}
+                                >
+                                  <Trash2 className="w-3 h-3 mr-1" />
+                                  Delete
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => syncSingleAllocation(donation)}
+                                  disabled={isSyncing}
+                                >
+                                  {isSyncing ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    'Sync'
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
