@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      allocation_traceability_logs: {
+        Row: {
+          action_type: string
+          allocation_id: string | null
+          card_unique_id: string | null
+          created_at: string
+          description: string
+          id: string
+          item_type_id: string | null
+          marketplace_id: string | null
+          marketplace_name: string
+          performed_by: string | null
+          performed_by_email: string | null
+          quantity_after: number
+          quantity_before: number
+        }
+        Insert: {
+          action_type: string
+          allocation_id?: string | null
+          card_unique_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          item_type_id?: string | null
+          marketplace_id?: string | null
+          marketplace_name: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+          quantity_after?: number
+          quantity_before?: number
+        }
+        Update: {
+          action_type?: string
+          allocation_id?: string | null
+          card_unique_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          item_type_id?: string | null
+          marketplace_id?: string | null
+          marketplace_name?: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+          quantity_after?: number
+          quantity_before?: number
+        }
+        Relationships: []
+      }
       archived_card_data: {
         Row: {
           activated_at: string | null

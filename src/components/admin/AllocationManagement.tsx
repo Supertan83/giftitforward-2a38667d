@@ -43,6 +43,7 @@ import {
 import { useItemTypes, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
+import { useLogTraceabilityEvent } from '@/hooks/useTraceabilityLogs';
 
 interface AllocationManagementProps {
   onBack: () => void;
@@ -79,6 +80,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   );
   const { allocateToMarketplace, deleteAllocation, updateAllocationQuantities, incrementDistributed } = useAllocationOperations();
   const { toast } = useToast();
+  const logEvent = useLogTraceabilityEvent();
 
   const activeMarketplaces = marketplaces.filter(m => m.status === 'active' || m.status === 'upcoming');
 
@@ -107,11 +109,27 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     }
 
     try {
+      const mp = marketplaces.find(m => m.id === targetMarketplace);
+      const item = itemTypes.find(i => i.id === modalItemTypeId);
+      const existingAlloc = allocations.find(a => a.itemTypeId === modalItemTypeId);
+      const qtyBefore = existingAlloc?.allocatedQuantity || 0;
+
       await allocateToMarketplace.mutateAsync({
         marketplaceId: targetMarketplace,
         itemTypeId: modalItemTypeId,
         quantity: qty,
       });
+
+      logEvent.mutate({
+        itemTypeId: modalItemTypeId,
+        marketplaceId: targetMarketplace,
+        marketplaceName: mp?.name || 'Unknown',
+        actionType: 'allocated',
+        quantityBefore: qtyBefore,
+        quantityAfter: qtyBefore + qty,
+        description: `${qty.toLocaleString()} units of ${item?.name || 'item'} allocated to ${mp?.name || 'marketplace'}`,
+      });
+
       toast({
         title: 'Items Allocated',
         description: `${qty.toLocaleString()} items allocated to marketplace`,
@@ -132,8 +150,25 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const handleDelete = async (allocationId: string) => {
     if (!confirm('Remove this allocation?')) return;
 
+    const alloc = allocations.find(a => a.id === allocationId);
+    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+
     try {
       await deleteAllocation.mutateAsync(allocationId);
+
+      if (alloc) {
+        logEvent.mutate({
+          allocationId,
+          itemTypeId: alloc.itemTypeId,
+          marketplaceId: selectedMarketplaceId || undefined,
+          marketplaceName: mp?.name || 'Unknown',
+          actionType: 'removed',
+          quantityBefore: alloc.allocatedQuantity,
+          quantityAfter: 0,
+          description: `Allocation of ${alloc.itemName || 'item'} removed from ${mp?.name || 'marketplace'}`,
+        });
+      }
+
       toast({
         title: 'Allocation Removed',
         description: 'The allocation has been deleted',
@@ -163,12 +198,27 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const handleSaveEdit = async () => {
     if (!editingAllocationId) return;
 
+    const alloc = allocations.find(a => a.id === editingAllocationId);
+    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+
     try {
       await updateAllocationQuantities.mutateAsync({
         allocationId: editingAllocationId,
         allocatedQuantity: editAllocated,
         distributedQuantity: editDistributed,
       });
+
+      logEvent.mutate({
+        allocationId: editingAllocationId,
+        itemTypeId: alloc?.itemTypeId,
+        marketplaceId: selectedMarketplaceId || undefined,
+        marketplaceName: mp?.name || 'Unknown',
+        actionType: 'edited',
+        quantityBefore: alloc?.allocatedQuantity || 0,
+        quantityAfter: editAllocated,
+        description: `Allocation of ${alloc?.itemName || 'item'} edited: allocated ${alloc?.allocatedQuantity}→${editAllocated}, distributed ${alloc?.distributedQuantity}→${editDistributed}`,
+      });
+
       toast({
         title: 'Allocation Updated',
         description: 'Quantities have been saved',
@@ -186,8 +236,21 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   // Handle distribute (increment distributed by 1)
   const handleDistribute = async () => {
     if (!distributeAllocation) return;
+    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+
     try {
       await incrementDistributed.mutateAsync(distributeAllocation.id);
+
+      logEvent.mutate({
+        allocationId: distributeAllocation.id,
+        marketplaceId: selectedMarketplaceId || undefined,
+        marketplaceName: mp?.name || 'Unknown',
+        actionType: 'distributed',
+        quantityBefore: distributeAllocation.distributed,
+        quantityAfter: distributeAllocation.distributed + 1,
+        description: `1 unit of ${distributeAllocation.itemName} distributed at ${mp?.name || 'marketplace'}`,
+      });
+
       toast({
         title: 'Item Distributed',
         description: `1 unit of ${distributeAllocation.itemName} marked as distributed`,
@@ -215,6 +278,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       toast({ title: 'Too Many', description: `Only ${maxReturnable} undistributed items can be returned`, variant: 'destructive' });
       return;
     }
+    const alloc = allocations.find(a => a.id === undoAllocation.id);
+    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+
     try {
       const newAllocated = undoAllocation.allocated - qty;
       if (newAllocated <= 0 && undoAllocation.distributed <= 0) {
@@ -225,6 +291,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
           allocatedQuantity: newAllocated,
         });
       }
+
+      logEvent.mutate({
+        allocationId: undoAllocation.id,
+        itemTypeId: alloc?.itemTypeId,
+        marketplaceId: selectedMarketplaceId || undefined,
+        marketplaceName: mp?.name || 'Unknown',
+        actionType: 'returned_to_warehouse',
+        quantityBefore: undoAllocation.allocated,
+        quantityAfter: newAllocated,
+        description: `${qty.toLocaleString()} units of ${alloc?.itemName || 'item'} returned to warehouse from ${mp?.name || 'marketplace'}`,
+      });
+
       toast({ title: 'Items Returned', description: `${qty.toLocaleString()} items returned to warehouse pool` });
       setUndoAllocation(null);
       setUndoQuantity('');
@@ -246,6 +324,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       toast({ title: 'Too Many', description: `Only ${maxMovable} undistributed items can be moved`, variant: 'destructive' });
       return;
     }
+    const sourceMp = marketplaces.find(m => m.id === selectedMarketplaceId);
+    const targetMp = marketplaces.find(m => m.id === reallocTargetMarketplace);
+
     try {
       const sourceAlloc = allocations.find(a => a.id === reallocAllocation.id);
       const itemTypeId = sourceAlloc?.itemTypeId;
@@ -265,6 +346,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         itemTypeId,
         quantity: qty,
       });
+
+      logEvent.mutate({
+        allocationId: reallocAllocation.id,
+        itemTypeId,
+        marketplaceId: selectedMarketplaceId || undefined,
+        marketplaceName: sourceMp?.name || 'Unknown',
+        actionType: 're-allocated',
+        quantityBefore: reallocAllocation.allocated,
+        quantityAfter: newAllocated,
+        description: `${qty.toLocaleString()} units of ${sourceAlloc?.itemName || 'item'} re-allocated from ${sourceMp?.name || 'source'} to ${targetMp?.name || 'target'}`,
+      });
+
       toast({ title: 'Items Re-allocated', description: `${qty.toLocaleString()} items moved to new marketplace` });
       setReallocAllocation(null);
       setReallocTargetMarketplace('');
