@@ -42,7 +42,7 @@ type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'market
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
-  const [expandedSection, setExpandedSection] = useState<'distribution' | 'stockOverview' | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'distribution' | 'stockOverview' | null>('distribution');
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
