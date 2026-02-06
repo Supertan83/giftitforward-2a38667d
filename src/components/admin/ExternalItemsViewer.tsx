@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Package, Building, MapPin, ChevronDown, ChevronUp, ExternalLink, Loader2, Search, Filter } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 
 interface ExternalItemsViewerProps {
   onBack: () => void;
@@ -190,6 +192,14 @@ export const ExternalItemsViewer = ({ onBack }: ExternalItemsViewerProps) => {
     return matchesSearch && matchesStatus;
   });
 
+  // Pagination
+  const pagination = usePagination(filteredItems, { defaultPageSize: 25 });
+
+  // Reset page when filters change
+  useEffect(() => {
+    pagination.setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -286,8 +296,9 @@ export const ExternalItemsViewer = ({ onBack }: ExternalItemsViewerProps) => {
               <p className="text-sm">Items will appear here when received via webhook</p>
             </div>
           ) : (
+            <>
             <div className="divide-y divide-border">
-              {filteredItems.map((item, index) => {
+              {pagination.paginatedItems.map((item, index) => {
                 const company = getCompany(item.company_id);
                 const address = getAddress(item.address_id);
                 const materialGroup = getMaterialGroup(item.material_group_id);
@@ -438,6 +449,26 @@ export const ExternalItemsViewer = ({ onBack }: ExternalItemsViewerProps) => {
                 );
               })}
             </div>
+            <div className="border-t border-border">
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                startIndex={pagination.startIndex}
+                endIndex={pagination.endIndex}
+                pageSize={pagination.pageSize}
+                pageSizeOptions={pagination.pageSizeOptions}
+                canGoNext={pagination.canGoNext}
+                canGoPrevious={pagination.canGoPrevious}
+                onPageChange={pagination.setCurrentPage}
+                onPageSizeChange={pagination.setPageSize}
+                onGoToFirst={pagination.goToFirstPage}
+                onGoToLast={pagination.goToLastPage}
+                onGoToNext={pagination.goToNextPage}
+                onGoToPrevious={pagination.goToPreviousPage}
+              />
+            </div>
+            </>
           )}
         </div>
       </main>
