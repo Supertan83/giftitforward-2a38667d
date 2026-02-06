@@ -392,13 +392,13 @@ export const AdminDashboard = () => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+        {/* Stats Overview - Hidden, can be re-enabled */}
+        {/* <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
           <StatCard icon={Package} label="Total Inventory" value={totalStock.toLocaleString()} subValue="items in warehouse" />
           <StatCard icon={Building} label="Allocated" value={totalAllocated.toLocaleString()} subValue={totalStock > 0 ? `${Math.round(totalAllocated / totalStock * 100)}% of inventory` : '0% of inventory'} variant="primary" />
           <StatCard icon={BarChart3} label="Distributed" value={totalDistributed.toLocaleString()} subValue={totalAllocated > 0 ? `${Math.round(totalDistributed / totalAllocated * 100)}% of allocated` : '0% of allocated'} variant="success" />
           <StatCard icon={TrendingUp} label="Remaining" value={totalRemaining.toLocaleString()} subValue="items to distribute" variant="warning" />
-        </div>
+        </div> */}
 
         {/* Per-Marketplace Breakdown - Collapsible */}
         {marketplaceStats.length > 0 && <div className="bg-card rounded-xl border border-border overflow-hidden mb-6 md:mb-8">
