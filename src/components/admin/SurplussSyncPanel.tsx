@@ -26,12 +26,40 @@ interface AllocatedMaterial {
   amount: number;
 }
 
-interface SurplussAllocation {
+interface SurplussDonation {
   id: number;
-  marketplace_event_id: number;
-  marketplace_event_title: string;
-  allocated_at: string;
-  allocated_materials: AllocatedMaterial[];
+  uuid?: string;
+  title: string;
+  description?: string;
+  active?: boolean;
+  quantity?: number;
+  item_count?: number;
+  box_count?: number;
+  condition_id?: number;
+  image_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  company?: {
+    id: number;
+    name: string;
+    main_business?: string;
+    sector?: string;
+    company_size?: string;
+  };
+  material_group?: {
+    id: number;
+    name: string;
+    code?: string;
+    uom?: string;
+  };
+  material_group_id?: number;
+  type?: {
+    offering_type?: string;
+    status?: string;
+    approve_date?: string;
+    count_of_boxes?: number;
+  };
+  images?: Array<{ url: string; name: string }>;
 }
 
 interface SyncResult {
@@ -50,8 +78,8 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [eventId, setEventId] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [allocations, setAllocations] = useState<SurplussAllocation[]>([]);
-  const [allFetchedAllocations, setAllFetchedAllocations] = useState<SurplussAllocation[]>([]);
+  const [allocations, setAllocations] = useState<SurplussDonation[]>([]);
+  const [allFetchedAllocations, setAllFetchedAllocations] = useState<SurplussDonation[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [isSyncing, setSyncing] = useState(false);
   const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
@@ -166,7 +194,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
         throw new Error(data.error || 'Failed to fetch allocations');
       }
 
-      const fetchedAllocations: SurplussAllocation[] = data.data || [];
+      const fetchedAllocations: SurplussDonation[] = data.data || [];
       
       // Store all fetched allocations for "show already synced" toggle
       setAllFetchedAllocations(fetchedAllocations);
@@ -254,7 +282,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     }
   };
 
-  const syncSingleAllocation = async (allocation: SurplussAllocation) => {
+  const syncSingleAllocation = async (allocation: SurplussDonation) => {
     setSyncing(true);
     
     try {
@@ -294,7 +322,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
       
       toast({
         title: 'Sync Complete',
-        description: `Synced ${allocation.marketplace_event_title}`
+        description: `Synced ${allocation.title}`
       });
     } catch (error) {
       console.error('Error syncing allocation:', error);
@@ -565,50 +593,48 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Marketplace</TableHead>
-                      <TableHead>External ID</TableHead>
-                      <TableHead>Materials</TableHead>
-                      <TableHead>Total Amount</TableHead>
-                      <TableHead>Allocated At</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
+                     <TableRow>
+                       <TableHead>Title</TableHead>
+                       <TableHead>ID</TableHead>
+                       <TableHead>Company</TableHead>
+                       <TableHead>Material Group</TableHead>
+                       <TableHead>Quantity</TableHead>
+                       <TableHead>Status</TableHead>
+                       <TableHead>Sync</TableHead>
+                       <TableHead className="text-right">Actions</TableHead>
+                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayedAllocations.map((allocation) => {
-                      const syncStatus = getSyncStatus(allocation.id);
-                      const isAlreadySynced = syncedAllocationIds.has(allocation.id);
-                      const totalAmount = allocation.allocated_materials?.reduce((sum, m) => sum + m.amount, 0) || 0;
+                    {displayedAllocations.map((donation) => {
+                      const syncStatus = getSyncStatus(donation.id);
+                      const isAlreadySynced = syncedAllocationIds.has(donation.id);
                       
                       return (
                         <TableRow 
-                          key={allocation.id}
+                          key={donation.id}
                           className={isAlreadySynced && showAlreadySynced ? 'bg-muted/50 opacity-75' : ''}
                         >
                           <TableCell className="font-medium">
-                            {allocation.marketplace_event_title}
+                            {donation.title}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{allocation.marketplace_event_id}</Badge>
+                            <Badge variant="outline">{donation.id}</Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {allocation.allocated_materials?.slice(0, 3).map((m, i) => (
-                                <Badge key={i} variant="secondary" className="text-xs">
-                                  {m.material_title}: {m.amount}
-                                </Badge>
-                              ))}
-                              {(allocation.allocated_materials?.length || 0) > 3 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  +{(allocation.allocated_materials?.length || 0) - 3} more
-                                </Badge>
-                              )}
-                            </div>
+                            {donation.company?.name || '-'}
                           </TableCell>
-                          <TableCell>{totalAmount.toLocaleString()}</TableCell>
                           <TableCell>
-                            {allocation.allocated_at ? new Date(allocation.allocated_at).toLocaleDateString() : '-'}
+                            {donation.material_group ? (
+                              <Badge variant="secondary" className="text-xs">
+                                {donation.material_group.name}
+                              </Badge>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>{(donation.quantity || donation.item_count || 0).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant={donation.type?.status === 'APPROVED' ? 'default' : 'secondary'} className={donation.type?.status === 'APPROVED' ? 'bg-emerald-500' : ''}>
+                              {donation.type?.status || 'Unknown'}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             {isAlreadySynced && showAlreadySynced ? (
@@ -621,7 +647,6 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                                 <Badge variant="default" className="bg-emerald-500">
                                   <Check className="w-3 h-3 mr-1" />
                                   Synced
-                                  {syncStatus.marketplace_created && ' (New)'}
                                 </Badge>
                               ) : (
                                 <Badge variant="destructive">
@@ -642,7 +667,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => syncSingleAllocation(allocation)}
+                                onClick={() => syncSingleAllocation(donation)}
                                 disabled={isSyncing}
                               >
                                 {isSyncing ? (
@@ -698,13 +723,13 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                 className="text-center py-12 bg-card rounded-xl border border-border"
               >
                 <Download className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">No Allocations Fetched</h3>
+                <h3 className="text-lg font-semibold mb-2">No Donations Fetched</h3>
                 <p className="text-muted-foreground mb-4">
-                  Use the filters above to fetch allocation data from Surpluss API
+                  Use the filters above to fetch donation data from Surpluss API
                 </p>
                 <Button onClick={fetchAllocations} disabled={isFetching}>
                   <Download className="w-4 h-4 mr-2" />
-                  Fetch Allocations
+                  Fetch Donations
                 </Button>
               </motion.div>
             )}
