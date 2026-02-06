@@ -6,39 +6,82 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface AllocatedMaterial {
-  material_id: number;
-  material_title: string;
-  amount: number;
-}
-
-interface SurplussAllocation {
+interface SurplussDonation {
   id: number;
-  marketplace_event_id: number;
-  marketplace_event_title: string;
-  allocated_at: string;
-  allocated_materials: AllocatedMaterial[];
-}
-
-interface SyncRequestPayload {
-  allocations: SurplussAllocation[];
-  environment?: string;
+  uuid?: string;
+  title: string;
+  description?: string;
+  active?: boolean;
+  quantity?: number;
+  item_count?: number;
+  box_count?: number;
+  condition_id?: number;
+  image_url?: string;
+  price?: number;
+  per?: string;
+  frequency?: unknown;
+  created_at?: string;
+  updated_at?: string;
+  company?: {
+    id: number;
+    uuid?: string;
+    name: string;
+    main_business?: string;
+    sector?: string;
+    company_size?: string;
+    designation?: string;
+    image_url?: string;
+    about_info?: string;
+    currency?: string;
+    company_license_number?: string;
+    website_url?: string;
+    is_parent_company?: boolean;
+  };
+  address?: {
+    id: number;
+    address?: string;
+    city?: string;
+    country?: string;
+    state?: string;
+    zip_code?: string;
+    location_latitude?: number;
+    location_longitude?: number;
+    is_primary?: boolean;
+  };
+  material_group?: {
+    id: number;
+    name: string;
+    code?: string;
+    uom?: string;
+  };
+  material_group_id?: number;
+  third_level_subcategory_id?: number;
+  type?: {
+    offering_type?: string;
+    status?: string;
+    approve_date?: string;
+    count_of_boxes?: number;
+  };
+  sdg_goals?: Array<{
+    id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    image_url?: string;
+  }>;
 }
 
 interface SyncResult {
   allocation_id: number;
-  marketplace_title: string;
+  title: string;
   status: 'success' | 'failed';
-  marketplace_id?: string;
-  marketplace_created?: boolean;
-  materials_processed?: number;
-  allocations_created?: number;
-  allocations_updated?: number;
+  external_item_id?: string;
+  company_synced?: boolean;
+  material_group_synced?: boolean;
   error?: string;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -48,7 +91,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const payload: SyncRequestPayload = await req.json();
+    const payload = await req.json();
     const { allocations, environment = 'unknown' } = payload;
 
     if (!allocations || !Array.isArray(allocations)) {
@@ -58,236 +101,235 @@ serve(async (req) => {
       );
     }
 
-    // Check which allocations have already been synced
-    const allocationIds = allocations.map(a => a.id);
+    // Check which donations have already been synced
+    const donationIds = allocations.map((a: SurplussDonation) => a.id);
     const { data: alreadySynced } = await supabase
       .from('surpluss_allocation_sync')
       .select('allocation_id')
       .eq('environment', environment)
-      .in('allocation_id', allocationIds);
+      .in('allocation_id', donationIds);
 
-    const syncedSet = new Set((alreadySynced || []).map(r => r.allocation_id));
-    const newAllocations = allocations.filter(a => !syncedSet.has(a.id));
+    const syncedSet = new Set((alreadySynced || []).map((r: { allocation_id: number }) => r.allocation_id));
+    const newDonations: SurplussDonation[] = allocations.filter((a: SurplussDonation) => !syncedSet.has(a.id));
 
-    if (newAllocations.length === 0) {
-      console.log('All allocations have already been synced');
+    if (newDonations.length === 0) {
+      console.log('All donations have already been synced');
       return new Response(
         JSON.stringify({
           success: true,
-          summary: {
-            total_processed: 0,
-            allocations_created: 0,
-            allocations_updated: 0,
-            failed: 0,
-            skipped: allocations.length
-          },
+          summary: { total_processed: 0, created: 0, updated: 0, failed: 0, skipped: allocations.length },
           results: [],
-          message: 'All allocations have already been synced'
+          message: 'All donations have already been synced'
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Processing ${newAllocations.length} new allocations (${syncedSet.size} already synced)`);
+    console.log(`Processing ${newDonations.length} new donations (${syncedSet.size} already synced)`);
 
     const results: SyncResult[] = [];
     let totalCreated = 0;
     let totalUpdated = 0;
     let totalFailed = 0;
 
-    for (const allocation of newAllocations) {
+    for (const donation of newDonations) {
       const result: SyncResult = {
-        allocation_id: allocation.id,
-        marketplace_title: allocation.marketplace_event_title,
+        allocation_id: donation.id,
+        title: donation.title,
         status: 'success',
-        materials_processed: 0,
-        allocations_created: 0,
-        allocations_updated: 0
       };
 
       try {
-        const externalMarketplaceId = allocation.marketplace_event_id;
-        const marketplaceTitle = allocation.marketplace_event_title;
-        const allocatedMaterials = allocation.allocated_materials || [];
+        let companyId: string | null = null;
+        let addressId: string | null = null;
+        let materialGroupId: string | null = null;
 
-        // Try to find existing marketplace by external_id first, then by title
-        let marketplace = null;
+        // Upsert company
+        if (donation.company && donation.company.id) {
+          const companyData = {
+            external_id: donation.company.id,
+            uuid: donation.company.uuid || null,
+            name: donation.company.name || 'Unknown Company',
+            main_business: donation.company.main_business || null,
+            sector: donation.company.sector || null,
+            company_size: donation.company.company_size || null,
+            designation: donation.company.designation || null,
+            image_url: donation.company.image_url || null,
+            about_info: donation.company.about_info || null,
+            currency: donation.company.currency || 'AED',
+            company_license_number: donation.company.company_license_number || null,
+            website_url: donation.company.website_url || null,
+            is_parent_company: donation.company.is_parent_company || false,
+            updated_at: new Date().toISOString(),
+          };
 
-        // First try by external_id
-        const { data: marketplaceByExtId } = await supabase
-          .from('marketplace_events')
-          .select('id, name, external_id')
-          .eq('external_id', externalMarketplaceId)
-          .single();
+          const { data: existingCompany } = await supabase
+            .from('external_companies')
+            .select('id')
+            .eq('external_id', donation.company.id)
+            .maybeSingle();
 
-        if (marketplaceByExtId) {
-          marketplace = marketplaceByExtId;
-          result.marketplace_id = marketplace.id;
-          console.log(`Found marketplace by external_id: ${marketplace.name} (${marketplace.id})`);
+          if (existingCompany) {
+            await supabase.from('external_companies').update(companyData).eq('id', existingCompany.id);
+            companyId = existingCompany.id;
+          } else {
+            const { data: newCompany } = await supabase.from('external_companies').insert(companyData).select('id').single();
+            companyId = newCompany?.id || null;
+          }
+          result.company_synced = true;
+        }
+
+        // Upsert address
+        if (donation.address && donation.address.id) {
+          const addressData = {
+            external_id: donation.address.id,
+            address: donation.address.address || 'Unknown',
+            city: donation.address.city || null,
+            country: donation.address.country || null,
+            state: donation.address.state || null,
+            zip_code: donation.address.zip_code || null,
+            location_latitude: donation.address.location_latitude || null,
+            location_longitude: donation.address.location_longitude || null,
+            is_primary: donation.address.is_primary || false,
+            company_id: companyId,
+            updated_at: new Date().toISOString(),
+          };
+
+          const { data: existingAddr } = await supabase
+            .from('external_addresses')
+            .select('id')
+            .eq('external_id', donation.address.id)
+            .maybeSingle();
+
+          if (existingAddr) {
+            await supabase.from('external_addresses').update(addressData).eq('id', existingAddr.id);
+            addressId = existingAddr.id;
+          } else {
+            const { data: newAddr } = await supabase.from('external_addresses').insert(addressData).select('id').single();
+            addressId = newAddr?.id || null;
+          }
+        }
+
+        // Upsert material group
+        if (donation.material_group && donation.material_group.id) {
+          const mgData = {
+            external_id: donation.material_group.id,
+            name: donation.material_group.name || 'Unknown',
+            code: donation.material_group.code || null,
+            uom: donation.material_group.uom || null,
+            updated_at: new Date().toISOString(),
+          };
+
+          const { data: existingMg } = await supabase
+            .from('external_material_groups')
+            .select('id')
+            .eq('external_id', donation.material_group.id)
+            .maybeSingle();
+
+          if (existingMg) {
+            await supabase.from('external_material_groups').update(mgData).eq('id', existingMg.id);
+            materialGroupId = existingMg.id;
+          } else {
+            const { data: newMg } = await supabase.from('external_material_groups').insert(mgData).select('id').single();
+            materialGroupId = newMg?.id || null;
+          }
+          result.material_group_synced = true;
+        }
+
+        // Upsert external item
+        const itemData = {
+          external_id: donation.id,
+          uuid: donation.uuid || null,
+          title: donation.title || 'Untitled',
+          description: donation.description || null,
+          active: donation.active ?? true,
+          price: donation.price ?? null,
+          per: donation.per ? String(donation.per) : null,
+          frequency: donation.frequency || null,
+          image_url: donation.image_url || null,
+          quantity: donation.quantity ?? 0,
+          item_count: donation.item_count ?? 0,
+          box_count: donation.box_count ?? null,
+          type_data: donation.type || null,
+          condition_id: donation.condition_id ?? null,
+          third_level_subcategory_id: donation.third_level_subcategory_id ?? null,
+          company_id: companyId,
+          address_id: addressId,
+          material_group_id: materialGroupId,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data: existingItem } = await supabase
+          .from('external_items')
+          .select('id')
+          .eq('external_id', donation.id)
+          .maybeSingle();
+
+        let itemId: string;
+        if (existingItem) {
+          await supabase.from('external_items').update(itemData).eq('id', existingItem.id);
+          itemId = existingItem.id;
+          totalUpdated++;
         } else {
-          // Try to find by title (fuzzy match)
-          const { data: marketplaceByTitle } = await supabase
-            .from('marketplace_events')
-            .select('id, name, external_id')
-            .ilike('name', `%${marketplaceTitle}%`)
-            .limit(1)
-            .single();
+          const { data: newItem } = await supabase.from('external_items').insert(itemData).select('id').single();
+          itemId = newItem?.id || '';
+          totalCreated++;
+        }
+        result.external_item_id = itemId;
 
-          if (marketplaceByTitle) {
-            marketplace = marketplaceByTitle;
-            result.marketplace_id = marketplace.id;
+        // Handle SDG goals
+        if (donation.sdg_goals && Array.isArray(donation.sdg_goals) && itemId) {
+          await supabase.from('external_item_sdg_goals').delete().eq('item_id', itemId);
 
-            // Update the external_id for future matching
-            await supabase
-              .from('marketplace_events')
-              .update({ external_id: externalMarketplaceId })
-              .eq('id', marketplace.id);
+          for (const sdg of donation.sdg_goals) {
+            if (!sdg.id) continue;
+            const sdgData = {
+              external_id: sdg.id,
+              name: sdg.name || 'Unknown',
+              code: sdg.code || null,
+              description: sdg.description || null,
+              image_url: sdg.image_url || null,
+              updated_at: new Date().toISOString(),
+            };
 
-            console.log(`Found marketplace by title: ${marketplace.name}, linked external_id`);
-          } else {
-            // Create new marketplace event
-            const { data: newMarketplace, error: createError } = await supabase
-              .from('marketplace_events')
-              .insert({
-                name: marketplaceTitle,
-                external_id: externalMarketplaceId,
-                status: 'upcoming',
-                event_date: allocation.allocated_at ? new Date(allocation.allocated_at).toISOString().split('T')[0] : null
-              })
-              .select('id, name')
-              .single();
+            const { data: existingSdg } = await supabase
+              .from('external_sdg_goals')
+              .select('id')
+              .eq('external_id', sdg.id)
+              .maybeSingle();
 
-            if (createError) {
-              throw new Error(`Failed to create marketplace: ${createError.message}`);
+            let sdgGoalId: string;
+            if (existingSdg) {
+              await supabase.from('external_sdg_goals').update(sdgData).eq('id', existingSdg.id);
+              sdgGoalId = existingSdg.id;
+            } else {
+              const { data: newSdg } = await supabase.from('external_sdg_goals').insert(sdgData).select('id').single();
+              sdgGoalId = newSdg?.id || '';
             }
 
-            marketplace = newMarketplace;
-            result.marketplace_id = marketplace.id;
-            result.marketplace_created = true;
-            console.log(`Created new marketplace: ${marketplace.name}`);
+            if (sdgGoalId) {
+              await supabase.from('external_item_sdg_goals').insert({ item_id: itemId, sdg_goal_id: sdgGoalId });
+            }
           }
         }
 
-        // Process each allocated material
-        for (const material of allocatedMaterials) {
-          const materialId = material.material_id;
-          const materialTitle = material.material_title;
-          const amount = material.amount || 0;
-
-          // Try to find existing item_type by external_material_id first, then by name
-          let itemType = null;
-
-          const { data: itemByExtId } = await supabase
-            .from('item_types')
-            .select('id, name, external_material_id')
-            .eq('external_material_id', materialId)
-            .single();
-
-          if (itemByExtId) {
-            itemType = itemByExtId;
-          } else {
-            // Try to find by name
-            const { data: itemByName } = await supabase
-              .from('item_types')
-              .select('id, name, external_material_id')
-              .ilike('name', materialTitle)
-              .limit(1)
-              .single();
-
-            if (itemByName) {
-              itemType = itemByName;
-
-              // Update the external_material_id for future matching
-              await supabase
-                .from('item_types')
-                .update({ external_material_id: materialId })
-                .eq('id', itemType.id);
-            } else {
-              // Create new item type
-              const { data: newItem, error: createItemError } = await supabase
-                .from('item_types')
-                .insert({
-                  name: materialTitle,
-                  external_material_id: materialId,
-                  icon: 'Package',
-                  total_stock: amount
-                })
-                .select('id, name')
-                .single();
-
-              if (createItemError) {
-                console.error(`Failed to create item type ${materialTitle}:`, createItemError);
-                continue;
-              }
-
-              itemType = newItem;
-            }
-          }
-
-          // Check for existing allocation
-          const { data: existingAllocation } = await supabase
-            .from('marketplace_item_allocations')
-            .select('id, allocated_quantity')
-            .eq('marketplace_id', marketplace.id)
-            .eq('item_type_id', itemType.id)
-            .single();
-
-          if (existingAllocation) {
-            // Update existing allocation - add to the allocated quantity
-            const newQuantity = existingAllocation.allocated_quantity + amount;
-            const { error: updateError } = await supabase
-              .from('marketplace_item_allocations')
-              .update({
-                allocated_quantity: newQuantity,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', existingAllocation.id);
-
-            if (updateError) {
-              console.error(`Failed to update allocation:`, updateError);
-            } else {
-              result.allocations_updated = (result.allocations_updated || 0) + 1;
-              totalUpdated++;
-            }
-          } else {
-            // Create new allocation
-            const { error: insertError } = await supabase
-              .from('marketplace_item_allocations')
-              .insert({
-                marketplace_id: marketplace.id,
-                item_type_id: itemType.id,
-                allocated_quantity: amount,
-                distributed_quantity: 0
-              });
-
-            if (insertError) {
-              console.error(`Failed to create allocation:`, insertError);
-            } else {
-              result.allocations_created = (result.allocations_created || 0) + 1;
-              totalCreated++;
-            }
-          }
-
-          result.materials_processed = (result.materials_processed || 0) + 1;
-        }
-
-        // Record the allocation as synced
+        // Record as synced
         await supabase
           .from('surpluss_allocation_sync')
           .insert({
-            allocation_id: allocation.id,
+            allocation_id: donation.id,
             environment,
-            marketplace_external_id: externalMarketplaceId
+            marketplace_external_id: donation.company?.id || null
           });
 
         results.push(result);
-
+        console.log(`Synced donation ${donation.id}: ${donation.title}`);
       } catch (error) {
         result.status = 'failed';
         result.error = error instanceof Error ? error.message : 'Unknown error';
         results.push(result);
         totalFailed++;
-        console.error(`Error processing allocation ${allocation.id}:`, error);
+        console.error(`Error processing donation ${donation.id}:`, error);
       }
     }
 
@@ -297,7 +339,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         summary: {
-          total_processed: newAllocations.length,
+          total_processed: newDonations.length,
           allocations_created: totalCreated,
           allocations_updated: totalUpdated,
           failed: totalFailed,
@@ -309,7 +351,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error syncing allocations:', error);
+    console.error('Error syncing donations:', error);
     return new Response(
       JSON.stringify({
         success: false,
