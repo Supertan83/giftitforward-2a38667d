@@ -1,7 +1,7 @@
 import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
   QrCode, Store, PieChart, RefreshCw, Unlock,
-  Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText
+  Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -56,6 +56,7 @@ const adminItems = [
   { view: 'hubspot-email-config' as AdminView, label: 'HubSpot Emails', icon: Mail, color: 'text-pink-500' },
   { view: 'email-logs' as AdminView, label: 'Email Logs', icon: Mail, color: 'text-red-500' },
   { view: 'email-management' as AdminView, label: 'Email Preview & Test', icon: Mail, color: 'text-emerald-500' },
+  { view: 'email-templates' as AdminView, label: 'Email Templates', icon: FileText, color: 'text-indigo-500' },
 ];
 
 export const AdminSidebar = ({
