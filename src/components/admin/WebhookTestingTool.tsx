@@ -40,7 +40,7 @@ export const WebhookTestingTool = () => {
   const [sourceIdentifier, setSourceIdentifier] = useState('test_source');
   const [apiKey, setApiKey] = useState('');
   const [isApiKeySaved, setIsApiKeySaved] = useState(false);
-  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status' | 'allocation_created'>('check_status');
+  const [payloadType, setPayloadType] = useState<'custom' | 'create_volunteer' | 'check_status' | 'allocation_created' | 'surpluss_item'>('check_status');
   const [customPayload, setCustomPayload] = useState('{\n  "action": "create_volunteer",\n  "volunteers": [\n    {\n      "email": "test@example.com",\n      "name": "Test User"\n    }\n  ]\n}');
   const [isLoading, setIsLoading] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
@@ -117,6 +117,48 @@ export const WebhookTestingTool = () => {
             total_amount: 500,
             allocated_at: new Date().toISOString()
           }
+        };
+      case 'surpluss_item':
+        return {
+          id: Math.floor(Math.random() * 10000),
+          uuid: crypto.randomUUID(),
+          title: 'Office Furniture Set',
+          description: 'Gently used office desks and chairs from corporate refresh.',
+          active: true,
+          price: 0,
+          per: 1,
+          frequency: { "One-off": true },
+          image_url: 'https://placehold.co/400x300?text=Furniture',
+          quantity: 50,
+          item_count: 50,
+          box_count: 5,
+          type: { offering_type: 'DONATION', status: 'APPROVED' },
+          condition_id: 1,
+          third_level_subcategory_id: null,
+          company: {
+            id: 10,
+            uuid: crypto.randomUUID(),
+            name: 'Acme Corp',
+            main_business: 'Retail',
+            sector: 'Consumer Goods',
+            company_size: 'Large',
+            image_url: 'https://placehold.co/200x200?text=Acme'
+          },
+          address: {
+            id: 5,
+            address: '123 Main St',
+            city: 'Dubai',
+            country: 'UAE'
+          },
+          material_group: {
+            id: 3,
+            name: 'Furniture',
+            code: 'FUR',
+            uom: 'piece'
+          },
+          sdg_goals: [
+            { id: 12, name: 'Responsible Consumption', code: 'SDG12' }
+          ]
         };
       case 'custom':
         try {
@@ -360,6 +402,7 @@ export const WebhookTestingTool = () => {
                   <SelectItem value="create_volunteer">Create Volunteer</SelectItem>
                   <SelectItem value="check_status">Check Status</SelectItem>
                   <SelectItem value="allocation_created">Allocation Created</SelectItem>
+                  <SelectItem value="surpluss_item">Surpluss Item</SelectItem>
                   <SelectItem value="custom">Custom Payload</SelectItem>
                 </SelectContent>
               </Select>
