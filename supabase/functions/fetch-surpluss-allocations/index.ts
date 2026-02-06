@@ -120,17 +120,20 @@ serve(async (req) => {
 
     // deno-lint-ignore no-explicit-any
     const typed = data as any;
-    console.log('Received allocations:', typed?.data?.length || 0, 'records');
+    // The Surpluss API returns { total, items } not { data, meta }
+    const items = typed?.items || typed?.data || [];
+    const total = typed?.total ?? typed?.meta?.total ?? items.length;
+    console.log('Received donations:', items.length, 'of', total, 'total records');
 
     return new Response(
       JSON.stringify({
         success: true,
         environment,
-        data: typed?.data || [],
-        meta: typed?.meta || {
+        data: items,
+        meta: {
           page,
           limit,
-          total: typed?.data?.length || 0,
+          total,
         },
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
