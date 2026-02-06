@@ -1,118 +1,104 @@
 
 
-## Email Template Control Center
+## Add Surpluss Distribution Items Endpoint
 
-Build a centralized system where admins can create and manage reusable email templates. All templates share the same branded structure (header, footer, fonts, colors) -- only the content sections and images are editable. Templates support dynamic placeholders (like `{{first_name}}`, `{{marketplace_date}}`) that get replaced with real data at send time.
+Create a dedicated backend endpoint that Surpluss can call to push distribution items (materials) into the GIF system, along with company info, material groups, and image URLs.
 
-### What You Get
+### What This Does
 
-- A new "Email Templates" section in the Admin panel
-- Ability to create templates for different purposes: Welcome, Reminder, Rejection, Approval, Follow-up, Custom
-- A rich form to define subject line, greeting, body sections, and call-to-action buttons
-- Dynamic placeholder tokens (e.g. `{{first_name}}`, `{{event_date}}`) that auto-fill with real data
-- Live preview showing exactly how the email will look
-- All templates share the same branded Dubai Holding / Gift It Forward layout (hero image, logo footer, fonts, colors)
+- Creates a new backend function `receive-surpluss-items` that accepts material data from the Surpluss platform
+- Stores items with full details: ID, title, description, quantity, image URL, company info, material group, SDG goals, and more
+- Secured with the existing `WEBHOOK_API_KEY` for authentication
+- Reuses the existing `external_items`, `external_companies`, `external_addresses`, `external_material_groups`, and `external_sdg_goals` tables (no database changes needed)
+- Items received through this endpoint will appear in the existing **External Items** viewer in the admin panel
 
-### How It Works
+### API Contract
 
-1. Admin opens "Email Templates" from the sidebar
-2. Clicks "New Template" -- picks a category (Reminder, Rejection, Approval, etc.)
-3. Fills in: Subject line, greeting text, body paragraphs, optional CTA button text/URL, optional image
-4. Inserts dynamic tokens from a clickable token list (e.g. click `{{first_name}}` to insert it)
-5. Previews the email in the branded layout
-6. Saves the template -- it's stored in the database and available for future use
+The endpoint accepts POST requests with either a single item or an array of items matching the Surpluss Material model:
 
----
+```text
+POST /receive-surpluss-items
+Header: x-api-key: <WEBHOOK_API_KEY>
+
+Body (single or array):
+{
+  "id": 123,                          // Material ID (external_id)
+  "uuid": "abc-def-...",              // UUID
+  "title": "Office Furniture Set",    // Item name
+  "description": "...",               // Description
+  "active": true,
+  "price": 0,
+  "per": 1,
+  "frequency": { "One-off": true },
+  "image_url": "https://...",         // Item image
+  "quantity": 50,
+  "item_count": 50,
+  "box_count": 5,
+  "type": { "offering_type": "DONATION", "status": "APPROVED" },
+  "condition_id": 1,
+  "third_level_subcategory_id": null,
+  "company": {                        // Donating company
+    "id": 10,
+    "uuid": "...",
+    "name": "Acme Corp",
+    "main_business": "Retail",
+    "sector": "Consumer Goods",
+    "company_size": "Large",
+    "image_url": "https://...",
+    ...
+  },
+  "address": {                        // Pickup/warehouse address
+    "id": 5,
+    "address": "123 Main St",
+    "city": "Dubai",
+    "country": "UAE",
+    ...
+  },
+  "material_group": {                 // Material category
+    "id": 3,
+    "name": "Furniture",
+    "code": "FUR",
+    "uom": "piece"
+  },
+  "sdg_goals": [                      // SDG goals (optional)
+    { "id": 1, "name": "No Poverty", "code": "SDG1" }
+  ]
+}
+```
 
 ### Technical Details
 
-**Step 1: Database Table**
+**Step 1: Create Edge Function `receive-surpluss-items`**
 
-Create an `email_templates` table:
+New file: `supabase/functions/receive-surpluss-items/index.ts`
 
-```text
-- id (uuid, PK)
-- name (text) -- internal template name, e.g. "Marketplace Reminder"
-- category (text) -- 'welcome' | 'reminder' | 'rejection' | 'approval' | 'followup' | 'custom'
-- subject (text) -- email subject line, supports tokens
-- greeting (text) -- e.g. "Dear {{first_name}},"
-- body_sections (jsonb) -- array of content blocks: [{ type: 'paragraph'|'list'|'cta'|'image', content: ... }]
-- cta_text (text, nullable) -- call-to-action button label
-- cta_url (text, nullable) -- call-to-action button URL
-- is_active (boolean, default true)
-- created_by (uuid, nullable)
-- created_at (timestamptz)
-- updated_at (timestamptz)
-```
+- Validates `x-api-key` header against `WEBHOOK_API_KEY` secret
+- Accepts both single object and array payloads
+- Reuses the exact same upsert logic already in `webhook-receiver` for external items:
+  - Upserts company into `external_companies`
+  - Upserts address into `external_addresses`
+  - Upserts material group into `external_material_groups`
+  - Upserts SDG goals into `external_sdg_goals`
+  - Upserts item into `external_items` with all foreign key references
+  - Links SDG goals via `external_item_sdg_goals`
+- Logs a webhook event into `webhook_events` with `source_identifier = 'surpluss_items'` for audit trail
+- Returns a summary: total received, processed, failed, with per-item details
 
-RLS: Admins can manage (ALL), Staff can view (SELECT).
+**Step 2: Register in `supabase/config.toml`**
 
-**Step 2: Hook -- `useEmailTemplates.ts`**
+Add the function with `verify_jwt = false` (it uses API key auth instead).
 
-New file `src/hooks/useEmailTemplates.ts`:
-- `useEmailTemplates(category?)` -- fetch all templates, optionally filtered by category
-- `useEmailTemplate(id)` -- fetch a single template
-- `createEmailTemplate` mutation
-- `updateEmailTemplate` mutation
-- `deleteEmailTemplate` mutation
+**Step 3: Add Webhook Testing Preset**
 
-**Step 3: Template Builder UI -- `EmailTemplateCenter.tsx`**
+Update `WebhookTestingTool.tsx` to include a "Surpluss Item" preset payload so admins can test the endpoint from the admin panel.
 
-New file `src/components/admin/EmailTemplateCenter.tsx`:
+### No Database Changes Required
 
-- **Template List View**: Table of all templates showing name, category, status, last updated. Actions: Edit, Preview, Duplicate, Delete.
-- **Template Editor**: Form with:
-  - Template name and category selector
-  - Subject line input
-  - Greeting text input
-  - Body sections editor (add/remove/reorder paragraph blocks, list blocks, CTA blocks)
-  - Dynamic Token Palette: a clickable list of available tokens like `{{first_name}}`, `{{last_name}}`, `{{email}}`, `{{marketplace_name}}`, `{{marketplace_date}}`, `{{marketplace_location}}`, `{{marketplace_time}}`, `{{qr_card_id}}`, `{{login_url}}`, `{{training_url}}`. Clicking a token inserts it at the cursor position.
-- **Live Preview Panel**: Shows the full branded email layout (hero banner, "Execution Partner" label, title, body content with tokens shown as highlighted chips, Dubai Holding footer) -- updating in real time as the admin types.
-
-**Step 4: Branded Layout Renderer**
-
-Create a shared `EmailTemplatePreview` component that wraps any template content in the standard branded shell:
-- Hero banner image (from email-assets bucket)
-- "Execution Partner" label
-- Template subject as title
-- Dynamic body sections rendered in order
-- CTA button with brand red color
-- Dubai Holding logo footer with "For the Good of Tomorrow" tagline
-
-This reuses the exact same structure/fonts/colors as the existing welcome email preview.
-
-**Step 5: Register in Admin**
-
-- Add `'email-templates'` to the `AdminView` type
-- Add sidebar item under "Admin Apps" section (with a `FileText` icon)
-- Render `EmailTemplateCenter` when that view is active
-
-**Step 6: Available Dynamic Tokens**
-
-The system supports these tokens out of the box:
-
-| Token | Description |
-|---|---|
-| `{{first_name}}` | Volunteer's first name |
-| `{{last_name}}` | Volunteer's last name |
-| `{{full_name}}` | Full name |
-| `{{email}}` | Volunteer's email |
-| `{{phone}}` | Phone number |
-| `{{marketplace_name}}` | Event name |
-| `{{marketplace_date}}` | Event date |
-| `{{marketplace_time}}` | Event timings |
-| `{{marketplace_location}}` | Event location |
-| `{{qr_card_id}}` | Volunteer QR card ID |
-| `{{login_url}}` | Platform login link |
-| `{{training_url}}` | Training module link |
-| `{{current_date}}` | Today's date |
-
-Admins can also type custom tokens using the `{{custom_field}}` syntax.
+The existing tables (`external_items`, `external_companies`, `external_addresses`, `external_material_groups`, `external_sdg_goals`, `external_item_sdg_goals`) already match the Surpluss Material model perfectly. The `ExternalItemsViewer` will display incoming items automatically.
 
 ### Files Created/Modified
 
-- **New migration**: `email_templates` table with RLS
-- **New**: `src/hooks/useEmailTemplates.ts`
-- **New**: `src/components/admin/EmailTemplateCenter.tsx`
-- **Modified**: `src/components/admin/AdminDashboard.tsx` -- add view case
-- **Modified**: `src/components/admin/AdminSidebar.tsx` -- add sidebar item
+- **New**: `supabase/functions/receive-surpluss-items/index.ts`
+- **Modified**: `supabase/config.toml` -- register new function
+- **Modified**: `src/components/admin/WebhookTestingTool.tsx` -- add test preset
+
