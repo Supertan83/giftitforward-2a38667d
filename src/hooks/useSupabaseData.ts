@@ -109,7 +109,8 @@ export const useItemTypes = () => {
         icon: item.icon,
         totalStock: item.total_stock,
         distributed: item.distributed,
-        category: item.category || null
+        category: item.category || null,
+        externalMaterialId: item.external_material_id ?? null
       }));
     }
   });

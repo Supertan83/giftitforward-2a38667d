@@ -12,7 +12,8 @@ import {
   Check,
   X,
   Undo2,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useItemTypes, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +52,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
   const [modalMarketplaceId, setModalMarketplaceId] = useState<string>('');
+  const [modalItemTypeId, setModalItemTypeId] = useState<string>('');
   const [quantity, setQuantity] = useState('');
 
   // Inline editing state
@@ -59,37 +69,28 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [reallocTargetMarketplace, setReallocTargetMarketplace] = useState('');
   const [reallocQuantity, setReallocQuantity] = useState('');
 
+  // Distribute confirmation state
+  const [distributeAllocation, setDistributeAllocation] = useState<{ id: string; itemName: string; allocated: number; distributed: number } | null>(null);
+
   const { data: itemTypes = [], isLoading: loadingItems } = useItemTypes();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(
     selectedMarketplaceId || undefined
   );
-  const { allocateToMarketplace, deleteAllocation, updateAllocationQuantities } = useAllocationOperations();
+  const { allocateToMarketplace, deleteAllocation, updateAllocationQuantities, incrementDistributed } = useAllocationOperations();
   const { toast } = useToast();
-
-  // Get the warehouse stock item
-  const warehouseItem = itemTypes.find(item => item.name === 'Warehouse Stock');
-  const totalWarehouseStock = warehouseItem?.totalStock || 0;
-  const totalWarehouseDistributed = warehouseItem?.distributed || 0;
-  const availableForAllocation = totalWarehouseStock - totalWarehouseDistributed;
 
   const activeMarketplaces = marketplaces.filter(m => m.status === 'active' || m.status === 'upcoming');
 
+  // All allocatable item types (those with external_material_id from Tractor)
+  const allocatableItems = itemTypes.filter(item => item.externalMaterialId != null);
+
   const handleAllocate = async () => {
     const targetMarketplace = modalMarketplaceId || selectedMarketplaceId;
-    if (!targetMarketplace || !quantity) {
+    if (!targetMarketplace || !modalItemTypeId || !quantity) {
       toast({
         title: 'Missing Fields',
-        description: 'Please select a marketplace and quantity',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!warehouseItem) {
-      toast({
-        title: 'No Warehouse Stock',
-        description: 'Please set warehouse stock in Inventory Management first',
+        description: 'Please select a marketplace, item, and quantity',
         variant: 'destructive',
       });
       return;
@@ -108,7 +109,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     try {
       await allocateToMarketplace.mutateAsync({
         marketplaceId: targetMarketplace,
-        itemTypeId: warehouseItem.id,
+        itemTypeId: modalItemTypeId,
         quantity: qty,
       });
       toast({
@@ -117,6 +118,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       });
       setShowAllocateModal(false);
       setModalMarketplaceId('');
+      setModalItemTypeId('');
       setQuantity('');
     } catch (error) {
       toast({
@@ -152,14 +154,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     setEditDistributed(alloc.distributedQuantity);
   };
 
-  // Cancel editing
   const handleCancelEdit = () => {
     setEditingAllocationId(null);
     setEditAllocated(0);
     setEditDistributed(0);
   };
 
-  // Save edited allocation
   const handleSaveEdit = async () => {
     if (!editingAllocationId) return;
 
@@ -183,9 +183,28 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     }
   };
 
+  // Handle distribute (increment distributed by 1)
+  const handleDistribute = async () => {
+    if (!distributeAllocation) return;
+    try {
+      await incrementDistributed.mutateAsync(distributeAllocation.id);
+      toast({
+        title: 'Item Distributed',
+        description: `1 unit of ${distributeAllocation.itemName} marked as distributed`,
+      });
+      setDistributeAllocation(null);
+    } catch (error) {
+      toast({
+        title: 'Distribution Failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Handle undo / return to warehouse
   const handleUndo = async () => {
-    if (!undoAllocation || !warehouseItem) return;
+    if (!undoAllocation) return;
     const qty = parseInt(undoQuantity);
     if (isNaN(qty) || qty <= 0) {
       toast({ title: 'Invalid Quantity', description: 'Enter a valid quantity to return', variant: 'destructive' });
@@ -216,7 +235,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
 
   // Handle re-allocate to another marketplace
   const handleReallocate = async () => {
-    if (!reallocAllocation || !reallocTargetMarketplace || !warehouseItem) return;
+    if (!reallocAllocation || !reallocTargetMarketplace) return;
     const qty = parseInt(reallocQuantity);
     if (isNaN(qty) || qty <= 0) {
       toast({ title: 'Invalid Quantity', description: 'Enter a valid quantity', variant: 'destructive' });
@@ -228,7 +247,10 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       return;
     }
     try {
-      // Reduce from source
+      const sourceAlloc = allocations.find(a => a.id === reallocAllocation.id);
+      const itemTypeId = sourceAlloc?.itemTypeId;
+      if (!itemTypeId) throw new Error('Could not determine item type');
+
       const newAllocated = reallocAllocation.allocated - qty;
       if (newAllocated <= 0 && reallocAllocation.distributed <= 0) {
         await deleteAllocation.mutateAsync(reallocAllocation.id);
@@ -238,10 +260,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
           allocatedQuantity: newAllocated,
         });
       }
-      // Add to target
       await allocateToMarketplace.mutateAsync({
         marketplaceId: reallocTargetMarketplace,
-        itemTypeId: warehouseItem.id,
+        itemTypeId,
         quantity: qty,
       });
       toast({ title: 'Items Re-allocated', description: `${qty.toLocaleString()} items moved to new marketplace` });
@@ -269,8 +290,8 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex-1 min-w-0">
-              <h1 className="font-display font-bold text-base md:text-lg truncate">Marketplace Allocation</h1>
-              <p className="text-xs md:text-sm text-muted-foreground">Allocate items to marketplaces</p>
+              <h1 className="font-display font-bold text-base md:text-lg truncate">Item Allocation</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">Allocate Tractor items to marketplaces</p>
             </div>
             <Button onClick={() => setShowAllocateModal(true)} size="sm" className="shrink-0">
               <Plus className="w-4 h-4 mr-1 md:mr-2" />
@@ -281,23 +302,6 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
-        {/* Warehouse Stock Overview */}
-        <div className="bg-card rounded-xl border border-border p-4 mb-6 shadow-card">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Warehouse className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Warehouse Stock</p>
-              <p className="text-2xl font-bold">{totalWarehouseStock.toLocaleString()}</p>
-            </div>
-            <div className="ml-auto text-right">
-              <p className="text-sm text-muted-foreground">Available for allocation</p>
-              <p className="text-lg font-semibold text-primary">{availableForAllocation.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-
         {/* Marketplace Selector */}
         <div className="mb-6">
           <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
@@ -317,48 +321,34 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
 
         {selectedMarketplaceId ? (
           <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
-              <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+            {/* Summary Stats - Total Quantity Only */}
+            <div className="bg-card rounded-xl border border-border p-4 mb-6 shadow-card">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Package className="w-5 h-5 text-primary" />
                   </div>
                   <div>
+                    <p className="text-sm text-muted-foreground">Total Quantity</p>
                     <p className="text-2xl font-bold">{totalAllocated.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Allocated</p>
                   </div>
                 </div>
-              </div>
-              <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <Package className="w-5 h-5 text-emerald-500" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{totalDistributed.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Distributed</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-card rounded-xl border border-border p-4 shadow-card">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                    <Package className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{(totalAllocated - totalDistributed).toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Remaining</p>
-                  </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Distributed / Remaining</p>
+                  <p className="text-lg font-semibold">
+                    <span className="text-emerald-600">{totalDistributed.toLocaleString()}</span>
+                    <span className="text-muted-foreground mx-1">/</span>
+                    <span className="text-amber-600">{(totalAllocated - totalDistributed).toLocaleString()}</span>
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Allocation Display */}
+            {/* Allocations Table */}
             <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
               <div className="p-4 md:p-6 border-b border-border">
                 <h2 className="font-display font-bold text-lg">
-                  Allocation for {selectedMarketplace?.name}
+                  Items for {selectedMarketplace?.name}
                 </h2>
               </div>
 
@@ -373,163 +363,163 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                   <p className="text-sm">Click "Allocate" to add items</p>
                 </div>
               ) : (
-                <div className="p-6 space-y-4">
-                  {allocations.map((alloc) => (
-                    <motion.div
-                      key={alloc.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="border border-border rounded-lg p-4"
-                    >
-                      {editingAllocationId === alloc.id ? (
-                        // Edit Mode
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">Edit Allocation</span>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={handleCancelEdit}
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="default"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={handleSaveEdit}
-                                disabled={updateAllocationQuantities.isPending}
-                              >
-                                {updateAllocationQuantities.isPending ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Check className="w-4 h-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="edit-allocated">Allocated Quantity</Label>
-                              <Input
-                                id="edit-allocated"
-                                type="number"
-                                min={0}
-                                value={editAllocated}
-                                onChange={(e) => setEditAllocated(parseInt(e.target.value) || 0)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="edit-distributed">Distributed Quantity</Label>
-                              <Input
-                                id="edit-distributed"
-                                type="number"
-                                min={0}
-                                max={editAllocated}
-                                value={editDistributed}
-                                onChange={(e) => setEditDistributed(parseInt(e.target.value) || 0)}
-                              />
-                            </div>
-                          </div>
-                          {editDistributed > editAllocated && (
-                            <p className="text-sm text-destructive">
-                              Warning: Distributed cannot exceed allocated
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        // Display Mode
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm text-muted-foreground">Distribution Progress</span>
-                              <span className="text-sm font-medium">
-                                {alloc.distributedQuantity.toLocaleString()} / {alloc.allocatedQuantity.toLocaleString()}
-                              </span>
-                            </div>
-                            <div className="h-3 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all ${
-                                  alloc.distributedQuantity > alloc.allocatedQuantity 
-                                    ? 'bg-destructive' 
-                                    : 'bg-emerald-500'
-                                }`}
-                                style={{ width: `${alloc.allocatedQuantity > 0 ? Math.min((alloc.distributedQuantity / alloc.allocatedQuantity) * 100, 100) : 0}%` }}
-                              />
-                            </div>
-                            <div className="flex justify-between mt-2 text-sm">
-                              <span className={alloc.distributedQuantity > alloc.allocatedQuantity ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-                                {alloc.allocatedQuantity > 0 
-                                  ? `${((alloc.distributedQuantity / alloc.allocatedQuantity) * 100).toFixed(1)}% complete`
-                                  : '0% complete'
-                                }
-                              </span>
-                              <span className={`font-medium ${
-                                alloc.allocatedQuantity - alloc.distributedQuantity < 0 
-                                  ? 'text-destructive' 
-                                  : 'text-amber-600'
-                              }`}>
-                                {(alloc.allocatedQuantity - alloc.distributedQuantity).toLocaleString()} remaining
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                onClick={() => handleStartEdit(alloc)}
-                                title="Edit"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-amber-600"
-                                onClick={() => {
-                                  const maxReturnable = alloc.allocatedQuantity - alloc.distributedQuantity;
-                                  setUndoAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
-                                  setUndoQuantity(maxReturnable > 0 ? String(maxReturnable) : '');
-                                }}
-                                disabled={alloc.allocatedQuantity - alloc.distributedQuantity <= 0}
-                                title="Return to Warehouse"
-                              >
-                                <Undo2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-blue-600"
-                                onClick={() => {
-                                  const maxMovable = alloc.allocatedQuantity - alloc.distributedQuantity;
-                                  setReallocAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
-                                  setReallocQuantity(maxMovable > 0 ? String(maxMovable) : '');
-                                }}
-                                disabled={alloc.allocatedQuantity - alloc.distributedQuantity <= 0}
-                                title="Re-allocate to Another Marketplace"
-                              >
-                                <ArrowRightLeft className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => handleDelete(alloc.id)}
-                                disabled={deleteAllocation.isPending}
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Material ID</TableHead>
+                        <TableHead>Item Name</TableHead>
+                        <TableHead className="text-right">Allocated</TableHead>
+                        <TableHead className="text-right">Distributed</TableHead>
+                        <TableHead className="text-right">Remaining</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allocations.map((alloc) => {
+                        const remaining = alloc.allocatedQuantity - alloc.distributedQuantity;
+                        const isEditing = editingAllocationId === alloc.id;
+
+                        return (
+                          <TableRow key={alloc.id}>
+                            {isEditing ? (
+                              <>
+                                <TableCell className="font-mono text-sm text-muted-foreground">
+                                  {alloc.externalMaterialId ?? '—'}
+                                </TableCell>
+                                <TableCell>{alloc.itemName || 'Unknown'}</TableCell>
+                                <TableCell className="text-right">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={editAllocated}
+                                    onChange={(e) => setEditAllocated(parseInt(e.target.value) || 0)}
+                                    className="w-24 ml-auto text-right"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={editAllocated}
+                                    value={editDistributed}
+                                    onChange={(e) => setEditDistributed(parseInt(e.target.value) || 0)}
+                                    className="w-24 ml-auto text-right"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {(editAllocated - editDistributed).toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex gap-1 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={handleCancelEdit}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="default"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={handleSaveEdit}
+                                      disabled={updateAllocationQuantities.isPending}
+                                    >
+                                      {updateAllocationQuantities.isPending ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <Check className="w-4 h-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell className="font-mono text-sm text-muted-foreground">
+                                  {alloc.externalMaterialId ?? '—'}
+                                </TableCell>
+                                <TableCell className="font-medium">{alloc.itemName || 'Unknown'}</TableCell>
+                                <TableCell className="text-right">{alloc.allocatedQuantity.toLocaleString()}</TableCell>
+                                <TableCell className="text-right text-emerald-600">{alloc.distributedQuantity.toLocaleString()}</TableCell>
+                                <TableCell className={`text-right font-medium ${remaining < 0 ? 'text-destructive' : 'text-amber-600'}`}>
+                                  {remaining.toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex gap-1 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                      onClick={() => handleStartEdit(alloc)}
+                                      title="Edit"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-emerald-600"
+                                      onClick={() => setDistributeAllocation({
+                                        id: alloc.id,
+                                        itemName: alloc.itemName || 'Unknown',
+                                        allocated: alloc.allocatedQuantity,
+                                        distributed: alloc.distributedQuantity,
+                                      })}
+                                      disabled={remaining <= 0}
+                                      title="Distribute"
+                                    >
+                                      <Send className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-amber-600"
+                                      onClick={() => {
+                                        const maxReturnable = alloc.allocatedQuantity - alloc.distributedQuantity;
+                                        setUndoAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
+                                        setUndoQuantity(maxReturnable > 0 ? String(maxReturnable) : '');
+                                      }}
+                                      disabled={remaining <= 0}
+                                      title="Return to Warehouse"
+                                    >
+                                      <Undo2 className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                                      onClick={() => {
+                                        const maxMovable = alloc.allocatedQuantity - alloc.distributedQuantity;
+                                        setReallocAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
+                                        setReallocQuantity(maxMovable > 0 ? String(maxMovable) : '');
+                                      }}
+                                      disabled={remaining <= 0}
+                                      title="Re-allocate"
+                                    >
+                                      <ArrowRightLeft className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                      onClick={() => handleDelete(alloc.id)}
+                                      disabled={deleteAllocation.isPending}
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </div>
@@ -542,30 +532,17 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         )}
       </main>
 
-      {/* Allocate Modal - Simplified to quantity only */}
+      {/* Allocate Modal - Select item by ID */}
       <Dialog open={showAllocateModal} onOpenChange={setShowAllocateModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Allocate Items</DialogTitle>
             <DialogDescription>
-              Allocate warehouse items to a marketplace
+              Assign items to a marketplace by item ID
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Warehouse Info */}
-            <div className="p-4 bg-muted rounded-lg">
-              <div className="flex items-center gap-3">
-                <Warehouse className="w-5 h-5 text-primary" />
-                <div>
-                  <p className="font-medium">Warehouse Stock</p>
-                  <p className="text-sm text-muted-foreground">
-                    {availableForAllocation.toLocaleString()} available for allocation
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Marketplace Selection */}
             <div className="space-y-2">
               <Label>Marketplace</Label>
@@ -586,6 +563,29 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               </Select>
             </div>
 
+            {/* Item Selection by Material ID */}
+            <div className="space-y-2">
+              <Label>Item (Material ID)</Label>
+              <Select value={modalItemTypeId} onValueChange={setModalItemTypeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select item..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allocatableItems.map(item => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.externalMaterialId} — {item.name}
+                    </SelectItem>
+                  ))}
+                  {/* Also show items without material ID */}
+                  {itemTypes.filter(item => item.externalMaterialId == null).map(item => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Quantity */}
             <div className="space-y-2">
               <Label>Quantity to Allocate</Label>
@@ -597,7 +597,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 min={1}
               />
               <p className="text-xs text-muted-foreground">
-                This will add to any existing allocation for the selected marketplace
+                This will add to any existing allocation for the selected item and marketplace
               </p>
             </div>
           </div>
@@ -608,10 +608,49 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             </Button>
             <Button 
               onClick={handleAllocate} 
-              disabled={allocateToMarketplace.isPending || !(modalMarketplaceId || selectedMarketplaceId) || !quantity || !warehouseItem}
+              disabled={allocateToMarketplace.isPending || !(modalMarketplaceId || selectedMarketplaceId) || !modalItemTypeId || !quantity}
             >
               {allocateToMarketplace.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Allocate Items
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Distribute Confirmation Modal */}
+      <Dialog open={!!distributeAllocation} onOpenChange={(open) => { if (!open) setDistributeAllocation(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl flex items-center gap-2">
+              <Send className="w-5 h-5" /> Confirm Distribution
+            </DialogTitle>
+            <DialogDescription>
+              Mark 1 unit as distributed
+            </DialogDescription>
+          </DialogHeader>
+          {distributeAllocation && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-muted rounded-lg space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Item</span>
+                  <span className="font-medium">{distributeAllocation.itemName}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Currently Distributed</span>
+                  <span className="font-medium">{distributeAllocation.distributed.toLocaleString()} / {distributeAllocation.allocated.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
+                  <span className="text-muted-foreground">After Distribution</span>
+                  <span className="font-semibold text-emerald-600">{(distributeAllocation.distributed + 1).toLocaleString()} / {distributeAllocation.allocated.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => setDistributeAllocation(null)}>Cancel</Button>
+            <Button onClick={handleDistribute} disabled={incrementDistributed.isPending}>
+              {incrementDistributed.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Confirm Distribute
             </Button>
           </div>
         </DialogContent>
