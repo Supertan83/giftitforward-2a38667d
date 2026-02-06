@@ -15,6 +15,7 @@ import {
   UserCheck,
   Clock
 } from 'lucide-react';
+import { VolunteerDetailsSection } from '@/components/admin/VolunteerDetailsSection';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQRCards, useItemTypes, useBeneficiaryDemographics, useVolunteerQRCards } from '@/hooks/useSupabaseData';
@@ -525,6 +526,9 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Volunteer Details */}
+        <VolunteerDetailsSection />
 
         {/* Info Card */}
         <motion.div
