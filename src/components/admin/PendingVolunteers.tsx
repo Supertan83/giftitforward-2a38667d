@@ -889,6 +889,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         'Phone Number',
         'Gender',
         'Employee',
+        'Employee ID',
         'Company/Vertical',
         'Events Registered',
         'Training Completed',
@@ -902,6 +903,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         v.phone_number || '',
         v.gender || '',
         v.is_employee ? 'Yes' : 'No',
+        v.employee_number || '',
         v.is_employee ? (v.employee_vertical || 'Dubai Holding') : (v.external_company || ''),
         v.events_list?.split(',').map((e: string) => formatEventName(e.trim())).join('; ') || '',
         v.training_completed ? 'Yes' : 'No',
@@ -924,6 +926,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           { wch: 15 }, // Phone
           { wch: 10 }, // Gender
           { wch: 10 }, // Employee
+          { wch: 15 }, // Employee ID
           { wch: 20 }, // Company
           { wch: 40 }, // Events
           { wch: 15 }, // Training
