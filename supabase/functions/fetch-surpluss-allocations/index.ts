@@ -6,8 +6,8 @@ const corsHeaders = {
 };
 
 const ENDPOINTS = {
-  staging: 'https://surpluss-server.herokuapp.com/api/common/donation-allocations',
-  production: 'https://api.thesurpluss.com/api/common/donation-allocations',
+  staging: 'https://surpluss-server.herokuapp.com/api/common/donations',
+  production: 'https://api.thesurpluss.com/api/common/donations',
 };
 
 interface FetchParams {
@@ -52,8 +52,8 @@ serve(async (req) => {
 
     // Build query parameters
     const queryParams = new URLSearchParams();
-    queryParams.set('page', page.toString());
-    queryParams.set('limit', limit.toString());
+    queryParams.set('page', (page - 1).toString());
+    queryParams.set('size', limit.toString());
 
     if (event_id) queryParams.set('event_id', event_id.toString());
     if (from_date) queryParams.set('from_date', from_date);
