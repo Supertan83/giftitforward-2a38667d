@@ -196,7 +196,7 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

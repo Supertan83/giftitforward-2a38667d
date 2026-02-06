@@ -555,21 +555,22 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
 
       <main className="container max-w-6xl py-6 px-4">
         <Tabs defaultValue="providers" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="providers" className="flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Providers
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1">
+            <TabsTrigger value="providers" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Providers</span>
+              <span className="sm:hidden">Config</span>
             </TabsTrigger>
-            <TabsTrigger value="assets" className="flex items-center gap-2">
-              <Image className="w-4 h-4" />
+            <TabsTrigger value="assets" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Image className="w-3 h-3 sm:w-4 sm:h-4" />
               Assets
             </TabsTrigger>
-            <TabsTrigger value="preview" className="flex items-center gap-2">
-              <Eye className="w-4 h-4" />
+            <TabsTrigger value="preview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
               Preview
             </TabsTrigger>
-            <TabsTrigger value="test" className="flex items-center gap-2">
-              <Send className="w-4 h-4" />
+            <TabsTrigger value="test" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Send className="w-3 h-3 sm:w-4 sm:h-4" />
               Test
             </TabsTrigger>
           </TabsList>

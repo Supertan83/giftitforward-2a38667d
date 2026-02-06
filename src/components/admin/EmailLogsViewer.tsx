@@ -158,7 +158,7 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
 
       <main className="container max-w-6xl py-6 px-4">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
           <Card>
             <CardContent className="p-4">
               <div className="text-2xl font-bold">{logs.length}</div>
@@ -188,11 +188,11 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
             </div>
           </CardHeader>
           <CardContent className="pb-4">
-            <div className="flex gap-4 flex-wrap">
+            <div className="flex flex-col sm:flex-row gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Provider</label>
                 <Select value={filterProvider} onValueChange={setFilterProvider}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-full sm:w-[140px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -206,7 +206,7 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Status</label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-full sm:w-[140px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -219,7 +219,7 @@ export const EmailLogsViewer = ({ onBack }: EmailLogsViewerProps) => {
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Email Type</label>
                 <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-full sm:w-[140px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

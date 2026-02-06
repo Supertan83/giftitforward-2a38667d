@@ -384,17 +384,18 @@ export const TrainingAssessmentBuilder = ({ onBack }: TrainingAssessmentBuilderP
       <div className="min-h-screen bg-background">
         <header className="bg-card border-b border-border sticky top-0 z-10">
           <div className="container max-w-6xl py-3 md:py-4 px-4">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={onBack}>
+            <div className="flex items-center gap-3 md:gap-4">
+              <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <div className="flex-1">
-                <h1 className="font-display font-bold text-lg md:text-xl">Training Assessments</h1>
-                <p className="text-sm text-muted-foreground">Create and manage training knowledge assessments</p>
+              <div className="flex-1 min-w-0">
+                <h1 className="font-display font-bold text-base md:text-lg truncate">Training Assessments</h1>
+                <p className="text-xs md:text-sm text-muted-foreground">Create and manage training knowledge assessments</p>
               </div>
-              <Button onClick={createNewAssessment}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Assessment
+              <Button onClick={createNewAssessment} size="sm" className="shrink-0">
+                <Plus className="h-4 w-4 mr-1 md:mr-2" />
+                <span className="hidden sm:inline">Create Assessment</span>
+                <span className="sm:hidden">Create</span>
               </Button>
             </div>
           </div>
