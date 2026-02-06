@@ -180,11 +180,16 @@ export const WebhookTestingTool = () => {
       return;
     }
 
-    // Use proxy URL if provided, otherwise use Supabase directly
-    const targetUrl = proxyUrl.trim() || supabaseUrl;
-    const urlWithSource = sourceIdentifier 
-      ? `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}source=${encodeURIComponent(sourceIdentifier)}`
-      : targetUrl;
+    // Surpluss Item goes directly to its dedicated endpoint
+    const surplussItemUrl = 'https://zrzlzggixuogpxberdxt.supabase.co/functions/v1/receive-surpluss-items';
+    const isSurplussItem = payloadType === 'surpluss_item';
+    
+    const targetUrl = isSurplussItem ? surplussItemUrl : (proxyUrl.trim() || supabaseUrl);
+    const urlWithSource = isSurplussItem
+      ? targetUrl
+      : sourceIdentifier 
+        ? `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}source=${encodeURIComponent(sourceIdentifier)}`
+        : targetUrl;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
