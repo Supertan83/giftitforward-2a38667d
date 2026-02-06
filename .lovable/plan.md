@@ -1,27 +1,73 @@
 
+## Add Traceability Logs for QR Card / Item Allocation Lifecycle
 
-## Fix Marketplace Dropdown Content Overflow
+Track every allocation action across marketplaces with full audit trail including timestamps, marketplace names, quantities, and the user who performed each action.
 
-The marketplace name, status badge, and icon inside select dropdowns don't fit properly, especially on mobile. The content overflows because it uses a flex row with no truncation.
+### Step 1: Create Database Table
 
-### Changes
+Create a new `allocation_traceability_logs` table via migration:
 
-**1. `src/components/admin/AllocationManagement.tsx`** (3 dropdowns)
-- Main marketplace selector (line ~311): Remove the inline `MapPin` icon and status badge from inside `SelectItem`. Show only the marketplace name as plain text, keeping it simple and fitting.
-- Allocate modal marketplace selector (line ~589): Same simplification.
-- Re-allocate target marketplace selector (line ~717): Same simplification.
-- Alternatively, keep icons but add `truncate` / `overflow-hidden` / `min-w-0` classes so long names get truncated with ellipsis instead of overflowing.
+```text
+Columns:
+- id (uuid, PK)
+- card_unique_id (text, nullable) -- for QR card-level tracing
+- allocation_id (uuid, nullable) -- for item allocation-level tracing  
+- item_type_id (uuid, nullable)
+- marketplace_id (uuid, nullable)
+- marketplace_name (text) -- denormalized for historical accuracy
+- action_type (text) -- e.g. 'allocated', 'distributed', 'returned_to_warehouse', 're-allocated', 'archived', 'reset', 'synced_to_inventory', 'consumed'
+- quantity_before (integer)
+- quantity_after (integer)
+- description (text) -- human-readable summary of what happened
+- performed_by (uuid, nullable) -- user who did the action
+- performed_by_email (text, nullable) -- denormalized
+- created_at (timestamptz, default now())
+```
 
-**2. `src/components/admin/MarketplaceSyncPanel.tsx`** (1 dropdown)
-- Marketplace selector (line ~181): Remove the `Badge` from inside the `SelectItem` or move it outside. Apply truncation classes to the marketplace name.
+RLS: Admins can manage, staff can view (matching existing patterns).
 
-### Approach
-- Simplify `SelectItem` content to just the marketplace name text (no icons, no badges inside the dropdown items).
-- Keep the status info visible via the selected marketplace details shown below the dropdown (already exists in both components).
-- Add `truncate` class to `SelectTrigger` content span to handle long selected values.
+### Step 2: Create a Hook for Traceability Logging
+
+Add a `useTraceabilityLogs` hook in a new file `src/hooks/useTraceabilityLogs.ts`:
+- `logTraceabilityEvent()` mutation to insert a log entry (auto-captures current user)
+- `useTraceabilityLogsByCard(cardUniqueId)` query to fetch logs for a specific QR card
+- `useTraceabilityLogsByAllocation(allocationId)` query for a specific allocation
+- `useAllTraceabilityLogs(filters)` query with optional marketplace/action filters
+
+### Step 3: Instrument Existing Operations
+
+Add traceability log calls at these action points:
+
+**In `AllocationManagement.tsx`:**
+- `handleAllocate` -- log "Items allocated to marketplace"
+- `handleUndo` -- log "Items returned to warehouse"
+- `handleReallocate` -- log two entries: "Items removed from source" + "Items re-allocated to target"
+- `handleDistribute` -- log "Item distributed"
+- `handleSaveEdit` -- log "Allocation quantities edited"
+- `handleDelete` -- log "Allocation removed"
+
+**In `MarketplaceSyncPanel.tsx`:**
+- `handleArchiveAndReset` -- log "Cards archived and reset for reuse"
+- `handleResetAll` -- log "All cards reset (no archive)"
+
+### Step 4: Build Traceability Viewer UI
+
+Create `src/components/admin/TraceabilityLogsViewer.tsx`:
+- Full-page admin panel accessible from the sidebar
+- Filter by marketplace, action type, date range, or QR card ID
+- Table showing: Timestamp, Action, Marketplace, QR Card / Item, Qty Before -> After, Performed By, Description
+- Color-coded action badges (green for allocations, amber for returns, red for resets, blue for distributions)
+- Timeline view option for a specific QR card showing its full lifecycle journey
+
+### Step 5: Register in Admin Navigation
+
+- Add `'traceability-logs'` to the `AdminView` type in `AdminDashboard.tsx`
+- Add sidebar entry under an appropriate section (e.g., near Marketplace Reports)
+- Render `TraceabilityLogsViewer` when that view is active
 
 ### Technical Details
-- In all 4 dropdowns across the 2 files, replace the `<div className="flex items-center gap-2">` wrapper inside `SelectItem` with just the marketplace name string.
-- Add `className="truncate"` or `max-w-full overflow-hidden text-ellipsis` to the trigger if needed.
-- This ensures the dropdown fits on all screen sizes without horizontal overflow.
 
+- The `performed_by` and `performed_by_email` fields are captured from `supabase.auth.getUser()` at log-write time
+- Marketplace name is denormalized (stored as text) so logs remain accurate even if the marketplace is renamed later
+- The description field provides a human-readable sentence for each log entry matching the example flow format
+- Logs are append-only; no update or delete operations from the UI
