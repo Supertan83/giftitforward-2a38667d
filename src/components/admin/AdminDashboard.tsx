@@ -472,12 +472,10 @@ export const AdminDashboard = () => {
                               {isExpanded && mpAllocations.map(alloc => <tr key={alloc.id} className="bg-muted/30 border-b border-border/30">
                                   <td className="py-2 px-3 pl-10">
                                     <div>
-                                      <span className="text-muted-foreground">{alloc.itemName || 'Unknown Item'}</span>
-                                      {alloc.externalMaterialId && (
-                                        <span className="text-xs text-muted-foreground/70 ml-2">
+                                      
+                                      {alloc.externalMaterialId && <span className="text-xs text-muted-foreground/70 ml-2">
                                           (ID: {alloc.externalMaterialId})
-                                        </span>
-                                      )}
+                                        </span>}
                                     </div>
                                   </td>
                                   <td className="text-right py-2 px-3">
@@ -1048,8 +1046,13 @@ export const AdminDashboard = () => {
                     description: 'Uploading approved volunteers to HubSpot contacts'
                   });
                   try {
-                    const { data, error } = await supabase.functions.invoke('hubspot-sync', {
-                      body: { action: 'sync_volunteers' }
+                    const {
+                      data,
+                      error
+                    } = await supabase.functions.invoke('hubspot-sync', {
+                      body: {
+                        action: 'sync_volunteers'
+                      }
                     });
                     if (error) throw error;
                     toast({
