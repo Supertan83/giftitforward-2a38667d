@@ -460,7 +460,7 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
           </Button>
         </div>
 
-        {/* Table */}
+        {/* Cards List */}
         <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -473,151 +473,111 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={pagination.paginatedItems.length > 0 && pagination.paginatedItems.every(c => selectedCardIds.has(c.id))}
-                          onCheckedChange={() => {
-                            const pageCardIds = pagination.paginatedItems.map(c => c.id);
-                            const allSelected = pageCardIds.every(id => selectedCardIds.has(id));
-                            setSelectedCardIds(prev => {
-                              const next = new Set(prev);
-                              pageCardIds.forEach(id => {
-                                if (allSelected) {
-                                  next.delete(id);
-                                } else {
-                                  next.add(id);
-                                }
-                              });
-                              return next;
-                            });
-                          }}
-                        />
-                      </TableHead>
-                      <TableHead>QR Card ID</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Volunteer</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Marketplace</TableHead>
-                      <TableHead>Hours</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pagination.paginatedItems.map((card) => {
-                      const isFamily = isFamilyCard(card.unique_id);
-                    
-                    return (
-                      <TableRow key={card.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedCardIds.has(card.id)}
-                            onCheckedChange={() => toggleSelectCard(card.id)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+              {/* Select all for current page */}
+              <div className="p-3 border-b border-border flex items-center gap-3">
+                <Checkbox
+                  checked={pagination.paginatedItems.length > 0 && pagination.paginatedItems.every(c => selectedCardIds.has(c.id))}
+                  onCheckedChange={() => {
+                    const pageCardIds = pagination.paginatedItems.map(c => c.id);
+                    const allSelected = pageCardIds.every(id => selectedCardIds.has(id));
+                    setSelectedCardIds(prev => {
+                      const next = new Set(prev);
+                      pageCardIds.forEach(id => {
+                        if (allSelected) {
+                          next.delete(id);
+                        } else {
+                          next.add(id);
+                        }
+                      });
+                      return next;
+                    });
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">Select all on page</span>
+              </div>
+
+              <div className="divide-y divide-border">
+                {pagination.paginatedItems.map((card) => {
+                  const isFamily = isFamilyCard(card.unique_id);
+                  return (
+                    <div key={card.id} className="p-3 md:p-4 flex items-start gap-3">
+                      <Checkbox
+                        checked={selectedCardIds.has(card.id)}
+                        onCheckedChange={() => toggleSelectCard(card.id)}
+                        className="mt-1 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono truncate max-w-[200px]">
                             {card.unique_id}
                           </code>
-                        </TableCell>
-                        <TableCell>
                           {isFamily ? (
-                            <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/30">
+                            <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/30 text-xs">
                               <Users className="w-3 h-3 mr-1" />
                               Family
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/30">
+                            <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/30 text-xs">
                               <User className="w-3 h-3 mr-1" />
                               Volunteer
                             </Badge>
                           )}
-                        </TableCell>
-                        <TableCell>
-                          {card.volunteer ? (
-                            <div>
-                              <p className="font-medium">
-                                {card.volunteer.first_name} {card.volunteer.last_name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{card.volunteer.email}</p>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">Unassigned</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
                           {getStatusBadge(card.status)}
-                        </TableCell>
-                        <TableCell>
-                          {card.marketplace ? (
-                            <div className="flex items-center gap-1 text-sm">
-                              <MapPin className="w-3 h-3 text-muted-foreground" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                          {card.volunteer ? (
+                            <span className="font-medium text-foreground">
+                              {card.volunteer.first_name} {card.volunteer.last_name}
+                            </span>
+                          ) : (
+                            <span>Unassigned</span>
+                          )}
+                          {card.marketplace && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
                               {card.marketplace.name}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
+                            </span>
                           )}
-                        </TableCell>
-                        <TableCell>
                           {card.total_hours_worked ? (
-                            <span className="font-medium">{card.total_hours_worked.toFixed(1)}h</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(card.created_at)}
-                        </TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePrintSingle(card)}
-                            className="gap-1"
-                          >
-                            <Printer className="w-4 h-4" />
+                            <span>{card.total_hours_worked.toFixed(1)}h</span>
+                          ) : null}
+                          <span className="text-xs">{formatDate(card.created_at)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handlePrintSingle(card)}>
+                          <Printer className="w-4 h-4" />
+                        </Button>
+                        {!isFamily && card.volunteer_id && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAddFamilyDialog(card.volunteer_id!)}>
+                            <UserPlus className="w-4 h-4" />
                           </Button>
-                          {!isFamily && card.volunteer_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openAddFamilyDialog(card.volunteer_id!)}
-                              className="gap-1"
-                            >
-                              <UserPlus className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="border-t border-border">
-              <PaginationControls
-                currentPage={pagination.currentPage}
-                totalPages={pagination.totalPages}
-                totalItems={pagination.totalItems}
-                startIndex={pagination.startIndex}
-                endIndex={pagination.endIndex}
-                pageSize={pagination.pageSize}
-                pageSizeOptions={pagination.pageSizeOptions}
-                canGoNext={pagination.canGoNext}
-                canGoPrevious={pagination.canGoPrevious}
-                onPageChange={pagination.setCurrentPage}
-                onPageSizeChange={pagination.setPageSize}
-                onGoToFirst={pagination.goToFirstPage}
-                onGoToLast={pagination.goToLastPage}
-                onGoToNext={pagination.goToNextPage}
-                onGoToPrevious={pagination.goToPreviousPage}
-              />
-            </div>
-          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-border">
+                <PaginationControls
+                  currentPage={pagination.currentPage}
+                  totalPages={pagination.totalPages}
+                  totalItems={pagination.totalItems}
+                  startIndex={pagination.startIndex}
+                  endIndex={pagination.endIndex}
+                  pageSize={pagination.pageSize}
+                  pageSizeOptions={pagination.pageSizeOptions}
+                  canGoNext={pagination.canGoNext}
+                  canGoPrevious={pagination.canGoPrevious}
+                  onPageChange={pagination.setCurrentPage}
+                  onPageSizeChange={pagination.setPageSize}
+                  onGoToFirst={pagination.goToFirstPage}
+                  onGoToLast={pagination.goToLastPage}
+                  onGoToNext={pagination.goToNextPage}
+                  onGoToPrevious={pagination.goToPreviousPage}
+                />
+              </div>
+            </>
           )}
         </div>
       </main>

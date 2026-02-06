@@ -626,8 +626,60 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
             </CardHeader>
 
             <CardContent>
-              {/* Table */}
-              <div className="rounded-md border">
+              {/* Mobile card view */}
+              <div className="md:hidden divide-y divide-border">
+                <AnimatePresence mode="popLayout">
+                  {paginatedVolunteers.map((volunteer) => {
+                    const isEditing = editingEntry?.id === volunteer.id;
+                    const canEdit = volunteer.status === 'pending' || volunteer.status === 'error';
+
+                    return (
+                      <motion.div
+                        key={volunteer.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="p-3 flex items-start gap-3"
+                      >
+                        <div className="flex-1 min-w-0">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <div className="flex gap-2">
+                                <Input value={editingEntry.firstName} onChange={(e) => setEditingEntry({ ...editingEntry, firstName: e.target.value })} placeholder="First" className="h-8 text-sm" />
+                                <Input value={editingEntry.lastName} onChange={(e) => setEditingEntry({ ...editingEntry, lastName: e.target.value })} placeholder="Last" className="h-8 text-sm" />
+                              </div>
+                              <Input value={editingEntry.email} onChange={(e) => setEditingEntry({ ...editingEntry, email: e.target.value })} placeholder="Email" className="h-8 text-sm" />
+                            </div>
+                          ) : (
+                            <>
+                              <p className="font-medium text-sm truncate">{volunteer.firstName} {volunteer.lastName}</p>
+                              <p className="text-xs text-muted-foreground truncate">{volunteer.email}</p>
+                            </>
+                          )}
+                          <div className="mt-1">{getStatusBadge(volunteer.status)}</div>
+                          {volunteer.errorMessage && <span className="text-xs text-destructive">{volunteer.errorMessage}</span>}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          {isEditing ? (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={saveEditing} className="h-8 w-8"><Check className="w-4 h-4 text-success" /></Button>
+                              <Button variant="ghost" size="icon" onClick={cancelEditing} className="h-8 w-8"><X className="w-4 h-4" /></Button>
+                            </>
+                          ) : (
+                            <>
+                              {canEdit && <Button variant="ghost" size="icon" onClick={() => startEditing(volunteer)} disabled={volunteer.status === 'creating'} className="h-8 w-8"><Pencil className="w-4 h-4" /></Button>}
+                              <Button variant="ghost" size="icon" onClick={() => removeEntry(volunteer.id)} disabled={volunteer.status === 'creating'} className="h-8 w-8"><Trash2 className="w-4 h-4" /></Button>
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+
+              {/* Desktop table view */}
+              <div className="hidden md:block rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -654,18 +706,8 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
                             <TableCell className="font-medium">
                               {isEditing ? (
                                 <div className="flex gap-2">
-                                  <Input
-                                    value={editingEntry.firstName}
-                                    onChange={(e) => setEditingEntry({ ...editingEntry, firstName: e.target.value })}
-                                    placeholder="First name"
-                                    className="h-8 w-24"
-                                  />
-                                  <Input
-                                    value={editingEntry.lastName}
-                                    onChange={(e) => setEditingEntry({ ...editingEntry, lastName: e.target.value })}
-                                    placeholder="Last name"
-                                    className="h-8 w-24"
-                                  />
+                                  <Input value={editingEntry.firstName} onChange={(e) => setEditingEntry({ ...editingEntry, firstName: e.target.value })} placeholder="First name" className="h-8 w-24" />
+                                  <Input value={editingEntry.lastName} onChange={(e) => setEditingEntry({ ...editingEntry, lastName: e.target.value })} placeholder="Last name" className="h-8 w-24" />
                                 </div>
                               ) : (
                                 <>{volunteer.firstName} {volunteer.lastName}</>
@@ -673,12 +715,7 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
                             </TableCell>
                             <TableCell className="text-muted-foreground">
                               {isEditing ? (
-                                <Input
-                                  value={editingEntry.email}
-                                  onChange={(e) => setEditingEntry({ ...editingEntry, email: e.target.value })}
-                                  placeholder="Email"
-                                  className="h-8 w-48"
-                                />
+                                <Input value={editingEntry.email} onChange={(e) => setEditingEntry({ ...editingEntry, email: e.target.value })} placeholder="Email" className="h-8 w-48" />
                               ) : (
                                 volunteer.email
                               )}
@@ -695,45 +732,15 @@ export const BulkVolunteerUpload = ({ onBack }: BulkVolunteerUploadProps) => {
                               <div className="flex gap-1">
                                 {isEditing ? (
                                   <>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={saveEditing}
-                                      className="h-8 w-8"
-                                    >
-                                      <Check className="w-4 h-4 text-success" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={cancelEditing}
-                                      className="h-8 w-8"
-                                    >
-                                      <X className="w-4 h-4 text-muted-foreground" />
-                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={saveEditing} className="h-8 w-8"><Check className="w-4 h-4 text-success" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={cancelEditing} className="h-8 w-8"><X className="w-4 h-4 text-muted-foreground" /></Button>
                                   </>
                                 ) : (
                                   <>
                                     {canEdit && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => startEditing(volunteer)}
-                                        disabled={volunteer.status === 'creating'}
-                                        className="h-8 w-8"
-                                      >
-                                        <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                                      </Button>
+                                      <Button variant="ghost" size="icon" onClick={() => startEditing(volunteer)} disabled={volunteer.status === 'creating'} className="h-8 w-8"><Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" /></Button>
                                     )}
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => removeEntry(volunteer.id)}
-                                      disabled={volunteer.status === 'creating'}
-                                      className="h-8 w-8"
-                                    >
-                                      <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => removeEntry(volunteer.id)} disabled={volunteer.status === 'creating'} className="h-8 w-8"><Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" /></Button>
                                   </>
                                 )}
                               </div>

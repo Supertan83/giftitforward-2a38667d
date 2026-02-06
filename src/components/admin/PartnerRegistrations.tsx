@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, 
@@ -13,15 +13,19 @@ import {
   AlertCircle,
   UserPlus,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 
 interface PartnerRegistrationsProps {
   onBack: () => void;
@@ -71,6 +75,7 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
   const { signOut } = useAuth();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: registrations = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['partner-registrations'],
@@ -100,6 +105,22 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
   const toggleEventExpand = (id: string) => {
     setExpandedEventId(expandedEventId === id ? null : id);
   };
+
+  // Filter registrations
+  const filteredRegistrations = registrations.filter(reg => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return `${reg.first_name} ${reg.last_name}`.toLowerCase().includes(q) ||
+           reg.work_email.toLowerCase().includes(q) ||
+           (reg.phone_number || '').toLowerCase().includes(q);
+  });
+
+  // Pagination
+  const pagination = usePagination(filteredRegistrations, { defaultPageSize: 25 });
+
+  useEffect(() => {
+    pagination.setCurrentPage(1);
+  }, [searchQuery]);
 
   const formatEventSlug = (slug: string) => {
     return slug
@@ -194,12 +215,25 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
           </div>
         </div>
 
+        {/* Search */}
+        <div className="mb-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
         {/* Registrations List */}
         <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card overflow-hidden">
           <div className="p-4 md:p-6 border-b border-border">
             <h2 className="font-display font-bold text-lg md:text-xl">Recent Registrations</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Click on a registration to view event details and family members
+              {filteredRegistrations.length} registration{filteredRegistrations.length !== 1 ? 's' : ''}
             </p>
           </div>
 
@@ -207,15 +241,15 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : registrations.length === 0 ? (
+          ) : filteredRegistrations.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No Dubai Holdings registrations yet</p>
-              <p className="text-sm">Registrations will appear here when received via webhook</p>
+              <p>No registrations found</p>
             </div>
           ) : (
+            <>
             <div className="divide-y divide-border">
-              {registrations.map((reg, index) => (
+              {pagination.paginatedItems.map((reg, index) => (
                 <motion.div
                   key={reg.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -412,6 +446,26 @@ export const PartnerRegistrations = ({ onBack }: PartnerRegistrationsProps) => {
                 </motion.div>
               ))}
             </div>
+            <div className="border-t border-border">
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                startIndex={pagination.startIndex}
+                endIndex={pagination.endIndex}
+                pageSize={pagination.pageSize}
+                pageSizeOptions={pagination.pageSizeOptions}
+                canGoNext={pagination.canGoNext}
+                canGoPrevious={pagination.canGoPrevious}
+                onPageChange={pagination.setCurrentPage}
+                onPageSizeChange={pagination.setPageSize}
+                onGoToFirst={pagination.goToFirstPage}
+                onGoToLast={pagination.goToLastPage}
+                onGoToNext={pagination.goToNextPage}
+                onGoToPrevious={pagination.goToPreviousPage}
+              />
+            </div>
+            </>
           )}
         </div>
       </main>

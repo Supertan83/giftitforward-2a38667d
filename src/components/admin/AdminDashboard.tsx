@@ -264,7 +264,51 @@ export const AdminDashboard = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="p-4 pt-0 overflow-x-auto">
+                <div className="p-4 pt-0">
+                  {/* Mobile card view */}
+                  <div className="space-y-3 md:hidden">
+                    {marketplaceStats.map(mp => {
+                      const mpAllocations = allocations.filter(a => a.marketplaceId === mp.id);
+                      const isExpanded = expandedMarketplace === mp.id;
+                      const pct = mp.allocated > 0 ? Math.round((mp.distributed / mp.allocated) * 100) : 0;
+                      return (
+                        <div key={mp.id} className="border border-border rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => setExpandedMarketplace(isExpanded ? null : mp.id)}
+                            className="w-full p-3 text-left hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <div className="font-medium text-sm">{mp.name}</div>
+                                <div className="text-xs text-muted-foreground">{mp.location}</div>
+                              </div>
+                              <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                              <div><p className="font-semibold">{mp.allocated.toLocaleString()}</p><p className="text-muted-foreground">Allocated</p></div>
+                              <div><p className="font-semibold text-emerald-600">{mp.distributed.toLocaleString()}</p><p className="text-muted-foreground">Distributed</p></div>
+                              <div><p className="font-semibold">{mp.remaining.toLocaleString()}</p><p className="text-muted-foreground">Remaining</p></div>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-xs text-muted-foreground">{pct}%</span>
+                            </div>
+                          </button>
+                          {isExpanded && mpAllocations.map(alloc => (
+                            <div key={alloc.id} className="px-3 py-2 bg-muted/30 border-t border-border/30 flex items-center justify-between text-xs">
+                              <span className="truncate">{alloc.itemIcon} {alloc.itemName}</span>
+                              <span>{alloc.distributedQuantity}/{alloc.allocatedQuantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop table view */}
+                  <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
@@ -392,6 +436,7 @@ export const AdminDashboard = () => {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </motion.div>
             )}
