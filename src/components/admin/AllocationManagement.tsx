@@ -308,15 +308,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             <SelectContent>
               {activeMarketplaces.map(mp => (
                 <SelectItem key={mp.id} value={mp.id}>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    {mp.name}
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'
-                    }`}>
-                      {mp.status}
-                    </span>
-                  </div>
+                  {mp.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -587,10 +579,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 <SelectContent>
                   {activeMarketplaces.map(mp => (
                     <SelectItem key={mp.id} value={mp.id}>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        {mp.name}
-                      </div>
+                      {mp.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -715,10 +704,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                       .filter(mp => mp.id !== selectedMarketplaceId)
                       .map(mp => (
                         <SelectItem key={mp.id} value={mp.id}>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            {mp.name}
-                          </div>
+                          {mp.name}
                         </SelectItem>
                       ))}
                   </SelectContent>

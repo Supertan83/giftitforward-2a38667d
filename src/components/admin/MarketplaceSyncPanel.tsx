@@ -179,12 +179,7 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
               <SelectContent>
                 {marketplaces.map((mp) => (
                   <SelectItem key={mp.id} value={mp.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{mp.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {mp.status}
-                      </Badge>
-                    </div>
+                    {mp.name}
                   </SelectItem>
                 ))}
               </SelectContent>
