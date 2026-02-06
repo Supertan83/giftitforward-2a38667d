@@ -35,10 +35,11 @@ import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useM
 import { useToast } from '@/hooks/use-toast';
 import { EmailManagement } from '@/components/admin/EmailManagement';
 import { BulkVolunteerUpload } from '@/components/admin/BulkVolunteerUpload';
+import { TraceabilityLogsViewer } from '@/components/admin/TraceabilityLogsViewer';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -228,6 +229,7 @@ export const AdminDashboard = () => {
       case 'email-logs': return <EmailLogsViewer onBack={goBack} />;
       case 'email-management': return <EmailManagement onBack={goBack} />;
       case 'bulk-volunteer-upload': return <BulkVolunteerUpload onBack={goBack} />;
+      case 'traceability-logs': return <TraceabilityLogsViewer onBack={goBack} />;
       default: return renderDashboardHome();
     }
   };

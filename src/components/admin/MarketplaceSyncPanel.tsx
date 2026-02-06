@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw, Archive, AlertTriangle, CheckCircle, Calendar, Ma
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useMarketplaces, useMarketplaceSyncOperations, useArchivedCardData, useQRCards } from '@/hooks/useSupabaseData';
+import { useLogTraceabilityEvent } from '@/hooks/useTraceabilityLogs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,7 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
   const { data: qrCards = [] } = useQRCards();
   const { data: archivedData = [] } = useArchivedCardData(selectedMarketplace || undefined);
   const { archiveAndResetCards, resetAllCardsForMarketplace } = useMarketplaceSyncOperations();
+  const logEvent = useLogTraceabilityEvent();
 
   const activeCards = qrCards.filter(c => c.status === 'active');
   const usedCards = qrCards.filter(c => c.marketplaceId);
@@ -58,7 +60,18 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
     setShowArchiveConfirm(false);
     
     try {
+      const mp = marketplaces.find(m => m.id === selectedMarketplace);
       const result = await archiveAndResetCards.mutateAsync(selectedMarketplace);
+
+      logEvent.mutate({
+        marketplaceId: selectedMarketplace,
+        marketplaceName: mp?.name || 'Unknown',
+        actionType: 'archived',
+        quantityBefore: result.archivedCount,
+        quantityAfter: 0,
+        description: `${result.archivedCount} cards archived and reset for reuse at ${mp?.name || 'marketplace'}`,
+      });
+
       toast({
         title: 'Sync Complete',
         description: `${result.archivedCount} cards archived and reset for reuse.`
@@ -80,6 +93,15 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
     
     try {
       const result = await resetAllCardsForMarketplace.mutateAsync();
+
+      logEvent.mutate({
+        marketplaceName: 'All Marketplaces',
+        actionType: 'reset',
+        quantityBefore: result.resetCount,
+        quantityAfter: 0,
+        description: `${result.resetCount} cards reset for reuse (no archive)`,
+      });
+
       toast({
         title: 'Reset Complete',
         description: `${result.resetCount} cards have been reset for reuse.`
