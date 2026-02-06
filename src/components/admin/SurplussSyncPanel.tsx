@@ -356,25 +356,24 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="container max-w-6xl py-4 px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={onBack}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h1 className="font-display font-bold text-lg">Surpluss Sync</h1>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-display font-bold text-base md:text-lg">Surpluss Sync</h1>
                 {syncedAllocationIds.size > 0 && (
-                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
                     {syncedAllocationIds.size} synced
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">Sync allocations and report distribution to Surpluss</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Sync allocations and report distribution to Surpluss</p>
             </div>
-            <div className="flex gap-2">
-              {/* Environment Selector in Header */}
+            <div className="flex gap-2 shrink-0">
               <Select value={environment} onValueChange={(v) => setEnvironment(v as 'staging' | 'production')}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-28 sm:w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -397,7 +396,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
           
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'sync' | 'report' | 'history')} className="mt-4">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsList className="grid w-full max-w-md grid-cols-3 h-auto gap-1">
               <TabsTrigger value="sync" className="flex items-center gap-2">
                 <Download className="w-4 h-4" />
                 Sync

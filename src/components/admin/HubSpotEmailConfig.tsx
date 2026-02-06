@@ -191,25 +191,25 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="container max-w-4xl py-4 px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={onBack}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            <Button variant="ghost" size="sm" onClick={onBack} className="shrink-0">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
-            <div className="flex-1">
-              <h1 className="font-display font-bold text-lg">Email Service Configuration</h1>
-              <p className="text-sm text-muted-foreground">
+            <div className="flex-1 min-w-0">
+              <h1 className="font-display font-bold text-base md:text-lg truncate">Email Service Configuration</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">
                 Choose email provider for each email type
               </p>
             </div>
             {hasChanges && (
-              <Button onClick={handleSave} disabled={isSaving}>
+              <Button onClick={handleSave} disabled={isSaving} size="sm" className="shrink-0">
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
-                Save Changes
+                Save
               </Button>
             )}
           </div>
@@ -235,12 +235,12 @@ export const HubSpotEmailConfig = ({ onBack }: HubSpotEmailConfigProps) => {
                   }
                 </CardDescription>
               </div>
-              <div className="flex gap-2">
-                <Badge variant="outline" className="gap-1">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="gap-1 text-xs">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
                   Resend: {configs.length - hubspotCount}
                 </Badge>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 text-xs">
                   <div className="w-2 h-2 rounded-full bg-orange-500" />
                   HubSpot: {hubspotCount}
                 </Badge>

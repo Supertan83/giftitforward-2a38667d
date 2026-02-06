@@ -1026,7 +1026,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           {/* Event Filter */}
           <div className="flex items-center gap-2">
             <Select value={eventFilter} onValueChange={setEventFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Filter by event" />
               </SelectTrigger>
               <SelectContent>

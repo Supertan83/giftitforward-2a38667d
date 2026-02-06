@@ -134,7 +134,7 @@ export const WebhookEventsViewer = ({ onBack }: WebhookEventsViewerProps) => {
 
         {/* Tabs for different sections */}
         <Tabs defaultValue="testing" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1">
             <TabsTrigger value="testing">Testing</TabsTrigger>
             <TabsTrigger value="actions">Actions</TabsTrigger>
             <TabsTrigger value="mapper">Data Mapper</TabsTrigger>

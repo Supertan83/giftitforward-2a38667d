@@ -377,7 +377,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
           <div className="bg-card rounded-xl border border-border p-4 shadow-card">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
@@ -426,11 +426,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
               
               {/* Status Filter Tabs */}
               <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v as StatusFilter); setSelectedIds(new Set()); }}>
-                <TabsList>
-                  <TabsTrigger value="all">All ({marketplaces.length})</TabsTrigger>
-                  <TabsTrigger value="upcoming">Upcoming ({upcomingCount})</TabsTrigger>
-                  <TabsTrigger value="active">Active ({activeCount})</TabsTrigger>
-                  <TabsTrigger value="completed">Completed ({completedCount})</TabsTrigger>
+                <TabsList className="flex-wrap h-auto gap-1">
+                  <TabsTrigger value="all" className="text-xs sm:text-sm">All ({marketplaces.length})</TabsTrigger>
+                  <TabsTrigger value="upcoming" className="text-xs sm:text-sm">Upcoming ({upcomingCount})</TabsTrigger>
+                  <TabsTrigger value="active" className="text-xs sm:text-sm">Active ({activeCount})</TabsTrigger>
+                  <TabsTrigger value="completed" className="text-xs sm:text-sm">Completed ({completedCount})</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
