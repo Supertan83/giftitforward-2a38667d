@@ -679,6 +679,28 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               </Select>
             </div>
 
+            {/* Selected item info */}
+            {modalItemTypeId && (() => {
+              const selectedItem = itemTypes.find(i => i.id === modalItemTypeId);
+              if (!selectedItem) return null;
+              return (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Stock</span>
+                    <span className="font-medium">{selectedItem.totalStock.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Distributed</span>
+                    <span className="font-medium">{selectedItem.distributed.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1">
+                    <span className="text-muted-foreground">Remaining</span>
+                    <span className="font-semibold text-primary">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Quantity */}
             <div className="space-y-2">
               <Label>Quantity to Allocate</Label>
