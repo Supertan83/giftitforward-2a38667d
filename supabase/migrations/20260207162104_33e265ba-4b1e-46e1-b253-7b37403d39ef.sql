@@ -1,0 +1,1 @@
+ALTER TABLE public.item_types ADD COLUMN surpluss_url text;
