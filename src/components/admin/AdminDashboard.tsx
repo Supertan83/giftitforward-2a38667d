@@ -37,10 +37,11 @@ import { EmailManagement } from '@/components/admin/EmailManagement';
 import { BulkVolunteerUpload } from '@/components/admin/BulkVolunteerUpload';
 import { TraceabilityLogsViewer } from '@/components/admin/TraceabilityLogsViewer';
 import { EmailTemplateCenter } from '@/components/admin/EmailTemplateCenter';
+import { ItemListViewer } from '@/components/admin/ItemListViewer';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -232,6 +233,7 @@ export const AdminDashboard = () => {
       case 'bulk-volunteer-upload': return <BulkVolunteerUpload onBack={goBack} />;
       case 'traceability-logs': return <TraceabilityLogsViewer onBack={goBack} />;
       case 'email-templates': return <EmailTemplateCenter onBack={goBack} />;
+      case 'item-list': return <ItemListViewer onBack={goBack} />;
       default: return renderDashboardHome();
     }
   };

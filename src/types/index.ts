@@ -37,6 +37,7 @@ export interface ItemType {
   distributed: number;
   category?: string | null;
   externalMaterialId?: number | null;
+  surplussUrl?: string | null;
 }
 
 export interface MarketplaceItemAllocation {

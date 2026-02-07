@@ -110,7 +110,8 @@ export const useItemTypes = () => {
         totalStock: item.total_stock,
         distributed: item.distributed,
         category: item.category || null,
-        externalMaterialId: item.external_material_id ?? null
+        externalMaterialId: item.external_material_id ?? null,
+        surplussUrl: item.surpluss_url ?? null
       }));
     }
   });

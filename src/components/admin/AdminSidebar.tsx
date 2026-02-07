@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -46,6 +46,7 @@ const beneficiaryItems = [
 ];
 
 const adminItems = [
+  { view: 'item-list' as AdminView, label: 'Item List', icon: Package, color: 'text-sky-500' },
   { view: 'inventory' as AdminView, label: 'Manage Inventory', icon: Package, color: 'text-foreground' },
   { view: 'allocations' as AdminView, label: 'Allocate Items', icon: TrendingUp, color: 'text-teal-500' },
   { view: 'statistics' as AdminView, label: 'Live Statistics', icon: TrendingUp, color: 'text-emerald-500' },
