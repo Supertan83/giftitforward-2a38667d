@@ -72,7 +72,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12"></TableHead>
+                    <TableHead>Name</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead className="hidden md:table-cell">Category</TableHead>
                     <TableHead className="hidden md:table-cell">Material ID</TableHead>
@@ -87,7 +87,6 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                       className={`cursor-pointer ${selectedItemId === item.id ? 'bg-primary/5' : ''}`}
                       onClick={() => setSelectedItemId(selectedItemId === item.id ? null : item.id)}
                     >
-                      <TableCell className="text-xl">{item.icon}</TableCell>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">{item.category || '—'}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">{item.externalMaterialId || '—'}</TableCell>
@@ -97,7 +96,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                         No items found
                       </TableCell>
                     </TableRow>
