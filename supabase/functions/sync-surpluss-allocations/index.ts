@@ -254,6 +254,36 @@ serve(async (req) => {
         }
         result.external_item_id = itemId;
 
+        // Upsert into item_types so the item appears in allocation dropdowns
+        const materialId = donation.material_group?.id || donation.id;
+        const categoryName = donation.material_group?.name || 'Uncategorized';
+        const totalQty = donation.quantity ?? donation.item_count ?? 0;
+
+        const { data: existingItemType } = await supabase
+          .from('item_types')
+          .select('id, total_stock')
+          .eq('external_material_id', materialId)
+          .maybeSingle();
+
+        if (existingItemType) {
+          await supabase.from('item_types').update({
+            name: donation.title || 'Untitled',
+            category: categoryName,
+            total_stock: totalQty,
+            updated_at: new Date().toISOString(),
+          }).eq('id', existingItemType.id);
+          console.log(`Updated item_type for material ${materialId}`);
+        } else {
+          await supabase.from('item_types').insert({
+            name: donation.title || 'Untitled',
+            icon: 'Package',
+            category: categoryName,
+            total_stock: totalQty,
+            external_material_id: materialId,
+          });
+          console.log(`Created item_type for material ${materialId}`);
+        }
+
         // Handle SDG goals
         if (donation.sdg_goals && Array.isArray(donation.sdg_goals) && itemId) {
           await supabase.from('external_item_sdg_goals').delete().eq('item_id', itemId);
