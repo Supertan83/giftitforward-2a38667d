@@ -636,14 +636,21 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
             </CardHeader>
             <CardContent>
               <div className="border rounded-lg overflow-hidden">
+                {/* Total quantity summary */}
+                {displayedAllocations.length > 0 && (
+                  <div className="flex items-center gap-4 px-4 py-3 bg-muted/30 border-b text-sm font-medium">
+                    <span>Total Listings: {displayedAllocations.length}</span>
+                    <span className="text-muted-foreground">|</span>
+                    <span>Total Quantity: {displayedAllocations.reduce((sum, d) => sum + (d.quantity || d.item_count || 0), 0).toLocaleString()}</span>
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
                      <TableRow>
                        <TableHead>Title</TableHead>
-                       <TableHead>ID</TableHead>
-                       <TableHead>Company</TableHead>
-                       <TableHead>Material Group</TableHead>
-                       <TableHead>Quantity</TableHead>
+                       <TableHead>Category</TableHead>
+                       <TableHead>Total Items</TableHead>
+                       <TableHead>Remaining</TableHead>
                        <TableHead>Status</TableHead>
                        <TableHead>Sync</TableHead>
                        <TableHead className="text-right">Actions</TableHead>
@@ -653,6 +660,9 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                     {displayedAllocations.map((donation) => {
                       const syncStatus = getSyncStatus(donation.id);
                       const isAlreadySynced = syncedAllocationIds.has(donation.id);
+                      const totalItems = donation.quantity || donation.item_count || 0;
+                      const distributed = donation.type?.count_of_boxes || 0;
+                      const remaining = totalItems - distributed;
                       
                       return (
                         <TableRow 
@@ -660,13 +670,8 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                           className={isAlreadySynced && showAlreadySynced ? 'bg-muted/50 opacity-75' : ''}
                         >
                           <TableCell className="font-medium">
-                            {donation.title}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{donation.id}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {donation.company?.name || '-'}
+                            <div>{donation.title}</div>
+                            <div className="text-xs text-muted-foreground">ID: {donation.id} · {donation.company?.name || 'No company'}</div>
                           </TableCell>
                           <TableCell>
                             {donation.material_group ? (
@@ -675,7 +680,12 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                               </Badge>
                             ) : '-'}
                           </TableCell>
-                          <TableCell>{(donation.quantity || donation.item_count || 0).toLocaleString()}</TableCell>
+                          <TableCell className="font-medium">{totalItems.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <span className={remaining <= 0 ? 'text-destructive font-medium' : 'text-emerald-600 dark:text-emerald-400 font-medium'}>
+                              {remaining.toLocaleString()}
+                            </span>
+                          </TableCell>
                           <TableCell>
                             <Badge variant={donation.type?.status === 'APPROVED' ? 'default' : 'secondary'} className={donation.type?.status === 'APPROVED' ? 'bg-emerald-500' : ''}>
                               {donation.type?.status || 'Unknown'}
