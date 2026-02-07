@@ -683,20 +683,17 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             {modalItemTypeId && (() => {
               const selectedItem = itemTypes.find(i => i.id === modalItemTypeId);
               if (!selectedItem) return null;
+              const remaining = selectedItem.totalStock - selectedItem.distributed;
               return (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Stock</span>
-                    <span className="font-medium">{selectedItem.totalStock.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Distributed</span>
-                    <span className="font-medium">{selectedItem.distributed.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1">
-                    <span className="text-muted-foreground">Remaining</span>
-                    <span className="font-semibold text-primary">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</span>
-                  </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                  <p className="font-semibold text-foreground">Current Material:</p>
+                  <p><span className="font-semibold">Title:</span> {selectedItem.name}</p>
+                  <p><span className="font-semibold">Category:</span> {selectedItem.category || 'Uncategorized'}</p>
+                  <p><span className="font-semibold">Total Items:</span> {selectedItem.totalStock.toLocaleString()}</p>
+                  <p>
+                    <span className="font-semibold">Remaining:</span>{' '}
+                    <span className={remaining > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>{remaining.toLocaleString()}</span>
+                  </p>
                 </div>
               );
             })()}
