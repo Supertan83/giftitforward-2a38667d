@@ -271,6 +271,7 @@ serve(async (req) => {
             name: donation.title || 'Untitled',
             category: categoryName,
             total_stock: totalQty,
+            surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
             updated_at: new Date().toISOString(),
           }).eq('id', existingItemType.id);
           console.log(`Updated item_type for donation ${materialId}: ${donation.title}`);
@@ -281,6 +282,7 @@ serve(async (req) => {
             category: categoryName,
             total_stock: totalQty,
             external_material_id: materialId,
+            surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
           });
           console.log(`Created item_type for donation ${materialId}: ${donation.title}`);
         }
