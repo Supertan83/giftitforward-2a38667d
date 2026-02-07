@@ -101,38 +101,15 @@ serve(async (req) => {
       );
     }
 
-    // Check which donations have already been synced
-    const donationIds = allocations.map((a: SurplussDonation) => a.id);
-    const { data: alreadySynced } = await supabase
-      .from('surpluss_allocation_sync')
-      .select('allocation_id')
-      .eq('environment', environment)
-      .in('allocation_id', donationIds);
-
-    const syncedSet = new Set((alreadySynced || []).map((r: { allocation_id: number }) => r.allocation_id));
-    const newDonations: SurplussDonation[] = allocations.filter((a: SurplussDonation) => !syncedSet.has(a.id));
-
-    if (newDonations.length === 0) {
-      console.log('All donations have already been synced');
-      return new Response(
-        JSON.stringify({
-          success: true,
-          summary: { total_processed: 0, created: 0, updated: 0, failed: 0, skipped: allocations.length },
-          results: [],
-          message: 'All donations have already been synced'
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`Processing ${newDonations.length} new donations (${syncedSet.size} already synced)`);
+    const donationsToProcess: SurplussDonation[] = allocations;
+    console.log(`Processing ${donationsToProcess.length} donations (will upsert - update existing, insert new)`);
 
     const results: SyncResult[] = [];
     let totalCreated = 0;
     let totalUpdated = 0;
     let totalFailed = 0;
 
-    for (const donation of newDonations) {
+    for (const donation of donationsToProcess) {
       const result: SyncResult = {
         allocation_id: donation.id,
         title: donation.title,
@@ -313,14 +290,26 @@ serve(async (req) => {
           }
         }
 
-        // Record as synced
-        await supabase
+        // Upsert sync tracking
+        const { data: existingSync } = await supabase
           .from('surpluss_allocation_sync')
-          .insert({
+          .select('id')
+          .eq('allocation_id', donation.id)
+          .eq('environment', environment)
+          .maybeSingle();
+
+        if (existingSync) {
+          await supabase.from('surpluss_allocation_sync').update({
+            marketplace_external_id: donation.company?.id || null,
+            updated_at: new Date().toISOString(),
+          }).eq('id', existingSync.id);
+        } else {
+          await supabase.from('surpluss_allocation_sync').insert({
             allocation_id: donation.id,
             environment,
-            marketplace_external_id: donation.company?.id || null
+            marketplace_external_id: donation.company?.id || null,
           });
+        }
 
         results.push(result);
         console.log(`Synced donation ${donation.id}: ${donation.title}`);
@@ -339,11 +328,10 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         summary: {
-          total_processed: newDonations.length,
+          total_processed: donationsToProcess.length,
           allocations_created: totalCreated,
           allocations_updated: totalUpdated,
           failed: totalFailed,
-          skipped: syncedSet.size
         },
         results
       }),
