@@ -255,7 +255,8 @@ serve(async (req) => {
         result.external_item_id = itemId;
 
         // Upsert into item_types so the item appears in allocation dropdowns
-        const materialId = donation.material_group?.id || donation.id;
+        // Use donation.id as unique key (not material_group.id which is shared across many donations)
+        const materialId = donation.id;
         const categoryName = donation.material_group?.name || 'Uncategorized';
         const totalQty = donation.quantity ?? donation.item_count ?? 0;
 
@@ -272,7 +273,7 @@ serve(async (req) => {
             total_stock: totalQty,
             updated_at: new Date().toISOString(),
           }).eq('id', existingItemType.id);
-          console.log(`Updated item_type for material ${materialId}`);
+          console.log(`Updated item_type for donation ${materialId}: ${donation.title}`);
         } else {
           await supabase.from('item_types').insert({
             name: donation.title || 'Untitled',
@@ -281,7 +282,7 @@ serve(async (req) => {
             total_stock: totalQty,
             external_material_id: materialId,
           });
-          console.log(`Created item_type for material ${materialId}`);
+          console.log(`Created item_type for donation ${materialId}: ${donation.title}`);
         }
 
         // Handle SDG goals
