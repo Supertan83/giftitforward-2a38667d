@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Download, ExternalLink, Search, Package } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +39,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Package className="h-8 w-8 animate-pulse text-muted-foreground" />
+        <span className="text-muted-foreground animate-pulse">Loading items...</span>
       </div>
     );
   }
