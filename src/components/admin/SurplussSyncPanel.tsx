@@ -433,11 +433,12 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
         page++;
       }
 
-      // For each fetched item, update category/subcategory on matching item_types
+      // For each fetched item, update name/category/subcategory on matching item_types
       let updated = 0;
       for (const donation of allItems) {
+        const itemName = donation.title || null;
         const rawTag = donation.donation_tag;
-        const categoryName = (typeof rawTag === 'object' && rawTag !== null ? (rawTag as any).name : rawTag) || donation.material_group?.name || null;
+        const categoryName = (typeof rawTag === 'object' && rawTag !== null ? (rawTag as any).name : rawTag) || null;
         const rawSubTag = donation.donation_tag_subcategory;
         const subcategoryName = (typeof rawSubTag === 'object' && rawSubTag !== null ? (rawSubTag as any).name : rawSubTag) || null;
 
@@ -448,18 +449,21 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
           .maybeSingle();
 
         if (matched) {
-          await supabase.from('item_types').update({
+          const updateData: Record<string, unknown> = {
             category: categoryName,
             subcategory: subcategoryName,
             updated_at: new Date().toISOString(),
-          }).eq('id', matched.id);
+          };
+          if (itemName) updateData.name = itemName;
+          
+          await supabase.from('item_types').update(updateData).eq('id', matched.id);
           updated++;
         }
       }
 
       toast({
         title: 'Categories Synced',
-        description: `Updated category/subcategory for ${updated} of ${allItems.length} items`
+        description: `Updated name, category & subcategory for ${updated} of ${allItems.length} items`
       });
     } catch (error) {
       console.error('Error syncing categories:', error);
