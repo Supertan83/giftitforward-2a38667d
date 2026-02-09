@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud, Trash2, Eye, EyeOff, Send, FileText } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Download, Check, AlertCircle, Loader2, Calendar, Filter, Server, Cloud, Trash2, Eye, EyeOff, Send, FileText, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -94,6 +94,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [showAlreadySynced, setShowAlreadySynced] = useState(false);
   const [selectedForReport, setSelectedForReport] = useState<Set<number>>(new Set());
+  const [isSyncingCategories, setIsSyncingCategories] = useState(false);
   const { toast } = useToast();
 
   // Hooks for reporting
@@ -410,6 +411,68 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     setCurrentPage(1);
   };
 
+  const syncCategoriesOnly = async () => {
+    setIsSyncingCategories(true);
+    try {
+      // Fetch all items from Surpluss API with auto-pagination
+      const pageSize = 100;
+      let page = 1;
+      let allItems: SurplussDonation[] = [];
+
+      while (true) {
+        const { data, error } = await supabase.functions.invoke('fetch-surpluss-allocations', {
+          body: { environment, page, limit: pageSize }
+        });
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error || 'Failed to fetch');
+
+        const pageItems: SurplussDonation[] = data.data || [];
+        const total = data.meta?.total || 0;
+        allItems = [...allItems, ...pageItems];
+        if (pageItems.length < pageSize || allItems.length >= total) break;
+        page++;
+      }
+
+      // For each fetched item, update category/subcategory on matching item_types
+      let updated = 0;
+      for (const donation of allItems) {
+        const rawTag = donation.donation_tag;
+        const categoryName = (typeof rawTag === 'object' && rawTag !== null ? (rawTag as any).name : rawTag) || donation.material_group?.name || null;
+        const rawSubTag = donation.donation_tag_subcategory;
+        const subcategoryName = (typeof rawSubTag === 'object' && rawSubTag !== null ? (rawSubTag as any).name : rawSubTag) || null;
+
+        const { data: matched } = await supabase
+          .from('item_types')
+          .select('id')
+          .eq('external_material_id', donation.id)
+          .maybeSingle();
+
+        if (matched) {
+          await supabase.from('item_types').update({
+            category: categoryName,
+            subcategory: subcategoryName,
+            updated_at: new Date().toISOString(),
+          }).eq('id', matched.id);
+          updated++;
+        }
+      }
+
+      toast({
+        title: 'Categories Synced',
+        description: `Updated category/subcategory for ${updated} of ${allItems.length} items`
+      });
+    } catch (error) {
+      console.error('Error syncing categories:', error);
+      toast({
+        title: 'Category Sync Failed',
+        description: error instanceof Error ? error.message : 'Failed to sync categories',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSyncingCategories(false);
+    }
+  };
+
   const handleReportSelected = async () => {
     if (selectedForReport.size === 0 || !allocationsWithDistribution) return;
     
@@ -510,7 +573,20 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
         {activeTab === 'sync' && (
           <>
             {/* Sync Header Actions */}
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={syncCategoriesOnly}
+                disabled={isSyncingCategories}
+              >
+                {isSyncingCategories ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Tags className="w-4 h-4 mr-2" />
+                )}
+                {isSyncingCategories ? 'Syncing Categories...' : 'Sync Categories Only'}
+              </Button>
               {syncedAllocationIds.size > 0 && (
                 <Button variant="outline" size="sm" onClick={clearSyncedTracking}>
                   <RefreshCw className="w-4 h-4 mr-2" />
