@@ -1,28 +1,62 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Download, ExternalLink, Search } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Search, ChevronDown, ChevronRight, Link } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useItemTypes } from '@/hooks/useSupabaseData';
+import { ItemType } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface ItemListViewerProps {
   onBack: () => void;
 }
 
+interface CategoryGroup {
+  category: string;
+  items: ItemType[];
+  totalQuantity: number;
+}
+
 export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   const { data: items = [], isLoading } = useItemTypes();
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const qrRef = useRef<HTMLCanvasElement | null>(null);
 
-  const filtered = items.filter(item =>
-    item.name.toLowerCase().includes(search.toLowerCase()) ||
-    item.category?.toLowerCase().includes(search.toLowerCase()) ||
-    String(item.externalMaterialId).includes(search)
-  );
+  const filtered = useMemo(() =>
+    items.filter(item =>
+      item.name.toLowerCase().includes(search.toLowerCase()) ||
+      item.category?.toLowerCase().includes(search.toLowerCase()) ||
+      item.subcategory?.toLowerCase().includes(search.toLowerCase()) ||
+      String(item.externalMaterialId).includes(search)
+    ), [items, search]);
+
+  const categoryGroups = useMemo((): CategoryGroup[] => {
+    const groups: Record<string, ItemType[]> = {};
+    filtered.forEach(item => {
+      const cat = item.category || 'Uncategorized';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(item);
+    });
+    return Object.entries(groups)
+      .map(([category, items]) => ({
+        category,
+        items,
+        totalQuantity: items.reduce((sum, i) => sum + i.totalStock, 0),
+      }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  }, [filtered]);
+
+  const toggleCategory = (cat: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
+    });
+  };
 
   const selectedItem = items.find(i => i.id === selectedItemId);
 
@@ -45,13 +79,14 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   }
 
   return (
-    <div className="py-4 md:py-6 px-4 max-w-6xl mx-auto space-y-4">
+    <div className="py-4 md:py-6 px-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="font-display text-xl font-bold">Item List</h1>
         <Badge variant="secondary">{items.length} items</Badge>
+        <Badge variant="outline">{categoryGroups.length} categories</Badge>
       </div>
 
       <div className="relative max-w-sm">
@@ -65,93 +100,130 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Item Table */}
         <div className={selectedItem ? 'lg:col-span-2' : 'lg:col-span-3'}>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="hidden md:table-cell">Category</TableHead>
-                    <TableHead className="hidden md:table-cell">Subcategory</TableHead>
-                    <TableHead className="hidden md:table-cell">Material ID</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                    <TableHead className="text-right">Distributed</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map(item => (
-                    <TableRow
-                      key={item.id}
-                      className={`cursor-pointer ${selectedItemId === item.id ? 'bg-primary/5' : ''}`}
-                      onClick={() => setSelectedItemId(selectedItemId === item.id ? null : item.id)}
-                    >
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">{item.category || '—'}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">{item.subcategory || '—'}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">{item.externalMaterialId || '—'}</TableCell>
-                      <TableCell className="text-right">{item.totalStock.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{item.distributed.toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                  {filtered.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        No items found
-                      </TableCell>
-                    </TableRow>
+          <div className="space-y-3">
+            {categoryGroups.map(group => {
+              const isCollapsed = collapsedCategories.has(group.category);
+              return (
+                <Card key={group.category} className="overflow-hidden">
+                  {/* Category Header */}
+                  <button
+                    onClick={() => toggleCategory(group.category)}
+                    className="w-full flex items-center justify-between px-4 md:px-6 py-3 bg-muted/50 hover:bg-muted/80 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                      <span className="font-display font-bold text-base md:text-lg">{group.category}</span>
+                      <Badge variant="secondary" className="text-xs">{group.items.length} Items</Badge>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Total Quantity: <span className="font-bold text-primary text-base">{group.totalQuantity.toLocaleString()}</span>
+                    </div>
+                  </button>
+
+                  {!isCollapsed && (
+                    <CardContent className="p-0">
+                      {/* Column Headers */}
+                      <div className="grid grid-cols-12 gap-2 px-4 md:px-6 py-2 border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <div className="col-span-4 md:col-span-3">Item Name</div>
+                        <div className="col-span-2 hidden md:block">Material ID</div>
+                        <div className="col-span-2 hidden md:block">Subcategory</div>
+                        <div className="col-span-2 text-right">Stock</div>
+                        <div className="col-span-2 text-right">Distributed</div>
+                        <div className="col-span-2 md:col-span-1 text-right">Available</div>
+                      </div>
+
+                      {/* Item Rows */}
+                      {group.items.map(item => {
+                        const available = item.totalStock - item.distributed;
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => setSelectedItemId(selectedItemId === item.id ? null : item.id)}
+                            className={cn(
+                              'grid grid-cols-12 gap-2 px-4 md:px-6 py-3 border-b last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30',
+                              selectedItemId === item.id && 'bg-primary/5'
+                            )}
+                          >
+                            <div className="col-span-4 md:col-span-3">
+                              <p className="font-medium text-sm">{item.name}</p>
+                              <p className="text-xs text-muted-foreground md:hidden">{item.subcategory || '—'}</p>
+                            </div>
+                            <div className="col-span-2 hidden md:flex items-center text-sm text-muted-foreground">
+                              {item.externalMaterialId || '—'}
+                            </div>
+                            <div className="col-span-2 hidden md:flex items-center text-sm text-muted-foreground truncate">
+                              {item.subcategory || '—'}
+                            </div>
+                            <div className="col-span-2 flex items-center justify-end text-sm">
+                              {item.totalStock.toLocaleString()}
+                            </div>
+                            <div className="col-span-2 flex items-center justify-end text-sm text-muted-foreground">
+                              {item.distributed.toLocaleString()}
+                            </div>
+                            <div className="col-span-2 md:col-span-1 flex items-center justify-end">
+                              <span className="font-bold text-sm text-primary">
+                                {available.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
                   )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                </Card>
+              );
+            })}
+
+            {categoryGroups.length === 0 && (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  No items found
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
 
         {/* Detail Panel */}
         {selectedItem && (
           <div className="lg:col-span-1">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
-                  {selectedItem.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <Card className="sticky top-4">
+              <CardContent className="p-4 space-y-4">
+                <div>
+                  <h3 className="font-display font-bold text-lg">{selectedItem.name}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedItem.category || '—'}</p>
+                </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Category</p>
-                    <p className="font-medium">{selectedItem.category || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Subcategory</p>
+                    <p className="text-muted-foreground text-xs">Subcategory</p>
                     <p className="font-medium">{selectedItem.subcategory || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Material ID</p>
+                    <p className="text-muted-foreground text-xs">Material ID</p>
                     <p className="font-medium">{selectedItem.externalMaterialId || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Total Stock</p>
+                    <p className="text-muted-foreground text-xs">Total Stock</p>
                     <p className="font-medium">{selectedItem.totalStock.toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Distributed</p>
+                    <p className="text-muted-foreground text-xs">Distributed</p>
                     <p className="font-medium">{selectedItem.distributed.toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Available</p>
-                    <p className="font-medium">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</p>
+                    <p className="text-muted-foreground text-xs">Available</p>
+                    <p className="font-medium text-primary">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</p>
                   </div>
                 </div>
 
                 {selectedItem.surplussUrl ? (
                   <div className="space-y-3">
-                    <div className="flex justify-center bg-white rounded-lg p-4">
+                    <div className="flex justify-center bg-white rounded-lg p-3">
                       <QRCodeCanvas
                         ref={qrRef as any}
                         value={selectedItem.surplussUrl}
-                        size={180}
+                        size={160}
                         level="H"
                         includeMargin
                       />
@@ -167,12 +239,12 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                     </a>
                     <Button variant="outline" size="sm" className="w-full" onClick={handleDownloadQR}>
                       <Download className="h-4 w-4 mr-1.5" />
-                      Download QR Code
+                      Download QR
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No Surpluss URL available for this item
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    No Surpluss URL available
                   </p>
                 )}
               </CardContent>
