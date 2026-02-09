@@ -194,7 +194,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+      <DialogContent className="w-[calc(100%-2rem)] sm:w-fit sm:max-w-md !p-0 overflow-hidden">
         <DialogHeader className="p-4 pb-0">
           <DialogTitle className="font-display text-xl flex items-center gap-2">
             <QrCode className="w-5 h-5 text-primary" />
