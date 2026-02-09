@@ -110,6 +110,7 @@ export const useItemTypes = () => {
         totalStock: item.total_stock,
         distributed: item.distributed,
         category: item.category || null,
+        subcategory: item.subcategory || null,
         externalMaterialId: item.external_material_id ?? null,
         surplussUrl: item.surpluss_url ?? null
       }));

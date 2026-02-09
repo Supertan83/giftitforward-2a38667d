@@ -73,8 +73,8 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Name</TableHead>
                     <TableHead className="hidden md:table-cell">Category</TableHead>
+                    <TableHead className="hidden md:table-cell">Subcategory</TableHead>
                     <TableHead className="hidden md:table-cell">Material ID</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
                     <TableHead className="text-right">Distributed</TableHead>
@@ -89,6 +89,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                     >
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">{item.category || '—'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">{item.subcategory || '—'}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">{item.externalMaterialId || '—'}</TableCell>
                       <TableCell className="text-right">{item.totalStock.toLocaleString()}</TableCell>
                       <TableCell className="text-right">{item.distributed.toLocaleString()}</TableCell>
@@ -96,7 +97,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                         No items found
                       </TableCell>
                     </TableRow>
@@ -118,6 +119,14 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Category</p>
+                    <p className="font-medium">{selectedItem.category || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Subcategory</p>
+                    <p className="font-medium">{selectedItem.subcategory || '—'}</p>
+                  </div>
                   <div>
                     <p className="text-muted-foreground">Material ID</p>
                     <p className="font-medium">{selectedItem.externalMaterialId || '—'}</p>
