@@ -39,6 +39,8 @@ interface SurplussDonation {
   image_url?: string;
   created_at?: string;
   updated_at?: string;
+  donation_tag?: string;
+  donation_tag_subcategory?: string;
   company?: {
     id: number;
     name: string;
@@ -663,13 +665,14 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                 <Table>
                   <TableHeader>
                      <TableRow>
-                       <TableHead>Title</TableHead>
-                       <TableHead>Category</TableHead>
-                       <TableHead>Total Items</TableHead>
-                       <TableHead>Remaining</TableHead>
-                       <TableHead>Status</TableHead>
-                       <TableHead>Sync</TableHead>
-                       <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Main Category</TableHead>
+                        <TableHead>Subcategory</TableHead>
+                        <TableHead>Total Items</TableHead>
+                        <TableHead>Remaining</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Sync</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                      </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -690,9 +693,20 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                             <div className="text-xs text-muted-foreground">ID: {donation.id} · {donation.company?.name || 'No company'}</div>
                           </TableCell>
                           <TableCell>
-                            {donation.material_group ? (
+                            {donation.donation_tag ? (
                               <Badge variant="secondary" className="text-xs">
+                                {donation.donation_tag}
+                              </Badge>
+                            ) : donation.material_group ? (
+                              <Badge variant="outline" className="text-xs">
                                 {donation.material_group.name}
+                              </Badge>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {donation.donation_tag_subcategory ? (
+                              <Badge variant="outline" className="text-xs">
+                                {donation.donation_tag_subcategory}
                               </Badge>
                             ) : '-'}
                           </TableCell>
