@@ -154,31 +154,25 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
     }
   };
 
-  // Countdown timer
+  // Countdown timer based on clock schedule (every 15 min: :00, :15, :30, :45)
   useEffect(() => {
     const updateCountdown = () => {
-      if (!lastAutoSyncTime) {
-        setCountdown('Waiting for first sync...');
-        return;
-      }
-      const nextSync = new Date(lastAutoSyncTime.getTime() + SYNC_INTERVAL_MINUTES * 60 * 1000);
       const now = new Date();
-      const diffMs = nextSync.getTime() - now.getTime();
-
-      if (diffMs <= 0) {
-        setCountdown('Syncing soon...');
-        return;
-      }
-
-      const mins = Math.floor(diffMs / 60000);
-      const secs = Math.floor((diffMs % 60000) / 1000);
-      setCountdown(`${mins}m ${secs.toString().padStart(2, '0')}s`);
+      const mins = now.getMinutes();
+      const secs = now.getSeconds();
+      const currentSlotMins = mins % SYNC_INTERVAL_MINUTES;
+      const remainingMins = SYNC_INTERVAL_MINUTES - 1 - currentSlotMins;
+      const remainingSecs = 60 - secs;
+      const adjustedMins = remainingSecs === 60 ? remainingMins + 1 : remainingMins;
+      const adjustedSecs = remainingSecs === 60 ? 0 : remainingSecs;
+      
+      setCountdown(`${adjustedMins}m ${adjustedSecs.toString().padStart(2, '0')}s`);
     };
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [lastAutoSyncTime]);
+  }, []);
 
   useEffect(() => { loadData(); }, []);
 
@@ -237,12 +231,14 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
   const recentSuccessCount = syncEventLogs.filter(l => l.success).length;
   const recentFailCount = syncEventLogs.filter(l => !l.success).length;
 
-  // Compute countdown progress (0-100)
+  // Compute countdown progress based on clock (0-100)
   const countdownProgress = (() => {
-    if (!lastAutoSyncTime) return 0;
-    const totalMs = SYNC_INTERVAL_MINUTES * 60 * 1000;
-    const elapsed = Date.now() - lastAutoSyncTime.getTime();
-    return Math.min(100, (elapsed / totalMs) * 100);
+    const now = new Date();
+    const mins = now.getMinutes();
+    const secs = now.getSeconds();
+    const elapsed = (mins % SYNC_INTERVAL_MINUTES) * 60 + secs;
+    const total = SYNC_INTERVAL_MINUTES * 60;
+    return (elapsed / total) * 100;
   })();
 
   if (isLoading) {
@@ -309,9 +305,9 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           <Progress value={countdownProgress} className="h-2" />
           <div className="flex justify-between mt-1">
             <span className="text-xs text-muted-foreground">
-              Last: {lastAutoSyncTime ? format(lastAutoSyncTime, 'HH:mm:ss') : 'Never'}
+              Last recorded sync: {lastAutoSyncTime ? formatDistanceToNow(lastAutoSyncTime, { addSuffix: true }) : 'No syncs recorded yet'}
             </span>
-            <span className="text-xs text-muted-foreground">Every 15 min</span>
+            <span className="text-xs text-muted-foreground">Schedule: every 15 min (:00, :15, :30, :45)</span>
           </div>
         </div>
 
