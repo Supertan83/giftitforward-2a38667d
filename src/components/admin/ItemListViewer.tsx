@@ -112,17 +112,12 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <span className="text-2xl">{selectedItem.icon}</span>
+                <CardTitle className="text-lg">
                   {selectedItem.name}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Category</p>
-                    <p className="font-medium">{selectedItem.category || '—'}</p>
-                  </div>
                   <div>
                     <p className="text-muted-foreground">Material ID</p>
                     <p className="font-medium">{selectedItem.externalMaterialId || '—'}</p>
