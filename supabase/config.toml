@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.surpluss-allocations-api]
 verify_jwt = false
+
+[functions.sync-surpluss-event-allocations]
+verify_jwt = false

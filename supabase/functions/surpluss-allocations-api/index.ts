@@ -200,6 +200,15 @@ serve(async (req) => {
           response_body: responseJson,
           success: response.ok,
         });
+
+        // Auto-sync to GIF tables after successful allocate/batch_allocate
+        if (response.ok && (action === 'allocate' || action === 'batch_allocate') && payload.marketplace_event_id) {
+          try {
+            await autoSyncToGif(supabase, payload, action, responseJson);
+          } catch (syncErr) {
+            console.error('[surpluss-allocations-api] Auto-sync to GIF failed:', syncErr);
+          }
+        }
       } catch (logErr) {
         console.error('[surpluss-allocations-api] Failed to log audit:', logErr);
       }
@@ -230,4 +239,85 @@ function errorResponse(message: string) {
     JSON.stringify({ success: false, error: message }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
+}
+
+async function autoSyncToGif(supabase: any, payload: RequestPayload, action: string, apiResponse: any) {
+  const surplussEventId = payload.marketplace_event_id;
+  if (!surplussEventId) return;
+
+  // Find the GIF marketplace by external_id
+  const { data: marketplace } = await supabase
+    .from('marketplace_events')
+    .select('id')
+    .eq('external_id', surplussEventId)
+    .maybeSingle();
+
+  if (!marketplace) {
+    console.log(`[auto-sync] No GIF marketplace found for Surpluss event ${surplussEventId}`);
+    return;
+  }
+
+  // Build list of materials to sync
+  const materials: Array<{ material_id: number; amount: number }> = [];
+  
+  if (action === 'allocate' && payload.material_id && payload.amount) {
+    materials.push({ material_id: payload.material_id, amount: payload.amount });
+  } else if (action === 'batch_allocate' && payload.materials) {
+    materials.push(...payload.materials);
+  }
+
+  for (const mat of materials) {
+    // Find or create item_type
+    let { data: itemType } = await supabase
+      .from('item_types')
+      .select('id')
+      .eq('external_material_id', mat.material_id)
+      .maybeSingle();
+
+    if (!itemType) {
+      const { data: newItem } = await supabase
+        .from('item_types')
+        .insert({
+          name: `Material ${mat.material_id}`,
+          external_material_id: mat.material_id,
+          icon: 'Package',
+          total_stock: mat.amount,
+          surpluss_url: `https://platform.thesurpluss.com/material/${mat.material_id}`,
+        })
+        .select('id')
+        .single();
+      itemType = newItem;
+    }
+
+    if (!itemType) continue;
+
+    // Upsert marketplace_item_allocations
+    const { data: existing } = await supabase
+      .from('marketplace_item_allocations')
+      .select('id, allocated_quantity')
+      .eq('marketplace_id', marketplace.id)
+      .eq('item_type_id', itemType.id)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from('marketplace_item_allocations')
+        .update({
+          allocated_quantity: existing.allocated_quantity + mat.amount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+    } else {
+      await supabase
+        .from('marketplace_item_allocations')
+        .insert({
+          marketplace_id: marketplace.id,
+          item_type_id: itemType.id,
+          allocated_quantity: mat.amount,
+          distributed_quantity: 0,
+        });
+    }
+  }
+
+  console.log(`[auto-sync] Synced ${materials.length} materials to GIF marketplace ${marketplace.id}`);
 }

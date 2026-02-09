@@ -95,6 +95,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [showAlreadySynced, setShowAlreadySynced] = useState(false);
   const [selectedForReport, setSelectedForReport] = useState<Set<number>>(new Set());
   const [isSyncingCategories, setIsSyncingCategories] = useState(false);
+  const [isSyncingEventAllocations, setIsSyncingEventAllocations] = useState(false);
   const { toast } = useToast();
 
   // Hooks for reporting
@@ -513,6 +514,56 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     }
   };
 
+  // Sync all marketplace event allocations from Surpluss
+  const syncAllEventAllocations = async () => {
+    setIsSyncingEventAllocations(true);
+    try {
+      // Get all marketplaces with external_id
+      const { data: marketplaces, error: mpError } = await supabase
+        .from('marketplace_events')
+        .select('id, name, external_id')
+        .not('external_id', 'is', null);
+
+      if (mpError) throw mpError;
+      if (!marketplaces || marketplaces.length === 0) {
+        toast({ title: 'No Linked Marketplaces', description: 'No marketplaces have a Surpluss external_id', variant: 'destructive' });
+        return;
+      }
+
+      let totalSynced = 0;
+      let totalErrors = 0;
+
+      for (const mp of marketplaces) {
+        try {
+          const { data, error } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
+            body: { marketplace_id: mp.id, environment }
+          });
+          if (error) throw error;
+          if (data?.success) {
+            totalSynced += data.synced || 0;
+          } else {
+            totalErrors++;
+          }
+        } catch {
+          totalErrors++;
+        }
+      }
+
+      toast({
+        title: 'Event Allocations Synced',
+        description: `Synced ${totalSynced} allocations across ${marketplaces.length} events${totalErrors > 0 ? ` (${totalErrors} errors)` : ''}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Sync Failed',
+        description: error instanceof Error ? error.message : 'Failed to sync event allocations',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncingEventAllocations(false);
+    }
+  };
+
   const toggleReportSelection = (allocationId: number) => {
     setSelectedForReport(prev => {
       const newSet = new Set(prev);
@@ -602,6 +653,19 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
           <>
             {/* Sync Header Actions */}
             <div className="flex flex-wrap justify-end gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={syncAllEventAllocations}
+                disabled={isSyncingEventAllocations}
+              >
+                {isSyncingEventAllocations ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                {isSyncingEventAllocations ? 'Syncing Events...' : 'Sync All Event Allocations'}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
