@@ -22,6 +22,8 @@ interface SurplussDonation {
   frequency?: unknown;
   created_at?: string;
   updated_at?: string;
+  donation_tag?: string;
+  donation_tag_subcategory?: string;
   company?: {
     id: number;
     uuid?: string;
@@ -257,7 +259,8 @@ serve(async (req) => {
         // Upsert into item_types so the item appears in allocation dropdowns
         // Use donation.id as unique key (not material_group.id which is shared across many donations)
         const materialId = donation.id;
-        const categoryName = donation.material_group?.name || 'Uncategorized';
+        const categoryName = donation.donation_tag || donation.material_group?.name || 'Uncategorized';
+        const subcategoryName = donation.donation_tag_subcategory || null;
         const totalQty = donation.quantity ?? donation.item_count ?? 0;
 
         const { data: existingItemType } = await supabase
@@ -270,6 +273,7 @@ serve(async (req) => {
           await supabase.from('item_types').update({
             name: donation.title || 'Untitled',
             category: categoryName,
+            subcategory: subcategoryName,
             total_stock: totalQty,
             surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
             updated_at: new Date().toISOString(),
@@ -280,6 +284,7 @@ serve(async (req) => {
             name: donation.title || 'Untitled',
             icon: 'Package',
             category: categoryName,
+            subcategory: subcategoryName,
             total_stock: totalQty,
             external_material_id: materialId,
             surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,

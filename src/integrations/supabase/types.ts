@@ -630,6 +630,7 @@ export type Database = {
           icon: string
           id: string
           name: string
+          subcategory: string | null
           surpluss_url: string | null
           total_stock: number
           updated_at: string
@@ -643,6 +644,7 @@ export type Database = {
           icon?: string
           id?: string
           name: string
+          subcategory?: string | null
           surpluss_url?: string | null
           total_stock?: number
           updated_at?: string
@@ -656,6 +658,7 @@ export type Database = {
           icon?: string
           id?: string
           name?: string
+          subcategory?: string | null
           surpluss_url?: string | null
           total_stock?: number
           updated_at?: string
