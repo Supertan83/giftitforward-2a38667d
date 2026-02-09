@@ -12,8 +12,92 @@ const BASE_URLS: Record<string, string> = {
 };
 
 interface SyncRequest {
-  marketplace_id: string; // GIF UUID
+  marketplace_id: string; // GIF UUID or "ALL" for cron
   environment?: 'staging' | 'production';
+}
+
+// Sync a single marketplace, returns summary
+async function syncSingleMarketplace(
+  supabase: any,
+  marketplace: { id: string; name: string; external_id: number },
+  environment: string,
+  apiHeaders: Record<string, string>,
+  baseUrl: string
+) {
+  const apiUrl = `${baseUrl}/api/common/marketplace-events/${marketplace.external_id}/allocations`;
+  console.log(`[sync] Fetching: ${apiUrl}`);
+  
+  const apiResponse = await fetch(apiUrl, { headers: apiHeaders });
+  const apiText = await apiResponse.text();
+
+  if (!apiResponse.ok) {
+    return { marketplace_name: marketplace.name, success: false, error: `API ${apiResponse.status}`, synced: 0, created: 0, updated: 0 };
+  }
+
+  let surplussAllocations: any[];
+  try {
+    const parsed = JSON.parse(apiText);
+    surplussAllocations = Array.isArray(parsed) ? parsed : (parsed.data || parsed.allocations || []);
+  } catch {
+    return { marketplace_name: marketplace.name, success: false, error: 'Parse error', synced: 0, created: 0, updated: 0 };
+  }
+  if (!Array.isArray(surplussAllocations)) surplussAllocations = [];
+
+  let synced = 0, created = 0, updated = 0;
+  const errors: string[] = [];
+
+  for (const alloc of surplussAllocations) {
+    try {
+      const materialId = alloc.donation_metadata?.id || alloc.material_id || alloc.donation_metadata_id;
+      const materialTitle = alloc.donation_metadata?.title || alloc.title || `Material ${materialId}`;
+      const allocatedAmount = alloc.amount || 0;
+      const distributedAmount = alloc.distributed_amount || 0;
+      if (!materialId) { errors.push('No material ID'); continue; }
+
+      let { data: itemType } = await supabase
+        .from('item_types').select('id').eq('external_material_id', materialId).maybeSingle();
+
+      if (!itemType) {
+        const { data: newItem, error: insertError } = await supabase
+          .from('item_types')
+          .insert({ name: materialTitle, external_material_id: materialId, icon: 'Package', total_stock: allocatedAmount, surpluss_url: `https://platform.thesurpluss.com/material/${materialId}` })
+          .select('id').single();
+        if (insertError) { errors.push(insertError.message); continue; }
+        itemType = newItem;
+        created++;
+      }
+
+      const { data: existingAlloc } = await supabase
+        .from('marketplace_item_allocations')
+        .select('id, allocated_quantity, distributed_quantity')
+        .eq('marketplace_id', marketplace.id).eq('item_type_id', itemType.id).maybeSingle();
+
+      if (existingAlloc) {
+        await supabase.from('marketplace_item_allocations')
+          .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, updated_at: new Date().toISOString() })
+          .eq('id', existingAlloc.id);
+        updated++;
+      } else {
+        await supabase.from('marketplace_item_allocations')
+          .insert({ marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount });
+        created++;
+      }
+      synced++;
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // Audit log
+  await supabase.from('surpluss_api_audit_log').insert({
+    action: 'sync_event_allocations', environment,
+    request_payload: { marketplace_id: marketplace.id, external_id: marketplace.external_id },
+    response_status: apiResponse.status,
+    response_body: { total_fetched: surplussAllocations.length, synced, created, updated, errors: errors.length },
+    success: errors.length === 0,
+  }).catch(() => {});
+
+  return { marketplace_name: marketplace.name, success: true, synced, created, updated, errors, total_fetched: surplussAllocations.length };
 }
 
 serve(async (req) => {
@@ -36,7 +120,48 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // 1. Look up the marketplace's external_id
+    // Build API headers
+    const apiHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    const apiKey = Deno.env.get('SURPLUSS_API_KEY');
+    if (apiKey) {
+      apiHeaders['Authorization'] = `Bearer ${apiKey}`;
+      apiHeaders['x-api-key'] = apiKey;
+    }
+
+    const baseUrl = BASE_URLS[environment];
+
+    // Handle "ALL" mode (cron job) — sync every marketplace with an external_id
+    if (marketplace_id === 'ALL') {
+      const { data: marketplaces, error: mpErr } = await supabase
+        .from('marketplace_events')
+        .select('id, name, external_id')
+        .not('external_id', 'is', null);
+
+      if (mpErr || !marketplaces?.length) {
+        return new Response(
+          JSON.stringify({ success: true, message: 'No linked marketplaces found', synced_events: 0 }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[sync-all] Syncing ${marketplaces.length} marketplace events`);
+      const results = [];
+      for (const mp of marketplaces) {
+        const result = await syncSingleMarketplace(supabase, mp, environment, apiHeaders, baseUrl);
+        results.push(result);
+      }
+
+      const totalSynced = results.reduce((s, r) => s + (r.synced || 0), 0);
+      return new Response(
+        JSON.stringify({ success: true, mode: 'ALL', synced_events: marketplaces.length, total_synced: totalSynced, results }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Single marketplace mode
     const { data: marketplace, error: mpError } = await supabase
       .from('marketplace_events')
       .select('id, name, external_id')
@@ -57,160 +182,14 @@ serve(async (req) => {
       );
     }
 
-    // 2. Fetch allocations from Surpluss API
-    const baseUrl = BASE_URLS[environment];
-    const apiUrl = `${baseUrl}/api/common/marketplace-events/${marketplace.external_id}/allocations`;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    const apiKey = Deno.env.get('SURPLUSS_API_KEY');
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      headers['x-api-key'] = apiKey;
-    }
-
-    console.log(`[sync-surpluss-event-allocations] Fetching: ${apiUrl}`);
-    const apiResponse = await fetch(apiUrl, { headers });
-    const apiText = await apiResponse.text();
-    console.log(`[sync-surpluss-event-allocations] Response: ${apiResponse.status} ${apiText.substring(0, 500)}`);
-
-    if (!apiResponse.ok) {
-      return new Response(
-        JSON.stringify({ success: false, error: `Surpluss API error: ${apiResponse.status}`, raw: apiText }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    let surplussAllocations: any[];
-    try {
-      const parsed = JSON.parse(apiText);
-      // API may return { data: [...] } or just [...]
-      surplussAllocations = Array.isArray(parsed) ? parsed : (parsed.data || parsed.allocations || []);
-    } catch {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Failed to parse Surpluss API response' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!Array.isArray(surplussAllocations)) {
-      surplussAllocations = [];
-    }
-
-    console.log(`[sync-surpluss-event-allocations] Found ${surplussAllocations.length} allocations for event ${marketplace.external_id}`);
-
-    // 3. For each allocation, upsert item_types and marketplace_item_allocations
-    let synced = 0;
-    let created = 0;
-    let updated = 0;
-    const errors: string[] = [];
-
-    for (const alloc of surplussAllocations) {
-      try {
-        const materialId = alloc.donation_metadata?.id || alloc.material_id || alloc.donation_metadata_id;
-        const materialTitle = alloc.donation_metadata?.title || alloc.title || `Material ${materialId}`;
-        const allocatedAmount = alloc.amount || 0;
-        const distributedAmount = alloc.distributed_amount || 0;
-
-        if (!materialId) {
-          errors.push(`Skipped allocation with no material ID`);
-          continue;
-        }
-
-        // a. Find or create item_types row by external_material_id
-        let { data: itemType } = await supabase
-          .from('item_types')
-          .select('id')
-          .eq('external_material_id', materialId)
-          .maybeSingle();
-
-        if (!itemType) {
-          // Create new item_type
-          const { data: newItem, error: insertError } = await supabase
-            .from('item_types')
-            .insert({
-              name: materialTitle,
-              external_material_id: materialId,
-              icon: 'Package',
-              total_stock: allocatedAmount,
-              surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
-            })
-            .select('id')
-            .single();
-
-          if (insertError) {
-            errors.push(`Failed to create item_type for material ${materialId}: ${insertError.message}`);
-            continue;
-          }
-          itemType = newItem;
-          created++;
-        }
-
-        // b. Upsert marketplace_item_allocations
-        const { data: existingAlloc } = await supabase
-          .from('marketplace_item_allocations')
-          .select('id, allocated_quantity, distributed_quantity')
-          .eq('marketplace_id', marketplace_id)
-          .eq('item_type_id', itemType.id)
-          .maybeSingle();
-
-        if (existingAlloc) {
-          // Update existing
-          await supabase
-            .from('marketplace_item_allocations')
-            .update({
-              allocated_quantity: allocatedAmount,
-              distributed_quantity: distributedAmount,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingAlloc.id);
-          updated++;
-        } else {
-          // Create new
-          await supabase
-            .from('marketplace_item_allocations')
-            .insert({
-              marketplace_id: marketplace_id,
-              item_type_id: itemType.id,
-              allocated_quantity: allocatedAmount,
-              distributed_quantity: distributedAmount,
-            });
-          created++;
-        }
-
-        synced++;
-      } catch (allocError) {
-        const msg = allocError instanceof Error ? allocError.message : String(allocError);
-        errors.push(msg);
-      }
-    }
-
-    // 4. Log audit
-    try {
-      await supabase.from('surpluss_api_audit_log').insert({
-        action: 'sync_event_allocations',
-        environment,
-        request_payload: { marketplace_id, external_id: marketplace.external_id },
-        response_status: apiResponse.status,
-        response_body: { total_fetched: surplussAllocations.length, synced, created, updated, errors: errors.length },
-        success: errors.length === 0,
-      });
-    } catch (logErr) {
-      console.error('[sync-surpluss-event-allocations] Audit log failed:', logErr);
-    }
+    const result = await syncSingleMarketplace(supabase, marketplace, environment, apiHeaders, baseUrl);
 
     return new Response(
       JSON.stringify({
-        success: true,
+        success: result.success,
         marketplace_name: marketplace.name,
         external_id: marketplace.external_id,
-        total_fetched: surplussAllocations.length,
-        synced,
-        created,
-        updated,
-        errors,
+        ...result,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
