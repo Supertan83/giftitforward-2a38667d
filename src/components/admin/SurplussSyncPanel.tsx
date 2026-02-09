@@ -39,8 +39,8 @@ interface SurplussDonation {
   image_url?: string;
   created_at?: string;
   updated_at?: string;
-  donation_tag?: string;
-  donation_tag_subcategory?: string;
+  donation_tag?: string | { id: number; name: string; [key: string]: unknown };
+  donation_tag_subcategory?: string | { id: number; name: string; [key: string]: unknown };
   company?: {
     id: number;
     name: string;
@@ -695,7 +695,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                           <TableCell>
                             {donation.donation_tag ? (
                               <Badge variant="secondary" className="text-xs">
-                                {donation.donation_tag}
+                                {typeof donation.donation_tag === 'object' ? donation.donation_tag.name : donation.donation_tag}
                               </Badge>
                             ) : donation.material_group ? (
                               <Badge variant="outline" className="text-xs">
@@ -706,7 +706,7 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                           <TableCell>
                             {donation.donation_tag_subcategory ? (
                               <Badge variant="outline" className="text-xs">
-                                {donation.donation_tag_subcategory}
+                                {typeof donation.donation_tag_subcategory === 'object' ? donation.donation_tag_subcategory.name : donation.donation_tag_subcategory}
                               </Badge>
                             ) : '-'}
                           </TableCell>
