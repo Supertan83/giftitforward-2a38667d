@@ -1,12 +1,11 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Download, ExternalLink, Search, ChevronDown, ChevronRight, Link } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useItemTypes } from '@/hooks/useSupabaseData';
-import { ItemType } from '@/types';
+import { useItemTypesExtended, ExtendedItemType } from '@/hooks/useItemTypesExtended';
 import { cn } from '@/lib/utils';
 
 interface ItemListViewerProps {
@@ -15,12 +14,12 @@ interface ItemListViewerProps {
 
 interface CategoryGroup {
   category: string;
-  items: ItemType[];
+  items: ExtendedItemType[];
   totalQuantity: number;
 }
 
 export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
-  const { data: items = [], isLoading } = useItemTypes();
+  const { data: items = [], isLoading } = useItemTypesExtended();
   const [search, setSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -31,11 +30,13 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
       item.name.toLowerCase().includes(search.toLowerCase()) ||
       item.category?.toLowerCase().includes(search.toLowerCase()) ||
       item.subcategory?.toLowerCase().includes(search.toLowerCase()) ||
+      item.donorCompany?.toLowerCase().includes(search.toLowerCase()) ||
+      item.marketplaceNames?.toLowerCase().includes(search.toLowerCase()) ||
       String(item.externalMaterialId).includes(search)
     ), [items, search]);
 
   const categoryGroups = useMemo((): CategoryGroup[] => {
-    const groups: Record<string, ItemType[]> = {};
+    const groups: Record<string, ExtendedItemType[]> = {};
     filtered.forEach(item => {
       const cat = item.category || 'Uncategorized';
       if (!groups[cat]) groups[cat] = [];
@@ -92,7 +93,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name, category, or material ID..."
+          placeholder="Search by name, category, company..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="pl-9"
@@ -106,7 +107,6 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
               const isCollapsed = collapsedCategories.has(group.category);
               return (
                 <Card key={group.category} className="overflow-hidden">
-                  {/* Category Header */}
                   <button
                     onClick={() => toggleCategory(group.category)}
                     className="w-full flex items-center justify-between px-4 md:px-6 py-3 bg-muted/50 hover:bg-muted/80 transition-colors text-left"
@@ -123,17 +123,15 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
 
                   {!isCollapsed && (
                     <CardContent className="p-0">
-                      {/* Column Headers */}
-                      <div className="grid grid-cols-12 gap-2 px-4 md:px-6 py-2 border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        <div className="col-span-4 md:col-span-3">Item Name</div>
-                        <div className="col-span-2 hidden md:block">Material ID</div>
-                        <div className="col-span-2 hidden md:block">Subcategory</div>
-                        <div className="col-span-2 text-right">Stock</div>
-                        <div className="col-span-2 text-right">Distributed</div>
-                        <div className="col-span-2 md:col-span-1 text-right">Available</div>
+                      <div className="hidden md:grid grid-cols-12 gap-2 px-4 md:px-6 py-2 border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <div className="col-span-3">Item Name</div>
+                        <div className="col-span-2">Donor Company</div>
+                        <div className="col-span-2">Marketplace</div>
+                        <div className="col-span-1 text-right">Assigned</div>
+                        <div className="col-span-1 text-right">Distributed</div>
+                        <div className="col-span-1 text-right">Qty Available</div>
                       </div>
 
-                      {/* Item Rows */}
                       {group.items.map(item => {
                         const available = item.totalStock - item.distributed;
                         return (
@@ -145,23 +143,23 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                               selectedItemId === item.id && 'bg-primary/5'
                             )}
                           >
-                            <div className="col-span-4 md:col-span-3">
+                            <div className="col-span-12 md:col-span-3">
                               <p className="font-medium text-sm">{item.name}</p>
-                              <p className="text-xs text-muted-foreground md:hidden">{item.subcategory || '—'}</p>
+                              <p className="text-xs text-muted-foreground">{item.subcategory || '—'}</p>
                             </div>
-                            <div className="col-span-2 hidden md:flex items-center text-sm text-muted-foreground">
-                              {item.externalMaterialId || '—'}
+                            <div className="col-span-4 md:col-span-2 flex items-center text-sm text-muted-foreground truncate">
+                              {item.donorCompany || '—'}
                             </div>
-                            <div className="col-span-2 hidden md:flex items-center text-sm text-muted-foreground truncate">
-                              {item.subcategory || '—'}
+                            <div className="col-span-4 md:col-span-2 flex items-center text-sm text-muted-foreground truncate">
+                              {item.marketplaceNames || '—'}
                             </div>
-                            <div className="col-span-2 flex items-center justify-end text-sm">
-                              {item.totalStock.toLocaleString()}
+                            <div className="col-span-1 hidden md:flex items-center justify-end text-sm text-muted-foreground">
+                              {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}
                             </div>
-                            <div className="col-span-2 flex items-center justify-end text-sm text-muted-foreground">
-                              {item.distributed.toLocaleString()}
+                            <div className="col-span-1 hidden md:flex items-center justify-end text-sm text-muted-foreground">
+                              {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}
                             </div>
-                            <div className="col-span-2 md:col-span-1 flex items-center justify-end">
+                            <div className="col-span-4 md:col-span-1 flex items-center justify-end">
                               <span className="font-bold text-sm text-primary">
                                 {available.toLocaleString()}
                               </span>
@@ -185,7 +183,6 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
           </div>
         </div>
 
-        {/* Detail Panel */}
         {selectedItem && (
           <div className="lg:col-span-1">
             <Card className="sticky top-4">
@@ -204,12 +201,16 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                     <p className="font-medium">{selectedItem.externalMaterialId || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground text-xs">Total Stock</p>
-                    <p className="font-medium">{selectedItem.totalStock.toLocaleString()}</p>
+                    <p className="text-muted-foreground text-xs">Donor Company</p>
+                    <p className="font-medium">{selectedItem.donorCompany || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground text-xs">Distributed</p>
-                    <p className="font-medium">{selectedItem.distributed.toLocaleString()}</p>
+                    <p className="text-muted-foreground text-xs">Marketplace</p>
+                    <p className="font-medium">{selectedItem.marketplaceNames || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Total Stock</p>
+                    <p className="font-medium">{selectedItem.totalStock.toLocaleString()}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Available</p>
