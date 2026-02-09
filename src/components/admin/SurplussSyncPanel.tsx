@@ -437,10 +437,34 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
       let updated = 0;
       for (const donation of allItems) {
         const itemName = donation.title || null;
-        const rawTag = donation.donation_tag;
-        const categoryName = (typeof rawTag === 'object' && rawTag !== null ? (rawTag as any).name : rawTag) || null;
+        
+        // donation_tag can be null at top level, but category is inside donation_tag_subcategory.donation_tag
         const rawSubTag = donation.donation_tag_subcategory;
-        const subcategoryName = (typeof rawSubTag === 'object' && rawSubTag !== null ? (rawSubTag as any).name : rawSubTag) || null;
+        let categoryName: string | null = null;
+        let subcategoryName: string | null = null;
+        
+        if (typeof rawSubTag === 'object' && rawSubTag !== null) {
+          subcategoryName = (rawSubTag as any).name || null;
+          // Category comes from the nested donation_tag inside donation_tag_subcategory
+          const nestedTag = (rawSubTag as any).donation_tag;
+          if (typeof nestedTag === 'object' && nestedTag !== null) {
+            categoryName = nestedTag.name || null;
+          } else if (typeof nestedTag === 'string') {
+            categoryName = nestedTag;
+          }
+        } else if (typeof rawSubTag === 'string') {
+          subcategoryName = rawSubTag;
+        }
+        
+        // Fallback: check top-level donation_tag
+        if (!categoryName) {
+          const rawTag = donation.donation_tag;
+          if (typeof rawTag === 'object' && rawTag !== null) {
+            categoryName = (rawTag as any).name || null;
+          } else if (typeof rawTag === 'string') {
+            categoryName = rawTag;
+          }
+        }
 
         const { data: matched } = await supabase
           .from('item_types')
