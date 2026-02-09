@@ -354,7 +354,7 @@ export const VolunteerZone = () => {
 
       {/* Zone Assignment Dialog */}
       <Dialog open={showZoneDialog} onOpenChange={setShowZoneDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100%-2rem)] sm:w-fit sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Assign Volunteer Zone</DialogTitle>
             <DialogDescription>
