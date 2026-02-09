@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { 
   ArrowLeft, 
@@ -13,7 +13,9 @@ import {
   X,
   Undo2,
   ArrowRightLeft,
-  Send
+  Send,
+  ChevronsUpDown,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +34,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -54,6 +70,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
   const [modalMarketplaceId, setModalMarketplaceId] = useState<string>('');
   const [modalItemTypeId, setModalItemTypeId] = useState<string>('');
+  const [itemComboOpen, setItemComboOpen] = useState(false);
   const [quantity, setQuantity] = useState('');
 
   // Inline editing state
@@ -656,27 +673,63 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               </Select>
             </div>
 
-            {/* Item Selection by Material ID */}
+            {/* Item Selection - Searchable */}
             <div className="space-y-2">
-              <Label>Item (Material ID)</Label>
-              <Select value={modalItemTypeId} onValueChange={setModalItemTypeId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select item..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {allocatableItems.map(item => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.externalMaterialId} — {item.name}
-                    </SelectItem>
-                  ))}
-                  {/* Also show items without material ID */}
-                  {itemTypes.filter(item => item.externalMaterialId == null).map(item => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Item</Label>
+              <Popover open={itemComboOpen} onOpenChange={setItemComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={itemComboOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {modalItemTypeId
+                      ? (() => {
+                          const item = itemTypes.find(i => i.id === modalItemTypeId);
+                          return item
+                            ? `${item.externalMaterialId ? item.externalMaterialId + ' — ' : ''}${item.name}`
+                            : 'Select item...';
+                        })()
+                      : 'Select item...'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search by name or material ID..." />
+                    <CommandList>
+                      <CommandEmpty>No items found.</CommandEmpty>
+                      <CommandGroup>
+                        {[...allocatableItems, ...itemTypes.filter(item => item.externalMaterialId == null)].map(item => (
+                          <CommandItem
+                            key={item.id}
+                            value={`${item.externalMaterialId || ''} ${item.name} ${item.category || ''}`}
+                            onSelect={() => {
+                              setModalItemTypeId(item.id);
+                              setItemComboOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                modalItemTypeId === item.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{item.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {item.externalMaterialId ? `ID: ${item.externalMaterialId}` : 'No Material ID'}
+                                {item.category ? ` · ${item.category}` : ''}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Selected item info */}
