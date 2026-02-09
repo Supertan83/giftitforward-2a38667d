@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Activity, Clock, CheckCircle, XCircle, AlertTriangle, Loader2, Database, Zap, Timer } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Clock, CheckCircle, XCircle, AlertTriangle, Loader2, Database, Zap, Timer, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format, formatDistanceToNow } from 'date-fns';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Progress } from '@/components/ui/progress';
 
 interface SurplussSyncMonitorProps {
   onBack: () => void;
@@ -35,14 +37,33 @@ interface MarketplaceSyncStatus {
   total_distributed: number;
 }
 
+interface AllocationDetail {
+  id: string;
+  marketplace_id: string;
+  marketplace_name: string;
+  item_type_id: string;
+  item_name: string;
+  item_category: string | null;
+  external_material_id: number | null;
+  allocated_quantity: number;
+  distributed_quantity: number;
+  updated_at: string;
+}
+
+const SYNC_INTERVAL_MINUTES = 15;
+
 export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [marketplaceStatuses, setMarketplaceStatuses] = useState<MarketplaceSyncStatus[]>([]);
+  const [allocationDetails, setAllocationDetails] = useState<AllocationDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncingSingle, setSyncingSingle] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'production' | 'staging'>('production');
+  const [showAllocations, setShowAllocations] = useState(false);
+  const [countdown, setCountdown] = useState('');
+  const [lastAutoSyncTime, setLastAutoSyncTime] = useState<Date | null>(null);
   const { toast } = useToast();
 
   const loadData = async () => {
@@ -65,7 +86,34 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       // Fetch allocation stats per marketplace
       const { data: allocations } = await supabase
         .from('marketplace_item_allocations')
-        .select('marketplace_id, allocated_quantity, distributed_quantity');
+        .select('id, marketplace_id, item_type_id, allocated_quantity, distributed_quantity, updated_at');
+
+      // Fetch item types for allocation details
+      const { data: itemTypes } = await supabase
+        .from('item_types')
+        .select('id, name, category, external_material_id');
+
+      const itemTypeMap = new Map((itemTypes || []).map((it: any) => [it.id, it]));
+      const marketplaceMap = new Map((marketplaces || []).map((mp: any) => [mp.id, mp]));
+
+      // Build full allocation details
+      const details: AllocationDetail[] = (allocations || []).map((a: any) => {
+        const item = itemTypeMap.get(a.item_type_id);
+        const mp = marketplaceMap.get(a.marketplace_id);
+        return {
+          id: a.id,
+          marketplace_id: a.marketplace_id,
+          marketplace_name: mp?.name || 'Unknown',
+          item_type_id: a.item_type_id,
+          item_name: item?.name || 'Unknown',
+          item_category: item?.category || null,
+          external_material_id: item?.external_material_id || null,
+          allocated_quantity: a.allocated_quantity,
+          distributed_quantity: a.distributed_quantity,
+          updated_at: a.updated_at,
+        };
+      });
+      setAllocationDetails(details);
 
       const statuses: MarketplaceSyncStatus[] = (marketplaces || []).map((mp: any) => {
         const mpAllocs = (allocations || []).filter((a: any) => a.marketplace_id === mp.id);
@@ -89,6 +137,15 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       });
 
       setMarketplaceStatuses(statuses);
+
+      // Determine last auto-sync time
+      const lastAuto = (logs || []).find((l: any) => {
+        const payload = l.request_payload as any;
+        return l.action === 'sync_event_allocations' && (payload?.marketplace_id === 'ALL' || payload?.mode === 'ALL');
+      });
+      if (lastAuto) {
+        setLastAutoSyncTime(new Date((lastAuto as AuditLogEntry).created_at));
+      }
     } catch (error) {
       console.error('Error loading sync monitor data:', error);
     } finally {
@@ -96,6 +153,32 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       setIsRefreshing(false);
     }
   };
+
+  // Countdown timer
+  useEffect(() => {
+    const updateCountdown = () => {
+      if (!lastAutoSyncTime) {
+        setCountdown('Waiting for first sync...');
+        return;
+      }
+      const nextSync = new Date(lastAutoSyncTime.getTime() + SYNC_INTERVAL_MINUTES * 60 * 1000);
+      const now = new Date();
+      const diffMs = nextSync.getTime() - now.getTime();
+
+      if (diffMs <= 0) {
+        setCountdown('Syncing soon...');
+        return;
+      }
+
+      const mins = Math.floor(diffMs / 60000);
+      const secs = Math.floor((diffMs % 60000) / 1000);
+      setCountdown(`${mins}m ${secs.toString().padStart(2, '0')}s`);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [lastAutoSyncTime]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -151,12 +234,16 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
   };
 
   const syncEventLogs = auditLogs.filter(l => l.action === 'sync_event_allocations');
-  const lastAutoSync = syncEventLogs.find(l => {
-    const payload = l.request_payload as any;
-    return payload?.marketplace_id === 'ALL' || payload?.mode === 'ALL';
-  });
   const recentSuccessCount = syncEventLogs.filter(l => l.success).length;
   const recentFailCount = syncEventLogs.filter(l => !l.success).length;
+
+  // Compute countdown progress (0-100)
+  const countdownProgress = (() => {
+    if (!lastAutoSyncTime) return 0;
+    const totalMs = SYNC_INTERVAL_MINUTES * 60 * 1000;
+    const elapsed = Date.now() - lastAutoSyncTime.getTime();
+    return Math.min(100, (elapsed / totalMs) * 100);
+  })();
 
   if (isLoading) {
     return (
@@ -210,6 +297,24 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           </Badge>
         </div>
 
+        {/* Countdown Timer */}
+        <div className="bg-muted/50 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium">Next Auto-Sync</span>
+            </div>
+            <span className="text-2xl font-mono font-bold text-primary">{countdown}</span>
+          </div>
+          <Progress value={countdownProgress} className="h-2" />
+          <div className="flex justify-between mt-1">
+            <span className="text-xs text-muted-foreground">
+              Last: {lastAutoSyncTime ? format(lastAutoSyncTime, 'HH:mm:ss') : 'Never'}
+            </span>
+            <span className="text-xs text-muted-foreground">Every 15 min</span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center p-3 bg-muted/50 rounded-lg">
             <p className="text-2xl font-bold">{marketplaceStatuses.length}</p>
@@ -225,8 +330,8 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           </div>
           <div className="text-center p-3 bg-muted/50 rounded-lg">
             <p className="text-sm font-medium">
-              {lastAutoSync
-                ? formatDistanceToNow(new Date(lastAutoSync.created_at), { addSuffix: true })
+              {lastAutoSyncTime
+                ? formatDistanceToNow(lastAutoSyncTime, { addSuffix: true })
                 : 'No auto-sync yet'}
             </p>
             <p className="text-xs text-muted-foreground">Last Auto-Sync</p>
@@ -320,6 +425,88 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
             </TableBody>
           </Table>
         )}
+      </motion.div>
+
+      {/* Full Allocation Details */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="bg-card border border-border rounded-xl overflow-hidden mb-6"
+      >
+        <Collapsible open={showAllocations} onOpenChange={setShowAllocations}>
+          <CollapsibleTrigger className="w-full p-4 border-b border-border flex items-center justify-between hover:bg-muted/30 transition-colors">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-primary" />
+              <div className="text-left">
+                <h2 className="font-semibold">All Allocation Details</h2>
+                <p className="text-sm text-muted-foreground">{allocationDetails.length} total allocations across all marketplaces</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{allocationDetails.length}</Badge>
+              {showAllocations ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {allocationDetails.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p>No allocations found</p>
+              </div>
+            ) : (
+              <div className="max-h-[500px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Marketplace</TableHead>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-center">Material ID</TableHead>
+                      <TableHead className="text-center">Allocated</TableHead>
+                      <TableHead className="text-center">Distributed</TableHead>
+                      <TableHead className="text-center">Remaining</TableHead>
+                      <TableHead className="text-center">% Used</TableHead>
+                      <TableHead>Last Updated</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allocationDetails
+                      .sort((a, b) => a.marketplace_name.localeCompare(b.marketplace_name) || a.item_name.localeCompare(b.item_name))
+                      .map(alloc => {
+                        const remaining = alloc.allocated_quantity - alloc.distributed_quantity;
+                        const pct = alloc.allocated_quantity > 0 ? Math.round((alloc.distributed_quantity / alloc.allocated_quantity) * 100) : 0;
+                        return (
+                          <TableRow key={alloc.id}>
+                            <TableCell className="font-medium text-sm">{alloc.marketplace_name}</TableCell>
+                            <TableCell className="text-sm">{alloc.item_name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{alloc.item_category || '—'}</TableCell>
+                            <TableCell className="text-center font-mono text-xs">{alloc.external_material_id || '—'}</TableCell>
+                            <TableCell className="text-center font-medium">{alloc.allocated_quantity.toLocaleString()}</TableCell>
+                            <TableCell className="text-center text-emerald-600 font-medium">{alloc.distributed_quantity.toLocaleString()}</TableCell>
+                            <TableCell className="text-center">
+                              <span className={remaining <= 0 ? 'text-red-500 font-bold' : remaining < 10 ? 'text-amber-500 font-medium' : 'text-foreground'}>
+                                {remaining.toLocaleString()}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex items-center gap-2">
+                                <Progress value={pct} className="h-1.5 flex-1" />
+                                <span className="text-xs text-muted-foreground w-8">{pct}%</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                              {format(new Date(alloc.updated_at), 'MMM d, HH:mm')}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </motion.div>
 
       {/* Audit Log */}
