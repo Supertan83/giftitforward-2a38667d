@@ -15,7 +15,8 @@ import {
   ArrowRightLeft,
   Send,
   ChevronsUpDown,
-  Search
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +61,7 @@ import { useItemTypes, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
 import { useLogTraceabilityEvent } from '@/hooks/useTraceabilityLogs';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AllocationManagementProps {
   onBack: () => void;
@@ -89,6 +91,8 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
 
   // Distribute confirmation state
   const [distributeAllocation, setDistributeAllocation] = useState<{ id: string; itemName: string; allocated: number; distributed: number } | null>(null);
+
+  const [isSyncingFromSurpluss, setIsSyncingFromSurpluss] = useState(false);
 
   const { data: itemTypes = [], isLoading: loadingItems } = useItemTypes();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
@@ -385,6 +389,32 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   };
 
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
+  const selectedHasExternalId = selectedMarketplace && (selectedMarketplace as any).external_id;
+
+  // Sync allocations from Surpluss for selected marketplace
+  const handleSyncFromSurpluss = async () => {
+    if (!selectedMarketplaceId) return;
+    setIsSyncingFromSurpluss(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
+        body: { marketplace_id: selectedMarketplaceId, environment: 'production' }
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Sync failed');
+      toast({
+        title: 'Surpluss Sync Complete',
+        description: `Synced ${data.synced} allocations (${data.created} created, ${data.updated} updated)`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Sync Failed',
+        description: error instanceof Error ? error.message : 'Failed to sync from Surpluss',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncingFromSurpluss(false);
+    }
+  };
 
   // Calculate totals for selected marketplace
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
@@ -403,6 +433,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               <h1 className="font-display font-bold text-base md:text-lg truncate">Item Allocation</h1>
               <p className="text-xs md:text-sm text-muted-foreground">Allocate Tractor items to marketplaces</p>
             </div>
+            {selectedHasExternalId && (
+              <Button onClick={handleSyncFromSurpluss} size="sm" variant="outline" className="shrink-0" disabled={isSyncingFromSurpluss}>
+                {isSyncingFromSurpluss ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                <span className="hidden sm:inline">Sync Surpluss</span>
+              </Button>
+            )}
             <Button onClick={() => setShowAllocateModal(true)} size="sm" className="shrink-0">
               <Plus className="w-4 h-4 mr-1 md:mr-2" />
               <span className="hidden sm:inline">Allocate</span>
