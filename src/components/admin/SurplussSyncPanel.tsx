@@ -177,43 +177,59 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
     setSkippedCount(0);
     
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-surpluss-allocations', {
-        body: {
-          environment,
-          event_id: eventId ? parseInt(eventId) : undefined,
-          from_date: fromDate || undefined,
-          to_date: toDate || undefined,
-          page: currentPage,
-          limit: 50
-        }
-      });
+      const pageSize = 100;
+      let page = 1;
+      let allItems: SurplussDonation[] = [];
+      let total = 0;
 
-      if (error) throw error;
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch allocations');
+      // Auto-paginate to fetch ALL items
+      while (true) {
+        const { data, error } = await supabase.functions.invoke('fetch-surpluss-allocations', {
+          body: {
+            environment,
+            event_id: eventId ? parseInt(eventId) : undefined,
+            from_date: fromDate || undefined,
+            to_date: toDate || undefined,
+            page,
+            limit: pageSize
+          }
+        });
+
+        if (error) throw error;
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch allocations');
+        }
+
+        const pageItems: SurplussDonation[] = data.data || [];
+        total = data.meta?.total || 0;
+        allItems = [...allItems, ...pageItems];
+
+        // Stop if we've fetched all items or got an empty page
+        if (pageItems.length < pageSize || allItems.length >= total) {
+          break;
+        }
+        page++;
       }
 
-      const fetchedAllocations: SurplussDonation[] = data.data || [];
-      
       // Store all fetched allocations for "show already synced" toggle
-      setAllFetchedAllocations(fetchedAllocations);
+      setAllFetchedAllocations(allItems);
       
       // Filter out already synced allocations
-      const newAllocations = fetchedAllocations.filter(
+      const newAllocations = allItems.filter(
         allocation => !syncedAllocationIds.has(allocation.id)
       );
-      const skipped = fetchedAllocations.length - newAllocations.length;
+      const skipped = allItems.length - newAllocations.length;
       setSkippedCount(skipped);
 
       setAllocations(newAllocations);
-      setTotalRecords(data.meta?.total || fetchedAllocations.length || 0);
+      setTotalRecords(total || allItems.length);
       
       toast({
         title: 'Allocations Fetched',
         description: skipped > 0 
-          ? `Found ${newAllocations.length} new allocations (${skipped} already synced)`
-          : `Found ${newAllocations.length} allocations from ${environment}`
+          ? `Found ${newAllocations.length} new of ${allItems.length} total (${skipped} already synced)`
+          : `Found ${allItems.length} allocations from ${environment}`
       });
     } catch (error) {
       console.error('Error fetching allocations:', error);
