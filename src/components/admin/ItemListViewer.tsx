@@ -81,7 +81,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   }
 
   return (
-    <div className="py-4 md:py-6 px-4 max-w-7xl mx-auto space-y-4">
+    <div className="py-4 md:py-6 px-4 mx-auto space-y-4">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
@@ -121,48 +121,47 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
               </button>
 
               {!isCollapsed && (
-                <CardContent className="p-0">
-                  <div className="hidden md:grid grid-cols-12 gap-2 px-4 md:px-6 py-2 border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <div className="col-span-3">Item Name</div>
-                    <div className="col-span-2">Donor Company</div>
-                    <div className="col-span-2">Marketplace</div>
-                    <div className="col-span-1 text-right">Assigned</div>
-                    <div className="col-span-1 text-right">Distributed</div>
-                    <div className="col-span-1 text-right">Qty Available</div>
-                  </div>
-
-                  {group.items.map(item => {
-                    const available = item.totalStock - item.distributed;
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => setSelectedItemId(item.id)}
-                        className="grid grid-cols-12 gap-2 px-4 md:px-6 py-3 border-b last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30"
-                      >
-                        <div className="col-span-12 md:col-span-3">
-                          <p className="font-medium text-sm">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">{item.subcategory || '—'}</p>
-                        </div>
-                        <div className="col-span-4 md:col-span-2 flex items-center text-sm text-muted-foreground truncate">
-                          {item.donorCompany || '—'}
-                        </div>
-                        <div className="col-span-4 md:col-span-2 flex items-center text-sm text-muted-foreground truncate">
-                          {item.marketplaceNames || '—'}
-                        </div>
-                        <div className="col-span-1 hidden md:flex items-center justify-end text-sm text-muted-foreground">
-                          {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}
-                        </div>
-                        <div className="col-span-1 hidden md:flex items-center justify-end text-sm text-muted-foreground">
-                          {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}
-                        </div>
-                        <div className="col-span-4 md:col-span-1 flex items-center justify-end">
-                          <span className="font-bold text-sm text-primary">
-                            {available.toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <CardContent className="p-0 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        <th className="text-left px-4 md:px-6 py-2 whitespace-nowrap">Item Name</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap hidden md:table-cell">Donor Company</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap hidden md:table-cell">Marketplace</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap hidden md:table-cell">Assigned</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap hidden md:table-cell">Distributed</th>
+                        <th className="text-right px-4 md:px-6 py-2 whitespace-nowrap">Qty Available</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map(item => {
+                        const available = item.totalStock - item.distributed;
+                        return (
+                          <tr
+                            key={item.id}
+                            onClick={() => setSelectedItemId(item.id)}
+                            className="border-b last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30"
+                          >
+                            <td className="px-4 md:px-6 py-3">
+                              <p className="font-medium">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">{item.subcategory || '—'}</p>
+                            </td>
+                            <td className="px-3 py-3 text-muted-foreground hidden md:table-cell">{item.donorCompany || '—'}</td>
+                            <td className="px-3 py-3 text-muted-foreground hidden md:table-cell">{item.marketplaceNames || '—'}</td>
+                            <td className="px-3 py-3 text-right text-muted-foreground hidden md:table-cell">
+                              {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}
+                            </td>
+                            <td className="px-3 py-3 text-right text-muted-foreground hidden md:table-cell">
+                              {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}
+                            </td>
+                            <td className="px-4 md:px-6 py-3 text-right">
+                              <span className="font-bold text-primary">{available.toLocaleString()}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </CardContent>
               )}
             </Card>
