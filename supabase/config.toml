@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.receive-surpluss-items]
 verify_jwt = false
+
+[functions.surpluss-allocations-api]
+verify_jwt = false

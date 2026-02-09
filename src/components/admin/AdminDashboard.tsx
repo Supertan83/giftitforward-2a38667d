@@ -26,6 +26,7 @@ import { MarketplaceSyncPanel } from '@/components/admin/MarketplaceSyncPanel';
 import { MarketplaceReports } from '@/components/admin/MarketplaceReports';
 import { SurplussSyncPanel } from '@/components/admin/SurplussSyncPanel';
 import { AllocationManagement } from '@/components/admin/AllocationManagement';
+import { SurplussAllocationControl } from '@/components/admin/SurplussAllocationControl';
 import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewer';
 import { HubSpotEmailConfig } from '@/components/admin/HubSpotEmailConfig';
 import { EmailLogsViewer } from '@/components/admin/EmailLogsViewer';
@@ -41,7 +42,7 @@ import { ItemListViewer } from '@/components/admin/ItemListViewer';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -227,6 +228,7 @@ export const AdminDashboard = () => {
       case 'allocations': return <AllocationManagement onBack={goBack} />;
       case 'volunteer-qr-cards': return <VolunteerQRCardsViewer onBack={goBack} />;
       case 'surpluss-sync': return <SurplussSyncPanel onBack={goBack} />;
+      case 'surpluss-allocation-control': return <SurplussAllocationControl onBack={goBack} />;
       case 'hubspot-email-config': return <HubSpotEmailConfig onBack={goBack} />;
       case 'email-logs': return <EmailLogsViewer onBack={goBack} />;
       case 'email-management': return <EmailManagement onBack={goBack} />;

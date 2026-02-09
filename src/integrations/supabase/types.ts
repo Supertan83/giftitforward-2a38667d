@@ -1241,6 +1241,39 @@ export type Database = {
         }
         Relationships: []
       }
+      surpluss_api_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          environment: string
+          id: string
+          request_payload: Json | null
+          response_body: Json | null
+          response_status: number | null
+          success: boolean | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          environment?: string
+          id?: string
+          request_payload?: Json | null
+          response_body?: Json | null
+          response_status?: number | null
+          success?: boolean | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          request_payload?: Json | null
+          response_body?: Json | null
+          response_status?: number | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
       surpluss_distribution_reports: {
         Row: {
           allocated_total: number
