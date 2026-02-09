@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -55,6 +55,7 @@ const adminItems = [
   { view: 'external-items' as AdminView, label: 'External Items', icon: Database, color: 'text-teal-500' },
   { view: 'surpluss-sync' as AdminView, label: 'Surpluss Sync', icon: Database, color: 'text-cyan-500' },
   { view: 'surpluss-allocation-control' as AdminView, label: 'Surpluss Allocations', icon: CloudUpload, color: 'text-emerald-500' },
+  { view: 'surpluss-sync-monitor' as AdminView, label: 'Sync Monitor', icon: RefreshCw, color: 'text-amber-500' },
   { view: 'hubspot-email-config' as AdminView, label: 'HubSpot Emails', icon: Mail, color: 'text-pink-500' },
   { view: 'email-logs' as AdminView, label: 'Email Logs', icon: Mail, color: 'text-red-500' },
   { view: 'email-management' as AdminView, label: 'Email Preview & Test', icon: Mail, color: 'text-emerald-500' },
