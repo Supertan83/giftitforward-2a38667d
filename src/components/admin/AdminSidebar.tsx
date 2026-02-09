@@ -1,7 +1,8 @@
 import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
   QrCode, Store, PieChart, RefreshCw, Unlock,
-  Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText
+  Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText,
+  ChevronRight, Archive
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -17,6 +18,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
 type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
@@ -47,19 +49,22 @@ const beneficiaryItems = [
 
 const adminItems = [
   { view: 'item-list' as AdminView, label: 'Item List', icon: Package, color: 'text-sky-500' },
-  { view: 'inventory' as AdminView, label: 'Manage Inventory', icon: Package, color: 'text-foreground' },
   { view: 'allocations' as AdminView, label: 'Allocate Items', icon: TrendingUp, color: 'text-teal-500' },
   { view: 'statistics' as AdminView, label: 'Live Statistics', icon: TrendingUp, color: 'text-emerald-500' },
   { view: 'users' as AdminView, label: 'Manage Users', icon: Users, color: 'text-violet-500' },
+  { view: 'surpluss-sync-monitor' as AdminView, label: 'Sync Monitor', icon: RefreshCw, color: 'text-amber-500' },
+  { view: 'email-logs' as AdminView, label: 'Email Logs', icon: Mail, color: 'text-red-500' },
+  { view: 'email-management' as AdminView, label: 'Email Preview & Test', icon: Mail, color: 'text-emerald-500' },
+  { view: 'email-templates' as AdminView, label: 'Email Templates', icon: FileText, color: 'text-indigo-500' },
+];
+
+const unusedItems = [
+  { view: 'inventory' as AdminView, label: 'Manage Inventory', icon: Package, color: 'text-foreground' },
   { view: 'webhooks' as AdminView, label: 'Webhook Events', icon: Webhook, color: 'text-cyan-500' },
   { view: 'external-items' as AdminView, label: 'External Items', icon: Database, color: 'text-teal-500' },
   { view: 'surpluss-sync' as AdminView, label: 'Surpluss Sync', icon: Database, color: 'text-cyan-500' },
   { view: 'surpluss-allocation-control' as AdminView, label: 'Surpluss Allocations', icon: CloudUpload, color: 'text-emerald-500' },
-  { view: 'surpluss-sync-monitor' as AdminView, label: 'Sync Monitor', icon: RefreshCw, color: 'text-amber-500' },
   { view: 'hubspot-email-config' as AdminView, label: 'HubSpot Emails', icon: Mail, color: 'text-pink-500' },
-  { view: 'email-logs' as AdminView, label: 'Email Logs', icon: Mail, color: 'text-red-500' },
-  { view: 'email-management' as AdminView, label: 'Email Preview & Test', icon: Mail, color: 'text-emerald-500' },
-  { view: 'email-templates' as AdminView, label: 'Email Templates', icon: FileText, color: 'text-indigo-500' },
 ];
 
 export const AdminSidebar = ({
@@ -166,22 +171,42 @@ export const AdminSidebar = ({
           <SidebarGroupContent>
             <SidebarMenu>
               {adminItems.map(renderMenuItem)}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={onHubspotSync}
-                  disabled={isSyncingHubspot}
-                  tooltip={isSyncingHubspot ? 'Syncing...' : 'Sync to HubSpot'}
-                >
-                  {isSyncingHubspot ? (
-                    <Loader2 className="h-4 w-4 text-orange-500 animate-spin" />
-                  ) : (
-                    <CloudUpload className="h-4 w-4 text-orange-500" />
-                  )}
-                  <span>{isSyncingHubspot ? 'Syncing...' : 'Sync to HubSpot'}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Unused Action Items - always collapsed */}
+        <SidebarGroup>
+          <Collapsible>
+            <CollapsibleTrigger className="flex w-full items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+              <ChevronRight className="h-3 w-3 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+              <Archive className="h-3 w-3" />
+              <span>Unused Action Items</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {unusedItems.map(renderMenuItem)}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={onHubspotSync}
+                      disabled={isSyncingHubspot}
+                      tooltip={isSyncingHubspot ? 'Syncing...' : 'Sync to HubSpot'}
+                    >
+                      {isSyncingHubspot ? (
+                        <Loader2 className="h-4 w-4 text-orange-500 animate-spin" />
+                      ) : (
+                        <CloudUpload className="h-4 w-4 text-orange-500" />
+                      )}
+                      <span>{isSyncingHubspot ? 'Syncing...' : 'Sync to HubSpot'}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
