@@ -55,6 +55,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     const card = qrCards[cardIndex];
     if (card.status === 'active') return card;
+    if (card.status === 'checked_out') return null; // Card already used today
     
     const transaction: Transaction = {
       id: `t-${Date.now()}`,
@@ -196,7 +197,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     const updatedCard: QRCard = {
       ...card,
-      status: 'ready',
+      status: 'checked_out',
       creditBalance: 0,
       totalItemsCollected: 0,
       transactions: [],
