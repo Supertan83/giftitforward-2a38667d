@@ -11,11 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
-
 interface SurplussSyncMonitorProps {
   onBack: () => void;
 }
-
 interface AuditLogEntry {
   id: string;
   action: string;
@@ -26,7 +24,6 @@ interface AuditLogEntry {
   response_body: any;
   created_at: string;
 }
-
 interface MarketplaceSyncStatus {
   id: string;
   name: string;
@@ -36,7 +33,6 @@ interface MarketplaceSyncStatus {
   total_allocated: number;
   total_distributed: number;
 }
-
 interface AllocationDetail {
   id: string;
   marketplace_id: string;
@@ -49,10 +45,10 @@ interface AllocationDetail {
   distributed_quantity: number;
   updated_at: string;
 }
-
-const SYNC_INTERVAL_MINUTES = 5;
-
-export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
+const SYNC_INTERVAL_MINUTES = 15;
+export const SurplussSyncMonitor = ({
+  onBack
+}: SurplussSyncMonitorProps) => {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [marketplaceStatuses, setMarketplaceStatuses] = useState<MarketplaceSyncStatus[]>([]);
   const [allocationDetails, setAllocationDetails] = useState<AllocationDetail[]>([]);
@@ -64,35 +60,33 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
   const [showAllocations, setShowAllocations] = useState(false);
   const [countdown, setCountdown] = useState('');
   const [lastAutoSyncTime, setLastAutoSyncTime] = useState<Date | null>(null);
-  const { toast } = useToast();
-
+  const {
+    toast
+  } = useToast();
   const loadData = async () => {
     try {
       // Fetch audit logs
-      const { data: logs } = await supabase
-        .from('surpluss_api_audit_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      setAuditLogs((logs as AuditLogEntry[]) || []);
+      const {
+        data: logs
+      } = await supabase.from('surpluss_api_audit_log').select('*').order('created_at', {
+        ascending: false
+      }).limit(50);
+      setAuditLogs(logs as AuditLogEntry[] || []);
 
       // Fetch marketplaces with external_id
-      const { data: marketplaces } = await supabase
-        .from('marketplace_events')
-        .select('id, name, external_id')
-        .not('external_id', 'is', null);
+      const {
+        data: marketplaces
+      } = await supabase.from('marketplace_events').select('id, name, external_id').not('external_id', 'is', null);
 
       // Fetch allocation stats per marketplace
-      const { data: allocations } = await supabase
-        .from('marketplace_item_allocations')
-        .select('id, marketplace_id, item_type_id, allocated_quantity, distributed_quantity, updated_at');
+      const {
+        data: allocations
+      } = await supabase.from('marketplace_item_allocations').select('id, marketplace_id, item_type_id, allocated_quantity, distributed_quantity, updated_at');
 
       // Fetch item types for allocation details
-      const { data: itemTypes } = await supabase
-        .from('item_types')
-        .select('id, name, category, external_material_id');
-
+      const {
+        data: itemTypes
+      } = await supabase.from('item_types').select('id, name, category, external_material_id');
       const itemTypeMap = new Map((itemTypes || []).map((it: any) => [it.id, it]));
       const marketplaceMap = new Map((marketplaces || []).map((mp: any) => [mp.id, mp]));
 
@@ -110,21 +104,16 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           external_material_id: item?.external_material_id || null,
           allocated_quantity: a.allocated_quantity,
           distributed_quantity: a.distributed_quantity,
-          updated_at: a.updated_at,
+          updated_at: a.updated_at
         };
       });
       setAllocationDetails(details);
-
       const statuses: MarketplaceSyncStatus[] = (marketplaces || []).map((mp: any) => {
         const mpAllocs = (allocations || []).filter((a: any) => a.marketplace_id === mp.id);
         const lastSync = (logs || []).find((l: any) => {
           const payload = l.request_payload as any;
-          return (
-            l.action === 'sync_event_allocations' &&
-            (payload?.marketplace_id === mp.id || payload?.external_id === mp.external_id)
-          );
+          return l.action === 'sync_event_allocations' && (payload?.marketplace_id === mp.id || payload?.external_id === mp.external_id);
         });
-
         return {
           id: mp.id,
           name: mp.name,
@@ -132,10 +121,9 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           last_sync: lastSync as AuditLogEntry | null || null,
           allocation_count: mpAllocs.length,
           total_allocated: mpAllocs.reduce((s: number, a: any) => s + (a.allocated_quantity || 0), 0),
-          total_distributed: mpAllocs.reduce((s: number, a: any) => s + (a.distributed_quantity || 0), 0),
+          total_distributed: mpAllocs.reduce((s: number, a: any) => s + (a.distributed_quantity || 0), 0)
         };
       });
-
       setMarketplaceStatuses(statuses);
 
       // Determine last auto-sync time
@@ -165,27 +153,30 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       const remainingSecs = 60 - secs;
       const adjustedMins = remainingSecs === 60 ? remainingMins + 1 : remainingMins;
       const adjustedSecs = remainingSecs === 60 ? 0 : remainingSecs;
-      
       setCountdown(`${adjustedMins}m ${adjustedSecs.toString().padStart(2, '0')}s`);
     };
-
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => { loadData(); }, []);
-
+  useEffect(() => {
+    loadData();
+  }, []);
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadData();
   };
-
   const handleSyncAll = async () => {
     setIsSyncingAll(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
-        body: { marketplace_id: 'ALL', environment }
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
+        body: {
+          marketplace_id: 'ALL',
+          environment
+        }
       });
       if (error) throw error;
       toast({
@@ -203,12 +194,17 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       setIsSyncingAll(false);
     }
   };
-
   const handleSyncSingle = async (marketplaceId: string) => {
     setSyncingSingle(marketplaceId);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
-        body: { marketplace_id: marketplaceId, environment }
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
+        body: {
+          marketplace_id: marketplaceId,
+          environment
+        }
       });
       if (error) throw error;
       toast({
@@ -226,7 +222,6 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       setSyncingSingle(null);
     }
   };
-
   const syncEventLogs = auditLogs.filter(l => l.action === 'sync_event_allocations');
   const recentSuccessCount = syncEventLogs.filter(l => l.success).length;
   const recentFailCount = syncEventLogs.filter(l => !l.success).length;
@@ -236,21 +231,16 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
     const now = new Date();
     const mins = now.getMinutes();
     const secs = now.getSeconds();
-    const elapsed = (mins % SYNC_INTERVAL_MINUTES) * 60 + secs;
+    const elapsed = mins % SYNC_INTERVAL_MINUTES * 60 + secs;
     const total = SYNC_INTERVAL_MINUTES * 60;
-    return (elapsed / total) * 100;
+    return elapsed / total * 100;
   })();
-
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+    return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-6 max-w-6xl mx-auto">
+  return <div className="min-h-screen bg-background p-4 md:p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -275,11 +265,13 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       </div>
 
       {/* Auto-Sync Status Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-card border border-border rounded-xl p-4 md:p-6 mb-6"
-      >
+      <motion.div initial={{
+      opacity: 0,
+      y: 10
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} className="bg-card border border-border rounded-xl p-4 md:p-6 mb-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Timer className="w-5 h-5 text-primary" />
@@ -305,9 +297,11 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           <Progress value={countdownProgress} className="h-2" />
           <div className="flex justify-between mt-1">
             <span className="text-xs text-muted-foreground">
-              Last recorded sync: {lastAutoSyncTime ? formatDistanceToNow(lastAutoSyncTime, { addSuffix: true }) : 'No syncs recorded yet'}
+              Last recorded sync: {lastAutoSyncTime ? formatDistanceToNow(lastAutoSyncTime, {
+              addSuffix: true
+            }) : 'No syncs recorded yet'}
             </span>
-            <span className="text-xs text-muted-foreground">Schedule: every 15 min (:00, :15, :30, :45)</span>
+            <span className="text-xs text-muted-foreground">Schedule: every 5 min</span>
           </div>
         </div>
 
@@ -326,9 +320,9 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
           </div>
           <div className="text-center p-3 bg-muted/50 rounded-lg">
             <p className="text-sm font-medium">
-              {lastAutoSyncTime
-                ? formatDistanceToNow(lastAutoSyncTime, { addSuffix: true })
-                : 'No auto-sync yet'}
+              {lastAutoSyncTime ? formatDistanceToNow(lastAutoSyncTime, {
+              addSuffix: true
+            }) : 'No auto-sync yet'}
             </p>
             <p className="text-xs text-muted-foreground">Last Auto-Sync</p>
           </div>
@@ -343,23 +337,23 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
       </motion.div>
 
       {/* Marketplace Sync Status */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-card border border-border rounded-xl overflow-hidden mb-6"
-      >
+      <motion.div initial={{
+      opacity: 0,
+      y: 10
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} transition={{
+      delay: 0.1
+    }} className="bg-card border border-border rounded-xl overflow-hidden mb-6">
         <div className="p-4 border-b border-border">
           <h2 className="font-semibold">Marketplace Sync Status</h2>
           <p className="text-sm text-muted-foreground">Per-event allocation sync overview</p>
         </div>
-        {marketplaceStatuses.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
+        {marketplaceStatuses.length === 0 ? <div className="p-8 text-center text-muted-foreground">
             <Database className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p>No marketplaces linked to Surpluss yet</p>
-          </div>
-        ) : (
-          <Table>
+          </div> : <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Marketplace</TableHead>
@@ -373,63 +367,46 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {marketplaceStatuses.map(mp => (
-                <TableRow key={mp.id}>
+              {marketplaceStatuses.map(mp => <TableRow key={mp.id}>
                   <TableCell className="font-medium">{mp.name}</TableCell>
                   <TableCell className="text-center font-mono text-sm">{mp.external_id}</TableCell>
                   <TableCell className="text-center">{mp.allocation_count}</TableCell>
                   <TableCell className="text-center">{mp.total_allocated.toLocaleString()}</TableCell>
                   <TableCell className="text-center text-emerald-600">{mp.total_distributed.toLocaleString()}</TableCell>
                   <TableCell className="text-center text-sm text-muted-foreground">
-                    {mp.last_sync
-                      ? formatDistanceToNow(new Date(mp.last_sync.created_at), { addSuffix: true })
-                      : 'Never'}
+                    {mp.last_sync ? formatDistanceToNow(new Date(mp.last_sync.created_at), {
+                addSuffix: true
+              }) : 'Never'}
                   </TableCell>
                   <TableCell className="text-center">
-                    {mp.last_sync ? (
-                      mp.last_sync.success ? (
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                    {mp.last_sync ? mp.last_sync.success ? <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
                           <CheckCircle className="w-3 h-3 mr-1" /> OK
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/30">
+                        </Badge> : <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/30">
                           <XCircle className="w-3 h-3 mr-1" /> Error
-                        </Badge>
-                      )
-                    ) : (
-                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                        </Badge> : <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
                         <AlertTriangle className="w-3 h-3 mr-1" /> Pending
-                      </Badge>
-                    )}
+                      </Badge>}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleSyncSingle(mp.id)}
-                      disabled={syncingSingle === mp.id}
-                    >
-                      {syncingSingle === mp.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-3 h-3" />
-                      )}
+                    <Button size="sm" variant="outline" onClick={() => handleSyncSingle(mp.id)} disabled={syncingSingle === mp.id}>
+                      {syncingSingle === mp.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                     </Button>
                   </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>)}
             </TableBody>
-          </Table>
-        )}
+          </Table>}
       </motion.div>
 
       {/* Full Allocation Details */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="bg-card border border-border rounded-xl overflow-hidden mb-6"
-      >
+      <motion.div initial={{
+      opacity: 0,
+      y: 10
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} transition={{
+      delay: 0.15
+    }} className="bg-card border border-border rounded-xl overflow-hidden mb-6">
         <Collapsible open={showAllocations} onOpenChange={setShowAllocations}>
           <CollapsibleTrigger className="w-full p-4 border-b border-border flex items-center justify-between hover:bg-muted/30 transition-colors">
             <div className="flex items-center gap-2">
@@ -445,13 +422,10 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
             </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            {allocationDetails.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
+            {allocationDetails.length === 0 ? <div className="p-8 text-center text-muted-foreground">
                 <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p>No allocations found</p>
-              </div>
-            ) : (
-              <div className="max-h-[500px] overflow-y-auto">
+              </div> : <div className="max-h-[500px] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -467,13 +441,10 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allocationDetails
-                      .sort((a, b) => a.marketplace_name.localeCompare(b.marketplace_name) || a.item_name.localeCompare(b.item_name))
-                      .map(alloc => {
-                        const remaining = alloc.allocated_quantity - alloc.distributed_quantity;
-                        const pct = alloc.allocated_quantity > 0 ? Math.round((alloc.distributed_quantity / alloc.allocated_quantity) * 100) : 0;
-                        return (
-                          <TableRow key={alloc.id}>
+                    {allocationDetails.sort((a, b) => a.marketplace_name.localeCompare(b.marketplace_name) || a.item_name.localeCompare(b.item_name)).map(alloc => {
+                  const remaining = alloc.allocated_quantity - alloc.distributed_quantity;
+                  const pct = alloc.allocated_quantity > 0 ? Math.round(alloc.distributed_quantity / alloc.allocated_quantity * 100) : 0;
+                  return <TableRow key={alloc.id}>
                             <TableCell className="font-medium text-sm">{alloc.marketplace_name}</TableCell>
                             <TableCell className="text-sm">{alloc.item_name}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{alloc.item_category || '—'}</TableCell>
@@ -494,35 +465,33 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
                             <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                               {format(new Date(alloc.updated_at), 'MMM d, HH:mm')}
                             </TableCell>
-                          </TableRow>
-                        );
-                      })}
+                          </TableRow>;
+                })}
                   </TableBody>
                 </Table>
-              </div>
-            )}
+              </div>}
           </CollapsibleContent>
         </Collapsible>
       </motion.div>
 
       {/* Audit Log */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-card border border-border rounded-xl overflow-hidden"
-      >
+      <motion.div initial={{
+      opacity: 0,
+      y: 10
+    }} animate={{
+      opacity: 1,
+      y: 0
+    }} transition={{
+      delay: 0.2
+    }} className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="p-4 border-b border-border">
           <h2 className="font-semibold">Sync Audit Log</h2>
           <p className="text-sm text-muted-foreground">Recent sync operations and API calls</p>
         </div>
-        {auditLogs.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
+        {auditLogs.length === 0 ? <div className="p-8 text-center text-muted-foreground">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p>No sync activity recorded yet</p>
-          </div>
-        ) : (
-          <div className="max-h-[400px] overflow-y-auto">
+          </div> : <div className="max-h-[400px] overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -535,15 +504,9 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
               </TableHeader>
               <TableBody>
                 {auditLogs.map(log => {
-                  const resp = log.response_body as any;
-                  const detail = resp?.synced != null
-                    ? `${resp.synced} synced, ${resp.created || 0} created, ${resp.updated || 0} updated`
-                    : resp?.total_synced != null
-                    ? `${resp.synced_events || 0} events, ${resp.total_synced} items`
-                    : resp?.error || (log.response_status ? `HTTP ${log.response_status}` : '—');
-
-                  return (
-                    <TableRow key={log.id}>
+              const resp = log.response_body as any;
+              const detail = resp?.synced != null ? `${resp.synced} synced, ${resp.created || 0} created, ${resp.updated || 0} updated` : resp?.total_synced != null ? `${resp.synced_events || 0} events, ${resp.total_synced} items` : resp?.error || (log.response_status ? `HTTP ${log.response_status}` : '—');
+              return <TableRow key={log.id}>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {format(new Date(log.created_at), 'MMM d, HH:mm:ss')}
                       </TableCell>
@@ -554,23 +517,16 @@ export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {log.success ? (
-                          <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-red-500 mx-auto" />
-                        )}
+                        {log.success ? <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" /> : <XCircle className="w-4 h-4 text-red-500 mx-auto" />}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
                         {detail}
                       </TableCell>
-                    </TableRow>
-                  );
-                })}
+                    </TableRow>;
+            })}
               </TableBody>
             </Table>
-          </div>
-        )}
+          </div>}
       </motion.div>
-    </div>
-  );
+    </div>;
 };
