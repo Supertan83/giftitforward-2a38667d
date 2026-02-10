@@ -53,6 +53,9 @@ const adminItems = [
   { view: 'statistics' as AdminView, label: 'Live Statistics', icon: TrendingUp, color: 'text-emerald-500' },
   { view: 'users' as AdminView, label: 'Manage Users', icon: Users, color: 'text-violet-500' },
   { view: 'surpluss-sync-monitor' as AdminView, label: 'Sync Monitor', icon: RefreshCw, color: 'text-amber-500' },
+];
+
+const emailItems = [
   { view: 'email-logs' as AdminView, label: 'Email Logs', icon: Mail, color: 'text-red-500' },
   { view: 'email-management' as AdminView, label: 'Email Preview & Test', icon: Mail, color: 'text-emerald-500' },
   { view: 'email-templates' as AdminView, label: 'Email Templates', icon: FileText, color: 'text-indigo-500' },
@@ -172,6 +175,18 @@ export const AdminSidebar = ({
           <SidebarGroupContent>
             <SidebarMenu>
               {adminItems.map(renderMenuItem)}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Email Apps */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Email Apps</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {emailItems.map(renderMenuItem)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
