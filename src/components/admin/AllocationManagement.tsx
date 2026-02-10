@@ -103,7 +103,14 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const { toast } = useToast();
   const logEvent = useLogTraceabilityEvent();
 
-  const activeMarketplaces = marketplaces.filter(m => m.status === 'active' || m.status === 'upcoming');
+  const activeMarketplaces = marketplaces
+    .filter(m => m.status === 'active' || m.status === 'upcoming')
+    .sort((a, b) => {
+      if (!a.event_date && !b.event_date) return 0;
+      if (!a.event_date) return 1;
+      if (!b.event_date) return -1;
+      return new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
+    });
 
   // All allocatable item types (those with external_material_id from Tractor)
   const allocatableItems = itemTypes.filter(item => item.externalMaterialId != null);
@@ -458,7 +465,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             <SelectContent>
               {activeMarketplaces.map(mp => (
                 <SelectItem key={mp.id} value={mp.id}>
-                  {mp.name}
+                  {mp.name}{mp.event_date ? ` (${new Date(mp.event_date).toLocaleDateString()})` : ''}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -702,7 +709,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 <SelectContent>
                   {activeMarketplaces.map(mp => (
                     <SelectItem key={mp.id} value={mp.id}>
-                      {mp.name}
+                      {mp.name}{mp.event_date ? ` (${new Date(mp.event_date).toLocaleDateString()})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
