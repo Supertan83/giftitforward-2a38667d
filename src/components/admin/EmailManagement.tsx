@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings, User, Building2, Calendar, MapPin, ClipboardList, ExternalLink, Copy } from 'lucide-react';
+import { ArrowLeft, Upload, Mail, Eye, Send, Loader2, Image, CheckCircle, AlertCircle, X, Settings, User, Building2, Calendar, MapPin, ClipboardList, ExternalLink, Copy, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { EmailProviderConfig } from './EmailProviderConfig';
+import { useEmailTemplates, type EmailTemplate } from '@/hooks/useEmailTemplates';
 
 interface EmailManagementProps {
   onBack: () => void;
@@ -116,6 +117,12 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
   const [createdSurveyToken, setCreatedSurveyToken] = useState<string | null>(null);
   const [existingSurveys, setExistingSurveys] = useState<Array<{ id: string; volunteer_name: string; survey_token: string; completed_at: string | null }>>([]);
   const [isLoadingSurveys, setIsLoadingSurveys] = useState(false);
+  
+  // Custom template testing state
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [templateTestEmail, setTemplateTestEmail] = useState('');
+  const [isSendingTemplate, setIsSendingTemplate] = useState(false);
+  const { data: customTemplates = [] } = useEmailTemplates();
   
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const { toast } = useToast();
@@ -380,6 +387,73 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       description: 'Survey URL copied to clipboard'
     });
   };
+
+  // Send custom template as test email
+  const handleSendTemplateEmail = async () => {
+    if (!templateTestEmail.trim() || !selectedTemplateId) {
+      toast({
+        title: 'Missing Fields',
+        description: 'Please select a template and enter a recipient email',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const template = customTemplates.find(t => t.id === selectedTemplateId);
+    if (!template) return;
+
+    setIsSendingTemplate(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-test-email', {
+        body: {
+          email_type: 'custom_template',
+          recipient_email: templateTestEmail.trim(),
+          test_mode: true,
+          provider: selectedProvider,
+          custom_template: {
+            subject: template.subject,
+            greeting: template.greeting,
+            body_sections: template.body_sections,
+            cta_text: template.cta_text,
+            cta_url: template.cta_url,
+          },
+          volunteer_data: {
+            first_name: simulatedVolunteer.first_name,
+            last_name: simulatedVolunteer.last_name,
+            name: `${simulatedVolunteer.first_name} ${simulatedVolunteer.last_name}`,
+            phone: simulatedVolunteer.phone_number,
+            marketplace_name: simulatedVolunteer.marketplace_name,
+            marketplace_date: simulatedVolunteer.marketplace_date,
+            marketplace_location: simulatedVolunteer.marketplace_location,
+            marketplace_time: simulatedVolunteer.marketplace_time,
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: 'Template Email Sent!',
+          description: `"${template.name}" sent to ${templateTestEmail}`,
+        });
+      } else {
+        throw new Error(data?.error || 'Failed to send template email');
+      }
+    } catch (error) {
+      console.error('Template email error:', error);
+      toast({
+        title: 'Send Failed',
+        description: error instanceof Error ? error.message : 'Failed to send template email',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSendingTemplate(false);
+    }
+  };
+
+
 
   // Open survey page in new tab
   const openSurveyPage = (token: string) => {
@@ -1259,6 +1333,92 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                         </>
                       )}
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Send Custom Template Card */}
+              <Card className="border-emerald-500/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Send Custom Template
+                  </CardTitle>
+                  <CardDescription>
+                    Send one of your created templates as a test email with dynamic token replacement
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {customTemplates.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">
+                        No custom templates created yet. Go to Email Templates to create one.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Select Template</Label>
+                            <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                              <SelectTrigger className="mt-1.5">
+                                <SelectValue placeholder="Choose a template..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {customTemplates.map((tpl) => (
+                                  <SelectItem key={tpl.id} value={tpl.id}>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{tpl.name}</span>
+                                      <span className="text-muted-foreground text-xs capitalize">({tpl.category})</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Recipient Email</Label>
+                            <Input
+                              type="email"
+                              placeholder="your.email@example.com"
+                              value={templateTestEmail}
+                              onChange={(e) => setTemplateTestEmail(e.target.value)}
+                              className="mt-1.5"
+                            />
+                          </div>
+                        </div>
+
+                        {selectedTemplateId && (() => {
+                          const tpl = customTemplates.find(t => t.id === selectedTemplateId);
+                          if (!tpl) return null;
+                          return (
+                            <div className="p-3 bg-muted/50 rounded-lg border text-sm">
+                              <p className="font-medium mb-1">Subject: {tpl.subject}</p>
+                              <p className="text-muted-foreground text-xs">
+                                Tokens like {'{{first_name}}'}, {'{{marketplace_name}}'} will be replaced with the volunteer simulation data above.
+                              </p>
+                            </div>
+                          );
+                        })()}
+
+                        <Button
+                          onClick={handleSendTemplateEmail}
+                          disabled={isSendingTemplate || !templateTestEmail.trim() || !selectedTemplateId}
+                          className="w-full"
+                        >
+                          {isSendingTemplate ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Sending Template...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4 mr-2" />
+                              Send Template Test Email
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
