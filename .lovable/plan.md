@@ -1,111 +1,58 @@
 
 
-## Email Campaign Manager: Send Templates to Volunteers (Manual + Scheduled)
+## Fix Marketplace Count: Fetch All 27 from Surpluss API and Clean Up Test Data
 
-### Overview
-Add a new "Email Campaigns" section in the Admin Dashboard that allows admins to:
-1. Select any custom template from the Email Template Center
-2. Choose recipients (all approved volunteers, specific marketplace, or manual selection)
-3. Send immediately (manual trigger) or schedule for a future date/time
-4. Track campaign status and delivery progress
+### Problem
+- The Surpluss platform has **27 marketplaces** (excluding test ones)
+- Locally, there are only **23 marketplaces** (22 linked + 1 unlinked), and **2 of those are test entries** ("Tala's Marketplace" and "Lea's Marketplace")
+- The Surpluss API endpoint `/api/common/marketplace-events` currently returns only **20 events** -- likely because it has default filters or pagination behavior that excludes some
 
-### Database Changes
+### Root Cause
+The `autoLinkMarketplaces` function in the edge function fetches from `/api/common/marketplace-events?page=1&limit=100` and only gets 20 results. The remaining 7+ marketplace events on Surpluss are not being returned, possibly due to:
+1. The API returning only "active" or "published" events by default
+2. Additional query parameters needed (e.g., `status=all`, `include_completed=true`, or `include_all=true`)
 
-**New table: `email_campaigns`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid (PK) | |
-| template_id | uuid (FK -> email_templates) | Selected template |
-| name | text | Campaign name |
-| recipient_filter | jsonb | Filter criteria (e.g. `{type: "all"}`, `{type: "marketplace", id: "..."}`, `{type: "manual", emails: [...]}`) |
-| scheduled_at | timestamptz (nullable) | Null = manual send only |
-| sent_at | timestamptz (nullable) | When actually sent |
-| status | text | `draft`, `scheduled`, `sending`, `sent`, `failed` |
-| total_recipients | int | Count of recipients |
-| sent_count | int | Successfully sent count |
-| failed_count | int | Failed count |
-| created_by | uuid | Admin who created it |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
+### Plan
 
-**New table: `email_campaign_recipients`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid (PK) | |
-| campaign_id | uuid (FK -> email_campaigns) | |
-| volunteer_id | uuid (nullable) | FK to pending_volunteers |
-| recipient_email | text | |
-| recipient_name | text | |
-| status | text | `pending`, `sent`, `failed` |
-| error_message | text (nullable) | |
-| sent_at | timestamptz (nullable) | |
-| created_at | timestamptz | |
+#### Step 1: Create a dedicated edge function to fetch and import ALL Surpluss marketplace events
+Build a new edge function `fetch-surpluss-marketplaces` that:
+- Calls the Surpluss API `/api/common/marketplace-events` with broader parameters (try `?page=1&limit=200&status=all` and similar variations)
+- Returns the full raw list of marketplace events from Surpluss so we can see exactly what's available
+- For each Surpluss event NOT already in the local database (matched by `external_id`), creates a new `marketplace_events` record with:
+  - `name` from the Surpluss event title
+  - `external_id` from the Surpluss event ID
+  - `status` set to "upcoming"
 
-RLS: Admin-only for both tables.
+#### Step 2: Clean up test marketplaces
+- Remove "Tala's Marketplace" (external_id: 35) and "Lea's Marketplace" (external_id: 68) from the local database, as these are test entries that don't correspond to real events
+- Also clean up any associated `marketplace_item_allocations` for these test entries
 
-### New Edge Function: `send-campaign-email`
+#### Step 3: Update the sync edge function to be more aggressive with fetching
+Modify `sync-surpluss-event-allocations/index.ts`:
+- In the `autoLinkMarketplaces` function, try additional API parameter variations to capture all events (e.g., adding `status=all` or fetching without filters)
+- If the API truly only returns 20, add a fallback: for any Surpluss event found, if no local marketplace exists with that `external_id`, **auto-create** it (not just auto-link by name)
 
-Handles both manual triggers and scheduled execution:
-- Accepts a `campaign_id`
-- Loads the campaign, template, and recipients
-- Iterates through pending recipients, renders the template with token replacement per recipient (using their `first_name`, `last_name`, `email`, linked marketplace data)
-- Sends via Resend (using the existing branded HTML wrapper from `send-test-email`)
-- Updates each recipient's status and the campaign's `sent_count`/`failed_count`
-- Logs each send to `email_send_logs`
+#### Step 4: Add a "Fetch All Marketplaces" button to the Sync Monitor UI
+Update `SurplussSyncMonitor.tsx`:
+- Add a button to trigger the new edge function, allowing admins to manually pull all marketplace events from Surpluss
+- Show a summary of how many new marketplaces were discovered and created
 
-### Scheduled Execution via pg_cron
+### Technical Details
 
-A cron job (every 5 minutes) that:
-```sql
-SELECT campaigns with status = 'scheduled' AND scheduled_at <= now()
-```
-For each, calls the `send-campaign-email` edge function.
+**New file:** `supabase/functions/fetch-surpluss-marketplaces/index.ts`
+- Fetches all pages from `/api/common/marketplace-events`
+- Cross-references with local `marketplace_events` table by `external_id`
+- Auto-creates missing local entries
+- Returns summary of what was found and created
 
-### New UI Component: `EmailCampaignManager.tsx`
+**Modified file:** `supabase/functions/sync-surpluss-event-allocations/index.ts`
+- Enhance `autoLinkMarketplaces` to also auto-create missing marketplace entries (not just link existing ones by name)
+- Try query parameter variations to get more results from the API
 
-Added as a new admin view accessible from the sidebar.
+**Modified file:** `src/components/admin/SurplussSyncMonitor.tsx`
+- Add "Fetch All Marketplaces" button in the header area
+- Show results toast with count of new vs existing marketplaces
 
-**Sections:**
-1. **Campaign List** -- Table showing all campaigns with status badges, recipient counts, scheduled time, and actions (Send Now, Edit, Delete)
-2. **Create/Edit Campaign Dialog** with:
-   - Campaign name
-   - Template selector (dropdown of active templates from `email_templates`)
-   - Recipient selector:
-     - "All approved volunteers" -- queries `pending_volunteers` where `status = 'approved'`
-     - "By marketplace" -- select a marketplace, filters volunteers by `events_list` or `events_json`
-     - "Manual list" -- paste/type email addresses
-   - Schedule toggle: immediate or pick a date/time
-3. **Campaign Detail View** -- Shows per-recipient delivery status (sent/failed/pending)
-
-### Files to Create
-- `src/components/admin/EmailCampaignManager.tsx` -- Main UI component
-- `supabase/functions/send-campaign-email/index.ts` -- Edge function for sending
-
-### Files to Modify
-- `src/components/admin/AdminDashboard.tsx` -- Add `email-campaigns` to AdminView type and render the new component
-- `src/components/admin/AdminSidebar.tsx` -- Add "Email Campaigns" menu item under the communications section
-- `supabase/config.toml` -- Add `[functions.send-campaign-email]` with `verify_jwt = false`
-
-### Technical Flow
-
-```text
-Admin creates campaign:
-  1. Selects template + recipients + schedule
-  2. Saves to email_campaigns + email_campaign_recipients
-
-Manual trigger (Send Now):
-  Admin clicks "Send Now" -> calls send-campaign-email edge function
-
-Scheduled trigger:
-  pg_cron (every 5 min) -> checks for due campaigns -> calls send-campaign-email
-
-send-campaign-email:
-  1. Load campaign + template
-  2. For each pending recipient:
-     a. Replace tokens ({{first_name}}, etc.) using pending_volunteers data
-     b. Render branded HTML
-     c. Send via Resend
-     d. Update recipient status
-  3. Update campaign totals + status to 'sent'
-```
+**Database cleanup (migration):**
+- Delete test marketplace allocations and entries for "Tala's Marketplace" and "Lea's Marketplace" (will confirm with user before executing)
 
