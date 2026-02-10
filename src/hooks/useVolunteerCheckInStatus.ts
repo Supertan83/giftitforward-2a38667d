@@ -46,11 +46,28 @@ export const useVolunteerCheckInStatus = () => {
       }
 
       // Find volunteer card linked to the pending_volunteers record
-      const { data: card, error } = await supabase
+      // First try to find an actively checked-in card
+      let { data: card, error } = await supabase
         .from('volunteer_qr_cards')
         .select('id, status, assigned_zone, marketplace_id, checked_in_at, volunteer_id')
         .eq('volunteer_id', pendingVolunteer.id)
+        .eq('status', 'checked_in')
+        .order('checked_in_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
+
+      // If no checked-in card, get the most recently created one
+      if (!card) {
+        const result = await supabase
+          .from('volunteer_qr_cards')
+          .select('id, status, assigned_zone, marketplace_id, checked_in_at, volunteer_id')
+          .eq('volunteer_id', pendingVolunteer.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        card = result.data;
+        error = result.error;
+      }
 
       if (error || !card) {
         return {
