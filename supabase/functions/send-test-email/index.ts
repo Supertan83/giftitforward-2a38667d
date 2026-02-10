@@ -25,12 +25,21 @@ interface VolunteerData {
   marketplace_time?: string;
 }
 
+interface CustomTemplateData {
+  subject: string;
+  greeting: string;
+  body_sections: Array<{ type: string; content: string }>;
+  cta_text?: string | null;
+  cta_url?: string | null;
+}
+
 interface SendTestEmailRequest {
-  email_type: 'welcome' | 'survey' | 'certificate';
+  email_type: 'welcome' | 'survey' | 'certificate' | 'custom_template';
   recipient_email: string;
   test_mode: boolean;
   provider?: 'resend' | 'microsoft_graph';
   volunteer_data?: VolunteerData;
+  custom_template?: CustomTemplateData;
 }
 
 // Microsoft Graph helper functions
@@ -620,6 +629,81 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
   return '';
 }
 
+// Generate branded HTML from a custom template with token replacement
+function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: string, volunteerData?: VolunteerData): string {
+  const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
+  const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+
+  // Token replacement map
+  const tokens: Record<string, string> = {
+    '{{first_name}}': volunteerData?.first_name || 'Test',
+    '{{last_name}}': volunteerData?.last_name || 'Volunteer',
+    '{{full_name}}': volunteerData?.name || `${volunteerData?.first_name || 'Test'} ${volunteerData?.last_name || 'Volunteer'}`,
+    '{{email}}': volunteerData?.first_name ? `${volunteerData.first_name.toLowerCase()}@example.com` : 'test@example.com',
+    '{{phone}}': volunteerData?.phone || '+971 50 123 4567',
+    '{{marketplace_name}}': volunteerData?.marketplace_name || 'GIF Marketplace',
+    '{{marketplace_date}}': volunteerData?.marketplace_date || 'TBD',
+    '{{marketplace_time}}': volunteerData?.marketplace_time || 'TBD',
+    '{{marketplace_location}}': volunteerData?.marketplace_location || 'TBD',
+    '{{qr_card_id}}': 'VOL-TEST-1234',
+    '{{login_url}}': 'https://giftitforward.lovable.app/auth',
+    '{{training_url}}': 'https://giftitforward.lovable.app/training',
+    '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+  };
+
+  const replaceTokens = (text: string): string => {
+    let result = text;
+    for (const [token, value] of Object.entries(tokens)) {
+      result = result.replaceAll(token, value);
+    }
+    return result;
+  };
+
+  // Build body sections HTML
+  let bodySectionsHtml = '';
+  for (const section of template.body_sections) {
+    const content = replaceTokens(section.content || '');
+    if (section.type === 'paragraph') {
+      bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">${content}</p></td></tr>`;
+    } else if (section.type === 'list') {
+      const items = content.split('\n').filter(Boolean).map(li => `<li>${li}</li>`).join('');
+      bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><ul style="margin: 0; padding-left: 18px; font-size: 14px; color: #333333; line-height: 1.8;">${items}</ul></td></tr>`;
+    } else if (section.type === 'cta') {
+      bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="#" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${content}</a></td></tr>`;
+    } else if (section.type === 'image' && content) {
+      bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><img src="${content}" alt="" style="display: block; width: 100%; height: auto;" /></td></tr>`;
+    }
+  }
+
+  // Optional CTA button
+  let ctaHtml = '';
+  if (template.cta_text) {
+    const ctaUrl = template.cta_url ? replaceTokens(template.cta_url) : '#';
+    ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${replaceTokens(template.cta_text)}</a></td></tr>`;
+  }
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>body { margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }</style>
+</head><body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
+<tr><td align="center" style="padding: 20px 0;">
+<table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
+<tr><td><img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" /></td></tr>
+<tr><td style="padding: 20px 30px 10px 30px; text-align: center;"><p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p></td></tr>
+<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><h1 style="margin: 0; font-size: 24px; color: #5D5348; font-weight: normal; line-height: 1.4; font-family: Georgia, 'Times New Roman', serif;">${replaceTokens(template.subject)}</h1></td></tr>
+<tr><td style="padding: 0 40px 15px 40px;"><p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">${replaceTokens(template.greeting)}</p></td></tr>
+${bodySectionsHtml}
+${ctaHtml}
+<tr><td style="padding: 15px 40px 20px 40px;"><p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p><p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: bold;">Gift It Forward team</p></td></tr>
+<tr><td style="padding: 20px 40px; border-top: 1px solid #e5e7eb;">
+<table width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="50%" valign="middle"><img src="${dubaiHoldingLogoUrl}" alt="Dubai Holding" height="40" style="display: block;" /></td>
+<td width="50%" valign="middle" style="text-align: right;"><p style="margin: 0; font-size: 13px; color: #54585A; font-style: italic;">For the Good of Tomorrow</p></td>
+</tr></table></td></tr>
+</table></td></tr></table></body></html>`;
+}
+
 // Helper function to send email via Resend
 async function sendEmailWithResend(
   emailOptions: {
@@ -704,7 +788,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { email_type, recipient_email, test_mode, provider = 'resend', volunteer_data }: SendTestEmailRequest = body;
+    const { email_type, recipient_email, test_mode, provider = 'resend', volunteer_data, custom_template }: SendTestEmailRequest = body;
 
     if (!email_type || !recipient_email) {
       return new Response(
@@ -720,14 +804,24 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Use volunteer data if provided, otherwise default
     const firstName = volunteer_data?.first_name || "Test Volunteer";
-    const emailSubjects: Record<string, string> = {
-      welcome: "[TEST] Thank you for registering as a Gift It Forward volunteer",
-      survey: "[TEST] Thank You for Volunteering! Share Your Feedback",
-      certificate: "[TEST] Your Circular Economy Training Certificate",
-    };
 
-    const html = generateEmailHTML(email_type, firstName, supabaseUrl, volunteer_data);
-    const subject = emailSubjects[email_type] || `[TEST] ${email_type} Email`;
+    let html: string;
+    let subject: string;
+
+    if (email_type === 'custom_template' && custom_template) {
+      // Render from custom template
+      html = generateCustomTemplateHTML(custom_template, supabaseUrl, volunteer_data);
+      subject = `[TEST] ${custom_template.subject.replace(/\{\{[^}]+\}\}/g, 'Test')}`;
+      console.log("Using custom template for email");
+    } else {
+      const emailSubjects: Record<string, string> = {
+        welcome: "[TEST] Thank you for registering as a Gift It Forward volunteer",
+        survey: "[TEST] Thank You for Volunteering! Share Your Feedback",
+        certificate: "[TEST] Your Circular Economy Training Certificate",
+      };
+      html = generateEmailHTML(email_type, firstName, supabaseUrl, volunteer_data);
+      subject = emailSubjects[email_type] || `[TEST] ${email_type} Email`;
+    }
 
     // Handle Microsoft Graph provider
     if (provider === 'microsoft_graph') {
