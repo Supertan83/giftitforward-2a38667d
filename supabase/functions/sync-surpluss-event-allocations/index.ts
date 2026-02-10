@@ -60,7 +60,7 @@ async function autoLinkMarketplaces(
     let hasMore = true;
 
     while (hasMore && page <= 5) {
-      const url = `${baseUrl}/api/common/marketplace-events?page=${page}&limit=${limit}`;
+      const url = `${baseUrl}/api/common/marketplace-events?page=${page}&limit=${limit}&status=all`;
       console.log(`[auto-link] Fetching Surpluss events page ${page}: ${url}`);
       
       const resp = await fetch(url, { headers: apiHeaders });
@@ -141,12 +141,33 @@ async function autoLinkMarketplaces(
       }
     }
 
-    console.log(`[auto-link] Linked ${linked.length} marketplaces`);
+    // Auto-create: for any Surpluss event not in local DB at all, create it
+    const created: Array<{ name: string; external_id: number }> = [];
+    for (const surp of allSurplussEvents) {
+      const surpId = surp.id;
+      if (usedExternalIds.has(surpId)) continue;
+      
+      const surpTitle = surp.title || surp.name || `Event ${surpId}`;
+      console.log(`[auto-link] Auto-creating missing marketplace: "${surpTitle}" (ext_id: ${surpId})`);
+      
+      const { error: insertErr } = await supabase
+        .from('marketplace_events')
+        .insert({ name: surpTitle, external_id: surpId, status: 'upcoming' });
+      
+      if (insertErr) {
+        errors.push(`Failed to auto-create ${surpTitle}: ${insertErr.message}`);
+      } else {
+        created.push({ name: surpTitle, external_id: surpId });
+        usedExternalIds.add(surpId);
+      }
+    }
+
+    console.log(`[auto-link] Linked ${linked.length}, auto-created ${created.length} marketplaces`);
   } catch (e) {
     errors.push(`Auto-link error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  return { linked, errors };
+  return { linked, created, errors };
 }
 
 // Sync a single material: upsert item_type + marketplace_item_allocation
