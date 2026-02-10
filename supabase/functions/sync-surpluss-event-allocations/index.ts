@@ -149,6 +149,63 @@ async function autoLinkMarketplaces(
   return { linked, errors };
 }
 
+// Sync a single material: upsert item_type + marketplace_item_allocation
+async function syncMaterial(
+  supabase: any,
+  marketplace: { id: string; name: string; external_id: number },
+  materialId: number,
+  materialTitle: string,
+  allocatedAmount: number,
+  distributedAmount: number,
+  category: string | null,
+  subcategory: string | null,
+  errors: string[]
+) {
+  let { data: itemType } = await supabase
+    .from('item_types').select('id').eq('external_material_id', materialId).maybeSingle();
+
+  if (!itemType) {
+    const insertData: any = { 
+      name: materialTitle, 
+      external_material_id: materialId, 
+      icon: 'Package', 
+      total_stock: allocatedAmount, 
+      surpluss_url: `https://platform.thesurpluss.com/material/${materialId}` 
+    };
+    if (category) insertData.category = category;
+    if (subcategory) insertData.subcategory = subcategory;
+    
+    const { data: newItem, error: insertError } = await supabase
+      .from('item_types')
+      .insert(insertData)
+      .select('id').single();
+    if (insertError) { errors.push(insertError.message); return; }
+    itemType = newItem;
+  } else {
+    // Update category/subcategory if we have new data
+    if (category || subcategory) {
+      const updateData: any = {};
+      if (category) updateData.category = category;
+      if (subcategory) updateData.subcategory = subcategory;
+      await supabase.from('item_types').update(updateData).eq('id', itemType.id);
+    }
+  }
+
+  const { data: existingAlloc } = await supabase
+    .from('marketplace_item_allocations')
+    .select('id, allocated_quantity, distributed_quantity')
+    .eq('marketplace_id', marketplace.id).eq('item_type_id', itemType.id).maybeSingle();
+
+  if (existingAlloc) {
+    await supabase.from('marketplace_item_allocations')
+      .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, updated_at: new Date().toISOString() })
+      .eq('id', existingAlloc.id);
+  } else {
+    await supabase.from('marketplace_item_allocations')
+      .insert({ marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount });
+  }
+}
+
 // Sync a single marketplace, returns summary
 async function syncSingleMarketplace(
   supabase: any,
@@ -181,45 +238,42 @@ async function syncSingleMarketplace(
 
   for (const alloc of surplussAllocations) {
     try {
-      // Log allocation structure for debugging
-      console.log(`[sync] Allocation keys: ${Object.keys(alloc).join(', ')}`);
-      console.log(`[sync] Allocation sample: ${JSON.stringify(alloc).substring(0, 500)}`);
+      // The Surpluss API returns allocations with an `allocated_materials` array
+      // Each material in the array has: material_id, material_title, amount, donation_tag_name, etc.
+      const allocatedMaterials = alloc.allocated_materials || [];
       
-      const materialId = alloc.donation_metadata?.id || alloc.material_id || alloc.donation_metadata_id || alloc.id;
-      const materialTitle = alloc.donation_metadata?.title || alloc.title || alloc.name || `Material ${materialId}`;
-      const allocatedAmount = alloc.amount || alloc.allocated_amount || alloc.quantity || 0;
-      const distributedAmount = alloc.distributed_amount || alloc.distributed_quantity || 0;
-      if (!materialId) { errors.push(`No material ID in: ${JSON.stringify(alloc).substring(0, 200)}`); continue; }
-
-      let { data: itemType } = await supabase
-        .from('item_types').select('id').eq('external_material_id', materialId).maybeSingle();
-
-      if (!itemType) {
-        const { data: newItem, error: insertError } = await supabase
-          .from('item_types')
-          .insert({ name: materialTitle, external_material_id: materialId, icon: 'Package', total_stock: allocatedAmount, surpluss_url: `https://platform.thesurpluss.com/material/${materialId}` })
-          .select('id').single();
-        if (insertError) { errors.push(insertError.message); continue; }
-        itemType = newItem;
-        created++;
-      }
-
-      const { data: existingAlloc } = await supabase
-        .from('marketplace_item_allocations')
-        .select('id, allocated_quantity, distributed_quantity')
-        .eq('marketplace_id', marketplace.id).eq('item_type_id', itemType.id).maybeSingle();
-
-      if (existingAlloc) {
-        await supabase.from('marketplace_item_allocations')
-          .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, updated_at: new Date().toISOString() })
-          .eq('id', existingAlloc.id);
-        updated++;
+      // If allocated_materials exists, iterate through each material
+      if (allocatedMaterials.length > 0) {
+        for (const mat of allocatedMaterials) {
+          const materialId = mat.material_id || mat.donation_metadata_id;
+          const materialTitle = mat.material_title || mat.title || `Material ${materialId}`;
+          const allocatedAmount = mat.amount || 0;
+          const distributedAmount = mat.distributed_amount || 0;
+          const category = mat.donation_tag_name || null;
+          const subcategory = mat.donation_tag_subcategory_name || null;
+          
+          if (!materialId) { errors.push('No material ID in allocated_materials entry'); continue; }
+          
+          await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, category, subcategory, errors);
+          synced++;
+          // Track created/updated via closure
+        }
       } else {
-        await supabase.from('marketplace_item_allocations')
-          .insert({ marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount });
-        created++;
+        // Fallback: legacy format where allocation itself is a material
+        const materialId = alloc.donation_metadata?.id || alloc.material_id || alloc.donation_metadata_id;
+        const materialTitle = alloc.donation_metadata?.title || alloc.title || `Material ${materialId}`;
+        const allocatedAmount = alloc.amount || alloc.total_amount || 0;
+        const distributedAmount = alloc.distributed_amount || alloc.total_distributed || 0;
+        
+        if (!materialId) { 
+          // Skip allocations without material IDs (they use allocated_materials which was empty)
+          console.log(`[sync] Skipping allocation ${alloc.id}: no materials`);
+          continue; 
+        }
+        
+        await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, null, null, errors);
+        synced++;
       }
-      synced++;
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
     }
