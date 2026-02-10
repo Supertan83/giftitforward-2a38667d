@@ -185,6 +185,11 @@ export const useCardOperations = () => {
         throw new SafeError('Card already activated. This beneficiary has already entered the marketplace.');
       }
 
+      // BLOCK: If card was already checked out today, prevent same-day reuse
+      if (card.status === 'checked_out') {
+        throw new SafeError('This card has already been used today. It will be available again tomorrow.');
+      }
+
       // Update card with beneficiary info - start with 0 items collected (credit_balance = 0)
       const updateData: Record<string, unknown> = {
         status: 'active' as DbCardStatus,
@@ -393,7 +398,7 @@ export const useCardOperations = () => {
       const { error: updateError } = await supabase
         .from('qr_cards')
         .update({
-          status: 'inactive' as DbCardStatus,
+          status: 'checked_out' as DbCardStatus,
           credit_balance: 0,
           total_items_collected: 0,
           collected_items: []

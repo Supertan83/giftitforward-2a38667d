@@ -52,7 +52,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
       setFeedback({
         type: 'success',
         title: 'Check-Out Complete!',
-        subtitle: `Collected ${itemsCollected}/15 items. Card is ready for reuse.`,
+        subtitle: `Collected ${itemsCollected}/15 items. Card is locked until tomorrow.`,
       });
     } catch (error) {
       setFeedback({
@@ -166,7 +166,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
             </div>
 
             <p className="text-center text-xs md:text-sm text-muted-foreground mt-3 md:mt-4">
-              Card has been reset and is ready for the next beneficiary
+              Card is locked for today and will be available again tomorrow
             </p>
           </motion.div>
         )}
