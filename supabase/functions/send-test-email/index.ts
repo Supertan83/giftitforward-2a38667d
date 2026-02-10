@@ -888,7 +888,7 @@ const handler = async (req: Request): Promise<Response> => {
         from: sender,
         to: [recipient_email],
         bcc: ['giftitforward@dubaiholding.com'],
-        subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
+        subject,
         html,
         attachments: [{ filename: "test-certificate.pdf", content: samplePdf }],
       });
@@ -915,7 +915,7 @@ const handler = async (req: Request): Promise<Response> => {
     // For welcome and survey emails
     const emailResult = await sendEmailWithResend({
       to: [recipient_email],
-      subject: emailSubjects[email_type] || `[TEST] ${email_type} Email`,
+      subject,
       html,
     });
 
