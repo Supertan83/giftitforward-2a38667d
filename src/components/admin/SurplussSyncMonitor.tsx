@@ -45,7 +45,13 @@ interface AllocationDetail {
   distributed_quantity: number;
   updated_at: string;
 }
-const SYNC_INTERVAL_MINUTES = 5;
+const SYNC_INTERVAL_OPTIONS = [
+  { value: 1, label: '1 min' },
+  { value: 3, label: '3 min' },
+  { value: 5, label: '5 min' },
+  { value: 15, label: '15 min' },
+];
+
 export const SurplussSyncMonitor = ({
   onBack
 }: SurplussSyncMonitorProps) => {
@@ -60,6 +66,8 @@ export const SurplussSyncMonitor = ({
   const [showAllocations, setShowAllocations] = useState(false);
   const [countdown, setCountdown] = useState('');
   const [lastAutoSyncTime, setLastAutoSyncTime] = useState<Date | null>(null);
+  const [syncInterval, setSyncInterval] = useState(5);
+  const [isUpdatingInterval, setIsUpdatingInterval] = useState(false);
   const {
     toast
   } = useToast();
@@ -72,6 +80,15 @@ export const SurplussSyncMonitor = ({
         ascending: false
       }).limit(50);
       setAuditLogs(logs as AuditLogEntry[] || []);
+
+      // Try to detect current sync interval from the most recent schedule update audit
+      const scheduleLog = (logs || []).find((l: any) => l.action === 'sync_schedule_updated');
+      if (scheduleLog) {
+        const payload = (scheduleLog as any).request_payload;
+        if (payload?.interval_minutes) {
+          setSyncInterval(payload.interval_minutes);
+        }
+      }
 
       // Fetch marketplaces with external_id
       const {
@@ -142,14 +159,14 @@ export const SurplussSyncMonitor = ({
     }
   };
 
-  // Countdown timer based on clock schedule (every 15 min: :00, :15, :30, :45)
+  // Countdown timer based on clock schedule
   useEffect(() => {
     const updateCountdown = () => {
       const now = new Date();
       const mins = now.getMinutes();
       const secs = now.getSeconds();
-      const currentSlotMins = mins % SYNC_INTERVAL_MINUTES;
-      const remainingMins = SYNC_INTERVAL_MINUTES - 1 - currentSlotMins;
+      const currentSlotMins = mins % syncInterval;
+      const remainingMins = syncInterval - 1 - currentSlotMins;
       const remainingSecs = 60 - secs;
       const adjustedMins = remainingSecs === 60 ? remainingMins + 1 : remainingMins;
       const adjustedSecs = remainingSecs === 60 ? 0 : remainingSecs;
@@ -158,7 +175,7 @@ export const SurplussSyncMonitor = ({
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [syncInterval]);
   useEffect(() => {
     loadData();
   }, []);
@@ -231,10 +248,33 @@ export const SurplussSyncMonitor = ({
     const now = new Date();
     const mins = now.getMinutes();
     const secs = now.getSeconds();
-    const elapsed = mins % SYNC_INTERVAL_MINUTES * 60 + secs;
-    const total = SYNC_INTERVAL_MINUTES * 60;
+    const elapsed = mins % syncInterval * 60 + secs;
+    const total = syncInterval * 60;
     return elapsed / total * 100;
   })();
+
+  const handleChangeInterval = async (newInterval: number) => {
+    setIsUpdatingInterval(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-sync-schedule', {
+        body: { interval_minutes: newInterval }
+      });
+      if (error) throw error;
+      setSyncInterval(newInterval);
+      toast({
+        title: 'Schedule Updated',
+        description: `Auto-sync now runs every ${newInterval} minute(s)`
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Update Schedule',
+        description: error instanceof Error ? error.message : 'Failed to update',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsUpdatingInterval(false);
+    }
+  };
   if (isLoading) {
     return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -272,17 +312,37 @@ export const SurplussSyncMonitor = ({
       opacity: 1,
       y: 0
     }} className="bg-card border border-border rounded-xl p-4 md:p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Timer className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h2 className="font-semibold">Scheduled Auto-Sync</h2>
-            <p className="text-sm text-muted-foreground">Cron job runs every 5 minutes via pg_cron</p>
+            <p className="text-sm text-muted-foreground">Cron job runs every {syncInterval} minute(s) via pg_cron</p>
           </div>
-          <Badge variant="outline" className="ml-auto bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-            <Activity className="w-3 h-3 mr-1" /> Active
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Interval:</span>
+            <Select 
+              value={String(syncInterval)} 
+              onValueChange={(v) => handleChangeInterval(Number(v))}
+              disabled={isUpdatingInterval}
+            >
+              <SelectTrigger className="w-[100px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SYNC_INTERVAL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={String(opt.value)}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isUpdatingInterval && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+              <Activity className="w-3 h-3 mr-1" /> Active
+            </Badge>
+          </div>
         </div>
 
         {/* Countdown Timer */}
@@ -301,7 +361,7 @@ export const SurplussSyncMonitor = ({
               addSuffix: true
             }) : 'No syncs recorded yet'}
             </span>
-            <span className="text-xs text-muted-foreground">Schedule: every 5 min</span>
+            <span className="text-xs text-muted-foreground">Schedule: every {syncInterval} min</span>
           </div>
         </div>
 
