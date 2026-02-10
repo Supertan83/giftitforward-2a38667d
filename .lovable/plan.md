@@ -1,104 +1,43 @@
 
 
-# Auto-Sync Surpluss Allocations and Distributions into GIF App
+## Fix: Prevent QR Card Reuse on Same Day per Marketplace
 
-## Overview
+### Problem
+When a beneficiary's QR card is checked out at the exit, the card status resets to `inactive` -- the same status as a brand-new card. This means it can be scanned again at the entrance and reactivated, allowing the same person to collect items a second time on the same day.
 
-Currently, the GIF app manages its own item allocations and distributions locally (via `item_types` and `marketplace_item_allocations` tables). The user wants Surpluss to be the single source of truth: when warehouse staff scan a QR code on a box (e.g., `https://platform.thesurpluss.com/material/889`), allocate items to a marketplace in the Surpluss system, and save -- those allocations and any subsequent distributions should **automatically appear** in the GIF app.
+### Root Cause
+The `checkoutCard` function sets the card status back to `inactive` and clears all data, but does NOT record that the card was already used today. The `activateCard` function only checks `if (card.status === 'active')` to block re-entry -- it has no awareness of same-day prior usage.
 
-## How It Will Work
+### Solution
+Use a dedicated `checked_out` status to prevent same-day reuse. Instead of resetting cards to `inactive` on checkout, set them to `checked_out`. The nightly auto-unblock job already resets cards back to `inactive` the next day.
 
-```text
-Surpluss System (Source of Truth)
-        |
-        |  1. Staff scans QR on box -> allocates to marketplace
-        |  2. Saves allocation in Surpluss
-        |
-        v
-  Polling Edge Function (runs on-demand or scheduled)
-        |
-        |  Fetches allocations per marketplace event from Surpluss API:
-        |    GET /api/common/marketplace-events/:id/allocations
-        |
-        v
-  GIF App Database
-        |
-        |  Upserts into:
-        |    - item_types (material metadata)
-        |    - marketplace_item_allocations (allocated + distributed qty)
-        |
-        v
-  GIF Admin Dashboard (auto-reflects synced data)
-```
+### Changes Required
 
-## Implementation Steps
+**1. Update `checkoutCard` in `src/hooks/useSupabaseData.ts`**
+- Change checkout status from `inactive` to `checked_out`
+- Keep `marketplace_id` on the card so the nightly reset can archive it properly
 
-### 1. New Edge Function: `sync-surpluss-event-allocations`
+**2. Update `activateCard` in `src/hooks/useSupabaseData.ts`**
+- Add a check: if `card.status === 'checked_out'`, throw an error like "This card has already been used today. It will be available again tomorrow."
 
-A new backend function that:
-- Accepts a GIF marketplace ID (which has an `external_id` linking to Surpluss)
-- Calls `GET /api/common/marketplace-events/:external_id/allocations` to fetch all allocations for that event from Surpluss
-- For each allocation:
-  - Upserts the material into `item_types` (using `external_material_id` as key)
-  - Upserts into `marketplace_item_allocations` matching the marketplace + item, setting `allocated_quantity` and `distributed_quantity` from Surpluss data (`amount` and `distributed_amount`)
-- Logs the sync in `surpluss_api_audit_log`
+**3. No database migration needed**
+- The `checked_out` value already exists in the `card_status` enum (`inactive | active | checked_out`)
+- The `archived_card_data` table and nightly `auto-unblock-cards` edge function already handle resetting `checked_out` cards
 
-### 2. "Sync from Surpluss" Button in Allocation Management
-
-Add a prominent sync button to the existing **Allocation Management** view that:
-- For the currently selected marketplace, triggers the new edge function
-- Shows a loading state and reports how many allocations were synced
-- Automatically refreshes the allocation table after sync
-
-### 3. "Auto-Sync All" in Surpluss Sync Panel
-
-Add a "Sync Allocations" action to the existing **Surpluss Sync Panel** that:
-- Iterates over all marketplace events that have an `external_id`
-- Calls the sync function for each one
-- Provides a summary of total allocations synced across all events
-
-### 4. Update Edge Function Config
-
-Add the new function to `supabase/config.toml` with `verify_jwt = false`.
-
-## Technical Details
-
-### Edge Function Logic (sync-surpluss-event-allocations)
+### Technical Details
 
 ```text
-Input: { marketplace_id (GIF UUID), environment }
+Current flow:
+  Entrance (inactive -> active) -> Exit (active -> inactive)
+  Re-entry possible: inactive -> active  [BUG]
 
-1. Look up marketplace_events.external_id for the given marketplace_id
-2. GET /api/common/marketplace-events/{external_id}/allocations
-3. For each allocation:
-   a. Find/create item_types row by external_material_id = allocation.donation_metadata.id
-   b. Upsert marketplace_item_allocations:
-      - marketplace_id = input marketplace_id
-      - item_type_id = matched item_type
-      - allocated_quantity = allocation.amount
-      - distributed_quantity = allocation.distributed_amount || 0
-4. Return summary of synced items
+Fixed flow:
+  Entrance (inactive -> active) -> Exit (active -> checked_out)
+  Re-entry blocked: checked_out -> ERROR
+  Next day: auto-unblock resets checked_out -> inactive
 ```
 
-### Data Mapping
-
-| Surpluss Field | GIF Table.Column |
-|---|---|
-| `allocation.donation_metadata.id` | `item_types.external_material_id` |
-| `allocation.donation_metadata.title` | `item_types.name` |
-| `allocation.amount` | `marketplace_item_allocations.allocated_quantity` |
-| `allocation.distributed_amount` | `marketplace_item_allocations.distributed_quantity` |
-| Marketplace event external ID | `marketplace_events.external_id` |
-
-### Files to Create/Modify
-
-- **Create**: `supabase/functions/sync-surpluss-event-allocations/index.ts` -- new edge function
-- **Modify**: `supabase/config.toml` -- add function config
-- **Modify**: `src/components/admin/AllocationManagement.tsx` -- add "Sync from Surpluss" button per marketplace
-- **Modify**: `src/components/admin/SurplussSyncPanel.tsx` -- add "Sync All Allocations" action
-- **Modify**: `supabase/functions/surpluss-allocations-api/index.ts` -- add auto-sync to GIF after successful allocate/batch_allocate actions (so when admins allocate via the Surpluss Allocation Control panel, GIF is updated immediately)
-
-### Auto-Sync on Write
-
-When allocations are created through the existing **Surpluss Allocation Control** panel (`surpluss-allocations-api` edge function), the function will be enhanced to automatically upsert into `marketplace_item_allocations` after a successful Surpluss API response. This means any allocation made from the GIF app to Surpluss will immediately reflect in the GIF allocation tables too.
+### Files to Modify
+- `src/hooks/useSupabaseData.ts` -- 2 small changes in `activateCard` and `checkoutCard` mutations
+- `src/store/useAppStore.ts` -- Update local mock store checkout logic to match (status -> `checked_out` instead of `ready`)
 
