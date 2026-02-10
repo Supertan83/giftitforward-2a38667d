@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Send, Clock, Trash2, Eye, Loader2, Users, Mail, CalendarClock, CheckCircle2, XCircle, AlertCircle, ScrollText } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Clock, Trash2, Eye, Loader2, Users, Mail, CalendarClock, CheckCircle2, XCircle, AlertCircle, ScrollText, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -80,6 +81,8 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
   const [isSending, setIsSending] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('campaigns');
   const [logFilterCampaign, setLogFilterCampaign] = useState<string>('all');
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -276,6 +279,12 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
 
   const handleDelete = async (campaignId: string) => {
     try {
+      // Delete recipients first
+      await supabase
+        .from('email_campaign_recipients' as any)
+        .delete()
+        .eq('campaign_id', campaignId);
+
       const { error } = await supabase
         .from('email_campaigns' as any)
         .delete()
@@ -285,8 +294,61 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
     } catch (error) {
       toast({ title: 'Error', description: (error as Error).message, variant: 'destructive' });
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
+
+  const handleEditCampaign = (campaign: Campaign) => {
+    setEditingCampaignId(campaign.id);
+    setFormName(campaign.name);
+    setFormTemplateId(campaign.template_id);
+    const filter = campaign.recipient_filter || { type: 'all' };
+    setFormRecipientType(filter.type || 'all');
+    setFormMarketplaceId(filter.marketplace_id || '');
+    setFormManualEmails(Array.isArray(filter.emails) ? filter.emails.join('\n') : '');
+    setFormScheduleEnabled(!!campaign.scheduled_at);
+    setFormScheduledAt(campaign.scheduled_at ? new Date(campaign.scheduled_at).toISOString().slice(0, 16) : '');
+    setShowCreateDialog(true);
+  };
+
+  const updateCampaign = useMutation({
+    mutationFn: async () => {
+      if (!editingCampaignId) throw new Error('No campaign selected');
+
+      let recipientFilter: any = { type: formRecipientType };
+      if (formRecipientType === 'marketplace') {
+        recipientFilter.marketplace_id = formMarketplaceId;
+      } else if (formRecipientType === 'manual') {
+        recipientFilter.emails = formManualEmails.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean);
+      }
+
+      const updateData: any = {
+        name: formName,
+        template_id: formTemplateId,
+        recipient_filter: recipientFilter,
+        scheduled_at: formScheduleEnabled && formScheduledAt ? new Date(formScheduledAt).toISOString() : null,
+        status: formScheduleEnabled ? 'scheduled' : 'draft',
+      };
+
+      const { error } = await supabase
+        .from('email_campaigns' as any)
+        .update(updateData)
+        .eq('id', editingCampaignId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+      toast({ title: 'Campaign Updated', description: 'Campaign has been updated successfully' });
+      setShowCreateDialog(false);
+      setEditingCampaignId(null);
+      resetForm();
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
 
   const getTemplateName = (templateId: string) => {
     return templates.find(t => t.id === templateId)?.name || 'Unknown Template';
@@ -306,7 +368,7 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
             <p className="text-sm text-muted-foreground">Send templates to volunteers manually or on a schedule</p>
           </div>
         </div>
-        <Button onClick={() => { resetForm(); setShowCreateDialog(true); }}>
+        <Button onClick={() => { resetForm(); setEditingCampaignId(null); setShowCreateDialog(true); }}>
           <Plus className="h-4 w-4 mr-2" /> New Campaign
         </Button>
       </div>
@@ -390,6 +452,15 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  onClick={() => handleEditCampaign(campaign)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   disabled={isSending === campaign.id}
                                   onClick={() => handleSendNow(campaign.id)}
                                 >
@@ -398,8 +469,8 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
                                     : <Send className="h-4 w-4 text-emerald-600" />}
                                 </Button>
                               )}
-                              {campaign.status === 'draft' && (
-                                <Button variant="ghost" size="icon" onClick={() => handleDelete(campaign.id)}>
+                              {campaign.status !== 'sending' && (
+                                <Button variant="ghost" size="icon" onClick={() => setDeleteConfirmId(campaign.id)}>
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               )}
@@ -486,10 +557,10 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       </Tabs>
 
       {/* Create Campaign Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { setShowCreateDialog(open); if (!open) setEditingCampaignId(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create Email Campaign</DialogTitle>
+            <DialogTitle>{editingCampaignId ? 'Edit Campaign' : 'Create Email Campaign'}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -566,14 +637,24 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button
-              onClick={() => createCampaign.mutate()}
-              disabled={!formName || !formTemplateId || createCampaign.isPending}
-            >
-              {createCampaign.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Campaign
-            </Button>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setEditingCampaignId(null); }}>Cancel</Button>
+            {editingCampaignId ? (
+              <Button
+                onClick={() => updateCampaign.mutate()}
+                disabled={!formName || !formTemplateId || updateCampaign.isPending}
+              >
+                {updateCampaign.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            ) : (
+              <Button
+                onClick={() => createCampaign.mutate()}
+                disabled={!formName || !formTemplateId || createCampaign.isPending}
+              >
+                {createCampaign.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Create Campaign
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -653,6 +734,24 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Campaign</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this campaign? This will also remove all recipient records. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
