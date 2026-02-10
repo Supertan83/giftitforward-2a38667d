@@ -256,15 +256,19 @@ export const MarketplaceReports = ({
                           <h4 className="text-sm font-medium text-muted-foreground mb-3">20</h4>
                           <div className="space-y-3">
                             {report.items.byItemType.map(item => <div key={item.itemId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                                <span className="text-2xl">{item.itemIcon === 'Package' ? '📦' : item.itemIcon}</span>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <p className="font-medium">{item.itemName}</p>
                                     {item.externalMaterialId && <span className="text-xs text-muted-foreground">
                                         (ID: {item.externalMaterialId})
                                       </span>}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                     {item.category && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
                                         {item.category}
+                                      </span>}
+                                    {item.subcategory && <span className="text-xs px-2 py-0.5 bg-muted text-muted-foreground rounded-full">
+                                        {item.subcategory}
                                       </span>}
                                   </div>
                                   <div className="flex items-center gap-2 mt-1">
