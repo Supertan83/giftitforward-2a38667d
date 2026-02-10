@@ -366,6 +366,25 @@ serve(async (req) => {
       }
 
       const totalSynced = results.reduce((s, r) => s + (r.synced || 0), 0);
+
+      // Write a dedicated audit log for the ALL-mode sync so the UI can detect auto-syncs
+      try {
+        await supabase.from('surpluss_api_audit_log').insert({
+          action: 'sync_event_allocations',
+          environment,
+          request_payload: { marketplace_id: 'ALL', mode: 'ALL', triggered_by: 'cron' },
+          response_status: 200,
+          response_body: { 
+            synced_events: marketplaces.length, 
+            total_synced: totalSynced, 
+            auto_linked: autoLinkResult.linked.length,
+            successful: results.filter((r: any) => r.success).length,
+            failed: results.filter((r: any) => !r.success).length,
+          },
+          success: true,
+        });
+      } catch (_) { /* ignore audit errors */ }
+
       return new Response(
         JSON.stringify({ 
           success: true, 
