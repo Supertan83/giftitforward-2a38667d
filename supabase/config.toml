@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.send-campaign-email]
 verify_jwt = false
+
+[functions.fetch-surpluss-marketplaces]
+verify_jwt = false

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Activity, Clock, CheckCircle, XCircle, AlertTriangle, Loader2, Database, Zap, Timer, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Clock, CheckCircle, XCircle, AlertTriangle, Loader2, Database, Zap, Timer, ChevronDown, ChevronUp, Package, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,6 +61,7 @@ export const SurplussSyncMonitor = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [isFetchingMarketplaces, setIsFetchingMarketplaces] = useState(false);
   const [syncingSingle, setSyncingSingle] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'production' | 'staging'>('production');
   const [showAllocations, setShowAllocations] = useState(false);
@@ -239,6 +240,28 @@ export const SurplussSyncMonitor = ({
       setSyncingSingle(null);
     }
   };
+  const handleFetchAllMarketplaces = async () => {
+    setIsFetchingMarketplaces(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-surpluss-marketplaces', {
+        body: { environment }
+      });
+      if (error) throw error;
+      toast({
+        title: 'Marketplace Fetch Complete',
+        description: `Found ${data?.total_surpluss_events || 0} events on Surpluss. ${data?.newly_created || 0} new marketplace(s) created, ${data?.already_existing || 0} already existed.`
+      });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Fetch Failed',
+        description: error instanceof Error ? error.message : 'Failed to fetch marketplaces',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsFetchingMarketplaces(false);
+    }
+  };
   const syncEventLogs = auditLogs.filter(l => l.action === 'sync_event_allocations');
   const recentSuccessCount = syncEventLogs.filter(l => l.success).length;
   const recentFailCount = syncEventLogs.filter(l => !l.success).length;
@@ -392,6 +415,10 @@ export const SurplussSyncMonitor = ({
           <Button onClick={handleSyncAll} disabled={isSyncingAll || marketplaceStatuses.length === 0}>
             {isSyncingAll ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
             Sync All Now
+          </Button>
+          <Button variant="outline" onClick={handleFetchAllMarketplaces} disabled={isFetchingMarketplaces}>
+            {isFetchingMarketplaces ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            Fetch All Marketplaces from Surpluss
           </Button>
         </div>
       </motion.div>
