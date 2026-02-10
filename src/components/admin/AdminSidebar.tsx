@@ -2,7 +2,7 @@ import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
   QrCode, Store, PieChart, RefreshCw, Unlock,
   Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText,
-  ChevronRight, Archive
+  ChevronRight, Archive, Megaphone
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -56,6 +56,7 @@ const adminItems = [
   { view: 'email-logs' as AdminView, label: 'Email Logs', icon: Mail, color: 'text-red-500' },
   { view: 'email-management' as AdminView, label: 'Email Preview & Test', icon: Mail, color: 'text-emerald-500' },
   { view: 'email-templates' as AdminView, label: 'Email Templates', icon: FileText, color: 'text-indigo-500' },
+  { view: 'email-campaigns' as AdminView, label: 'Email Campaigns', icon: Megaphone, color: 'text-orange-500' },
 ];
 
 const unusedItems = [
