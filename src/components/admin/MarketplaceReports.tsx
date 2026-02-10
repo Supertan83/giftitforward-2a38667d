@@ -412,6 +412,69 @@ export const MarketplaceReports = ({
                           ))}
                         </div>
                       </>}
+
+                      {/* Individual Volunteer List */}
+                      {report.volunteers?.volunteerList && report.volunteers.volunteerList.length > 0 && <div>
+                        <h4 className="font-display font-semibold text-sm mb-3">Volunteer List</h4>
+                        <div className="hidden md:block overflow-x-auto">
+                          <table className="w-full text-sm table-fixed">
+                            <colgroup>
+                              <col className="w-[30%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[16%]" />
+                            </colgroup>
+                            <thead>
+                              <tr className="border-b border-border text-muted-foreground">
+                                <th className="text-left py-3 px-2 font-medium">Name</th>
+                                <th className="text-left py-3 px-2 font-medium">Category</th>
+                                <th className="text-left py-3 px-2 font-medium">Company</th>
+                                <th className="text-left py-3 px-2 font-medium">Status</th>
+                                <th className="text-right py-3 px-2 font-medium">Hours</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {report.volunteers.volunteerList.map((vol, idx) => (
+                                <tr key={idx} className="border-b border-border/50 last:border-0">
+                                  <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
+                                  <td className="py-2.5 px-2 text-muted-foreground text-xs">{vol.category}</td>
+                                  <td className="py-2.5 px-2 text-muted-foreground text-xs truncate">{vol.company}</td>
+                                  <td className="py-2.5 px-2">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                      vol.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
+                                      vol.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
+                                      'bg-muted text-muted-foreground'
+                                    }`}>
+                                      {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-2 text-right font-medium">{vol.hoursWorked > 0 ? `${vol.hoursWorked.toFixed(1)}h` : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {/* Mobile */}
+                        <div className="space-y-2 md:hidden">
+                          {report.volunteers.volunteerList.map((vol, idx) => (
+                            <div key={idx} className="border border-border rounded-lg p-3">
+                              <div className="flex justify-between items-start mb-1">
+                                <p className="font-medium text-sm text-foreground">{vol.name}</p>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  vol.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
+                                  vol.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
+                                  'bg-muted text-muted-foreground'
+                                }`}>
+                                  {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{vol.category} · {vol.company}</p>
+                              {vol.hoursWorked > 0 && <p className="text-xs text-muted-foreground mt-1">{vol.hoursWorked.toFixed(1)} hours</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>}
                     </div>}
                 </div>
               </> : <div className="text-center py-12 text-muted-foreground">

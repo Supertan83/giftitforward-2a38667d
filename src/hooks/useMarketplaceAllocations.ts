@@ -53,6 +53,14 @@ export interface MarketplaceReport {
     totalRegistered: number;
     totalAttended: number;
     dropoutRate: number;
+    volunteerList: Array<{
+      name: string;
+      status: string;
+      hoursWorked: number;
+      category: string;
+      company: string;
+      gender: string | null;
+    }>;
     categoryBreakdown: Array<{
       category: string;
       registered: number;
@@ -372,7 +380,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       // Fetch volunteer data - QR cards for this marketplace
       const { data: volunteerCards } = await supabase
         .from('volunteer_qr_cards')
-        .select('*, volunteer:pending_volunteers(id, is_employee, external_company, gender)')
+        .select('*, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender)')
         .eq('marketplace_id', marketplaceId);
 
       const totalVolunteers = volunteerCards?.length || 0;
@@ -383,6 +391,10 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const volCategoryMap = new Map<string, {
         registered: number; attended: number; male: number; female: number; companies: Map<string, number>;
       }>();
+
+      const volunteerList: Array<{
+        name: string; status: string; hoursWorked: number; category: string; company: string; gender: string | null;
+      }> = [];
 
       for (const card of volunteerCards || []) {
         const vol = card.volunteer as any;
@@ -397,6 +409,17 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           categoryKey = 'Outreach Partners';
         }
 
+        const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
+
+        volunteerList.push({
+          name: `${vol.first_name || ''} ${vol.last_name || ''}`.trim() || 'Unknown',
+          status: card.status,
+          hoursWorked: Number(card.total_hours_worked) || 0,
+          category: categoryKey,
+          company,
+          gender: vol.gender || null,
+        });
+
         if (!volCategoryMap.has(categoryKey)) {
           volCategoryMap.set(categoryKey, { registered: 0, attended: 0, male: 0, female: 0, companies: new Map() });
         }
@@ -405,7 +428,6 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         if (card.status === 'checked_in' || card.status === 'checked_out') cat.attended++;
         if (vol.gender?.toLowerCase() === 'male') cat.male++;
         if (vol.gender?.toLowerCase() === 'female') cat.female++;
-        const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
         cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
       }
 
@@ -452,6 +474,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           totalRegistered: totalVolunteers,
           totalAttended,
           dropoutRate: volDropoutRate,
+          volunteerList,
           categoryBreakdown: volunteerCategoryBreakdown,
         },
       };
