@@ -38,27 +38,32 @@ serve(async (req) => {
     // Try multiple API variations to get ALL marketplace events
     const allEvents: Map<number, any> = new Map();
     const urlVariations = [
-      `${baseUrl}/api/common/marketplace-events?page=1&limit=200`,
-      `${baseUrl}/api/common/marketplace-events?page=1&limit=200&status=all`,
-      `${baseUrl}/api/common/marketplace-events?page=1&limit=200&include_completed=true`,
-      `${baseUrl}/api/common/marketplace-events?page=2&limit=100`,
-      `${baseUrl}/api/common/marketplace-events?page=3&limit=100`,
+      `${baseUrl}/api/common/marketplace-events?page=1&limit=100`,
+      `${baseUrl}/api/common/marketplace-events?page=1&limit=50`,
+      `${baseUrl}/api/common/marketplace-events?page=2&limit=50`,
+      `${baseUrl}/api/common/marketplace-events?page=1&limit=100&status=all`,
+      `${baseUrl}/api/common/marketplace-events`,
     ];
 
-    const apiResults: Array<{ url: string; count: number; status: number }> = [];
+    const apiResults: Array<{ url: string; count: number; status: number; raw_sample?: any }> = [];
 
     for (const url of urlVariations) {
       try {
         console.log(`[fetch-marketplaces] Trying: ${url}`);
         const resp = await fetch(url, { headers: apiHeaders });
+        const bodyText = await resp.text();
         
         if (!resp.ok) {
-          apiResults.push({ url, count: 0, status: resp.status });
+          console.log(`[fetch-marketplaces] ${resp.status} response: ${bodyText.substring(0, 500)}`);
+          apiResults.push({ url, count: 0, status: resp.status, raw_sample: bodyText.substring(0, 300) });
           continue;
         }
 
-        const body = await resp.json();
-        const items = Array.isArray(body) ? body : (body.items || body.data || body.results || []);
+        let body: any;
+        try { body = JSON.parse(bodyText); } catch { continue; }
+        
+        // Handle various response shapes
+        const items = Array.isArray(body) ? body : (body.items || body.data || body.results || body.events || []);
         
         if (Array.isArray(items)) {
           for (const item of items) {
@@ -67,7 +72,12 @@ serve(async (req) => {
               allEvents.set(id, item);
             }
           }
-          apiResults.push({ url, count: items.length, status: resp.status });
+          // Log first item shape for debugging
+          const sample = items.length > 0 ? Object.keys(items[0]) : [];
+          apiResults.push({ url, count: items.length, status: resp.status, raw_sample: { keys: sample, total_in_body: body.total || body.count || body.totalCount || 'N/A' } });
+        } else {
+          // Maybe the body itself has a different structure - log it
+          apiResults.push({ url, count: 0, status: resp.status, raw_sample: { type: typeof body, keys: Object.keys(body).slice(0, 10) } });
         }
       } catch (e) {
         console.error(`[fetch-marketplaces] Error fetching ${url}:`, e);
@@ -127,19 +137,21 @@ serve(async (req) => {
     }));
 
     // Audit log
-    await supabase.from('surpluss_api_audit_log').insert({
-      action: 'fetch_all_marketplaces',
-      environment,
-      request_payload: { api_variations_tried: apiResults.length },
-      response_status: 200,
-      response_body: {
-        total_found: allEvents.size,
-        already_existing: existing.length,
-        newly_created: created.length,
-        errors: errors.length,
-      },
-      success: true,
-    }).catch(() => {});
+    try {
+      await supabase.from('surpluss_api_audit_log').insert({
+        action: 'fetch_all_marketplaces',
+        environment,
+        request_payload: { api_variations_tried: apiResults.length },
+        response_status: 200,
+        response_body: {
+          total_found: allEvents.size,
+          already_existing: existing.length,
+          newly_created: created.length,
+          errors: errors.length,
+        },
+        success: true,
+      });
+    } catch (_) { /* ignore */ }
 
     return new Response(
       JSON.stringify({
