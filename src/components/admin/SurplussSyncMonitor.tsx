@@ -45,7 +45,7 @@ interface AllocationDetail {
   distributed_quantity: number;
   updated_at: string;
 }
-const SYNC_INTERVAL_MINUTES = 15;
+const SYNC_INTERVAL_MINUTES = 5;
 export const SurplussSyncMonitor = ({
   onBack
 }: SurplussSyncMonitorProps) => {
@@ -278,7 +278,7 @@ export const SurplussSyncMonitor = ({
           </div>
           <div>
             <h2 className="font-semibold">Scheduled Auto-Sync</h2>
-            <p className="text-sm text-muted-foreground">Cron job runs every 15 minutes via pg_cron</p>
+            <p className="text-sm text-muted-foreground">Cron job runs every 5 minutes via pg_cron</p>
           </div>
           <Badge variant="outline" className="ml-auto bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
             <Activity className="w-3 h-3 mr-1" /> Active
