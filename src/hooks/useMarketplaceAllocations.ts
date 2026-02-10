@@ -290,8 +290,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const { data: activeCards } = await supabase
         .from('qr_cards')
         .select('*')
-        .eq('marketplace_id', marketplaceId)
-        .in('status', ['active', 'inactive']);
+        .eq('marketplace_id', marketplaceId);
 
       const allBeneficiaries = [
         ...(archivedCards || []),
