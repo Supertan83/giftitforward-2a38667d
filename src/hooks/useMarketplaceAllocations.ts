@@ -50,6 +50,18 @@ export interface MarketplaceReport {
   volunteers?: {
     total: number;
     totalHours: number;
+    totalRegistered: number;
+    totalAttended: number;
+    dropoutRate: number;
+    categoryBreakdown: Array<{
+      category: string;
+      registered: number;
+      attended: number;
+      dropoutRate: number;
+      maleCount: number;
+      femaleCount: number;
+      topCompanies: string[];
+    }>;
   };
 }
 
@@ -357,14 +369,59 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalAllocated = itemsByType.reduce((sum, item) => sum + item.allocated, 0);
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
 
-      // Fetch volunteer data
+      // Fetch volunteer data - QR cards for this marketplace
       const { data: volunteerCards } = await supabase
         .from('volunteer_qr_cards')
-        .select('*')
+        .select('*, volunteer:pending_volunteers(id, is_employee, external_company, gender)')
         .eq('marketplace_id', marketplaceId);
 
       const totalVolunteers = volunteerCards?.length || 0;
       const totalHours = volunteerCards?.reduce((sum, v) => sum + (Number(v.total_hours_worked) || 0), 0) || 0;
+      const totalAttended = volunteerCards?.filter(v => v.status === 'checked_in' || v.status === 'checked_out').length || 0;
+
+      // Build category breakdown from volunteer cards
+      const volCategoryMap = new Map<string, {
+        registered: number; attended: number; male: number; female: number; companies: Map<string, number>;
+      }>();
+
+      for (const card of volunteerCards || []) {
+        const vol = card.volunteer as any;
+        if (!vol) continue;
+
+        let categoryKey: string;
+        if (vol.is_employee) {
+          categoryKey = 'Corporate Internal';
+        } else if (vol.external_company) {
+          categoryKey = 'Corporate External';
+        } else {
+          categoryKey = 'Outreach Partners';
+        }
+
+        if (!volCategoryMap.has(categoryKey)) {
+          volCategoryMap.set(categoryKey, { registered: 0, attended: 0, male: 0, female: 0, companies: new Map() });
+        }
+        const cat = volCategoryMap.get(categoryKey)!;
+        cat.registered++;
+        if (card.status === 'checked_in' || card.status === 'checked_out') cat.attended++;
+        if (vol.gender?.toLowerCase() === 'male') cat.male++;
+        if (vol.gender?.toLowerCase() === 'female') cat.female++;
+        const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
+        cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
+      }
+
+      const volunteerCategoryBreakdown = Array.from(volCategoryMap.entries())
+        .map(([category, d]) => ({
+          category,
+          registered: d.registered,
+          attended: d.attended,
+          dropoutRate: d.registered > 0 ? Math.round(((d.registered - d.attended) / d.registered) * 100) : 0,
+          maleCount: d.male,
+          femaleCount: d.female,
+          topCompanies: Array.from(d.companies.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name),
+        }))
+        .sort((a, b) => b.registered - a.registered);
+
+      const volDropoutRate = totalVolunteers > 0 ? Math.round(((totalVolunteers - totalAttended) / totalVolunteers) * 100) : 0;
 
       return {
         marketplace: {
@@ -392,6 +449,10 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         volunteers: {
           total: totalVolunteers,
           totalHours,
+          totalRegistered: totalVolunteers,
+          totalAttended,
+          dropoutRate: volDropoutRate,
+          categoryBreakdown: volunteerCategoryBreakdown,
         },
       };
     },
