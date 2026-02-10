@@ -50,7 +50,7 @@ interface AllocationDetail {
   updated_at: string;
 }
 
-const SYNC_INTERVAL_MINUTES = 15;
+const SYNC_INTERVAL_MINUTES = 5;
 
 export const SurplussSyncMonitor = ({ onBack }: SurplussSyncMonitorProps) => {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
