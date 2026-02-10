@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Send, Clock, Trash2, Eye, Loader2, Users, Mail, CalendarClock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Clock, Trash2, Eye, Loader2, Users, Mail, CalendarClock, CheckCircle2, XCircle, AlertCircle, ScrollText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
@@ -49,6 +50,16 @@ interface CampaignRecipient {
   created_at: string;
 }
 
+interface CampaignLog {
+  id: string;
+  email_type: string;
+  recipient_email: string;
+  provider: string;
+  success: boolean;
+  error_message: string | null;
+  created_at: string;
+}
+
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ElementType }> = {
   draft: { label: 'Draft', variant: 'secondary', icon: AlertCircle },
   scheduled: { label: 'Scheduled', variant: 'outline', icon: CalendarClock },
@@ -67,6 +78,8 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('campaigns');
+  const [logFilterCampaign, setLogFilterCampaign] = useState<string>('all');
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -88,6 +101,28 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       if (error) throw error;
       return (data || []) as unknown as Campaign[];
     },
+  });
+
+  // Fetch campaign send logs
+  const { data: campaignLogs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ['email-campaign-logs', logFilterCampaign],
+    queryFn: async () => {
+      let query = supabase
+        .from('email_send_logs')
+        .select('*')
+        .like('email_type', 'campaign:%')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (logFilterCampaign !== 'all') {
+        query = query.eq('email_type', `campaign:${logFilterCampaign}`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as unknown as CampaignLog[];
+    },
+    enabled: activeTab === 'logs',
   });
 
   // Fetch recipients for selected campaign
@@ -276,101 +311,179 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
         </Button>
       </div>
 
-      {/* Campaign List */}
-      {campaignsLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : campaigns.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <Mail className="h-12 w-12 mb-3 opacity-40" />
-            <p className="font-medium">No campaigns yet</p>
-            <p className="text-sm">Create your first email campaign to get started</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead>Template</TableHead>
-                  <TableHead>Recipients</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Scheduled</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {campaigns.map(campaign => {
-                  const config = statusConfig[campaign.status] || statusConfig.draft;
-                  const StatusIcon = config.icon;
-                  return (
-                    <TableRow key={campaign.id}>
-                      <TableCell className="font-medium">{campaign.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{getTemplateName(campaign.template_id)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Users className="h-3.5 w-3.5" />
-                          <span>{campaign.total_recipients}</span>
-                          {campaign.status === 'sent' && (
-                            <span className="text-muted-foreground ml-1">
-                              ({campaign.sent_count}✓ {campaign.failed_count > 0 ? `${campaign.failed_count}✗` : ''})
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={config.variant} className="gap-1">
-                          <StatusIcon className={`h-3 w-3 ${campaign.status === 'sending' ? 'animate-spin' : ''}`} />
-                          {config.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {campaign.scheduled_at
-                          ? format(new Date(campaign.scheduled_at), 'MMM d, yyyy HH:mm')
-                          : campaign.sent_at
-                            ? `Sent ${format(new Date(campaign.sent_at), 'MMM d, HH:mm')}`
-                            : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => { setSelectedCampaignId(campaign.id); setShowDetailDialog(true); }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={isSending === campaign.id}
-                              onClick={() => handleSendNow(campaign.id)}
-                            >
-                              {isSending === campaign.id
-                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                : <Send className="h-4 w-4 text-emerald-600" />}
-                            </Button>
-                          )}
-                          {campaign.status === 'draft' && (
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(campaign.id)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="campaigns" className="gap-2"><Mail className="h-4 w-4" /> Campaigns</TabsTrigger>
+          <TabsTrigger value="logs" className="gap-2"><ScrollText className="h-4 w-4" /> Logs</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="campaigns">
+          {/* Campaign List */}
+          {campaignsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : campaigns.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Mail className="h-12 w-12 mb-3 opacity-40" />
+                <p className="font-medium">No campaigns yet</p>
+                <p className="text-sm">Create your first email campaign to get started</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead>Template</TableHead>
+                      <TableHead>Recipients</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Scheduled</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                  </TableHeader>
+                  <TableBody>
+                    {campaigns.map(campaign => {
+                      const config = statusConfig[campaign.status] || statusConfig.draft;
+                      const StatusIcon = config.icon;
+                      return (
+                        <TableRow key={campaign.id}>
+                          <TableCell className="font-medium">{campaign.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{getTemplateName(campaign.template_id)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm">
+                              <Users className="h-3.5 w-3.5" />
+                              <span>{campaign.total_recipients}</span>
+                              {campaign.status === 'sent' && (
+                                <span className="text-muted-foreground ml-1">
+                                  ({campaign.sent_count}✓ {campaign.failed_count > 0 ? `${campaign.failed_count}✗` : ''})
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={config.variant} className="gap-1">
+                              <StatusIcon className={`h-3 w-3 ${campaign.status === 'sending' ? 'animate-spin' : ''}`} />
+                              {config.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {campaign.scheduled_at
+                              ? format(new Date(campaign.scheduled_at), 'MMM d, yyyy HH:mm')
+                              : campaign.sent_at
+                                ? `Sent ${format(new Date(campaign.sent_at), 'MMM d, HH:mm')}`
+                                : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => { setSelectedCampaignId(campaign.id); setShowDetailDialog(true); }}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isSending === campaign.id}
+                                  onClick={() => handleSendNow(campaign.id)}
+                                >
+                                  {isSending === campaign.id
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <Send className="h-4 w-4 text-emerald-600" />}
+                                </Button>
+                              )}
+                              {campaign.status === 'draft' && (
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(campaign.id)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="logs">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Campaign Send Logs</CardTitle>
+                <Select value={logFilterCampaign} onValueChange={setLogFilterCampaign}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Filter by campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Campaigns</SelectItem>
+                    {campaigns.map(c => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {logsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              ) : campaignLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <ScrollText className="h-10 w-10 mb-2 opacity-40" />
+                  <p className="text-sm">No campaign logs yet</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Provider</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Timestamp</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaignLogs.map(log => (
+                      <TableRow key={log.id}>
+                        <TableCell className="font-medium text-sm">
+                          {log.email_type.replace('campaign:', '')}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{log.recipient_email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{log.provider}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={log.success ? 'default' : 'destructive'}>
+                            {log.success ? 'Sent' : 'Failed'}
+                          </Badge>
+                          {log.error_message && (
+                            <p className="text-xs text-destructive mt-1 max-w-[200px] truncate" title={log.error_message}>
+                              {log.error_message}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {format(new Date(log.created_at), 'MMM d, HH:mm:ss')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Create Campaign Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
