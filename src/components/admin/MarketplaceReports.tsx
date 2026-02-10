@@ -227,6 +227,9 @@ export const MarketplaceReports = ({
                     <div className="flex items-center gap-3">
                       <Package className="w-5 h-5 text-emerald-500" />
                       <h3 className="font-display font-semibold text-lg">Item Distribution</h3>
+                      <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                        {report.items.byItemType.length} Items
+                      </span>
                     </div>
                     {expandedSections.items ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                   </button>
@@ -248,47 +251,61 @@ export const MarketplaceReports = ({
                         </div>
                       </div>
 
-                      {/* Category Summary */}
-                      {Object.keys(report.items.byCategory).length > 0}
+                      {/* Grouped by Category - Table Layout */}
+                      {report.items.byItemType.length > 0 ? (() => {
+                        const grouped = report.items.byItemType.reduce((acc, item) => {
+                          const cat = item.category || 'Uncategorized';
+                          if (!acc[cat]) acc[cat] = [];
+                          acc[cat].push(item);
+                          return acc;
+                        }, {} as Record<string, typeof report.items.byItemType>);
 
-                      {/* Item Type Breakdown */}
-                      {report.items.byItemType.length > 0 ? <>
-                          <h4 className="text-sm font-medium text-muted-foreground mb-3">20</h4>
-                          <div className="space-y-3">
-                            {report.items.byItemType.map(item => <div key={item.itemId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-medium">{item.itemName}</p>
-                                    {item.externalMaterialId && <span className="text-xs text-muted-foreground">
-                                        (ID: {item.externalMaterialId})
-                                      </span>}
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                    {item.category && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
-                                        {item.category}
-                                      </span>}
-                                    {item.subcategory && <span className="text-xs px-2 py-0.5 bg-muted text-muted-foreground rounded-full">
-                                        {item.subcategory}
-                                      </span>}
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                                      <div className="h-full bg-emerald-500 rounded-full transition-all" style={{
-                            width: `${item.allocated > 0 ? item.distributed / item.allocated * 100 : 0}%`
-                          }} />
-                                    </div>
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                      {item.distributed}/{item.allocated}
-                                    </span>
-                                  </div>
+                        return <div className="space-y-6">
+                          {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([category, items]) => {
+                            const catAllocated = items.reduce((s, i) => s + i.allocated, 0);
+                            const catDistributed = items.reduce((s, i) => s + i.distributed, 0);
+                            const catRemaining = items.reduce((s, i) => s + i.remaining, 0);
+                            return <div key={category} className="bg-muted/20 rounded-xl border border-border overflow-hidden">
+                              <div className="flex items-center justify-between p-4 bg-muted/40">
+                                <div className="flex items-center gap-3">
+                                  <h4 className="font-display font-semibold">{category}</h4>
+                                  <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                                    {items.length} Items
+                                  </span>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-sm font-semibold text-amber-600">{item.remaining}</p>
-                                  <p className="text-xs text-muted-foreground">left</p>
+                                <div className="flex items-center gap-4 text-sm">
+                                  <span className="text-muted-foreground">Allocated: <span className="font-semibold text-foreground">{catAllocated.toLocaleString()}</span></span>
+                                  <span className="text-muted-foreground">Distributed: <span className="font-semibold text-emerald-600">{catDistributed.toLocaleString()}</span></span>
+                                  <span className="text-muted-foreground">Remaining: <span className="font-semibold text-primary">{catRemaining.toLocaleString()}</span></span>
                                 </div>
-                              </div>)}
-                          </div>
-                        </> : <div className="text-center py-8 text-muted-foreground">
+                              </div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-border">
+                                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Item Name</th>
+                                      <th className="text-center py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Allocated</th>
+                                      <th className="text-center py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Distributed</th>
+                                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remaining</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {items.map(item => <tr key={item.itemId} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                                      <td className="py-3 px-4">
+                                        <p className="font-medium">{item.itemName}</p>
+                                        {item.subcategory && <p className="text-xs text-muted-foreground">{item.subcategory}</p>}
+                                      </td>
+                                      <td className="py-3 px-4 text-center text-muted-foreground">{item.allocated > 0 ? item.allocated.toLocaleString() : '—'}</td>
+                                      <td className="py-3 px-4 text-center text-muted-foreground">{item.distributed > 0 ? item.distributed.toLocaleString() : '—'}</td>
+                                      <td className="py-3 px-4 text-right font-semibold text-primary">{item.remaining.toLocaleString()}</td>
+                                    </tr>)}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>;
+                          })}
+                        </div>;
+                      })() : <div className="text-center py-8 text-muted-foreground">
                           <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
                           <p>No items allocated to this marketplace</p>
                         </div>}
