@@ -39,6 +39,7 @@ export interface MarketplaceReport {
       itemName: string;
       itemIcon: string;
       category: string | null;
+      subcategory: string | null;
       externalMaterialId: number | null;
       allocated: number;
       distributed: number;
@@ -325,7 +326,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         .from('marketplace_item_allocations')
         .select(`
           *,
-          item_types (id, name, icon, category, external_material_id)
+          item_types (id, name, icon, category, subcategory, external_material_id)
         `)
         .eq('marketplace_id', marketplaceId);
 
@@ -334,6 +335,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         itemName: alloc.item_types?.name || 'Unknown',
         itemIcon: alloc.item_types?.icon || '📦',
         category: alloc.item_types?.category || null,
+        subcategory: alloc.item_types?.subcategory || null,
         externalMaterialId: alloc.item_types?.external_material_id || null,
         allocated: alloc.allocated_quantity,
         distributed: alloc.distributed_quantity,
