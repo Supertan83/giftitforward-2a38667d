@@ -1,19 +1,29 @@
 
 
-## Sort Marketplace Dropdown by Nearest Start Date
+## Fix: Beneficiary Count Dropping to Zero After Checkout
 
-### What Changes
-In the **Item Allocation** page (`AllocationManagement.tsx`), the marketplace dropdown will be sorted so that marketplaces with the nearest upcoming `event_date` appear first. Marketplaces without a date will appear at the bottom.
+### Problem
+When beneficiaries are checked out, the marketplace report shows 0 beneficiaries. This happens because the query in `useMarketplaceReport` only fetches cards with status `active` or `inactive` -- it excludes `checked_out` cards entirely.
 
-### Technical Details
+### Root Cause
+In `src/hooks/useMarketplaceAllocations.ts`, line 294:
+```
+.in('status', ['active', 'inactive'])
+```
+This filter means checked-out beneficiaries are not counted in the report.
 
-**File: `src/components/admin/AllocationManagement.tsx`**
+### Fix
 
-- Modify the `activeMarketplaces` variable (line 106) to sort by `event_date` ascending, with `null` dates pushed to the end
-- Update the `SelectItem` rendering to also display the event date next to each marketplace name for easier identification
+**File: `src/hooks/useMarketplaceAllocations.ts`**
 
-The sorting logic will:
-1. Place marketplaces with dates before those without dates
-2. Among dated marketplaces, sort by nearest date first (ascending)
-3. Marketplaces without dates go to the bottom
+1. In `useMarketplaceReport` (line ~290-294): Change the `qr_cards` query to include ALL statuses that represent real beneficiaries -- `active`, `checked_out`, and `inactive`. The simplest fix is to remove the status filter entirely so all cards assigned to the marketplace are counted (matching what `useAllMarketplaceReports` already does).
+
+2. This single-line change ensures:
+   - Beneficiaries are counted when checked in (active)
+   - Beneficiaries remain counted after checkout (checked_out)
+   - The count stays consistent with the "All Marketplaces Overview" which already counts all cards
+
+### Technical Detail
+- Remove `.in('status', ['active', 'inactive'])` from line 294 in `useMarketplaceReport`
+- This aligns the single-marketplace report with the all-marketplaces overview (which already counts all cards without filtering)
 
