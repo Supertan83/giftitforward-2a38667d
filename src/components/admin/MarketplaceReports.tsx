@@ -316,23 +316,96 @@ export const MarketplaceReports = ({
                 <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
                   <button onClick={() => toggleSection('volunteers')} className="w-full p-4 md:p-6 flex items-center justify-between text-left hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-blue-500" />
-                      <h3 className="font-display font-semibold text-lg">Volunteer Activity</h3>
+                      <Users className="w-5 h-5 text-primary" />
+                      <h3 className="font-display font-semibold text-lg">Volunteer Details</h3>
                     </div>
                     {expandedSections.volunteers ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                   </button>
                   
-                  {expandedSections.volunteers && <div className="px-4 md:px-6 pb-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-blue-500/10 rounded-lg p-6 text-center">
-                          <p className="text-3xl font-bold text-blue-600">{report.volunteers?.total || 0}</p>
-                          <p className="text-sm text-muted-foreground mt-1">Total Volunteers</p>
+                  {expandedSections.volunteers && <div className="px-4 md:px-6 pb-6 space-y-6">
+                      <p className="text-sm text-muted-foreground">Comprehensive volunteer tracking and attendance data</p>
+                      
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="rounded-lg border p-3 md:p-4 bg-primary/5 border-primary/20">
+                          <p className="text-xs text-muted-foreground mb-1">Total Registered</p>
+                          <p className="text-xl md:text-2xl font-bold text-primary">{report.volunteers?.totalRegistered || 0}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Volunteers</p>
                         </div>
-                        <div className="bg-purple-500/10 rounded-lg p-6 text-center">
-                          <p className="text-3xl font-bold text-purple-600">{report.volunteers?.totalHours.toFixed(1) || 0}</p>
-                          <p className="text-sm text-muted-foreground mt-1">Total Hours Worked</p>
+                        <div className="rounded-lg border p-3 md:p-4 bg-success/5 border-success/20">
+                          <p className="text-xs text-muted-foreground mb-1">Total Attended</p>
+                          <p className="text-xl md:text-2xl font-bold text-success">{report.volunteers?.totalAttended || 0}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Volunteers</p>
+                        </div>
+                        <div className="rounded-lg border p-3 md:p-4 bg-blue-500/5 border-blue-500/20">
+                          <p className="text-xs text-muted-foreground mb-1">Total Hours</p>
+                          <p className="text-xl md:text-2xl font-bold text-blue-600">{report.volunteers?.totalHours.toFixed(1) || 0}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Hours Worked</p>
+                        </div>
+                        <div className="rounded-lg border p-3 md:p-4 bg-destructive/5 border-destructive/20">
+                          <p className="text-xs text-muted-foreground mb-1">Drop-out Rate</p>
+                          <p className="text-xl md:text-2xl font-bold text-destructive">{report.volunteers?.dropoutRate || 0}%</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{(report.volunteers?.totalRegistered || 0) - (report.volunteers?.totalAttended || 0)} volunteers</p>
                         </div>
                       </div>
+
+                      {/* Category Breakdown Table - Desktop */}
+                      {report.volunteers?.categoryBreakdown && report.volunteers.categoryBreakdown.length > 0 && <>
+                        <div className="hidden md:block overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border text-muted-foreground">
+                                <th className="text-left py-3 px-2 font-medium">Category</th>
+                                <th className="text-left py-3 px-2 font-medium">Registered</th>
+                                <th className="text-left py-3 px-2 font-medium">Attended</th>
+                                <th className="text-left py-3 px-2 font-medium">Drop-out Rate</th>
+                                <th className="text-left py-3 px-2 font-medium">Gender (M/F)</th>
+                                <th className="text-left py-3 px-2 font-medium">Top Companies</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {report.volunteers.categoryBreakdown.map(row => (
+                                <tr key={row.category} className="border-b border-border/50 last:border-0">
+                                  <td className="py-3 px-2 font-medium text-foreground">{row.category}</td>
+                                  <td className="py-3 px-2 text-foreground">{row.registered}</td>
+                                  <td className="py-3 px-2 text-success font-medium">{row.attended}</td>
+                                  <td className="py-3 px-2 text-warning font-medium">{row.dropoutRate}%</td>
+                                  <td className="py-3 px-2 text-foreground">{row.maleCount} / {row.femaleCount}</td>
+                                  <td className="py-3 px-2 text-muted-foreground text-xs">{row.topCompanies.join(', ')}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Category Breakdown Cards - Mobile */}
+                        <div className="space-y-3 md:hidden">
+                          {report.volunteers.categoryBreakdown.map(row => (
+                            <div key={row.category} className="border border-border rounded-lg p-3 space-y-2">
+                              <p className="font-medium text-foreground text-sm">{row.category}</p>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <span className="text-muted-foreground">Registered: </span>
+                                  <span className="font-medium text-foreground">{row.registered}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Attended: </span>
+                                  <span className="font-medium text-success">{row.attended}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Drop-out: </span>
+                                  <span className="font-medium text-warning">{row.dropoutRate}%</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">M/F: </span>
+                                  <span className="font-medium text-foreground">{row.maleCount} / {row.femaleCount}</span>
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{row.topCompanies.join(', ')}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>}
                     </div>}
                 </div>
               </> : <div className="text-center py-12 text-muted-foreground">
