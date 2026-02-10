@@ -351,11 +351,18 @@ serve(async (req) => {
         );
       }
 
-      console.log(`[sync-all] Syncing ${marketplaces.length} marketplace events`);
-      const results = [];
-      for (const mp of marketplaces) {
-        const result = await syncSingleMarketplace(supabase, mp, environment, apiHeaders, baseUrl);
-        results.push(result);
+      console.log(`[sync-all] Syncing ${marketplaces.length} marketplace events (concurrent batches of 5)`);
+      const results: any[] = [];
+      // Process in batches of 5 to avoid timeout
+      const batchSize = 5;
+      for (let i = 0; i < marketplaces.length; i += batchSize) {
+        const batch = marketplaces.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map((mp: any) => syncSingleMarketplace(supabase, mp, environment, apiHeaders, baseUrl)
+            .catch(e => ({ marketplace_name: mp.name, success: false, error: e?.message || String(e), synced: 0 }))
+          )
+        );
+        results.push(...batchResults);
       }
 
       const totalSynced = results.reduce((s, r) => s + (r.synced || 0), 0);
