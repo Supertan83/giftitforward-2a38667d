@@ -280,7 +280,13 @@ export const MarketplaceReports = ({
                                 </div>
                               </div>
                               <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm table-fixed">
+                                  <colgroup>
+                                    <col className="w-[40%]" />
+                                    <col className="w-[20%]" />
+                                    <col className="w-[20%]" />
+                                    <col className="w-[20%]" />
+                                  </colgroup>
                                   <thead>
                                     <tr className="border-b border-border">
                                       <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Item Name</th>
