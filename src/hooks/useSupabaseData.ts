@@ -1166,6 +1166,7 @@ interface MarketplaceEvent {
   end_time: string | null;
   created_at: string;
   beneficiary_credit_limit: number;
+  external_id: number | null;
 }
 
 export const useMarketplaces = () => {
