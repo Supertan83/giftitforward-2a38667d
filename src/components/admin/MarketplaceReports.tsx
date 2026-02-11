@@ -171,31 +171,26 @@ export const MarketplaceReports = ({
                       <span className={`text-sm px-3 py-1 rounded-full ${report.marketplace.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : report.marketplace.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
                         {report.marketplace.status}
                       </span>
-                      {(() => {
-                        const selectedMp = marketplaces.find(m => m.id === selectedMarketplaceId);
-                        return selectedMp?.external_id ? (
-                          <div className="flex items-center gap-2">
-                            <Select value={surplussEnv} onValueChange={(v) => setSurplussEnv(v as 'staging' | 'production')}>
-                              <SelectTrigger className="w-28 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="production">Production</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={isSyncing}
-                              onClick={() => syncToSurpluss(selectedMarketplaceId, surplussEnv)}
-                              className="gap-1.5"
-                            >
-                              {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                              Send to Surpluss
-                            </Button>
-                          </div>
-                        ) : null;
-                      })()}
+                      <div className="flex items-center gap-2">
+                        <Select value={surplussEnv} onValueChange={(v) => setSurplussEnv(v as 'staging' | 'production')}>
+                          <SelectTrigger className="w-28 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="production">Production</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isSyncing}
+                          onClick={() => syncToSurpluss(selectedMarketplaceId, surplussEnv)}
+                          className="gap-1.5"
+                        >
+                          {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                          Send to Surpluss
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
