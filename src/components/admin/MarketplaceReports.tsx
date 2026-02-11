@@ -16,7 +16,7 @@ export const MarketplaceReports = ({
   onBack
 }: MarketplaceReportsProps) => {
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
-  const [surplussEnv, setSurplussEnv] = useState<'staging' | 'production'>('staging');
+  const [surplussEnv, setSurplussEnv] = useState<'staging' | 'production'>('production');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     beneficiaries: true,
     items: true,
@@ -180,7 +180,6 @@ export const MarketplaceReports = ({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="staging">Staging</SelectItem>
                                 <SelectItem value="production">Production</SelectItem>
                               </SelectContent>
                             </Select>
