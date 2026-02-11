@@ -71,12 +71,12 @@ export const MarketplaceReports = ({
             <SelectTrigger className="w-full md:w-80">
               <SelectValue placeholder="Choose a marketplace to view report..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]">
               {marketplaces.map(mp => <SelectItem key={mp.id} value={mp.id}>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    {mp.name}
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${mp.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                  <div className="flex items-center gap-2 w-full min-w-0">
+                    <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="truncate">{mp.name}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${mp.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
                       {mp.status}
                     </span>
                   </div>
