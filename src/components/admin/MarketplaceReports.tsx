@@ -68,7 +68,7 @@ export const MarketplaceReports = ({
         <div className="mb-6">
           <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
           <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
-            <SelectTrigger className="w-full md:w-80">
+            <SelectTrigger className="w-full md:w-[32rem]">
               <SelectValue placeholder="Choose a marketplace to view report..." />
             </SelectTrigger>
             <SelectContent className="min-w-[var(--radix-select-trigger-width)] max-w-[90vw]">
