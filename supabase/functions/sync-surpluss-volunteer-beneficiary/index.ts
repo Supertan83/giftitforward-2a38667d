@@ -43,25 +43,73 @@ serve(async (req) => {
       );
     }
 
-    if (!marketplace.external_id) {
-      return new Response(
-        JSON.stringify({ error: 'Marketplace has no external_id - cannot sync to Surpluss' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const errors: string[] = [];
     let volunteers_sent = 0;
     let volunteers_failed = 0;
     let beneficiary_update_success = false;
 
-    // 2. Fetch volunteer QR cards with their pending_volunteers data
+    // 2. Look up the Surpluss event by marketplace name
+    let surplussEventId: number | null = marketplace.external_id || null;
+
+    if (!surplussEventId) {
+      console.log(`No external_id set. Looking up Surpluss event by name: "${marketplace.name}"`);
+
+      const apiHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      const apiKey = Deno.env.get('SURPLUSS_API_KEY');
+      if (apiKey) {
+        apiHeaders['Authorization'] = `Bearer ${apiKey}`;
+        apiHeaders['x-api-key'] = apiKey;
+      }
+
+      try {
+        const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
+        console.log(`GET ${lookupUrl}`);
+        const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
+        const lookupBody = await lookupResp.text();
+
+        if (lookupResp.ok) {
+          let parsed: any;
+          try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
+
+          const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
+
+          if (Array.isArray(items)) {
+            // Fuzzy name match: normalize and compare
+            const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const targetName = normalize(marketplace.name);
+
+            const match = items.find((e: any) => {
+              const eventName = normalize(e.title || e.name || '');
+              return eventName === targetName || eventName.includes(targetName) || targetName.includes(eventName);
+            });
+
+            if (match) {
+              surplussEventId = match.id;
+              console.log(`Found matching Surpluss event: "${match.title || match.name}" (ID: ${match.id})`);
+            } else {
+              console.log(`No matching Surpluss event found for: "${marketplace.name}". Available: ${items.map((e: any) => e.title || e.name).join(', ')}`);
+              errors.push(`No matching Surpluss event found for marketplace: "${marketplace.name}"`);
+            }
+          }
+        } else {
+          errors.push(`Surpluss marketplace lookup failed: ${lookupResp.status}`);
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        errors.push(`Surpluss marketplace lookup error: ${errMsg}`);
+      }
+    }
+
+    // 3. Fetch volunteer QR cards with their pending_volunteers data
     const { data: volunteerCards } = await supabase
       .from('volunteer_qr_cards')
       .select('*, volunteer:pending_volunteers(id, first_name, last_name, email, phone_number, is_employee, external_company, gender)')
       .eq('marketplace_id', marketplace_id);
 
-    // 3. Send each volunteer to Surpluss
+    // 4. Send each volunteer to Surpluss
     console.log(`Sending ${volunteerCards?.length || 0} volunteers to Surpluss...`);
 
     for (const card of volunteerCards || []) {
@@ -82,9 +130,11 @@ serve(async (req) => {
       const volunteerPayload: Record<string, any> = {
         name: volunteerName,
         source: 'API',
+        marketplace_event_name: marketplace.name,
       };
       if (vol.email) volunteerPayload.email = vol.email;
       if (vol.phone_number) volunteerPayload.phone = vol.phone_number;
+      if (surplussEventId) volunteerPayload.marketplace_event_id = surplussEventId;
 
       try {
         const apiUrl = `${baseUrl}/api/common/volunteers`;
@@ -96,20 +146,18 @@ serve(async (req) => {
           body: JSON.stringify(volunteerPayload),
         });
 
-      const responseBody = await response.text();
-      let responseJson: any;
-      try { responseJson = JSON.parse(responseBody); } catch {
-        // Detect HTML responses (dead server, 404 pages, etc.)
-        if (responseBody.includes('<!DOCTYPE') || responseBody.includes('<html')) {
-          responseJson = { raw: 'API endpoint unavailable (received HTML instead of JSON)' };
-        } else {
-          responseJson = { raw: responseBody.substring(0, 500) };
+        const responseBody = await response.text();
+        let responseJson: any;
+        try { responseJson = JSON.parse(responseBody); } catch {
+          if (responseBody.includes('<!DOCTYPE') || responseBody.includes('<html')) {
+            responseJson = { raw: 'API endpoint unavailable (received HTML instead of JSON)' };
+          } else {
+            responseJson = { raw: responseBody.substring(0, 500) };
+          }
         }
-      }
 
-      // Log to audit
-      await supabase.from('surpluss_api_audit_log').insert({
-        action: 'sync_volunteer',
+        await supabase.from('surpluss_api_audit_log').insert({
+          action: 'sync_volunteer',
           environment,
           request_payload: volunteerPayload,
           response_status: response.status,
@@ -130,64 +178,66 @@ serve(async (req) => {
       }
     }
 
-    // 4. Update marketplace event with beneficiary demographics
-    console.log(`Updating marketplace event ${marketplace.external_id} with demographics...`);
+    // 5. Update marketplace event with beneficiary demographics (only if we have a Surpluss event ID)
+    if (surplussEventId) {
+      console.log(`Updating Surpluss event ${surplussEventId} with demographics...`);
 
-    const demographicsPayload: Record<string, any> = {};
+      const demographicsPayload: Record<string, any> = {};
+      if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
+      if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
+      if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
+      if (marketplace.demographics_male_adults != null) demographicsPayload.male_adults = marketplace.demographics_male_adults;
+      if (marketplace.demographics_female_adults != null) demographicsPayload.female_adults = marketplace.demographics_female_adults;
+      if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
+      if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
+      if (marketplace.demographics_nationalities) demographicsPayload.nationalities = marketplace.demographics_nationalities;
+      if (marketplace.demographics_target != null) demographicsPayload.target = marketplace.demographics_target;
+      if (marketplace.demographics_reach != null) demographicsPayload.reach = marketplace.demographics_reach;
+      if (marketplace.demographics_notes) demographicsPayload.notes = marketplace.demographics_notes;
 
-    // Use the marketplace demographics fields
-    if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
-    if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
-    if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
-    if (marketplace.demographics_male_adults != null) demographicsPayload.male_adults = marketplace.demographics_male_adults;
-    if (marketplace.demographics_female_adults != null) demographicsPayload.female_adults = marketplace.demographics_female_adults;
-    if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
-    if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
-    if (marketplace.demographics_nationalities) demographicsPayload.nationalities = marketplace.demographics_nationalities;
-    if (marketplace.demographics_target != null) demographicsPayload.target = marketplace.demographics_target;
-    if (marketplace.demographics_reach != null) demographicsPayload.reach = marketplace.demographics_reach;
-    if (marketplace.demographics_notes) demographicsPayload.notes = marketplace.demographics_notes;
+      try {
+        const apiUrl = `${baseUrl}/api/common/marketplace-events/${surplussEventId}`;
+        console.log(`PUT ${apiUrl}`);
 
-    try {
-      const apiUrl = `${baseUrl}/api/common/marketplace-events/${marketplace.external_id}`;
-      console.log(`PUT ${apiUrl}`);
+        const response = await fetch(apiUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(demographicsPayload),
+        });
 
-      const response = await fetch(apiUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(demographicsPayload),
-      });
-
-      const responseBody = await response.text();
-      let responseJson: any;
-      try { responseJson = JSON.parse(responseBody); } catch {
-        if (responseBody.includes('<!DOCTYPE') || responseBody.includes('<html')) {
-          responseJson = { raw: 'API endpoint unavailable (received HTML instead of JSON)' };
-        } else {
-          responseJson = { raw: responseBody.substring(0, 500) };
+        const responseBody = await response.text();
+        let responseJson: any;
+        try { responseJson = JSON.parse(responseBody); } catch {
+          if (responseBody.includes('<!DOCTYPE') || responseBody.includes('<html')) {
+            responseJson = { raw: 'API endpoint unavailable (received HTML instead of JSON)' };
+          } else {
+            responseJson = { raw: responseBody.substring(0, 500) };
+          }
         }
-      }
 
-      // Log to audit
-      await supabase.from('surpluss_api_audit_log').insert({
-        action: 'sync_beneficiary_demographics',
-        environment,
-        request_payload: demographicsPayload,
-        response_status: response.status,
-        response_body: responseJson,
-        success: response.ok,
-      });
+        await supabase.from('surpluss_api_audit_log').insert({
+          action: 'sync_beneficiary_demographics',
+          environment,
+          request_payload: demographicsPayload,
+          response_status: response.status,
+          response_body: responseJson,
+          success: response.ok,
+        });
 
-      beneficiary_update_success = response.ok;
-      if (!response.ok) {
-        errors.push(`Demographics update failed: ${response.status} - ${responseBody.substring(0, 200)}`);
+        beneficiary_update_success = response.ok;
+        if (!response.ok) {
+          errors.push(`Demographics update failed: ${response.status} - ${responseBody.substring(0, 200)}`);
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        errors.push(`Demographics update error: ${errMsg}`);
       }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Unknown error';
-      errors.push(`Demographics update error: ${errMsg}`);
+    } else {
+      console.log(`Skipping demographics update - no matching Surpluss event found for "${marketplace.name}"`);
+      errors.push(`Demographics not sent: no matching Surpluss event found for "${marketplace.name}"`);
     }
 
-    const success = volunteers_failed === 0 && beneficiary_update_success;
+    const success = volunteers_failed === 0 && (surplussEventId ? beneficiary_update_success : true);
 
     return new Response(
       JSON.stringify({
@@ -195,6 +245,7 @@ serve(async (req) => {
         volunteers_sent,
         volunteers_failed,
         beneficiary_update_success,
+        surpluss_event_id: surplussEventId,
         errors,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
