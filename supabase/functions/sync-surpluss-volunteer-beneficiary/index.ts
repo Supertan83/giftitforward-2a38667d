@@ -96,13 +96,20 @@ serve(async (req) => {
           body: JSON.stringify(volunteerPayload),
         });
 
-        const responseBody = await response.text();
-        let responseJson: any;
-        try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody }; }
+      const responseBody = await response.text();
+      let responseJson: any;
+      try { responseJson = JSON.parse(responseBody); } catch {
+        // Detect HTML responses (dead server, 404 pages, etc.)
+        if (responseBody.includes('<!DOCTYPE') || responseBody.includes('<html')) {
+          responseJson = { raw: 'API endpoint unavailable (received HTML instead of JSON)' };
+        } else {
+          responseJson = { raw: responseBody.substring(0, 500) };
+        }
+      }
 
-        // Log to audit
-        await supabase.from('surpluss_api_audit_log').insert({
-          action: 'sync_volunteer',
+      // Log to audit
+      await supabase.from('surpluss_api_audit_log').insert({
+        action: 'sync_volunteer',
           environment,
           request_payload: volunteerPayload,
           response_status: response.status,
@@ -153,7 +160,13 @@ serve(async (req) => {
 
       const responseBody = await response.text();
       let responseJson: any;
-      try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody }; }
+      try { responseJson = JSON.parse(responseBody); } catch {
+        if (responseBody.includes('<!DOCTYPE') || responseBody.includes('<html')) {
+          responseJson = { raw: 'API endpoint unavailable (received HTML instead of JSON)' };
+        } else {
+          responseJson = { raw: responseBody.substring(0, 500) };
+        }
+      }
 
       // Log to audit
       await supabase.from('surpluss_api_audit_log').insert({
