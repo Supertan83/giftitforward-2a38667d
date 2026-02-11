@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.fetch-surpluss-marketplaces]
 verify_jwt = false
+
+[functions.sync-surpluss-volunteer-beneficiary]
+verify_jwt = false

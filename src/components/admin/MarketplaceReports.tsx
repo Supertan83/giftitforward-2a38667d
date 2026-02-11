@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
+import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 interface MarketplaceReportsProps {
   onBack: () => void;
@@ -15,11 +16,13 @@ export const MarketplaceReports = ({
   onBack
 }: MarketplaceReportsProps) => {
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
+  const [surplussEnv, setSurplussEnv] = useState<'staging' | 'production'>('staging');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     beneficiaries: true,
     items: true,
     volunteers: true
   });
+  const { isSyncing, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
   const {
     data: marketplaces = [],
     isLoading: loadingMarketplaces
@@ -164,13 +167,40 @@ export const MarketplaceReports = ({
                           </span>}
                       </div>
                     </div>
-                    <span className={`text-sm px-3 py-1 rounded-full self-start ${report.marketplace.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : report.marketplace.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                      {report.marketplace.status}
-                    </span>
+                    <div className="flex items-center gap-2 self-start">
+                      <span className={`text-sm px-3 py-1 rounded-full ${report.marketplace.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : report.marketplace.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                        {report.marketplace.status}
+                      </span>
+                      {(() => {
+                        const selectedMp = marketplaces.find(m => m.id === selectedMarketplaceId);
+                        return selectedMp?.external_id ? (
+                          <div className="flex items-center gap-2">
+                            <Select value={surplussEnv} onValueChange={(v) => setSurplussEnv(v as 'staging' | 'production')}>
+                              <SelectTrigger className="w-28 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="staging">Staging</SelectItem>
+                                <SelectItem value="production">Production</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isSyncing}
+                              onClick={() => syncToSurpluss(selectedMarketplaceId, surplussEnv)}
+                              className="gap-1.5"
+                            >
+                              {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                              Send to Surpluss
+                            </Button>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
                 </div>
 
-                {/* Header Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                   <div className="bg-card rounded-xl border border-border p-4 shadow-card">
                     <div className="flex items-center gap-3">
