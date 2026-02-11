@@ -49,10 +49,11 @@ serve(async (req) => {
     let beneficiary_update_success = false;
 
     // 2. Look up the Surpluss event by marketplace name
-    let surplussEventId: number | null = marketplace.external_id || null;
+    let surplussEventId: number | null = null;
 
-    if (!surplussEventId) {
-      console.log(`No external_id set. Looking up Surpluss event by name: "${marketplace.name}"`);
+    // Always look up by name — external_id may be stale or wrong
+    {
+      console.log(`Looking up Surpluss event by name: "${marketplace.name}"`);
 
       const apiHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
