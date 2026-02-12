@@ -182,6 +182,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [exportEndDate, setExportEndDate] = useState<Date | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
+  const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
@@ -999,6 +1000,42 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  setSyncingSurpluss(true);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', {
+                      body: { 
+                        marketplace_id: eventFilter !== 'all' 
+                          ? marketplaces.find(m => m.name === eventFilter)?.id 
+                          : marketplaces[0]?.id,
+                        environment: 'production'
+                      },
+                    });
+                    if (error) throw error;
+                    toast({
+                      title: 'Synced to Surpluss',
+                      description: `Sent ${data.volunteers_sent} volunteers. ${data.errors?.length ? data.errors.length + ' error(s).' : ''}`,
+                      variant: data.success ? 'default' : 'destructive',
+                    });
+                  } catch (err) {
+                    toast({
+                      title: 'Sync Failed',
+                      description: err instanceof Error ? err.message : 'Unknown error',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setSyncingSurpluss(false);
+                  }
+                }}
+                disabled={syncingSurpluss || marketplaces.length === 0}
+                className="gap-2"
+              >
+                {syncingSurpluss ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span className="hidden sm:inline">Sync to Surpluss</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)} className="gap-2">
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
