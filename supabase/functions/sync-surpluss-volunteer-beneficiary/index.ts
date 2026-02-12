@@ -183,7 +183,10 @@ serve(async (req) => {
     if (surplussEventId) {
       console.log(`Updating Surpluss event ${surplussEventId} with demographics...`);
 
-      const demographicsPayload: Record<string, any> = {};
+      const demographicsPayload: Record<string, any> = {
+        total_volunteers: volunteerCards?.length || 0,
+        volunteers_checked_in: volunteerCards?.filter((c: any) => c.status === 'checked_in' || c.status === 'checked_out').length || 0,
+      };
       if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
       if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
       if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
