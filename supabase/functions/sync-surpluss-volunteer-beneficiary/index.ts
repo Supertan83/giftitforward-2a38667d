@@ -76,6 +76,47 @@ serve(async (req) => {
       }
     }
 
+    // 1. Fetch Surpluss events ONCE for all marketplaces
+    const surplussEventsMap = new Map<string, number>(); // normalized name -> surpluss event id
+    const apiHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    const apiKey = Deno.env.get('SURPLUSS_API_KEY');
+    if (apiKey) {
+      apiHeaders['Authorization'] = `Bearer ${apiKey}`;
+      apiHeaders['x-api-key'] = apiKey;
+    }
+
+    try {
+      const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
+      console.log(`Fetching Surpluss events from ${lookupUrl}...`);
+      const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
+      const lookupBody = await lookupResp.text();
+
+      if (lookupResp.ok) {
+        let parsed: any;
+        try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
+        const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            const name = normalize(item.title || item.name || '');
+            if (name) surplussEventsMap.set(name, item.id);
+          }
+          console.log(`Loaded ${surplussEventsMap.size} Surpluss events`);
+        }
+      } else {
+        console.log(`Surpluss events lookup failed: ${lookupResp.status}`);
+        allErrors.push(`Surpluss events lookup failed: ${lookupResp.status}`);
+      }
+    } catch (err) {
+      console.log(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
+      allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
     // Process each marketplace
     for (const mpId of marketplaceIdsToProcess) {
       const { data: marketplace, error: mpError } = await supabase
@@ -92,52 +133,22 @@ serve(async (req) => {
       console.log(`\n--- Processing marketplace: "${marketplace.name}" ---`);
 
       const alreadySyncedEmails = alreadySyncedMap.get(marketplace.name) || new Set<string>();
-
-      // Look up the Surpluss event by marketplace name (skip for test marketplaces)
-      let surplussEventId: number | null = null;
       const isTestMarketplace = /^(lea|tala)'?s?\s+marketplace$/i.test(marketplace.name.trim());
 
-      if (isTestMarketplace) {
-        console.log(`"${marketplace.name}" is a test marketplace — skipping Surpluss event lookup`);
-      } else {
-        const apiHeaders: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        };
-        const apiKey = Deno.env.get('SURPLUSS_API_KEY');
-        if (apiKey) {
-          apiHeaders['Authorization'] = `Bearer ${apiKey}`;
-          apiHeaders['x-api-key'] = apiKey;
-        }
-
-        try {
-          const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
-          const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
-          const lookupBody = await lookupResp.text();
-
-          if (lookupResp.ok) {
-            let parsed: any;
-            try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
-            const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
-            if (Array.isArray(items)) {
-              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-              const targetName = normalize(marketplace.name);
-              const match = items.find((e: any) => {
-                const eventName = normalize(e.title || e.name || '');
-                return eventName === targetName || eventName.includes(targetName) || targetName.includes(eventName);
-              });
-              if (match) {
-                surplussEventId = match.id;
-                console.log(`Found Surpluss event: "${match.title || match.name}" (ID: ${match.id})`);
-              } else {
-                allErrors.push(`No matching Surpluss event for "${marketplace.name}"`);
-              }
-            }
-          } else {
-            allErrors.push(`Surpluss lookup failed for "${marketplace.name}": ${lookupResp.status}`);
+      // Find matching Surpluss event from pre-fetched list
+      let surplussEventId: number | null = null;
+      if (!isTestMarketplace) {
+        const targetName = normalize(marketplace.name);
+        // Try exact match first, then contains match
+        for (const [eventName, eventId] of surplussEventsMap) {
+          if (eventName === targetName || eventName.includes(targetName) || targetName.includes(eventName)) {
+            surplussEventId = eventId;
+            console.log(`Matched Surpluss event ID: ${eventId}`);
+            break;
           }
-        } catch (err) {
-          allErrors.push(`Surpluss lookup error for "${marketplace.name}": ${err instanceof Error ? err.message : 'Unknown'}`);
+        }
+        if (!surplussEventId) {
+          console.log(`No Surpluss event match for "${marketplace.name}" — will still send volunteers without event association`);
         }
       }
 
@@ -221,7 +232,7 @@ serve(async (req) => {
         }
       }
 
-      // Update demographics if we have a Surpluss event ID
+      // Update demographics only if we have a Surpluss event ID
       if (surplussEventId) {
         const demographicsPayload: Record<string, any> = {
           total_volunteers: volunteerCards?.length || 0,
