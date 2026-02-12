@@ -29,55 +29,6 @@ serve(async (req) => {
       ? 'https://api.thesurpluss.com'
       : 'https://surpluss-server.herokuapp.com';
 
-    // Determine which marketplaces to process
-    let marketplaceIdsToProcess: string[] = [];
-    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
-      marketplaceIdsToProcess = marketplace_ids;
-    } else if (marketplace_id) {
-      marketplaceIdsToProcess = [marketplace_id];
-    } else {
-      // Fetch ALL marketplaces
-      const { data: allMarketplaces } = await supabase
-        .from('marketplace_events')
-        .select('id');
-      marketplaceIdsToProcess = (allMarketplaces || []).map((m: any) => m.id);
-    }
-
-    if (marketplaceIdsToProcess.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'No marketplaces found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const allErrors: string[] = [];
-    let totalSent = 0;
-    let totalFailed = 0;
-    let totalSkipped = 0;
-    let totalVolunteers = 0;
-    const allVolunteerDetails: { name: string; status: 'sent' | 'skipped' | 'failed'; reason?: string; marketplace?: string }[] = [];
-
-    // 0. Fetch all previously synced emails once
-    const { data: previousSyncs } = await supabase
-      .from('surpluss_api_audit_log')
-      .select('request_payload')
-      .eq('action', 'sync_volunteer')
-      .eq('success', true);
-
-    const alreadySyncedMap = new Map<string, Set<string>>();
-    if (previousSyncs) {
-      for (const log of previousSyncs) {
-        const payload = log.request_payload as any;
-        if (payload?.email && payload?.marketplace_event_name) {
-          const mpName = payload.marketplace_event_name;
-          if (!alreadySyncedMap.has(mpName)) alreadySyncedMap.set(mpName, new Set());
-          alreadySyncedMap.get(mpName)!.add(payload.email.toLowerCase());
-        }
-      }
-    }
-
-    // 1. Fetch Surpluss events ONCE for all marketplaces
-    const surplussEventsMap = new Map<string, number>(); // normalized name -> surpluss event id
     const apiHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -88,203 +39,208 @@ serve(async (req) => {
       apiHeaders['x-api-key'] = apiKey;
     }
 
-    try {
-      const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
-      console.log(`Fetching Surpluss events from ${lookupUrl}...`);
-      const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
-      const lookupBody = await lookupResp.text();
+    const allErrors: string[] = [];
+    let totalSent = 0;
+    let totalFailed = 0;
+    let totalSkipped = 0;
+    const allVolunteerDetails: { name: string; status: 'sent' | 'skipped' | 'failed'; reason?: string }[] = [];
 
-      if (lookupResp.ok) {
-        let parsed: any;
-        try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
-        const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
-        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (Array.isArray(items)) {
-          for (const item of items) {
-            const name = normalize(item.title || item.name || '');
-            if (name) surplussEventsMap.set(name, item.id);
-          }
-          console.log(`Loaded ${surplussEventsMap.size} Surpluss events`);
+    // 1. Fetch all previously synced emails for deduplication
+    const { data: previousSyncs } = await supabase
+      .from('surpluss_api_audit_log')
+      .select('request_payload')
+      .eq('action', 'sync_volunteer')
+      .eq('success', true);
+
+    const alreadySyncedEmails = new Set<string>();
+    if (previousSyncs) {
+      for (const log of previousSyncs) {
+        const payload = log.request_payload as any;
+        if (payload?.email) {
+          alreadySyncedEmails.add(payload.email.toLowerCase());
         }
-      } else {
-        console.log(`Surpluss events lookup failed: ${lookupResp.status}`);
-        allErrors.push(`Surpluss events lookup failed: ${lookupResp.status}`);
       }
-    } catch (err) {
-      console.log(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
-      allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+    console.log(`Found ${alreadySyncedEmails.size} previously synced emails`);
+
+    // 2. Fetch ALL volunteers from pending_volunteers directly
+    const { data: allVolunteers, error: volError } = await supabase
+      .from('pending_volunteers')
+      .select('id, first_name, last_name, email, phone_number, is_employee, external_company, gender');
+
+    if (volError) {
+      throw new Error(`Failed to fetch volunteers: ${volError.message}`);
     }
 
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const volunteers = allVolunteers || [];
+    console.log(`Fetched ${volunteers.length} volunteers from pending_volunteers`);
 
-    // Process each marketplace
-    for (const mpId of marketplaceIdsToProcess) {
-      const { data: marketplace, error: mpError } = await supabase
-        .from('marketplace_events')
-        .select('*')
-        .eq('id', mpId)
-        .single();
-
-      if (mpError || !marketplace) {
-        allErrors.push(`Marketplace ${mpId} not found`);
+    // 3. Send each volunteer to Surpluss
+    for (const vol of volunteers) {
+      const volunteerName = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
+      if (!volunteerName) {
+        totalFailed++;
+        allVolunteerDetails.push({ name: vol.email || 'Unknown', status: 'failed', reason: 'No name' });
         continue;
       }
 
-      console.log(`\n--- Processing marketplace: "${marketplace.name}" ---`);
+      if (vol.email && alreadySyncedEmails.has(vol.email.toLowerCase())) {
+        totalSkipped++;
+        allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already synced previously' });
+        continue;
+      }
 
-      const alreadySyncedEmails = alreadySyncedMap.get(marketplace.name) || new Set<string>();
-      const isTestMarketplace = /^(lea|tala)'?s?\s+marketplace$/i.test(marketplace.name.trim());
+      const volunteerPayload: Record<string, any> = {
+        name: volunteerName,
+        source: 'API',
+      };
+      if (vol.email) volunteerPayload.email = vol.email;
+      if (vol.phone_number) volunteerPayload.phone = vol.phone_number;
 
-      // Find matching Surpluss event from pre-fetched list
-      let surplussEventId: number | null = null;
-      if (!isTestMarketplace) {
+      try {
+        const apiUrl = `${baseUrl}/api/common/volunteers`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: apiHeaders,
+          body: JSON.stringify(volunteerPayload),
+        });
+
+        const responseBody = await response.text();
+        let responseJson: any;
+        try { responseJson = JSON.parse(responseBody); } catch {
+          responseJson = responseBody.includes('<!DOCTYPE') ? { raw: 'HTML response' } : { raw: responseBody.substring(0, 500) };
+        }
+
+        await supabase.from('surpluss_api_audit_log').insert({
+          action: 'sync_volunteer',
+          environment,
+          request_payload: volunteerPayload,
+          response_status: response.status,
+          response_body: responseJson,
+          success: response.ok,
+        });
+
+        if (response.ok) {
+          totalSent++;
+          allVolunteerDetails.push({ name: volunteerName, status: 'sent' });
+        } else if (responseBody.includes('already exists')) {
+          totalSkipped++;
+          allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss' });
+          // Mark as success in audit log
+          await supabase.from('surpluss_api_audit_log')
+            .update({ success: true })
+            .eq('action', 'sync_volunteer')
+            .eq('success', false)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        } else {
+          totalFailed++;
+          const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
+          allVolunteerDetails.push({ name: volunteerName, status: 'failed', reason });
+        }
+      } catch (err) {
+        totalFailed++;
+        allVolunteerDetails.push({ name: volunteerName, status: 'failed', reason: err instanceof Error ? err.message : 'Unknown' });
+      }
+    }
+
+    // 4. Demographics update (optional, only if marketplace IDs provided)
+    let marketplaceIdsToProcess: string[] = [];
+    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
+      marketplaceIdsToProcess = marketplace_ids;
+    } else if (marketplace_id) {
+      marketplaceIdsToProcess = [marketplace_id];
+    }
+
+    if (marketplaceIdsToProcess.length > 0) {
+      // Fetch Surpluss events for demographics matching
+      const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const surplussEventsMap = new Map<string, number>();
+
+      try {
+        const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
+        const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
+        const lookupBody = await lookupResp.text();
+
+        if (lookupResp.ok) {
+          let parsed: any;
+          try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
+          const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
+          if (Array.isArray(items)) {
+            for (const item of items) {
+              const name = normalize(item.title || item.name || '');
+              if (name) surplussEventsMap.set(name, item.id);
+            }
+          }
+        }
+      } catch (err) {
+        allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+
+      for (const mpId of marketplaceIdsToProcess) {
+        const { data: marketplace } = await supabase
+          .from('marketplace_events')
+          .select('*')
+          .eq('id', mpId)
+          .single();
+
+        if (!marketplace) continue;
+
+        let surplussEventId: number | null = null;
         const targetName = normalize(marketplace.name);
-        // Try exact match first, then contains match
         for (const [eventName, eventId] of surplussEventsMap) {
           if (eventName === targetName || eventName.includes(targetName) || targetName.includes(eventName)) {
             surplussEventId = eventId;
-            console.log(`Matched Surpluss event ID: ${eventId}`);
             break;
           }
         }
-        if (!surplussEventId) {
-          console.log(`No Surpluss event match for "${marketplace.name}" — will still send volunteers without event association`);
-        }
-      }
 
-      // Fetch volunteer QR cards for this marketplace
-      const { data: volunteerCards } = await supabase
-        .from('volunteer_qr_cards')
-        .select('*, volunteer:pending_volunteers(id, first_name, last_name, email, phone_number, is_employee, external_company, gender)')
-        .eq('marketplace_id', mpId);
+        if (surplussEventId) {
+          const demographicsPayload: Record<string, any> = {};
+          if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
+          if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
+          if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
+          if (marketplace.demographics_male_adults != null) demographicsPayload.male_adults = marketplace.demographics_male_adults;
+          if (marketplace.demographics_female_adults != null) demographicsPayload.female_adults = marketplace.demographics_female_adults;
+          if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
+          if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
 
-      totalVolunteers += volunteerCards?.length || 0;
-      console.log(`Processing ${volunteerCards?.length || 0} volunteers for "${marketplace.name}"...`);
+          try {
+            const response = await fetch(`${baseUrl}/api/common/marketplace-events/${surplussEventId}`, {
+              method: 'PUT',
+              headers: apiHeaders,
+              body: JSON.stringify(demographicsPayload),
+            });
+            const responseBody = await response.text();
+            let responseJson: any;
+            try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody.substring(0, 500) }; }
 
-      for (const card of volunteerCards || []) {
-        const vol = card.volunteer as any;
-        if (!vol) {
-          totalFailed++;
-          allVolunteerDetails.push({ name: card.unique_id, status: 'failed', reason: 'No linked volunteer record', marketplace: marketplace.name });
-          continue;
-        }
-
-        const volunteerName = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
-        if (!volunteerName) {
-          totalFailed++;
-          allVolunteerDetails.push({ name: card.unique_id, status: 'failed', reason: 'No name', marketplace: marketplace.name });
-          continue;
-        }
-
-        if (vol.email && alreadySyncedEmails.has(vol.email.toLowerCase())) {
-          totalSkipped++;
-          allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already synced previously', marketplace: marketplace.name });
-          continue;
-        }
-
-        const volunteerPayload: Record<string, any> = {
-          name: volunteerName,
-          source: 'API',
-          marketplace_event_name: marketplace.name,
-        };
-        if (vol.email) volunteerPayload.email = vol.email;
-        if (vol.phone_number) volunteerPayload.phone = vol.phone_number;
-        if (surplussEventId) volunteerPayload.marketplace_event_id = surplussEventId;
-
-        try {
-          const apiUrl = `${baseUrl}/api/common/volunteers`;
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(volunteerPayload),
-          });
-
-          const responseBody = await response.text();
-          let responseJson: any;
-          try { responseJson = JSON.parse(responseBody); } catch {
-            responseJson = responseBody.includes('<!DOCTYPE') ? { raw: 'HTML response' } : { raw: responseBody.substring(0, 500) };
+            await supabase.from('surpluss_api_audit_log').insert({
+              action: 'sync_beneficiary_demographics',
+              environment,
+              request_payload: demographicsPayload,
+              response_status: response.status,
+              response_body: responseJson,
+              success: response.ok,
+            });
+            if (!response.ok) {
+              allErrors.push(`Demographics update failed for "${marketplace.name}": ${response.status}`);
+            }
+          } catch (err) {
+            allErrors.push(`Demographics error for "${marketplace.name}": ${err instanceof Error ? err.message : 'Unknown'}`);
           }
-
-          await supabase.from('surpluss_api_audit_log').insert({
-            action: 'sync_volunteer',
-            environment,
-            request_payload: volunteerPayload,
-            response_status: response.status,
-            response_body: responseJson,
-            success: response.ok,
-          });
-
-          if (response.ok) {
-            totalSent++;
-            allVolunteerDetails.push({ name: volunteerName, status: 'sent', marketplace: marketplace.name });
-          } else if (responseBody.includes('already exists')) {
-            totalSkipped++;
-            allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss', marketplace: marketplace.name });
-            await supabase.from('surpluss_api_audit_log').update({ success: true }).eq('id', (await supabase.from('surpluss_api_audit_log').select('id').order('created_at', { ascending: false }).limit(1).single()).data?.id || '');
-          } else {
-            totalFailed++;
-            const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
-            allVolunteerDetails.push({ name: volunteerName, status: 'failed', reason, marketplace: marketplace.name });
-          }
-        } catch (err) {
-          totalFailed++;
-          allVolunteerDetails.push({ name: volunteerName, status: 'failed', reason: err instanceof Error ? err.message : 'Unknown', marketplace: marketplace.name });
-        }
-      }
-
-      // Update demographics only if we have a Surpluss event ID
-      if (surplussEventId) {
-        const demographicsPayload: Record<string, any> = {
-          total_volunteers: volunteerCards?.length || 0,
-          volunteers_checked_in: volunteerCards?.filter((c: any) => c.status === 'checked_in' || c.status === 'checked_out').length || 0,
-        };
-        if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
-        if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
-        if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
-        if (marketplace.demographics_male_adults != null) demographicsPayload.male_adults = marketplace.demographics_male_adults;
-        if (marketplace.demographics_female_adults != null) demographicsPayload.female_adults = marketplace.demographics_female_adults;
-        if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
-        if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
-
-        try {
-          const apiUrl = `${baseUrl}/api/common/marketplace-events/${surplussEventId}`;
-          const response = await fetch(apiUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(demographicsPayload),
-          });
-          const responseBody = await response.text();
-          let responseJson: any;
-          try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody.substring(0, 500) }; }
-
-          await supabase.from('surpluss_api_audit_log').insert({
-            action: 'sync_beneficiary_demographics',
-            environment,
-            request_payload: demographicsPayload,
-            response_status: response.status,
-            response_body: responseJson,
-            success: response.ok,
-          });
-          if (!response.ok) {
-            allErrors.push(`Demographics update failed for "${marketplace.name}": ${response.status}`);
-          }
-        } catch (err) {
-          allErrors.push(`Demographics error for "${marketplace.name}": ${err instanceof Error ? err.message : 'Unknown'}`);
         }
       }
     }
 
-    const success = totalFailed === 0;
-
     return new Response(
       JSON.stringify({
-        success,
+        success: totalFailed === 0,
         volunteers_sent: totalSent,
         volunteers_failed: totalFailed,
         volunteers_skipped: totalSkipped,
-        volunteers_total: totalVolunteers,
+        volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
-        marketplaces_processed: marketplaceIdsToProcess.length,
         errors: allErrors,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
