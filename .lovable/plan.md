@@ -1,41 +1,48 @@
 
 
-## Remove external_id Requirement for Surpluss Sync
+# Fix: Sync All 296 Volunteers Directly from pending_volunteers Table
 
-### Problem
-The "Send to Surpluss" button only appears when a marketplace has an `external_id`. Surpluss confirmed they don't use `external_id` -- it was a GIF-internal concept. This means most marketplaces can't sync because they lack an `external_id`.
+## Problem
 
-### Changes
+The current edge function fetches volunteers through `volunteer_qr_cards` grouped by marketplace. Since most QR cards have no marketplace assigned, only ~12 volunteers get processed. The actual 296 volunteers live in the `pending_volunteers` table and should be sent directly.
 
-**1. UI: Show "Send to Surpluss" for ALL marketplaces** (`src/components/admin/MarketplaceReports.tsx`)
-- Remove the `selectedMp?.external_id` condition on line 176 so the button appears for every marketplace
-- The button will always be visible regardless of whether `external_id` is set
+## Solution
 
-**2. Edge function: Use marketplace name instead of external_id** (`supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`)
-- Remove the check that requires `external_id` (lines 46-50)
-- For the demographics PUT request, search the Surpluss API by marketplace **name** instead of using `external_id` in the URL path
-- Strategy: First call `GET /api/common/marketplace-events` to find a matching event by name, then use that Surpluss-side ID for the PUT call
-- If no matching event is found by name, log a clear error: "No matching Surpluss event found for marketplace: [name]"
+Rewrite the core sync logic in the edge function to query `pending_volunteers` directly instead of going through `volunteer_qr_cards`.
 
-**3. Edge function: Update volunteer POST to include marketplace name** (`supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`)
-- Include the marketplace name in the volunteer payload so Surpluss can associate volunteers with the correct event on their side
+## Changes
 
-### Technical Flow
+### Edge Function (`supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`)
+
+**Replace the marketplace-loop approach with a single direct query:**
+
+1. Fetch ALL records from `pending_volunteers` table directly (no marketplace filter)
+2. For each volunteer, check deduplication against `surpluss_api_audit_log` (by email)
+3. Send each volunteer to Surpluss API via POST `/api/common/volunteers`
+4. Handle "already exists" responses as "skipped"
+5. Keep the demographics update logic for marketplaces that have a matching Surpluss event (unchanged)
+
+**New flow:**
 
 ```text
-1. User clicks "Send to Surpluss"
-2. Edge function receives marketplace_id
-3. Fetches marketplace record from DB (gets name)
-4. Calls GET /api/common/marketplace-events to find matching Surpluss event by name
-5. If found: uses that Surpluss event ID for demographics PUT
-6. If not found: returns clear error message
-7. Sends volunteers via POST /api/common/volunteers (unchanged)
+1. Fetch all previously synced emails from audit log (deduplication)
+2. Fetch ALL volunteers from pending_volunteers table
+3. For each volunteer:
+   a. Skip if email already synced (deduplication)
+   b. POST to Surpluss /api/common/volunteers
+   c. If "already exists" response -> mark as skipped
+   d. Log result in audit log
+4. Report totals: sent, skipped, failed
+5. (Optional) Still process demographics per marketplace if Surpluss event match exists
 ```
 
-### Files to Modify
+**Key details:**
+- No longer depends on `volunteer_qr_cards` or `marketplace_id` for volunteer sending
+- The `marketplace_id` / `marketplace_ids` parameters become optional and only used for demographics updates
+- Volunteer payload includes: name, email, phone, source="API"
+- Deduplication uses email from `surpluss_api_audit_log` where action='sync_volunteer' and success=true
 
-| File | Change |
-|------|--------|
-| `src/components/admin/MarketplaceReports.tsx` | Remove `external_id` guard on Send to Surpluss button |
-| `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts` | Look up Surpluss event by name instead of using `external_id` |
+### No UI Changes Needed
+
+The existing sync results dialog in `PendingVolunteers.tsx` already handles the `volunteer_details` array with status badges, so all 296 volunteers will appear in the results automatically.
 
