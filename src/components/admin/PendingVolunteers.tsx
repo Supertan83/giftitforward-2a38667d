@@ -1008,14 +1008,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 onClick={async () => {
                    setSyncingSurpluss(true);
                   try {
-                    const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', {
-                      body: { 
-                        marketplace_id: eventFilter !== 'all' 
-                          ? marketplaces.find(m => m.name === eventFilter)?.id 
-                          : marketplaces[0]?.id,
-                        environment: 'production'
-                      },
-                    });
+                    const body: any = { environment: 'production' };
+                    if (eventFilter !== 'all') {
+                      body.marketplace_id = marketplaces.find(m => m.name === eventFilter)?.id;
+                    }
+                    // When 'all', no marketplace_id sent = edge function processes ALL marketplaces
+                    const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', { body });
                     if (error) throw error;
                     setSyncResult(data);
                     setShowSyncResultDialog(true);
