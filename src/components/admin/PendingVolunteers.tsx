@@ -183,6 +183,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
+  const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
   
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1004,7 +1006,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 variant="outline" 
                 size="sm" 
                 onClick={async () => {
-                  setSyncingSurpluss(true);
+                   setSyncingSurpluss(true);
                   try {
                     const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', {
                       body: { 
@@ -1015,11 +1017,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       },
                     });
                     if (error) throw error;
-                    toast({
-                      title: 'Synced to Surpluss',
-                      description: `Sent ${data.volunteers_sent} volunteers. ${data.errors?.length ? data.errors.length + ' error(s).' : ''}`,
-                      variant: data.success ? 'default' : 'destructive',
-                    });
+                    setSyncResult(data);
+                    setShowSyncResultDialog(true);
                   } catch (err) {
                     toast({
                       title: 'Sync Failed',
@@ -2602,6 +2601,108 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </>
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Surpluss Sync Result Dialog */}
+      <Dialog open={showSyncResultDialog} onOpenChange={setShowSyncResultDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5" />
+              Surpluss Sync Results
+            </DialogTitle>
+            <DialogDescription>
+              {syncResult?.marketplace_name ? `Marketplace: ${syncResult.marketplace_name}` : 'Sync complete'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {syncResult && (
+            <div className="space-y-4">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="rounded-lg border p-3 text-center">
+                  <p className="text-2xl font-bold">{syncResult.volunteers_total || 0}</p>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{syncResult.volunteers_sent || 0}</p>
+                  <p className="text-xs text-muted-foreground">Sent</p>
+                </div>
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-yellow-600">{syncResult.volunteers_skipped || 0}</p>
+                  <p className="text-xs text-muted-foreground">Skipped</p>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">{syncResult.volunteers_failed || 0}</p>
+                  <p className="text-xs text-muted-foreground">Failed</p>
+                </div>
+              </div>
+
+              {/* Demographics */}
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-medium mb-1">Demographics Update</p>
+                <Badge variant={syncResult.beneficiary_update_success ? 'default' : 'destructive'}>
+                  {syncResult.beneficiary_update_success ? 'Success' : syncResult.surpluss_event_id ? 'Failed' : 'Skipped (no matching event)'}
+                </Badge>
+              </div>
+
+              {/* Volunteer Details */}
+              {syncResult.volunteer_details?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Volunteer Details</p>
+                  <ScrollArea className="max-h-[250px]">
+                    <div className="space-y-1">
+                      {syncResult.volunteer_details.map((v: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted/50">
+                          <span className="truncate mr-2">{v.name}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {v.status === 'sent' && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Sent</Badge>}
+                            {v.status === 'skipped' && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Skipped</Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>{v.reason}</p></TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {v.status === 'failed' && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Badge variant="destructive">Failed</Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-xs"><p>{v.reason}</p></TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Errors */}
+              {syncResult.errors?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-destructive">Errors</p>
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-1 max-h-[150px] overflow-y-auto">
+                    {syncResult.errors.map((err: string, i: number) => (
+                      <p key={i} className="text-xs text-destructive">{err}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setShowSyncResultDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

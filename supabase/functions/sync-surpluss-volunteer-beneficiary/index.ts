@@ -46,6 +46,8 @@ serve(async (req) => {
     const errors: string[] = [];
     let volunteers_sent = 0;
     let volunteers_failed = 0;
+    let volunteers_skipped = 0;
+    const volunteer_details: { name: string; status: 'sent' | 'skipped' | 'failed'; reason?: string }[] = [];
     let beneficiary_update_success = false;
 
     // 2. Look up the Surpluss event by marketplace name
@@ -110,21 +112,51 @@ serve(async (req) => {
       .select('*, volunteer:pending_volunteers(id, first_name, last_name, email, phone_number, is_employee, external_company, gender)')
       .eq('marketplace_id', marketplace_id);
 
+    // 3b. Fetch already-synced volunteer emails from audit log for this marketplace
+    const { data: previousSyncs } = await supabase
+      .from('surpluss_api_audit_log')
+      .select('request_payload')
+      .eq('action', 'sync_volunteer')
+      .eq('success', true);
+
+    const alreadySyncedEmails = new Set<string>();
+    if (previousSyncs) {
+      for (const log of previousSyncs) {
+        const payload = log.request_payload as any;
+        if (payload?.email && payload?.marketplace_event_name === marketplace.name) {
+          alreadySyncedEmails.add(payload.email.toLowerCase());
+        }
+      }
+    }
+    console.log(`Found ${alreadySyncedEmails.size} already-synced volunteers for "${marketplace.name}"`);
+
     // 4. Send each volunteer to Surpluss
-    console.log(`Sending ${volunteerCards?.length || 0} volunteers to Surpluss...`);
+    console.log(`Processing ${volunteerCards?.length || 0} volunteers...`);
 
     for (const card of volunteerCards || []) {
       const vol = card.volunteer as any;
       if (!vol) {
         volunteers_failed++;
-        errors.push(`Volunteer card ${card.unique_id} has no linked volunteer record`);
+        const reason = `Card ${card.unique_id} has no linked volunteer record`;
+        errors.push(reason);
+        volunteer_details.push({ name: card.unique_id, status: 'failed', reason });
         continue;
       }
 
       const volunteerName = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
       if (!volunteerName) {
         volunteers_failed++;
-        errors.push(`Volunteer card ${card.unique_id} has no name`);
+        const reason = `Card ${card.unique_id} has no name`;
+        errors.push(reason);
+        volunteer_details.push({ name: card.unique_id, status: 'failed', reason });
+        continue;
+      }
+
+      // Skip if already synced
+      if (vol.email && alreadySyncedEmails.has(vol.email.toLowerCase())) {
+        volunteers_skipped++;
+        volunteer_details.push({ name: volunteerName, status: 'skipped', reason: 'Already synced previously' });
+        console.log(`Skipping "${volunteerName}" — already synced`);
         continue;
       }
 
@@ -168,14 +200,18 @@ serve(async (req) => {
 
         if (response.ok) {
           volunteers_sent++;
+          volunteer_details.push({ name: volunteerName, status: 'sent' });
         } else {
           volunteers_failed++;
-          errors.push(`Volunteer "${volunteerName}" failed: ${response.status} - ${responseBody.substring(0, 200)}`);
+          const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
+          errors.push(`Volunteer "${volunteerName}" failed: ${reason}`);
+          volunteer_details.push({ name: volunteerName, status: 'failed', reason });
         }
       } catch (err) {
         volunteers_failed++;
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
         errors.push(`Volunteer "${volunteerName}" error: ${errMsg}`);
+        volunteer_details.push({ name: volunteerName, status: 'failed', reason: errMsg });
       }
     }
 
@@ -248,8 +284,12 @@ serve(async (req) => {
         success,
         volunteers_sent,
         volunteers_failed,
+        volunteers_skipped,
+        volunteers_total: volunteerCards?.length || 0,
+        volunteer_details,
         beneficiary_update_success,
         surpluss_event_id: surplussEventId,
+        marketplace_name: marketplace.name,
         errors,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
