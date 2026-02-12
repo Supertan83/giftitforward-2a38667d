@@ -81,7 +81,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   }
 
   return (
-    <div className="py-4 md:py-6 px-4 mx-auto space-y-4">
+    <div className="py-4 md:py-6 px-2 md:px-4 mx-auto space-y-4 max-w-full overflow-hidden">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
@@ -121,47 +121,80 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
               </button>
 
               {!isCollapsed && (
-                <CardContent className="p-0 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        <th className="text-left px-4 md:px-6 py-2 whitespace-nowrap">Item Name</th>
-                        <th className="text-left px-3 py-2 whitespace-nowrap hidden md:table-cell">Donor Company</th>
-                        <th className="text-left px-3 py-2 whitespace-nowrap hidden md:table-cell">Marketplace</th>
-                        <th className="text-right px-3 py-2 whitespace-nowrap hidden md:table-cell">Assigned</th>
-                        <th className="text-right px-3 py-2 whitespace-nowrap hidden md:table-cell">Distributed</th>
-                        <th className="text-right px-4 md:px-6 py-2 whitespace-nowrap">Qty Available</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.items.map(item => {
-                        const available = item.totalStock - item.distributed;
-                        return (
-                          <tr
-                            key={item.id}
-                            onClick={() => setSelectedItemId(item.id)}
-                            className="border-b last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30"
-                          >
-                            <td className="px-4 md:px-6 py-3">
-                              <p className="font-medium">{item.name}</p>
-                              <p className="text-xs text-muted-foreground">{item.subcategory || '—'}</p>
-                            </td>
-                            <td className="px-3 py-3 text-muted-foreground hidden md:table-cell">{item.donorCompany || '—'}</td>
-                            <td className="px-3 py-3 text-muted-foreground hidden md:table-cell">{item.marketplaceNames || '—'}</td>
-                            <td className="px-3 py-3 text-right text-muted-foreground hidden md:table-cell">
-                              {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}
-                            </td>
-                            <td className="px-3 py-3 text-right text-muted-foreground hidden md:table-cell">
-                              {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}
-                            </td>
-                            <td className="px-4 md:px-6 py-3 text-right">
-                              <span className="font-bold text-primary">{available.toLocaleString()}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <CardContent className="p-0">
+                  {/* Mobile card view */}
+                  <div className="md:hidden divide-y divide-border">
+                    {group.items.map(item => {
+                      const available = item.totalStock - item.distributed;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setSelectedItemId(item.id)}
+                          className="w-full p-3 text-left hover:bg-muted/30 transition-colors"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-medium text-sm">{item.name}</p>
+                            <span className="font-bold text-primary text-sm">{available.toLocaleString()}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{item.subcategory || '—'}</p>
+                          {item.donorCompany && (
+                            <p className="text-xs text-muted-foreground mt-1">Donor: {item.donorCompany}</p>
+                          )}
+                          {item.marketplaceNames && (
+                            <p className="text-xs text-muted-foreground">Marketplace: {item.marketplaceNames}</p>
+                          )}
+                          <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                            <span>Assigned: {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}</span>
+                            <span>Distributed: {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop table view */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm table-fixed">
+                      <thead>
+                        <tr className="border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          <th className="text-left px-4 lg:px-6 py-2 w-[25%]">Item Name</th>
+                          <th className="text-left px-3 py-2 w-[20%]">Donor Company</th>
+                          <th className="text-left px-3 py-2 w-[15%]">Marketplace</th>
+                          <th className="text-right px-3 py-2 w-[12%]">Assigned</th>
+                          <th className="text-right px-3 py-2 w-[12%]">Distributed</th>
+                          <th className="text-right px-4 lg:px-6 py-2 w-[16%]">Qty Available</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.items.map(item => {
+                          const available = item.totalStock - item.distributed;
+                          return (
+                            <tr
+                              key={item.id}
+                              onClick={() => setSelectedItemId(item.id)}
+                              className="border-b last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30"
+                            >
+                              <td className="px-4 lg:px-6 py-3">
+                                <p className="font-medium truncate">{item.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{item.subcategory || '—'}</p>
+                              </td>
+                              <td className="px-3 py-3 text-muted-foreground truncate">{item.donorCompany || '—'}</td>
+                              <td className="px-3 py-3 text-muted-foreground truncate">{item.marketplaceNames || '—'}</td>
+                              <td className="px-3 py-3 text-right text-muted-foreground">
+                                {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}
+                              </td>
+                              <td className="px-3 py-3 text-right text-muted-foreground">
+                                {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}
+                              </td>
+                              <td className="px-4 lg:px-6 py-3 text-right">
+                                <span className="font-bold text-primary">{available.toLocaleString()}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </CardContent>
               )}
             </Card>
