@@ -50,11 +50,13 @@ serve(async (req) => {
     const volunteer_details: { name: string; status: 'sent' | 'skipped' | 'failed'; reason?: string }[] = [];
     let beneficiary_update_success = false;
 
-    // 2. Look up the Surpluss event by marketplace name
+    // 2. Look up the Surpluss event by marketplace name (skip for test marketplaces)
     let surplussEventId: number | null = null;
+    const isTestMarketplace = /^(lea|tala)'?s?\s+marketplace$/i.test(marketplace.name.trim());
 
-    // Always look up by name — external_id may be stale or wrong
-    {
+    if (isTestMarketplace) {
+      console.log(`"${marketplace.name}" is a test marketplace — skipping Surpluss event lookup, volunteers will be sent without marketplace association`);
+    } else {
       console.log(`Looking up Surpluss event by name: "${marketplace.name}"`);
 
       const apiHeaders: Record<string, string> = {
@@ -80,7 +82,6 @@ serve(async (req) => {
           const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
 
           if (Array.isArray(items)) {
-            // Fuzzy name match: normalize and compare
             const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
             const targetName = normalize(marketplace.name);
 
@@ -201,6 +202,13 @@ serve(async (req) => {
         if (response.ok) {
           volunteers_sent++;
           volunteer_details.push({ name: volunteerName, status: 'sent' });
+        } else if (responseBody.includes('already exists')) {
+          // Treat "already exists" as a skip, not a failure
+          volunteers_skipped++;
+          volunteer_details.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss' });
+          console.log(`Skipping "${volunteerName}" — already exists in Surpluss`);
+          // Log as success in audit since it's not an error
+          await supabase.from('surpluss_api_audit_log').update({ success: true }).eq('id', (await supabase.from('surpluss_api_audit_log').select('id').order('created_at', { ascending: false }).limit(1).single()).data?.id || '');
         } else {
           volunteers_failed++;
           const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
@@ -272,6 +280,9 @@ serve(async (req) => {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
         errors.push(`Demographics update error: ${errMsg}`);
       }
+    } else if (isTestMarketplace) {
+      console.log(`Skipping demographics update — "${marketplace.name}" is a test marketplace`);
+      beneficiary_update_success = true; // Not a failure for test marketplaces
     } else {
       console.log(`Skipping demographics update - no matching Surpluss event found for "${marketplace.name}"`);
       errors.push(`Demographics not sent: no matching Surpluss event found for "${marketplace.name}"`);
