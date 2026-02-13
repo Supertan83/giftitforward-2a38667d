@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -37,6 +37,7 @@ const volunteerItems = [
   { view: 'volunteer-qr-cards' as AdminView, label: 'Volunteer QR Cards', icon: UserCheck, color: 'text-blue-500' },
   { view: 'training-completion' as AdminView, label: 'Training Completion', icon: Award, color: 'text-emerald-500' },
   { view: 'training-assessments' as AdminView, label: 'Training Assessments', icon: FileQuestion, color: 'text-purple-500' },
+  { view: 'volunteer-schema-export' as AdminView, label: 'Schema Export', icon: FileText, color: 'text-cyan-500' },
 ];
 
 const beneficiaryItems = [
