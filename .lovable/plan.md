@@ -1,53 +1,116 @@
 
+# External Company Volunteer Survey (Shared Link)
 
-# Add Copyable/Downloadable Volunteer Schema Page
+## Overview
+Create a public, shareable survey link for each marketplace that external company volunteers can open (e.g., from an SMS blast), enter their name and email, complete the same 3 survey questions, and receive their participation certificate.
 
-## Problem
-On mobile, the user cannot easily copy the volunteer schema information to share with Surpluss IT. The browser copy functionality is unreliable on phone browsers.
+## How It Works
 
-## Solution
-Create a dedicated admin page/dialog with:
-1. A "Copy to Clipboard" button that copies all schema info as formatted text
-2. A "Download as Text File" button that saves a `.txt` file with the full schema
-3. Both buttons work reliably on mobile browsers
+1. Admin goes to a new "External Survey Links" section in the admin dashboard
+2. Admin selects a marketplace and clicks "Generate Survey Link"
+3. The system creates a unique shareable URL like: `https://giftitforward.lovable.app/external-survey?marketplace=abc123`
+4. Admin copies this link and shares it with the external company for their SMS blast
+5. Volunteers open the link, enter their name + email, answer the 3 questions, and get their certificate
 
 ## Changes
 
-### 1. New Component: `src/components/admin/VolunteerSchemaExport.tsx`
-- A card/section within the admin dashboard (or a dialog triggered from a button)
-- Displays the volunteer schema in a readable format
-- Two action buttons at the top:
-  - **Copy All** -- uses `navigator.clipboard.writeText()` with a fallback for mobile (creating a temporary textarea element)
-  - **Download .txt** -- creates a Blob and triggers a file download (`volunteer-schema.txt`)
-- The schema content includes:
-  - `pending_volunteers` table fields (all columns, types, descriptions)
-  - `volunteer_qr_cards` tracking fields
-  - `volunteer_attendance` shift records
-  - `marketplace_events` demographics
-  - Current sync payload format
-- Toast notification confirms "Copied!" or "Downloaded!"
+### 1. New Database Table: `external_survey_responses`
+Store survey responses from external volunteers (separate from internal `volunteer_surveys` to avoid mixing data).
 
-### 2. Add to Admin Dashboard (`src/components/admin/AdminDashboard.tsx`)
-- Add a new tab or button in the Volunteers section labeled "Export Schema for Surpluss IT"
-- Opens the schema export component
+Columns:
+- `id` (uuid, primary key)
+- `marketplace_id` (uuid, references marketplace_events)
+- `volunteer_name` (text, required)
+- `volunteer_email` (text, required)
+- `company_name` (text, optional -- auto-filled from outreach partner if set)
+- `experience_word` (text)
+- `would_volunteer_again` (boolean)
+- `improvement_suggestions` (text)
+- `certificate_sent_at` (timestamptz)
+- `completed_at` (timestamptz)
+- `created_at` (timestamptz, default now())
 
-### Technical Details
+RLS: Public INSERT (no auth needed since it's a public survey form), staff can SELECT/manage.
 
-**Mobile-safe copy fallback:**
+### 2. New Edge Function: `submit-external-survey`
+Handles both fetching marketplace info (GET) and submitting survey responses (POST).
+- GET: Validates marketplace ID, returns marketplace name/date/location for display
+- POST: Validates inputs, inserts into `external_survey_responses`, auto-sends attendance certificate via the existing `send-certificate` flow
+
+### 3. New Page: `src/pages/ExternalSurveyPage.tsx`
+A public page (no login required) at route `/external-survey?marketplace=<id>`.
+- Step 1: Volunteer enters their name and email
+- Step 2: Same 3 survey questions (experience word, volunteer again, improvement suggestions)
+- Step 3: Submit and receive certificate (download + email, same as current survey page)
+- Branded with GIF/Dubai Holding styling, matching the existing survey page look
+
+### 4. New Admin Component: `src/components/admin/ExternalSurveyLinksManager.tsx`
+A section in the admin dashboard to:
+- Select a marketplace from a dropdown
+- Generate and display the shareable survey URL
+- One-click copy button (mobile-safe, same pattern as schema export)
+- View count of responses received per marketplace
+
+### 5. Route Registration (`src/App.tsx`)
+Add `/external-survey` route pointing to `ExternalSurveyPage`.
+
+### 6. Admin Sidebar and Dashboard Updates
+- Add "External Survey Links" to the sidebar under Beneficiary Apps or a new section
+- Register the new view in AdminDashboard
+
+## Technical Details
+
+### Database Migration SQL
 ```text
-1. Try navigator.clipboard.writeText()
-2. If that fails, create a hidden textarea, select its content, run document.execCommand('copy')
-3. Show toast confirmation either way
+CREATE TABLE public.external_survey_responses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  marketplace_id uuid NOT NULL,
+  volunteer_name text NOT NULL,
+  volunteer_email text NOT NULL,
+  company_name text,
+  experience_word text,
+  would_volunteer_again boolean,
+  improvement_suggestions text,
+  certificate_sent_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.external_survey_responses ENABLE ROW LEVEL SECURITY;
+
+-- Public can insert (survey is public-facing)
+CREATE POLICY "Anyone can submit external survey"
+  ON public.external_survey_responses FOR INSERT
+  WITH CHECK (true);
+
+-- Staff can view all responses
+CREATE POLICY "Staff can view external survey responses"
+  ON public.external_survey_responses FOR SELECT
+  USING (is_staff(auth.uid()));
+
+-- Admins can manage
+CREATE POLICY "Admins can manage external survey responses"
+  ON public.external_survey_responses FOR ALL
+  USING (has_role(auth.uid(), 'admin'::app_role));
 ```
 
-**Download implementation:**
+### Edge Function: `submit-external-survey`
+- GET with `?marketplace_id=xxx` returns marketplace details (name, date, location)
+- POST accepts name, email, survey answers; inserts record; generates and emails certificate
+- Uses existing `generateCertificatePDF` pattern via the `send-certificate` edge function
+- No authentication required (public endpoint, JWT verification disabled in config.toml)
+
+### External Survey Page Flow
 ```text
-1. Create a Blob with the schema text
-2. Create an object URL
-3. Create a temporary anchor element with download attribute
-4. Trigger click programmatically
-5. Clean up URL and element
+1. User opens link --> page fetches marketplace info via GET
+2. Shows branded form with marketplace name/date
+3. User fills name, email, 3 questions
+4. Submit --> POST to edge function
+5. Certificate generated client-side, emailed via send-certificate, download offered
 ```
 
-No database changes needed -- this is purely a UI feature that displays static schema documentation.
-
+### Admin Link Generator
+- Dropdown of all marketplaces
+- Generated URL format: `https://giftitforward.lovable.app/external-survey?marketplace={marketplace_id}`
+- Copy button with mobile-safe clipboard fallback
+- Response count badge per marketplace (query from external_survey_responses)
