@@ -1673,6 +1673,7 @@ export type Database = {
       }
       volunteer_surveys: {
         Row: {
+          answers: Json | null
           certificate_sent_at: string | null
           completed_at: string | null
           created_at: string
@@ -1689,6 +1690,7 @@ export type Database = {
           would_volunteer_again: boolean | null
         }
         Insert: {
+          answers?: Json | null
           certificate_sent_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1705,6 +1707,7 @@ export type Database = {
           would_volunteer_again?: boolean | null
         }
         Update: {
+          answers?: Json | null
           certificate_sent_at?: string | null
           completed_at?: string | null
           created_at?: string
