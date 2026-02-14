@@ -35,7 +35,7 @@ export const ExternalSurveyLinksManager = ({ onBack }: ExternalSurveyLinksManage
   });
 
   const surveyUrl = selectedMarketplace
-    ? `${window.location.origin}/external-survey?marketplace=${selectedMarketplace}`
+    ? `https://giftitforward.lovable.app/external-survey?marketplace=${selectedMarketplace}`
     : '';
 
   const handleCopy = async () => {
