@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -12,65 +12,21 @@ import { Loader2, Award, Download, Mail, Check, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { generateCertificatePDF, generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
 
-interface MarketplaceInfo {
-  id: string;
-  name: string;
-  event_date: string | null;
-  location: string | null;
-  outreach_partner: string | null;
-}
-
 export default function ExternalSurveyPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const marketplaceId = searchParams.get('marketplace');
   const { toast } = useToast();
 
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [marketplace, setMarketplace] = useState<MarketplaceInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Form state
   const [volunteerName, setVolunteerName] = useState('');
   const [volunteerEmail, setVolunteerEmail] = useState('');
   const [experienceWord, setExperienceWord] = useState('');
   const [wouldVolunteerAgain, setWouldVolunteerAgain] = useState<string | null>(null);
   const [improvementSuggestions, setImprovementSuggestions] = useState('');
 
-  // Certificate state
   const [showCertificate, setShowCertificate] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [certificateSent, setCertificateSent] = useState(false);
-
-  useEffect(() => {
-    if (!marketplaceId) {
-      setError('Invalid survey link. No marketplace specified.');
-      setLoading(false);
-      return;
-    }
-    fetchMarketplace();
-  }, [marketplaceId]);
-
-  const fetchMarketplace = async () => {
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-external-survey?marketplace_id=${encodeURIComponent(marketplaceId!)}`,
-        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-      );
-      const result = await response.json();
-      if (!result.success) {
-        setError(result.error || 'Marketplace not found.');
-        return;
-      }
-      setMarketplace(result.marketplace);
-    } catch {
-      setError('Failed to load survey. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const parseVolunteerName = () => {
     const parts = volunteerName.trim().split(' ');
@@ -95,7 +51,6 @@ export default function ExternalSurveyPage() {
     try {
       const { data, error: fnError } = await supabase.functions.invoke('submit-external-survey', {
         body: {
-          marketplace_id: marketplaceId,
           volunteer_name: volunteerName.trim(),
           volunteer_email: volunteerEmail.trim(),
           experience_word: experienceWord.trim(),
@@ -150,7 +105,6 @@ export default function ExternalSurveyPage() {
           email: volunteerEmail.trim(),
           certificateBase64: base64Data,
           certificateType: 'attendance',
-          marketplaceId,
         },
       });
       if (error) throw error;
@@ -162,29 +116,6 @@ export default function ExternalSurveyPage() {
       setIsSendingEmail(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-destructive/20">
-            <span className="text-3xl">⚠️</span>
-          </div>
-          <h1 className="font-display font-bold text-xl text-white mb-2">Survey Not Available</h1>
-          <p className="text-white/70 mb-6">{error}</p>
-          <Button onClick={() => navigate('/')}>Return Home</Button>
-        </div>
-      </div>
-    );
-  }
 
   if (showCertificate) {
     return (
@@ -226,19 +157,11 @@ export default function ExternalSurveyPage() {
                 Resend to {volunteerEmail}
               </Button>
             )}
-            <Button size="lg" variant="ghost" onClick={() => navigate('/')} className="w-full text-white/70 hover:text-white">
-              Finish
-            </Button>
           </div>
         </motion.div>
       </div>
     );
   }
-
-  const formatDate = (d: string | null) => {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  };
 
   return (
     <div className="min-h-screen bg-[#1a1a1a]">
@@ -252,13 +175,7 @@ export default function ExternalSurveyPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
           <div className="text-center">
             <h1 className="font-display font-bold text-2xl text-white mb-2">Volunteer Feedback Survey</h1>
-            {marketplace && (
-              <p className="text-white/70">
-                {marketplace.name}
-                {marketplace.event_date && ` • ${formatDate(marketplace.event_date)}`}
-                {marketplace.location && ` • ${marketplace.location}`}
-              </p>
-            )}
+            <p className="text-white/70">Thank you for volunteering! Please share your experience.</p>
           </div>
 
           {/* Name & Email */}

@@ -709,7 +709,7 @@ export type Database = {
           experience_word: string | null
           id: string
           improvement_suggestions: string | null
-          marketplace_id: string
+          marketplace_id: string | null
           volunteer_email: string
           volunteer_name: string
           would_volunteer_again: boolean | null
@@ -722,7 +722,7 @@ export type Database = {
           experience_word?: string | null
           id?: string
           improvement_suggestions?: string | null
-          marketplace_id: string
+          marketplace_id?: string | null
           volunteer_email: string
           volunteer_name: string
           would_volunteer_again?: boolean | null
@@ -735,7 +735,7 @@ export type Database = {
           experience_word?: string | null
           id?: string
           improvement_suggestions?: string | null
-          marketplace_id?: string
+          marketplace_id?: string | null
           volunteer_email?: string
           volunteer_name?: string
           would_volunteer_again?: boolean | null

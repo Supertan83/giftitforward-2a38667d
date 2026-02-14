@@ -1,0 +1,1 @@
+ALTER TABLE public.external_survey_responses ALTER COLUMN marketplace_id DROP NOT NULL;
