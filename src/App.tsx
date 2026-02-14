@@ -10,6 +10,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import TrainingPage from "./pages/TrainingPage";
 import TrainingCompletePage from "./pages/TrainingCompletePage";
 import VolunteerSurveyPage from "./pages/VolunteerSurveyPage";
+import ExternalSurveyPage from "./pages/ExternalSurveyPage";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/training/complete" element={<TrainingCompletePage />} />
             <Route path="/volunteer-survey" element={<VolunteerSurveyPage />} />
+            <Route path="/external-survey" element={<ExternalSurveyPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

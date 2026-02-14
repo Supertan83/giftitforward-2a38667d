@@ -42,10 +42,11 @@ import { ItemListViewer } from '@/components/admin/ItemListViewer';
 import { EmailCampaignManager } from '@/components/admin/EmailCampaignManager';
 import { SurplussSyncMonitor } from '@/components/admin/SurplussSyncMonitor';
 import { VolunteerSchemaExport } from '@/components/admin/VolunteerSchemaExport';
+import { ExternalSurveyLinksManager } from '@/components/admin/ExternalSurveyLinksManager';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -242,6 +243,7 @@ export const AdminDashboard = () => {
       case 'surpluss-sync-monitor': return <SurplussSyncMonitor onBack={goBack} />;
       case 'email-campaigns': return <EmailCampaignManager onBack={goBack} />;
       case 'volunteer-schema-export': return <VolunteerSchemaExport onBack={goBack} />;
+      case 'external-survey-links': return <ExternalSurveyLinksManager onBack={goBack} />;
       default: return renderDashboardHome();
     }
   };

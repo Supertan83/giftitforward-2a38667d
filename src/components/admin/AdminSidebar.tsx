@@ -2,7 +2,7 @@ import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
   QrCode, Store, PieChart, RefreshCw, Unlock,
   Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText,
-  ChevronRight, Archive, Megaphone
+  ChevronRight, Archive, Megaphone, LinkIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -46,6 +46,7 @@ const beneficiaryItems = [
   { view: 'marketplace-reports' as AdminView, label: 'Marketplace Reports', icon: PieChart, color: 'text-indigo-500' },
   { view: 'traceability-logs' as AdminView, label: 'Traceability Logs', icon: ScrollText, color: 'text-cyan-500' },
   { view: 'marketplace-sync' as AdminView, label: 'Sync & Reset Cards', icon: RefreshCw, color: 'text-rose-500' },
+  { view: 'external-survey-links' as AdminView, label: 'External Survey Links', icon: LinkIcon, color: 'text-violet-500' },
 ];
 
 const adminItems = [
