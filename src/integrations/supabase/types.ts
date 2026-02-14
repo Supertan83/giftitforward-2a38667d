@@ -700,6 +700,48 @@ export type Database = {
         }
         Relationships: []
       }
+      external_survey_responses: {
+        Row: {
+          certificate_sent_at: string | null
+          company_name: string | null
+          completed_at: string | null
+          created_at: string
+          experience_word: string | null
+          id: string
+          improvement_suggestions: string | null
+          marketplace_id: string
+          volunteer_email: string
+          volunteer_name: string
+          would_volunteer_again: boolean | null
+        }
+        Insert: {
+          certificate_sent_at?: string | null
+          company_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          experience_word?: string | null
+          id?: string
+          improvement_suggestions?: string | null
+          marketplace_id: string
+          volunteer_email: string
+          volunteer_name: string
+          would_volunteer_again?: boolean | null
+        }
+        Update: {
+          certificate_sent_at?: string | null
+          company_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          experience_word?: string | null
+          id?: string
+          improvement_suggestions?: string | null
+          marketplace_id?: string
+          volunteer_email?: string
+          volunteer_name?: string
+          would_volunteer_again?: boolean | null
+        }
+        Relationships: []
+      }
       hubspot_email_config: {
         Row: {
           created_at: string

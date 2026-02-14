@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.sync-surpluss-volunteer-beneficiary]
 verify_jwt = false
+
+[functions.submit-external-survey]
+verify_jwt = false
