@@ -46,7 +46,6 @@ const beneficiaryItems = [
   { view: 'marketplace-reports' as AdminView, label: 'Marketplace Reports', icon: PieChart, color: 'text-indigo-500' },
   { view: 'traceability-logs' as AdminView, label: 'Traceability Logs', icon: ScrollText, color: 'text-cyan-500' },
   { view: 'marketplace-sync' as AdminView, label: 'Sync & Reset Cards', icon: RefreshCw, color: 'text-rose-500' },
-  { view: 'external-survey-links' as AdminView, label: 'External Survey Links', icon: LinkIcon, color: 'text-violet-500' },
 ];
 
 const adminItems = [
@@ -55,6 +54,7 @@ const adminItems = [
   { view: 'statistics' as AdminView, label: 'Live Statistics', icon: TrendingUp, color: 'text-emerald-500' },
   { view: 'users' as AdminView, label: 'Manage Users', icon: Users, color: 'text-violet-500' },
   { view: 'surpluss-sync-monitor' as AdminView, label: 'Sync Monitor', icon: RefreshCw, color: 'text-amber-500' },
+  { view: 'external-survey-links' as AdminView, label: 'External Survey Links', icon: LinkIcon, color: 'text-violet-500' },
 ];
 
 const emailItems = [
