@@ -7,7 +7,7 @@ interface ExternalSurveyLinksManagerProps {
   onBack: () => void;
 }
 
-const SURVEY_URL = 'https://gif.thesurpluss.com/external-survey';
+const SURVEY_URL = 'https://gif.thesurpluss.com/survey';
 
 export const ExternalSurveyLinksManager = ({ onBack }: ExternalSurveyLinksManagerProps) => {
   const [copied, setCopied] = useState(false);
