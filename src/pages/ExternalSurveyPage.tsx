@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Loader2, Award, Download, Mail, Check, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
+import gifLogo from '@/assets/gift-it-forward-logo.png';
 import { generateCertificatePDF, generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
 
 export default function ExternalSurveyPage() {
@@ -167,7 +168,7 @@ export default function ExternalSurveyPage() {
     <div className="min-h-screen bg-[#1a1a1a]">
       <header className="bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center justify-center">
-          <BrandLogo size="sm" />
+          <img src={gifLogo} alt="Gift It Forward" className="h-10 object-contain" />
         </div>
       </header>
 
