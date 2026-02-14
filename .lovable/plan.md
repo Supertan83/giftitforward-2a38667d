@@ -1,116 +1,64 @@
 
-# External Company Volunteer Survey (Shared Link)
+
+# Survey Question Builder - Admin Panel
 
 ## Overview
-Create a public, shareable survey link for each marketplace that external company volunteers can open (e.g., from an SMS blast), enter their name and email, complete the same 3 survey questions, and receive their participation certificate.
+Create a new admin section called **"Survey Questions"** where you can fully customize the external survey questions: add, edit, reorder, and delete questions with different answer types (text, yes/no, multiple choice, rating scale).
 
 ## How It Works
 
-1. Admin goes to a new "External Survey Links" section in the admin dashboard
-2. Admin selects a marketplace and clicks "Generate Survey Link"
-3. The system creates a unique shareable URL like: `https://giftitforward.lovable.app/external-survey?marketplace=abc123`
-4. Admin copies this link and shares it with the external company for their SMS blast
-5. Volunteers open the link, enter their name + email, answer the 3 questions, and get their certificate
+1. **New database table** `survey_questions` stores all customizable questions
+2. **New admin panel section** "Survey Questions" in Admin Apps lets you manage questions with a drag-and-drop style interface
+3. **The public survey page** (`/survey`) dynamically loads questions from the database instead of showing hardcoded ones
+4. **Responses stored as JSON** in the existing `external_survey_responses` table (new `answers` JSONB column)
 
-## Changes
+## Question Types Available
+- **Short Text** - single line input
+- **Long Text** - multi-line textarea
+- **Yes/No** - radio buttons (Yes / No)
+- **Multiple Choice** - radio buttons with custom options you define
+- **Rating Scale** - 1-5 star or number rating
 
-### 1. New Database Table: `external_survey_responses`
-Store survey responses from external volunteers (separate from internal `volunteer_surveys` to avoid mixing data).
-
-Columns:
-- `id` (uuid, primary key)
-- `marketplace_id` (uuid, references marketplace_events)
-- `volunteer_name` (text, required)
-- `volunteer_email` (text, required)
-- `company_name` (text, optional -- auto-filled from outreach partner if set)
-- `experience_word` (text)
-- `would_volunteer_again` (boolean)
-- `improvement_suggestions` (text)
-- `certificate_sent_at` (timestamptz)
-- `completed_at` (timestamptz)
-- `created_at` (timestamptz, default now())
-
-RLS: Public INSERT (no auth needed since it's a public survey form), staff can SELECT/manage.
-
-### 2. New Edge Function: `submit-external-survey`
-Handles both fetching marketplace info (GET) and submitting survey responses (POST).
-- GET: Validates marketplace ID, returns marketplace name/date/location for display
-- POST: Validates inputs, inserts into `external_survey_responses`, auto-sends attendance certificate via the existing `send-certificate` flow
-
-### 3. New Page: `src/pages/ExternalSurveyPage.tsx`
-A public page (no login required) at route `/external-survey?marketplace=<id>`.
-- Step 1: Volunteer enters their name and email
-- Step 2: Same 3 survey questions (experience word, volunteer again, improvement suggestions)
-- Step 3: Submit and receive certificate (download + email, same as current survey page)
-- Branded with GIF/Dubai Holding styling, matching the existing survey page look
-
-### 4. New Admin Component: `src/components/admin/ExternalSurveyLinksManager.tsx`
-A section in the admin dashboard to:
-- Select a marketplace from a dropdown
-- Generate and display the shareable survey URL
-- One-click copy button (mobile-safe, same pattern as schema export)
-- View count of responses received per marketplace
-
-### 5. Route Registration (`src/App.tsx`)
-Add `/external-survey` route pointing to `ExternalSurveyPage`.
-
-### 6. Admin Sidebar and Dashboard Updates
-- Add "External Survey Links" to the sidebar under Beneficiary Apps or a new section
-- Register the new view in AdminDashboard
+## Admin Interface Features
+- Add new questions with a title, type, and required/optional toggle
+- Edit question text and type inline
+- Reorder questions with up/down arrows
+- Delete questions with confirmation
+- Preview how the survey looks
+- For multiple choice: add/remove answer options
 
 ## Technical Details
 
-### Database Migration SQL
-```text
-CREATE TABLE public.external_survey_responses (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  marketplace_id uuid NOT NULL,
-  volunteer_name text NOT NULL,
-  volunteer_email text NOT NULL,
-  company_name text,
-  experience_word text,
-  would_volunteer_again boolean,
-  improvement_suggestions text,
-  certificate_sent_at timestamptz,
-  completed_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+### Database Changes
 
-ALTER TABLE public.external_survey_responses ENABLE ROW LEVEL SECURITY;
+**New table: `survey_questions`**
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid (PK) | Auto-generated |
+| question_text | text | The question shown to volunteers |
+| question_type | text | `short_text`, `long_text`, `yes_no`, `multiple_choice`, `rating` |
+| options | jsonb | For multiple choice: array of option strings |
+| is_required | boolean | Whether the question must be answered |
+| sort_order | integer | Display order |
+| is_active | boolean | Show/hide without deleting |
+| created_at | timestamptz | Auto |
+| updated_at | timestamptz | Auto |
 
--- Public can insert (survey is public-facing)
-CREATE POLICY "Anyone can submit external survey"
-  ON public.external_survey_responses FOR INSERT
-  WITH CHECK (true);
+RLS: Admins can manage, anyone can read active questions (for the public survey page).
 
--- Staff can view all responses
-CREATE POLICY "Staff can view external survey responses"
-  ON public.external_survey_responses FOR SELECT
-  USING (is_staff(auth.uid()));
+**Alter table: `external_survey_responses`**
+- Add column `answers` (jsonb) to store dynamic question responses as `{ "question_id": "answer_value" }` pairs
 
--- Admins can manage
-CREATE POLICY "Admins can manage external survey responses"
-  ON public.external_survey_responses FOR ALL
-  USING (has_role(auth.uid(), 'admin'::app_role));
-```
+### New Files
+- `src/components/admin/SurveyQuestionBuilder.tsx` -- the admin CRUD interface for managing questions
+- Sidebar entry added to Admin Apps section
 
-### Edge Function: `submit-external-survey`
-- GET with `?marketplace_id=xxx` returns marketplace details (name, date, location)
-- POST accepts name, email, survey answers; inserts record; generates and emails certificate
-- Uses existing `generateCertificatePDF` pattern via the `send-certificate` edge function
-- No authentication required (public endpoint, JWT verification disabled in config.toml)
+### Modified Files
+- `src/components/admin/AdminSidebar.tsx` -- add "Survey Questions" menu item + new view type
+- `src/components/admin/AdminDashboard.tsx` -- register the new view in the switch/case
+- `src/pages/ExternalSurveyPage.tsx` -- fetch questions dynamically from `survey_questions` table, render based on type, submit answers as JSON
+- `supabase/functions/submit-external-survey/index.ts` -- accept and store the new `answers` JSONB field
 
-### External Survey Page Flow
-```text
-1. User opens link --> page fetches marketplace info via GET
-2. Shows branded form with marketplace name/date
-3. User fills name, email, 3 questions
-4. Submit --> POST to edge function
-5. Certificate generated client-side, emailed via send-certificate, download offered
-```
+### Data Migration
+The three existing hardcoded questions will be seeded into the `survey_questions` table so nothing is lost.
 
-### Admin Link Generator
-- Dropdown of all marketplaces
-- Generated URL format: `https://giftitforward.lovable.app/external-survey?marketplace={marketplace_id}`
-- Copy button with mobile-safe clipboard fallback
-- Response count badge per marketplace (query from external_survey_responses)
