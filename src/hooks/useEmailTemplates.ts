@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface BodySection {
   type: 'paragraph' | 'list' | 'cta' | 'image';
   content: string;
+  url?: string;
 }
 
 export interface EmailTemplate {

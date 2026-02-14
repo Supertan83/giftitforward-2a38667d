@@ -2,12 +2,15 @@ import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Plus, Pencil, Copy, Trash2, Eye, Search, FileText,
-  ChevronUp, ChevronDown, X, Save, ToggleLeft, ToggleRight
+  ChevronUp, ChevronDown, X, Save, ToggleLeft, ToggleRight, Upload, Link
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { RichTextToolbar } from '@/components/admin/RichTextToolbar';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -79,6 +82,8 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
 
   const { data: templates = [], isLoading } = useEmailTemplates();
   const { createTemplate, updateTemplate, deleteTemplate, duplicateTemplate } = useEmailTemplateMutations();
+  const { toast } = useToast();
+  const [uploadingImage, setUploadingImage] = useState<number | null>(null);
 
   const filteredTemplates = templates.filter(t => {
     if (filterCategory !== 'all' && t.category !== filterCategory) return false;
@@ -165,6 +170,32 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
     setEditingTemplate({ ...editingTemplate, body_sections: sections });
   };
 
+  const updateSectionUrl = (idx: number, url: string) => {
+    if (!editingTemplate) return;
+    const sections = [...editingTemplate.body_sections];
+    sections[idx] = { ...sections[idx], url: url || undefined };
+    setEditingTemplate({ ...editingTemplate, body_sections: sections });
+  };
+
+  const handleImageUpload = async (idx: number, file: File) => {
+    setUploadingImage(idx);
+    try {
+      const ext = file.name.split('.').pop();
+      const fileName = `template-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage
+        .from('email-assets')
+        .upload(fileName, file, { upsert: true });
+      if (error) throw error;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/email-assets/${fileName}`;
+      updateSection(idx, url);
+      toast({ title: 'Image Uploaded', description: 'Image added to template' });
+    } catch (err: any) {
+      toast({ title: 'Upload Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
@@ -182,11 +213,11 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
         {tpl.greeting && <p>{highlightTokens(tpl.greeting)}</p>}
         {tpl.body_sections.map((sec, i) => (
           <div key={i}>
-            {sec.type === 'paragraph' && <p>{highlightTokens(sec.content || '...')}</p>}
+            {sec.type === 'paragraph' && <p dangerouslySetInnerHTML={{ __html: highlightTokensHtml(sec.content || '...') }} />}
             {sec.type === 'list' && (
               <ul className="list-disc pl-5 space-y-1">
                 {(sec.content || '').split('\n').filter(Boolean).map((li, j) => (
-                  <li key={j}>{highlightTokens(li)}</li>
+                  <li key={j} dangerouslySetInnerHTML={{ __html: highlightTokensHtml(li) }} />
                 ))}
               </ul>
             )}
@@ -195,18 +226,18 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
             )}
             {sec.type === 'cta' && (
               <div className="text-center py-2">
-                <span className="inline-block px-6 py-2.5 rounded font-semibold text-white text-sm" style={{ backgroundColor: '#DA291C' }}>
+                <a href={sec.url || '#'} className="inline-block px-6 py-2.5 rounded font-semibold text-white text-sm no-underline" style={{ backgroundColor: '#DA291C' }}>
                   {highlightTokens(sec.content || 'Click Here')}
-                </span>
+                </a>
               </div>
             )}
           </div>
         ))}
         {tpl.cta_text && (
           <div className="text-center py-3">
-            <span className="inline-block px-6 py-2.5 rounded font-semibold text-white text-sm" style={{ backgroundColor: '#DA291C' }}>
+            <a href={tpl.cta_url || '#'} className="inline-block px-6 py-2.5 rounded font-semibold text-white text-sm no-underline" style={{ backgroundColor: '#DA291C' }}>
               {highlightTokens(tpl.cta_text)}
-            </span>
+            </a>
           </div>
         )}
       </div>
@@ -225,6 +256,13 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
       ) : (
         <span key={i}>{part}</span>
       )
+    );
+  };
+
+  const highlightTokensHtml = (text: string) => {
+    return text.replace(
+      /(\{\{[^}]+\}\})/g,
+      '<span style="background:#fef3c7;color:#92400e;padding:0 4px;border-radius:3px;font-size:11px;font-family:monospace">$1</span>'
     );
   };
 
@@ -344,23 +382,74 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
                         </Button>
                       </div>
                     </div>
+
                     {sec.type === 'image' ? (
-                      <Input
-                        ref={el => { fieldRefs.current[`section-${idx}`] = el; }}
-                        value={sec.content}
-                        onChange={e => updateSection(idx, e.target.value)}
-                        onFocus={() => setActiveFieldRef(`section-${idx}`)}
-                        placeholder="Image URL"
-                      />
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            ref={el => { fieldRefs.current[`section-${idx}`] = el; }}
+                            value={sec.content}
+                            onChange={e => updateSection(idx, e.target.value)}
+                            onFocus={() => setActiveFieldRef(`section-${idx}`)}
+                            placeholder="Image URL"
+                            className="flex-1"
+                          />
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) handleImageUpload(idx, file);
+                              }}
+                            />
+                            <Button type="button" size="sm" variant="outline" className="h-10" asChild>
+                              <span>
+                                <Upload className="h-3.5 w-3.5 mr-1" />
+                                {uploadingImage === idx ? 'Uploading...' : 'Upload'}
+                              </span>
+                            </Button>
+                          </label>
+                        </div>
+                        {sec.content && (
+                          <img src={sec.content} alt="Preview" className="w-full h-auto rounded border max-h-40 object-contain" />
+                        )}
+                      </div>
+                    ) : sec.type === 'cta' ? (
+                      <div className="space-y-2">
+                        <Input
+                          ref={el => { fieldRefs.current[`section-${idx}`] = el; }}
+                          value={sec.content}
+                          onChange={e => updateSection(idx, e.target.value)}
+                          onFocus={() => setActiveFieldRef(`section-${idx}`)}
+                          placeholder="Button text"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Link className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <Input
+                            value={sec.url || ''}
+                            onChange={e => updateSectionUrl(idx, e.target.value)}
+                            placeholder="Button URL (e.g. {{login_url}} or https://...)"
+                          />
+                        </div>
+                      </div>
                     ) : (
-                      <Textarea
-                        ref={el => { fieldRefs.current[`section-${idx}`] = el; }}
-                        value={sec.content}
-                        onChange={e => updateSection(idx, e.target.value)}
-                        onFocus={() => setActiveFieldRef(`section-${idx}`)}
-                        placeholder={sec.type === 'list' ? 'One item per line' : sec.type === 'cta' ? 'Button text' : 'Paragraph text...'}
-                        rows={sec.type === 'list' ? 4 : 3}
-                      />
+                      <div>
+                        <RichTextToolbar
+                          textareaRef={fieldRefs.current[`section-${idx}`] as HTMLTextAreaElement | null}
+                          value={sec.content}
+                          onChange={v => updateSection(idx, v)}
+                        />
+                        <Textarea
+                          ref={el => { fieldRefs.current[`section-${idx}`] = el; }}
+                          value={sec.content}
+                          onChange={e => updateSection(idx, e.target.value)}
+                          onFocus={() => setActiveFieldRef(`section-${idx}`)}
+                          placeholder={sec.type === 'list' ? 'One item per line' : 'Paragraph text... Use toolbar for bold, italic, etc.'}
+                          rows={sec.type === 'list' ? 4 : 3}
+                        />
+                      </div>
                     )}
                   </div>
                 ))}
