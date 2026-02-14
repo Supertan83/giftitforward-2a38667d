@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -8,26 +7,53 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Loader2, Award, Download, Mail, Check, Send } from 'lucide-react';
-import { BrandLogo } from '@/components/BrandLogo';
+import { Loader2, Award, Download, Mail, Check, Send, Star } from 'lucide-react';
 import gifLogo from '@/assets/gift-it-forward-logo.png';
 import { generateCertificatePDF, generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
 
+interface SurveyQuestion {
+  id: string;
+  question_text: string;
+  question_type: string;
+  options: string[];
+  is_required: boolean;
+  sort_order: number;
+}
+
 export default function ExternalSurveyPage() {
-  const navigate = useNavigate();
   const { toast } = useToast();
+
+  const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   const [submitting, setSubmitting] = useState(false);
   const [volunteerName, setVolunteerName] = useState('');
   const [volunteerEmail, setVolunteerEmail] = useState('');
-  const [experienceWord, setExperienceWord] = useState('');
-  const [wouldVolunteerAgain, setWouldVolunteerAgain] = useState<string | null>(null);
-  const [improvementSuggestions, setImprovementSuggestions] = useState('');
 
   const [showCertificate, setShowCertificate] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [certificateSent, setCertificateSent] = useState(false);
+
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      const { data, error } = await supabase
+        .from('survey_questions')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!error && data) {
+        setQuestions(data.map(q => ({ ...q, options: Array.isArray(q.options) ? q.options as string[] : [] })));
+      }
+      setLoadingQuestions(false);
+    };
+    fetchQuestions();
+  }, []);
+
+  const setAnswer = (questionId: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
 
   const parseVolunteerName = () => {
     const parts = volunteerName.trim().split(' ');
@@ -43,9 +69,13 @@ export default function ExternalSurveyPage() {
       toast({ title: 'Valid email required', description: 'Please enter a valid email address.', variant: 'destructive' });
       return;
     }
-    if (!experienceWord.trim() || wouldVolunteerAgain === null || !improvementSuggestions.trim()) {
-      toast({ title: 'Please answer all questions', description: 'All survey questions are required.', variant: 'destructive' });
-      return;
+
+    // Check required questions
+    for (const q of questions) {
+      if (q.is_required && !answers[q.id]?.trim()) {
+        toast({ title: 'Please answer all required questions', variant: 'destructive' });
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -54,9 +84,7 @@ export default function ExternalSurveyPage() {
         body: {
           volunteer_name: volunteerName.trim(),
           volunteer_email: volunteerEmail.trim(),
-          experience_word: experienceWord.trim(),
-          would_volunteer_again: wouldVolunteerAgain === 'true',
-          improvement_suggestions: improvementSuggestions.trim(),
+          answers,
         },
       });
 
@@ -115,6 +143,79 @@ export default function ExternalSurveyPage() {
       toast({ title: 'Email Failed', description: 'Please download your certificate instead.', variant: 'destructive' });
     } finally {
       setIsSendingEmail(false);
+    }
+  };
+
+  const renderQuestionInput = (q: SurveyQuestion) => {
+    const value = answers[q.id] || '';
+
+    switch (q.question_type) {
+      case 'short_text':
+        return (
+          <Input
+            value={value}
+            onChange={e => setAnswer(q.id, e.target.value)}
+            placeholder="Enter your answer..."
+            className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+            maxLength={500}
+          />
+        );
+      case 'long_text':
+        return (
+          <Textarea
+            value={value}
+            onChange={e => setAnswer(q.id, e.target.value)}
+            placeholder="Enter your answer..."
+            className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+            rows={4}
+            maxLength={2000}
+          />
+        );
+      case 'yes_no':
+        return (
+          <RadioGroup value={value} onValueChange={v => setAnswer(q.id, v)} className="flex gap-6">
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="yes" id={`${q.id}-yes`} className="border-white/40 text-primary" />
+              <Label htmlFor={`${q.id}-yes`} className="text-white cursor-pointer">Yes</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="no" id={`${q.id}-no`} className="border-white/40 text-primary" />
+              <Label htmlFor={`${q.id}-no`} className="text-white cursor-pointer">No</Label>
+            </div>
+          </RadioGroup>
+        );
+      case 'multiple_choice':
+        return (
+          <RadioGroup value={value} onValueChange={v => setAnswer(q.id, v)} className="space-y-2">
+            {q.options.map((opt, i) => (
+              <div key={i} className="flex items-center space-x-2">
+                <RadioGroupItem value={opt} id={`${q.id}-${i}`} className="border-white/40 text-primary" />
+                <Label htmlFor={`${q.id}-${i}`} className="text-white cursor-pointer">{opt}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+      case 'rating':
+        return (
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setAnswer(q.id, String(n))}
+                className={`w-10 h-10 rounded-lg border transition-colors flex items-center justify-center ${
+                  value === String(n)
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-white/5 border-white/20 text-white/60 hover:bg-white/10'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        );
+      default:
+        return <Input value={value} onChange={e => setAnswer(q.id, e.target.value)} className="bg-white/5 border-white/20 text-white" />;
     }
   };
 
@@ -204,52 +305,23 @@ export default function ExternalSurveyPage() {
             </div>
           </div>
 
-          {/* Question 1 */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <label className="block text-white font-medium mb-3">
-              How would you describe your GIF experience in one word?
-            </label>
-            <Textarea
-              value={experienceWord}
-              onChange={(e) => setExperienceWord(e.target.value)}
-              placeholder="Enter your answer..."
-              className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-              rows={2}
-            />
-          </div>
-
-          {/* Question 2 */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <label className="block text-white font-medium mb-3">
-              Would you volunteer for Gift It Forward again in the future?
-            </label>
-            <RadioGroup value={wouldVolunteerAgain || ''} onValueChange={setWouldVolunteerAgain} className="flex gap-6">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="true" id="ext-yes" className="border-white/40 text-primary" />
-                <Label htmlFor="ext-yes" className="text-white cursor-pointer">Yes</Label>
+          {/* Dynamic Questions */}
+          {loadingQuestions ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-white/50" />
+            </div>
+          ) : (
+            questions.map(q => (
+              <div key={q.id} className="bg-white/5 rounded-xl p-6 border border-white/10">
+                <label className="block text-white font-medium mb-3">
+                  {q.question_text} {q.is_required && '*'}
+                </label>
+                {renderQuestionInput(q)}
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="false" id="ext-no" className="border-white/40 text-primary" />
-                <Label htmlFor="ext-no" className="text-white cursor-pointer">No</Label>
-              </div>
-            </RadioGroup>
-          </div>
+            ))
+          )}
 
-          {/* Question 3 */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <label className="block text-white font-medium mb-3">
-              What could be improved for future volunteer experiences?
-            </label>
-            <Textarea
-              value={improvementSuggestions}
-              onChange={(e) => setImprovementSuggestions(e.target.value)}
-              placeholder="Share your suggestions..."
-              className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-              rows={4}
-            />
-          </div>
-
-          <Button size="lg" onClick={handleSubmit} disabled={submitting} className="w-full">
+          <Button size="lg" onClick={handleSubmit} disabled={submitting || loadingQuestions} className="w-full">
             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
             Submit & Get Certificate
           </Button>

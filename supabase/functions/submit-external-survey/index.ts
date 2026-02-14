@@ -18,7 +18,7 @@ serve(async (req: Request) => {
   try {
     if (req.method === "POST") {
       const body = await req.json();
-      const { volunteer_name, volunteer_email, experience_word, would_volunteer_again, improvement_suggestions } = body;
+      const { volunteer_name, volunteer_email, answers } = body;
 
       if (!volunteer_name?.trim() || !volunteer_email?.trim()) {
         return new Response(JSON.stringify({ success: false, error: "Name and email are required" }), {
@@ -33,16 +33,31 @@ serve(async (req: Request) => {
         });
       }
 
+      // Build insert payload - support both legacy fields and new answers JSONB
+      const insertData: Record<string, unknown> = {
+        volunteer_name: volunteer_name.trim(),
+        volunteer_email: volunteer_email.trim(),
+        completed_at: new Date().toISOString(),
+      };
+
+      if (answers && typeof answers === "object") {
+        insertData.answers = answers;
+      }
+
+      // Also populate legacy columns if present in answers or directly in body for backward compat
+      if (body.experience_word) {
+        insertData.experience_word = body.experience_word.trim();
+      }
+      if (body.would_volunteer_again !== undefined) {
+        insertData.would_volunteer_again = body.would_volunteer_again;
+      }
+      if (body.improvement_suggestions) {
+        insertData.improvement_suggestions = body.improvement_suggestions.trim();
+      }
+
       const { data: response, error: insertError } = await supabase
         .from("external_survey_responses")
-        .insert({
-          volunteer_name: volunteer_name.trim(),
-          volunteer_email: volunteer_email.trim(),
-          experience_word: experience_word?.trim() || null,
-          would_volunteer_again: would_volunteer_again ?? null,
-          improvement_suggestions: improvement_suggestions?.trim() || null,
-          completed_at: new Date().toISOString(),
-        })
+        .insert(insertData)
         .select()
         .single();
 

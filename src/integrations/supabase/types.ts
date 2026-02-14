@@ -702,6 +702,7 @@ export type Database = {
       }
       external_survey_responses: {
         Row: {
+          answers: Json | null
           certificate_sent_at: string | null
           company_name: string | null
           completed_at: string | null
@@ -715,6 +716,7 @@ export type Database = {
           would_volunteer_again: boolean | null
         }
         Insert: {
+          answers?: Json | null
           certificate_sent_at?: string | null
           company_name?: string | null
           completed_at?: string | null
@@ -728,6 +730,7 @@ export type Database = {
           would_volunteer_again?: boolean | null
         }
         Update: {
+          answers?: Json | null
           certificate_sent_at?: string | null
           company_name?: string | null
           completed_at?: string | null
@@ -1464,6 +1467,42 @@ export type Database = {
           marketplace_external_id?: number | null
           reported_at?: string
           request_payload?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      survey_questions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_required: boolean
+          options: Json | null
+          question_text: string
+          question_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          options?: Json | null
+          question_text: string
+          question_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: []
