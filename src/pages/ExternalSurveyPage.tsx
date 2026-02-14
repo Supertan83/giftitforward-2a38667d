@@ -166,7 +166,7 @@ export default function ExternalSurveyPage() {
 
   return (
     <div className="min-h-screen bg-[#1a1a1a]">
-      <header className="bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-3">
+      <header className="bg-white border-b border-white/10 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center justify-center">
           <img src={gifLogo} alt="Gift It Forward" className="h-10 object-contain" />
         </div>
