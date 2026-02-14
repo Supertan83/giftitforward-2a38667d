@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -16,11 +17,17 @@ interface SurveyData {
   volunteer_name: string;
   volunteer_email: string;
   volunteer_card_id: string | null;
-  experience_word: string | null;
-  would_volunteer_again: boolean | null;
-  improvement_suggestions: string | null;
   completed_at: string | null;
   certificate_sent_at: string | null;
+}
+
+interface SurveyQuestion {
+  id: string;
+  question_text: string;
+  question_type: string;
+  options: string[];
+  is_required: boolean;
+  sort_order: number;
 }
 
 export default function VolunteerSurveyPage() {
@@ -34,10 +41,9 @@ export default function VolunteerSurveyPage() {
   const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state
-  const [experienceWord, setExperienceWord] = useState('');
-  const [wouldVolunteerAgain, setWouldVolunteerAgain] = useState<string | null>(null);
-  const [improvementSuggestions, setImprovementSuggestions] = useState('');
+  // Dynamic questions
+  const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   // Certificate state
   const [showCertificate, setShowCertificate] = useState(false);
@@ -51,49 +57,41 @@ export default function VolunteerSurveyPage() {
       setLoading(false);
       return;
     }
-
-    fetchSurvey();
+    fetchSurveyAndQuestions();
   }, [token]);
 
-  const fetchSurvey = async () => {
+  const fetchSurveyAndQuestions = async () => {
     try {
-      // Use edge function to fetch survey (server-side token validation)
-      const { data, error: fetchError } = await supabase.functions.invoke('submit-survey', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: null,
-      });
+      // Fetch survey data and questions in parallel
+      const [surveyRes, questionsRes] = await Promise.all([
+        fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey?action=get&token=${encodeURIComponent(token!)}`,
+          { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+        ),
+        supabase
+          .from('survey_questions')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true }),
+      ]);
 
-      // The invoke method doesn't support GET with query params, so we need to use a different approach
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey?action=get&token=${encodeURIComponent(token!)}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const surveyResult = await surveyRes.json();
 
-      const result = await response.json();
-
-      if (!result.success) {
-        setError(result.error || 'Survey not found. The link may be invalid or expired.');
+      if (!surveyResult.success) {
+        setError(surveyResult.error || 'Survey not found.');
         setLoading(false);
         return;
       }
 
-      setSurveyData(result.survey);
+      setSurveyData(surveyResult.survey);
 
-      // If already completed, show certificate
-      if (result.survey.completed_at) {
-        setExperienceWord(result.survey.experience_word || '');
-        setWouldVolunteerAgain(result.survey.would_volunteer_again?.toString() || null);
-        setImprovementSuggestions(result.survey.improvement_suggestions || '');
+      if (questionsRes.data) {
+        setQuestions(questionsRes.data.map(q => ({ ...q, options: Array.isArray(q.options) ? q.options as string[] : [] })));
+      }
+
+      if (surveyResult.survey.completed_at) {
         setShowCertificate(true);
-        setCertificateSent(!!result.survey.certificate_sent_at);
+        setCertificateSent(!!surveyResult.survey.certificate_sent_at);
       }
     } catch (err) {
       console.error('Error fetching survey:', err);
@@ -103,91 +101,52 @@ export default function VolunteerSurveyPage() {
     }
   };
 
+  const setAnswer = (questionId: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
+
   const handleSubmit = async () => {
-    if (!experienceWord.trim()) {
-      toast({
-        title: 'Please answer all questions',
-        description: 'Describe your GIF experience in one word.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (wouldVolunteerAgain === null) {
-      toast({
-        title: 'Please answer all questions',
-        description: 'Would you volunteer again?',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!improvementSuggestions.trim()) {
-      toast({
-        title: 'Please answer all questions',
-        description: 'Share what could be improved.',
-        variant: 'destructive',
-      });
-      return;
+    // Check required questions
+    for (const q of questions) {
+      if (q.is_required && !answers[q.id]?.trim()) {
+        toast({ title: 'Please answer all required questions', variant: 'destructive' });
+        return;
+      }
     }
 
     setSubmitting(true);
-
     try {
-      // Use edge function for secure server-side submission
       const { data, error: submitError } = await supabase.functions.invoke('submit-survey', {
         body: {
           surveyToken: token,
-          experienceWord: experienceWord.trim(),
-          wouldVolunteerAgain: wouldVolunteerAgain === 'true',
-          improvementSuggestions: improvementSuggestions.trim(),
+          answers,
         },
       });
 
       if (submitError) throw submitError;
-
-      if (data && !data.success) {
-        throw new Error(data.error || 'Failed to submit survey');
-      }
+      if (data && !data.success) throw new Error(data.error || 'Failed to submit survey');
 
       setShowCertificate(true);
-      
-      // Auto-send certificate email
       sendCertificateEmail();
-
-      toast({
-        title: 'Survey Submitted!',
-        description: 'Thank you for your feedback.',
-      });
+      toast({ title: 'Survey Submitted!', description: 'Thank you for your feedback.' });
     } catch (err: any) {
-      console.error('Error submitting survey:', err);
-      toast({
-        title: 'Submission Failed',
-        description: err.message || 'Please try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Submission Failed', description: err.message || 'Please try again.', variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Helper to parse volunteer name into first and last name
   const parseVolunteerName = () => {
     const nameParts = (surveyData?.volunteer_name || 'Volunteer').split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || '';
-    return { firstName, lastName };
+    return { firstName: nameParts[0] || '', lastName: nameParts.slice(1).join(' ') || '' };
   };
 
   const downloadCertificate = async () => {
     if (!surveyData) return;
-    
     setIsGenerating(true);
     try {
       const { firstName, lastName } = parseVolunteerName();
       const blob = await generateCertificatePDFBlob({ firstName, lastName, type: 'attendance' });
-      
-      // Create download link from blob
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -196,18 +155,9 @@ export default function VolunteerSurveyPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      toast({
-        title: 'Certificate Downloaded',
-        description: 'Your certificate has been saved to your device.',
-      });
-    } catch (error) {
-      console.error('Error generating certificate:', error);
-      toast({
-        title: 'Download Failed',
-        description: 'Failed to generate certificate. Please try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Certificate Downloaded' });
+    } catch {
+      toast({ title: 'Download Failed', variant: 'destructive' });
     } finally {
       setIsGenerating(false);
     }
@@ -215,52 +165,104 @@ export default function VolunteerSurveyPage() {
 
   const sendCertificateEmail = async () => {
     if (!surveyData) return;
-
     setIsSendingEmail(true);
     try {
       const { firstName, lastName } = parseVolunteerName();
       const base64Data = await generateCertificatePDF({ firstName, lastName, type: 'attendance' });
-
-      const { data, error } = await supabase.functions.invoke('send-certificate', {
+      const { error } = await supabase.functions.invoke('send-certificate', {
         body: {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: surveyData.volunteer_email.trim(),
           certificateBase64: base64Data,
-          certificateType: 'attendance', // Attendance certificate sent after survey completion
+          certificateType: 'attendance',
         },
       });
-
       if (error) throw error;
-
-      if (data && data.success === false) {
-        throw new Error(data.error || 'Failed to send certificate email');
-      }
-
       setCertificateSent(true);
-
-      // Update certificate_sent_at via edge function
       await supabase.functions.invoke('submit-survey?action=update-certificate-sent', {
         body: { surveyToken: token },
       });
-
-      toast({
-        title: 'Certificate Sent!',
-        description: `Your certificate has been emailed to ${surveyData.volunteer_email}`,
-      });
-    } catch (error: any) {
-      console.error('Error sending certificate email:', error);
-      toast({
-        title: 'Email Failed',
-        description: error.message || 'Failed to send certificate email. Please download your certificate instead.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Certificate Sent!', description: `Emailed to ${surveyData.volunteer_email}` });
+    } catch {
+      toast({ title: 'Email Failed', description: 'Please download your certificate instead.', variant: 'destructive' });
     } finally {
       setIsSendingEmail(false);
     }
   };
 
-  // Loading state
+  const renderQuestionInput = (q: SurveyQuestion) => {
+    const value = answers[q.id] || '';
+    switch (q.question_type) {
+      case 'short_text':
+        return (
+          <Input
+            value={value}
+            onChange={e => setAnswer(q.id, e.target.value)}
+            placeholder="Enter your answer..."
+            className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+            maxLength={500}
+          />
+        );
+      case 'long_text':
+        return (
+          <Textarea
+            value={value}
+            onChange={e => setAnswer(q.id, e.target.value)}
+            placeholder="Enter your answer..."
+            className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+            rows={4}
+            maxLength={2000}
+          />
+        );
+      case 'yes_no':
+        return (
+          <RadioGroup value={value} onValueChange={v => setAnswer(q.id, v)} className="flex gap-6">
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="yes" id={`${q.id}-yes`} className="border-white/40 text-primary" />
+              <Label htmlFor={`${q.id}-yes`} className="text-white cursor-pointer">Yes</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="no" id={`${q.id}-no`} className="border-white/40 text-primary" />
+              <Label htmlFor={`${q.id}-no`} className="text-white cursor-pointer">No</Label>
+            </div>
+          </RadioGroup>
+        );
+      case 'multiple_choice':
+        return (
+          <RadioGroup value={value} onValueChange={v => setAnswer(q.id, v)} className="space-y-2">
+            {q.options.map((opt, i) => (
+              <div key={i} className="flex items-center space-x-2">
+                <RadioGroupItem value={opt} id={`${q.id}-${i}`} className="border-white/40 text-primary" />
+                <Label htmlFor={`${q.id}-${i}`} className="text-white cursor-pointer">{opt}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+      case 'rating':
+        return (
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setAnswer(q.id, String(n))}
+                className={`w-10 h-10 rounded-lg border transition-colors flex items-center justify-center ${
+                  value === String(n)
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-white/5 border-white/20 text-white/60 hover:bg-white/10'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        );
+      default:
+        return <Input value={value} onChange={e => setAnswer(q.id, e.target.value)} className="bg-white/5 border-white/20 text-white" />;
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
@@ -269,7 +271,6 @@ export default function VolunteerSurveyPage() {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-4">
@@ -277,9 +278,7 @@ export default function VolunteerSurveyPage() {
           <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-destructive/20">
             <span className="text-3xl">⚠️</span>
           </div>
-          <h1 className="font-display font-bold text-xl text-white mb-2">
-            Survey Not Available
-          </h1>
+          <h1 className="font-display font-bold text-xl text-white mb-2">Survey Not Available</h1>
           <p className="text-white/70 mb-6">{error}</p>
           <Button onClick={() => navigate('/')}>Return Home</Button>
         </div>
@@ -287,26 +286,16 @@ export default function VolunteerSurveyPage() {
     );
   }
 
-  // Certificate view after completion
   if (showCertificate && surveyData) {
     return (
       <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-md"
-        >
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
           <div className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center bg-success/20">
             <Award className="w-12 h-12 text-success" />
           </div>
-          <h2 className="font-display font-bold text-2xl text-white mb-2">
-            Thank You for Volunteering!
-          </h2>
-          <p className="text-white/70 mb-4">
-            {surveyData.volunteer_name}, your certificate of participation is ready.
-          </p>
+          <h2 className="font-display font-bold text-2xl text-white mb-2">Thank You for Volunteering!</h2>
+          <p className="text-white/70 mb-4">{surveyData.volunteer_name}, your certificate of participation is ready.</p>
 
-          {/* Email status indicator */}
           <div className="mb-6 p-3 rounded-lg bg-white/5 border border-white/10">
             {isSendingEmail ? (
               <div className="flex items-center justify-center gap-2 text-white/70">
@@ -327,38 +316,17 @@ export default function VolunteerSurveyPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <Button
-              size="lg"
-              onClick={downloadCertificate}
-              disabled={isGenerating}
-              className="w-full"
-            >
-              {isGenerating ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
+            <Button size="lg" onClick={downloadCertificate} disabled={isGenerating} className="w-full">
+              {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
               Download Certificate
             </Button>
-
             {!certificateSent && !isSendingEmail && (
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={sendCertificateEmail}
-                className="w-full"
-              >
+              <Button size="lg" variant="outline" onClick={sendCertificateEmail} className="w-full">
                 <Mail className="w-4 h-4 mr-2" />
                 Resend to {surveyData.volunteer_email}
               </Button>
             )}
-
-            <Button
-              size="lg"
-              variant="ghost"
-              onClick={() => navigate('/')}
-              className="w-full text-white/70 hover:text-white"
-            >
+            <Button size="lg" variant="ghost" onClick={() => navigate('/')} className="w-full text-white/70 hover:text-white">
               Finish
             </Button>
           </div>
@@ -367,106 +335,39 @@ export default function VolunteerSurveyPage() {
     );
   }
 
-  // Survey form
   return (
     <div className="min-h-screen bg-[#1a1a1a]">
-      {/* Header */}
       <header className="bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center justify-center">
           <BrandLogo size="sm" />
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-8"
-        >
-          {/* Title */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
           <div className="text-center">
-            <h1 className="font-display font-bold text-2xl text-white mb-2">
-              Volunteer Feedback Survey
-            </h1>
-            <p className="text-white/70">
-              Hi {surveyData?.volunteer_name}! Please share your experience.
-            </p>
+            <h1 className="font-display font-bold text-2xl text-white mb-2">Volunteer Feedback Survey</h1>
+            <p className="text-white/70">Hi {surveyData?.volunteer_name}! Please share your experience.</p>
           </div>
 
-          {/* Question 1 */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <label className="block text-white font-medium mb-3">
-              How would you describe your GIF experience in one word?
-            </label>
-            <Textarea
-              value={experienceWord}
-              onChange={(e) => setExperienceWord(e.target.value)}
-              placeholder="Enter your answer..."
-              className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-              rows={2}
-            />
-          </div>
-
-          {/* Question 2 */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <label className="block text-white font-medium mb-3">
-              Would you volunteer for Gift It Forward again in the future?
-            </label>
-            <RadioGroup
-              value={wouldVolunteerAgain || ''}
-              onValueChange={setWouldVolunteerAgain}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem
-                  value="true"
-                  id="yes"
-                  className="border-white/40 text-primary"
-                />
-                <Label htmlFor="yes" className="text-white cursor-pointer">
-                  Yes
-                </Label>
+          {/* Dynamic Questions */}
+          {questions.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-white/50" />
+            </div>
+          ) : (
+            questions.map(q => (
+              <div key={q.id} className="bg-white/5 rounded-xl p-6 border border-white/10">
+                <label className="block text-white font-medium mb-3">
+                  {q.question_text} {q.is_required && '*'}
+                </label>
+                {renderQuestionInput(q)}
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem
-                  value="false"
-                  id="no"
-                  className="border-white/40 text-primary"
-                />
-                <Label htmlFor="no" className="text-white cursor-pointer">
-                  No
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+            ))
+          )}
 
-          {/* Question 3 */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <label className="block text-white font-medium mb-3">
-              What could be improved for future volunteer experiences?
-            </label>
-            <Textarea
-              value={improvementSuggestions}
-              onChange={(e) => setImprovementSuggestions(e.target.value)}
-              placeholder="Share your suggestions..."
-              className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-              rows={4}
-            />
-          </div>
-
-          {/* Submit Button */}
-          <Button
-            size="lg"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full"
-          >
-            {submitting ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4 mr-2" />
-            )}
+          <Button size="lg" onClick={handleSubmit} disabled={submitting} className="w-full">
+            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
             Submit & Get Certificate
           </Button>
         </motion.div>
