@@ -6,6 +6,81 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+/** Normalize a slug like "event-7---cda" to fuzzy-matchable form */
+const normalizeSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Build a map of normalized slug fragments -> marketplace name */
+function buildEventSlugMap(marketplaces: { name: string }[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const mp of marketplaces) {
+    const norm = normalizeSlug(mp.name);
+    map.set(norm, mp.name);
+  }
+  return map;
+}
+
+/** Resolve comma-separated event slugs to semicolon-separated human-readable names */
+function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, string>): string | undefined {
+  if (!eventsList) return undefined;
+  const slugs = eventsList.split(',').map(s => s.trim()).filter(Boolean);
+  const resolvedNames: string[] = [];
+
+  for (const slug of slugs) {
+    const normSlug = normalizeSlug(slug);
+    let matched = false;
+    for (const [normName, displayName] of slugMap) {
+      // Check if either contains the other (fuzzy match)
+      if (normName.includes(normSlug) || normSlug.includes(normName)) {
+        resolvedNames.push(displayName);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      // Fallback: use the slug itself, cleaned up
+      const fallback = slug.replace(/---/g, ' - ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+      resolvedNames.push(fallback);
+    }
+  }
+
+  return resolvedNames.length > 0 ? resolvedNames.join(';') : undefined;
+}
+
+/** Build the enriched volunteer payload for the Surpluss API */
+function buildVolunteerPayload(
+  vol: any,
+  slugMap: Map<string, string>
+): Record<string, any> {
+  const name = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
+  const payload: Record<string, any> = { name };
+
+  if (vol.email) payload.email = vol.email;
+  if (vol.phone_number) payload.phone = vol.phone_number;
+
+  // Gender mapping
+  if (vol.gender) {
+    const g = vol.gender.toLowerCase();
+    if (g === 'male' || g === 'female') {
+      payload.gender = g.toUpperCase();
+    }
+  }
+
+  // Employment mapping
+  if (vol.is_employee != null) {
+    payload.employed = vol.is_employee ? 'YES' : 'NO';
+  }
+
+  // Company name
+  const company = vol.external_company || vol.employee_vertical;
+  if (company) payload.company_name = company;
+
+  // Events registered
+  const events = resolveEventSlugs(vol.events_list, slugMap);
+  if (events) payload.events_registered = events;
+
+  return payload;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -43,9 +118,17 @@ serve(async (req) => {
     let totalSent = 0;
     let totalFailed = 0;
     let totalSkipped = 0;
-    const allVolunteerDetails: { name: string; status: 'sent' | 'skipped' | 'failed'; reason?: string }[] = [];
+    let totalBulkUpdated = 0;
+    const allVolunteerDetails: { name: string; status: 'sent' | 'skipped' | 'failed' | 'bulk_updated'; reason?: string }[] = [];
 
-    // 1. Fetch all previously synced emails for deduplication
+    // 1. Fetch marketplace events for slug resolution
+    const { data: marketplaceEvents } = await supabase
+      .from('marketplace_events')
+      .select('name');
+    const slugMap = buildEventSlugMap(marketplaceEvents || []);
+    console.log(`Built slug map with ${slugMap.size} marketplace events`);
+
+    // 2. Fetch all previously synced emails for deduplication
     const { data: previousSyncs } = await supabase
       .from('surpluss_api_audit_log')
       .select('request_payload')
@@ -63,10 +146,10 @@ serve(async (req) => {
     }
     console.log(`Found ${alreadySyncedEmails.size} previously synced emails`);
 
-    // 2. Fetch ALL volunteers from pending_volunteers directly
+    // 3. Fetch ALL volunteers (now including events_list and employee_vertical)
     const { data: allVolunteers, error: volError } = await supabase
       .from('pending_volunteers')
-      .select('id, first_name, last_name, email, phone_number, is_employee, external_company, gender');
+      .select('id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical');
 
     if (volError) {
       throw new Error(`Failed to fetch volunteers: ${volError.message}`);
@@ -75,7 +158,10 @@ serve(async (req) => {
     const volunteers = allVolunteers || [];
     console.log(`Fetched ${volunteers.length} volunteers from pending_volunteers`);
 
-    // 3. Send each volunteer to Surpluss
+    // 4. Separate new vs already-synced volunteers
+    const newVolunteers: any[] = [];
+    const previouslySyncedVolunteers: any[] = [];
+
     for (const vol of volunteers) {
       const volunteerName = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
       if (!volunteerName) {
@@ -83,19 +169,17 @@ serve(async (req) => {
         allVolunteerDetails.push({ name: vol.email || 'Unknown', status: 'failed', reason: 'No name' });
         continue;
       }
-
       if (vol.email && alreadySyncedEmails.has(vol.email.toLowerCase())) {
-        totalSkipped++;
-        allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already synced previously' });
-        continue;
+        previouslySyncedVolunteers.push(vol);
+      } else {
+        newVolunteers.push(vol);
       }
+    }
 
-      const volunteerPayload: Record<string, any> = {
-        name: volunteerName,
-        source: 'API',
-      };
-      if (vol.email) volunteerPayload.email = vol.email;
-      if (vol.phone_number) volunteerPayload.phone = vol.phone_number;
+    // 5. Create new volunteers with enriched payload
+    for (const vol of newVolunteers) {
+      const volunteerName = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
+      const volunteerPayload = buildVolunteerPayload(vol, slugMap);
 
       try {
         const apiUrl = `${baseUrl}/api/common/volunteers`;
@@ -126,7 +210,6 @@ serve(async (req) => {
         } else if (responseBody.includes('already exists')) {
           totalSkipped++;
           allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss' });
-          // Mark as success in audit log
           await supabase.from('surpluss_api_audit_log')
             .update({ success: true })
             .eq('action', 'sync_volunteer')
@@ -144,7 +227,70 @@ serve(async (req) => {
       }
     }
 
-    // 4. Demographics update (optional, only if marketplace IDs provided)
+    // 6. Bulk-update previously synced volunteers with enriched data
+    if (previouslySyncedVolunteers.length > 0) {
+      const bulkPayload = previouslySyncedVolunteers
+        .filter(vol => vol.email)
+        .map(vol => {
+          const enriched = buildVolunteerPayload(vol, slugMap);
+          // bulk-update uses email as identifier, keep only updatable fields
+          return {
+            email: vol.email,
+            ...(enriched.gender && { gender: enriched.gender }),
+            ...(enriched.employed && { employed: enriched.employed }),
+            ...(enriched.company_name && { company_name: enriched.company_name }),
+            ...(enriched.events_registered && { events_registered: enriched.events_registered }),
+          };
+        });
+
+      if (bulkPayload.length > 0) {
+        try {
+          const bulkUrl = `${baseUrl}/api/common/volunteers/bulk-update`;
+          console.log(`Sending bulk-update for ${bulkPayload.length} previously synced volunteers`);
+
+          const response = await fetch(bulkUrl, {
+            method: 'POST',
+            headers: apiHeaders,
+            body: JSON.stringify({ volunteers: bulkPayload }),
+          });
+
+          const responseBody = await response.text();
+          let responseJson: any;
+          try { responseJson = JSON.parse(responseBody); } catch {
+            responseJson = { raw: responseBody.substring(0, 500) };
+          }
+
+          await supabase.from('surpluss_api_audit_log').insert({
+            action: 'bulk_update_volunteers',
+            environment,
+            request_payload: { count: bulkPayload.length, sample: bulkPayload.slice(0, 3) },
+            response_status: response.status,
+            response_body: responseJson,
+            success: response.ok,
+          });
+
+          if (response.ok) {
+            totalBulkUpdated = bulkPayload.length;
+            for (const vol of previouslySyncedVolunteers) {
+              const name = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
+              allVolunteerDetails.push({ name, status: 'bulk_updated' });
+            }
+          } else {
+            allErrors.push(`Bulk-update failed: ${response.status} - ${responseBody.substring(0, 200)}`);
+            for (const vol of previouslySyncedVolunteers) {
+              const name = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
+              allVolunteerDetails.push({ name, status: 'skipped', reason: 'Bulk-update failed' });
+            }
+            totalSkipped += previouslySyncedVolunteers.length;
+          }
+        } catch (err) {
+          allErrors.push(`Bulk-update error: ${err instanceof Error ? err.message : 'Unknown'}`);
+          totalSkipped += previouslySyncedVolunteers.length;
+        }
+      }
+    }
+
+    // 7. Demographics update (optional, only if marketplace IDs provided)
     let marketplaceIdsToProcess: string[] = [];
     if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
       marketplaceIdsToProcess = marketplace_ids;
@@ -153,7 +299,6 @@ serve(async (req) => {
     }
 
     if (marketplaceIdsToProcess.length > 0) {
-      // Fetch Surpluss events for demographics matching
       const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
       const surplussEventsMap = new Map<string, number>();
 
@@ -239,6 +384,7 @@ serve(async (req) => {
         volunteers_sent: totalSent,
         volunteers_failed: totalFailed,
         volunteers_skipped: totalSkipped,
+        volunteers_bulk_updated: totalBulkUpdated,
         volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
         errors: allErrors,
