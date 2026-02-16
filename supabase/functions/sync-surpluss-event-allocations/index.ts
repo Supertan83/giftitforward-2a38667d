@@ -162,7 +162,7 @@ async function syncMaterial(
   errors: string[]
 ) {
   let { data: itemType } = await supabase
-    .from('item_types').select('id').eq('external_material_id', materialId).maybeSingle();
+    .from('item_types').select('id').eq('external_material_id', materialId).limit(1).maybeSingle();
 
   if (!itemType) {
     const insertData: any = { 
@@ -194,7 +194,7 @@ async function syncMaterial(
   const { data: existingAlloc } = await supabase
     .from('marketplace_item_allocations')
     .select('id, allocated_quantity, distributed_quantity')
-    .eq('marketplace_id', marketplace.id).eq('item_type_id', itemType.id).maybeSingle();
+    .eq('marketplace_id', marketplace.id).eq('item_type_id', itemType.id).limit(1).maybeSingle();
 
   if (existingAlloc) {
     await supabase.from('marketplace_item_allocations')
