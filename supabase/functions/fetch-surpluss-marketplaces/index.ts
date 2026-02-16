@@ -11,6 +11,31 @@ const BASE_URLS: Record<string, string> = {
   production: 'https://api.thesurpluss.com',
 };
 
+// Normalize a marketplace name for fuzzy matching
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/[-–—]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Check if two normalized names match (substring or high overlap)
+function namesMatch(localNorm: string, surplussNorm: string): boolean {
+  if (localNorm === surplussNorm) return true;
+  if (localNorm.includes(surplussNorm) || surplussNorm.includes(localNorm)) return true;
+  
+  const localWords = localNorm.split(' ').filter(w => w.length > 2);
+  const surplussWords = surplussNorm.split(' ').filter(w => w.length > 2);
+  if (localWords.length === 0 || surplussWords.length === 0) return false;
+  
+  const matchCount = localWords.filter(w => surplussWords.includes(w)).length;
+  const matchRatio = matchCount / Math.max(localWords.length, surplussWords.length);
+  return matchRatio >= 0.7;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -54,7 +79,6 @@ serve(async (req) => {
         const bodyText = await resp.text();
         
         if (!resp.ok) {
-          console.log(`[fetch-marketplaces] ${resp.status} response: ${bodyText.substring(0, 500)}`);
           apiResults.push({ url, count: 0, status: resp.status, raw_sample: bodyText.substring(0, 300) });
           continue;
         }
@@ -62,7 +86,6 @@ serve(async (req) => {
         let body: any;
         try { body = JSON.parse(bodyText); } catch { continue; }
         
-        // Handle various response shapes
         const items = Array.isArray(body) ? body : (body.items || body.data || body.results || body.events || []);
         
         if (Array.isArray(items)) {
@@ -72,11 +95,9 @@ serve(async (req) => {
               allEvents.set(id, item);
             }
           }
-          // Log first item shape for debugging
           const sample = items.length > 0 ? Object.keys(items[0]) : [];
           apiResults.push({ url, count: items.length, status: resp.status, raw_sample: { keys: sample, total_in_body: body.total || body.count || body.totalCount || 'N/A' } });
         } else {
-          // Maybe the body itself has a different structure - log it
           apiResults.push({ url, count: 0, status: resp.status, raw_sample: { type: typeof body, keys: Object.keys(body).slice(0, 10) } });
         }
       } catch (e) {
@@ -87,7 +108,7 @@ serve(async (req) => {
 
     console.log(`[fetch-marketplaces] Total unique Surpluss events found: ${allEvents.size}`);
 
-    // Get existing local marketplaces
+    // Get ALL existing local marketplaces (including those without external_id)
     const { data: existingMarketplaces } = await supabase
       .from('marketplace_events')
       .select('id, name, external_id');
@@ -98,20 +119,47 @@ serve(async (req) => {
         .map((m: any) => m.external_id)
     );
 
-    // Find events not in local DB and create them
     const created: Array<{ name: string; external_id: number }> = [];
     const existing: Array<{ name: string; external_id: number }> = [];
+    const linked: Array<{ name: string; external_id: number; local_name: string }> = [];
     const errors: string[] = [];
 
     for (const [eventId, event] of allEvents) {
       const title = event.title || event.name || `Event ${eventId}`;
       
+      // Check 1: Already linked by external_id
       if (existingExternalIds.has(eventId)) {
         existing.push({ name: title, external_id: eventId });
         continue;
       }
 
-      // Auto-create missing marketplace
+      // Check 2: Fuzzy name match against ALL local marketplaces (including those without external_id)
+      const surplussNorm = normalizeName(title);
+      const nameMatch = (existingMarketplaces || []).find((m: any) => {
+        if (m.external_id != null) return false; // Already linked, skip
+        return namesMatch(normalizeName(m.name), surplussNorm);
+      });
+
+      if (nameMatch) {
+        // Link existing record instead of creating new one
+        const { error: updateError } = await supabase
+          .from('marketplace_events')
+          .update({ external_id: eventId })
+          .eq('id', nameMatch.id);
+
+        if (updateError) {
+          errors.push(`Failed to link "${nameMatch.name}" to ext_id ${eventId}: ${updateError.message}`);
+        } else {
+          linked.push({ name: title, external_id: eventId, local_name: nameMatch.name });
+          // Mark as used so we don't link it again
+          nameMatch.external_id = eventId;
+          existingExternalIds.add(eventId);
+          console.log(`[fetch-marketplaces] Linked: "${nameMatch.name}" -> ext_id ${eventId}`);
+        }
+        continue;
+      }
+
+      // Check 3: No match found — create new marketplace
       const { error: insertError } = await supabase
         .from('marketplace_events')
         .insert({
@@ -124,11 +172,11 @@ serve(async (req) => {
         errors.push(`Failed to create "${title}" (ext_id: ${eventId}): ${insertError.message}`);
       } else {
         created.push({ name: title, external_id: eventId });
+        existingExternalIds.add(eventId);
         console.log(`[fetch-marketplaces] Created: "${title}" (ext_id: ${eventId})`);
       }
     }
 
-    // Build raw events list for transparency
     const rawEvents = Array.from(allEvents.entries()).map(([id, e]) => ({
       id,
       title: e.title || e.name || `Event ${id}`,
@@ -147,6 +195,7 @@ serve(async (req) => {
           total_found: allEvents.size,
           already_existing: existing.length,
           newly_created: created.length,
+          newly_linked: linked.length,
           errors: errors.length,
         },
         success: true,
@@ -159,7 +208,9 @@ serve(async (req) => {
         total_surpluss_events: allEvents.size,
         already_existing: existing.length,
         newly_created: created.length,
+        newly_linked: linked.length,
         created,
+        linked,
         existing,
         errors,
         raw_events: rawEvents,
