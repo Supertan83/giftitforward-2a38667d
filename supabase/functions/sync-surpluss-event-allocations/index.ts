@@ -141,33 +141,12 @@ async function autoLinkMarketplaces(
       }
     }
 
-    // Auto-create: for any Surpluss event not in local DB at all, create it
-    const created: Array<{ name: string; external_id: number }> = [];
-    for (const surp of allSurplussEvents) {
-      const surpId = surp.id;
-      if (usedExternalIds.has(surpId)) continue;
-      
-      const surpTitle = surp.title || surp.name || `Event ${surpId}`;
-      console.log(`[auto-link] Auto-creating missing marketplace: "${surpTitle}" (ext_id: ${surpId})`);
-      
-      const { error: insertErr } = await supabase
-        .from('marketplace_events')
-        .insert({ name: surpTitle, external_id: surpId, status: 'upcoming' });
-      
-      if (insertErr) {
-        errors.push(`Failed to auto-create ${surpTitle}: ${insertErr.message}`);
-      } else {
-        created.push({ name: surpTitle, external_id: surpId });
-        usedExternalIds.add(surpId);
-      }
-    }
-
-    console.log(`[auto-link] Linked ${linked.length}, auto-created ${created.length} marketplaces`);
+    console.log(`[auto-link] Linked ${linked.length} marketplaces (auto-create disabled, use fetch-surpluss-marketplaces for discovery)`);
   } catch (e) {
     errors.push(`Auto-link error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  return { linked, created, errors };
+  return { linked, errors };
 }
 
 // Sync a single material: upsert item_type + marketplace_item_allocation
