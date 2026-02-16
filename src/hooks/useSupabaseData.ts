@@ -1570,11 +1570,11 @@ export const useMarketplaceSyncOperations = () => {
 
   const archiveAndResetCards = useMutation({
     mutationFn: async (marketplaceId: string) => {
-      // Get all cards associated with this marketplace
+      // Get cards associated with this marketplace OR orphaned checked_out cards
       const { data: cards, error: fetchError } = await supabase
         .from('qr_cards')
         .select('*')
-        .eq('marketplace_id', marketplaceId);
+        .or(`marketplace_id.eq.${marketplaceId},and(status.eq.checked_out,marketplace_id.is.null)`);
 
       if (fetchError) throw new SafeError(mapDatabaseError(fetchError), fetchError);
 
@@ -1586,7 +1586,7 @@ export const useMarketplaceSyncOperations = () => {
       const archiveData = cards.map(card => ({
         original_card_id: card.id,
         unique_id: card.unique_id,
-        marketplace_id: marketplaceId,
+        marketplace_id: card.marketplace_id || marketplaceId,
         gender: card.gender,
         marital_status: card.marital_status,
         nationality: card.nationality,
@@ -1671,9 +1671,36 @@ export const useMarketplaceSyncOperations = () => {
     }
   });
 
+  const forceResetCard = useMutation({
+    mutationFn: async (cardId: string) => {
+      const { error } = await supabase
+        .from('qr_cards')
+        .update({
+          status: 'inactive',
+          credit_balance: 0,
+          total_items_collected: 0,
+          collected_items: [],
+          gender: null,
+          marital_status: null,
+          nationality: null,
+          children_count: 0,
+          marketplace_id: null,
+          activated_at: null
+        })
+        .eq('id', cardId);
+
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+    }
+  });
+
   return {
     archiveAndResetCards,
-    resetAllCardsForMarketplace
+    resetAllCardsForMarketplace,
+    forceResetCard
   };
 };
 

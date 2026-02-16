@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Archive, AlertTriangle, CheckCircle, Calendar, MapPin, Users } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Archive, AlertTriangle, CheckCircle, Calendar, MapPin, Users, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useMarketplaces, useMarketplaceSyncOperations, useArchivedCardData, useQRCards } from '@/hooks/useSupabaseData';
@@ -47,11 +47,12 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
   const { data: marketplaces = [] } = useMarketplaces();
   const { data: qrCards = [] } = useQRCards();
   const { data: archivedData = [] } = useArchivedCardData(selectedMarketplace || undefined);
-  const { archiveAndResetCards, resetAllCardsForMarketplace } = useMarketplaceSyncOperations();
+  const { archiveAndResetCards, resetAllCardsForMarketplace, forceResetCard } = useMarketplaceSyncOperations();
   const logEvent = useLogTraceabilityEvent();
 
   const activeCards = qrCards.filter(c => c.status === 'active');
   const usedCards = qrCards.filter(c => c.marketplaceId);
+  const stuckCards = qrCards.filter(c => c.status === 'checked_out');
 
   const handleArchiveAndReset = async () => {
     if (!selectedMarketplace) return;
@@ -114,6 +115,22 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
       });
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleForceReset = async (cardId: string, uniqueId: string) => {
+    try {
+      await forceResetCard.mutateAsync(cardId);
+      toast({
+        title: 'Card Reset',
+        description: `Card ${uniqueId} has been force-reset to inactive.`
+      });
+    } catch (error) {
+      toast({
+        title: 'Reset Failed',
+        description: error instanceof Error ? error.message : 'Failed to reset card',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -245,6 +262,60 @@ export const MarketplaceSyncPanel = ({ onBack }: MarketplaceSyncPanelProps) => {
           </Button>
         </div>
       </motion.div>
+
+      {/* Stuck Cards Section */}
+      {stuckCards.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="bg-card border border-destructive/30 rounded-xl overflow-hidden mb-6"
+        >
+          <div className="p-4 border-b border-border">
+            <h2 className="font-semibold flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-4 h-4" />
+              Stuck Cards ({stuckCards.length})
+            </h2>
+            <p className="text-sm text-muted-foreground">Cards in "checked_out" status that can be force-reset for reuse</p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Card ID</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Marketplace</TableHead>
+                <TableHead>Activated At</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stuckCards.map((card) => (
+                <TableRow key={card.id}>
+                  <TableCell className="font-mono text-sm">{card.uniqueId}</TableCell>
+                  <TableCell>
+                    <Badge variant="destructive">checked_out</Badge>
+                  </TableCell>
+                  <TableCell>{card.marketplaceId || <span className="text-muted-foreground">None</span>}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {card.activatedAt ? format(new Date(card.activatedAt), 'MMM d, HH:mm') : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleForceReset(card.id, card.uniqueId)}
+                      disabled={forceResetCard.isPending}
+                    >
+                      <RotateCcw className="w-3 h-3 mr-1" />
+                      Force Reset
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </motion.div>
+      )}
 
       {/* Archived Data Table */}
       {archivedData.length > 0 && (
