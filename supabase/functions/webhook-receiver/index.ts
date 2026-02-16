@@ -514,9 +514,16 @@ function parseTimeRange(timeStr: string | null | undefined): { start: string | n
 function slugToName(slug: string): string {
   return slug
     .split('-')
+    .filter(word => word.length > 0) // Skip empty segments from consecutive hyphens
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
-    .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
+    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces into single space
+    .trim();
+}
+
+// Helper to normalize a name for fuzzy comparison
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 // Helper to create marketplace events from form data if they don't exist
@@ -526,31 +533,90 @@ async function createMarketplacesFromEvents(supabase: any, eventsJson: unknown):
   
   console.log(`Processing ${eventsJson.length} events to check/create marketplaces`);
   
+  // Fetch all existing marketplaces once for efficient matching
+  const { data: allMarketplaces } = await supabase
+    .from('marketplace_events')
+    .select('id, name, event_date');
+  
+  const existingMarketplaces = (allMarketplaces || []) as Array<{ id: string; name: string; event_date: string | null }>;
+  
   for (const evt of eventsJson as RegisteredEvent[]) {
     if (!evt.event) continue;
     
     try {
       // Generate a human-readable name from the event slug
       const eventName = slugToName(evt.event);
+      const normalizedEventName = normalizeName(eventName);
       
-      // Check if marketplace with this name already exists (case-insensitive)
-      const { data: existingMarketplace } = await supabase
-        .from('marketplace_events')
-        .select('id, name')
-        .ilike('name', eventName)
-        .maybeSingle();
+      // Extract date from slug for precise matching
+      const slugDate = extractDateFromSlug(evt.event);
       
-      if (existingMarketplace) {
-        console.log(`Marketplace already exists: "${eventName}" (ID: ${existingMarketplace.id})`);
-        continue;
+      // Try to find a matching marketplace using normalized fuzzy matching
+      let matchFound = false;
+      
+      for (const mp of existingMarketplaces) {
+        const normalizedMpName = normalizeName(mp.name);
+        
+        // Check exact normalized match first
+        if (normalizedMpName === normalizedEventName) {
+          console.log(`Marketplace exact match: "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
+          matchFound = true;
+          break;
+        }
+        
+        // Check if one name contains the other (handles missing/extra date numbers)
+        const shorter = normalizedEventName.length <= normalizedMpName.length ? normalizedEventName : normalizedMpName;
+        const longer = normalizedEventName.length > normalizedMpName.length ? normalizedEventName : normalizedMpName;
+        
+        if (longer.includes(shorter) || shorter.includes(longer.replace(/\s+\d+\s*$/, '').trim())) {
+          // Names are similar - now check date compatibility
+          if (slugDate && mp.event_date) {
+            const dbDate = new Date(mp.event_date);
+            const dateMatches = (dbDate.getMonth() + 1) === slugDate.month && dbDate.getDate() === slugDate.day;
+            if (dateMatches) {
+              console.log(`Marketplace fuzzy+date match: "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
+              matchFound = true;
+              break;
+            }
+          } else {
+            // No date to compare - name similarity is enough
+            console.log(`Marketplace fuzzy match: "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
+            matchFound = true;
+            break;
+          }
+        }
+        
+        // Word overlap check (similar to getMarketplacesBySlug logic)
+        const eventWords = normalizedEventName.split(' ').filter(w => w.length > 2 && !['the', 'and', 'for'].includes(w));
+        const mpWords = normalizedMpName.split(' ').filter(w => w.length > 2 && !['the', 'and', 'for'].includes(w));
+        const overlapCount = eventWords.filter(w => mpWords.includes(w)).length;
+        const overlapRatio = overlapCount / Math.max(eventWords.length, mpWords.length);
+        
+        if (overlapRatio >= 0.7) {
+          // High word overlap - check date if available
+          if (slugDate && mp.event_date) {
+            const dbDate = new Date(mp.event_date);
+            const dateMatches = (dbDate.getMonth() + 1) === slugDate.month && dbDate.getDate() === slugDate.day;
+            if (dateMatches) {
+              console.log(`Marketplace word-overlap+date match (${(overlapRatio * 100).toFixed(0)}%): "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
+              matchFound = true;
+              break;
+            }
+          } else {
+            console.log(`Marketplace word-overlap match (${(overlapRatio * 100).toFixed(0)}%): "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
+            matchFound = true;
+            break;
+          }
+        }
       }
       
-      // Parse date and time from form data
+      if (matchFound) continue;
+      
+      // No match found - create new marketplace event
       const eventDate = parseDateToISO(evt.eventDate);
       const { start: startTime, end: endTime } = parseTimeRange(evt.eventTime);
       const location = evt.eventLocation || null;
       
-      // Create new marketplace event
       const { data: newMarketplace, error: createError } = await supabase
         .from('marketplace_events')
         .insert({
@@ -568,6 +634,8 @@ async function createMarketplacesFromEvents(supabase: any, eventsJson: unknown):
         console.error(`Failed to create marketplace "${eventName}":`, createError);
       } else {
         console.log(`Created new marketplace: "${eventName}" (ID: ${newMarketplace.id})`);
+        // Add to existing list so subsequent events in the same batch can match
+        existingMarketplaces.push({ id: newMarketplace.id, name: eventName, event_date: eventDate });
       }
     } catch (err) {
       console.error(`Error processing event "${evt.event}":`, err);
