@@ -1,62 +1,52 @@
 
 
-## Update Volunteer Sync to Use Full Surpluss API Fields
+## Add and Remove Registered Events for Volunteers
 
-### What's Changing
-The Surpluss Volunteers API now accepts additional fields that we already have in our database but aren't sending. This update will enrich the volunteer data sent to Surpluss and leverage the new bulk-update endpoint for previously synced volunteers.
+### Current State
+- The Volunteers Added details dialog already has an **Add Event** button and dialog that works correctly.
+- Events are displayed as simple `Badge` components with no way to remove them.
+- There is no remove event mutation.
 
-### Current vs. New Payload
+### Changes Needed
 
-Currently we send only 3-4 fields per volunteer:
-- `name`, `email`, `phone`, `source`
+**1. Add a Remove Event Mutation** (in `PendingVolunteers.tsx`)
 
-After the update, we'll send all available fields:
-- `name`, `email`, `phone`, `gender` (MALE/FEMALE), `employed` (YES/NO), `company_name`, `events_registered` (semicolon-separated event titles)
+Create a `removeEventMutation` that:
+- Takes the volunteer ID and the event slug to remove
+- Filters it out of the `events_list` comma-separated string
+- Filters it out of the `events_json` array
+- Updates the `pending_volunteers` record
+- Also removes the corresponding `registration_events` row if one exists for that slug
 
-### Changes
+**2. Update Event Badges to Include a Remove Button**
 
-**1. Update `sync-surpluss-volunteer-beneficiary` edge function**
+Change each event badge (lines ~1773-1776) from a plain badge to a badge with an "X" button:
+- Each badge will show the event name and a small close/X icon
+- Clicking X will trigger a confirmation, then call the remove mutation
+- Styled consistently with the existing UI
 
-- **Enrich the CREATE payload** (for new volunteers) with:
-  - `gender`: Map from `pending_volunteers.gender` to uppercase `MALE` / `FEMALE`
-  - `employed`: Map from `pending_volunteers.is_employee` to `YES` / `NO`
-  - `company_name`: Use `pending_volunteers.external_company` or `pending_volunteers.employee_vertical`
-  - `events_registered`: Build from `pending_volunteers.events_list` -- convert comma-separated event slugs to semicolon-separated human-readable event titles by matching against local `marketplace_events` names
-  - Remove `source: 'API'` (not in API spec; API sets `source: 'MANUAL'` automatically)
+**3. Add Confirmation Dialog for Removal**
 
-- **Add bulk-update step** for already-synced volunteers: After creating new volunteers, collect all previously-synced volunteers and call `POST /volunteers/bulk-update` to push any updated fields (gender, company, events) that may have been added since the initial sync.
-
-- **Also fetch `events_list` column** from the `pending_volunteers` query (currently not selected)
-
-**2. Event title resolution**
-
-The `events_list` field in our DB contains slugs like `"event-7---cda,event-9---stronger-together"`. We need to resolve these to human-readable marketplace event names for the `events_registered` field. The function will:
-- Fetch all local `marketplace_events` with their names
-- For each volunteer's `events_list`, match slugs to marketplace names
-- Join matched names with semicolons
+Add a small alert dialog to confirm before removing an event, to prevent accidental deletions. It will show the event name and ask the admin to confirm.
 
 ### Technical Details
 
-Key mapping logic:
+Remove mutation logic:
 ```text
-pending_volunteers.gender "male" -> "MALE"
-pending_volunteers.gender "female" -> "FEMALE"
-pending_volunteers.is_employee true -> employed: "YES"
-pending_volunteers.is_employee false -> employed: "NO"
-pending_volunteers.external_company -> company_name
-pending_volunteers.events_list "event-7---cda,event-9---st" -> events_registered: "CDA Marketplace;Stronger Together Marketplace"
+1. Get current volunteer's events_list string
+2. Split by comma, filter out the target slug
+3. Rejoin with commas (or set to null if empty)
+4. Filter events_json array to remove matching entry
+5. Update pending_volunteers record
+6. Delete matching registration_events row (by registration_id + event_slug)
+7. Invalidate queries to refresh UI
 ```
 
-Bulk-update call (for already-synced volunteers):
+Badge update (conceptual):
 ```text
-POST /volunteers/bulk-update
-{
-  "volunteers": [
-    { "email": "john@example.com", "gender": "MALE", "employed": "YES", "company_name": "Dubai Holding", "events_registered": "CDA;Beach Cleanup" },
-    ...
-  ]
-}
+Before: <Badge>Event Name</Badge>
+After:  <Badge>Event Name <X onClick={remove} /></Badge>
 ```
 
-No UI changes are needed -- the same sync buttons will now send richer data automatically.
+No database schema changes are needed -- this uses existing tables and columns.
 
