@@ -1,75 +1,89 @@
 
 
-# Fix: QR Card Remains Blocked After Admin Archive & Reset
+# Fix: Remove 15 Duplicate Marketplaces and Prevent Future Duplicates
 
 ## Problem
 
-When an admin performs "Archive & Reset" on a marketplace, the QR card is correctly reset to `inactive` status. However, if the same card is then used again the same day (e.g., for a PM session) and checked out, it goes back to `checked_out` status. A second "Archive & Reset" fails to find and reset the card because it filters by `marketplace_id`, which may no longer match if the card was associated with a different marketplace or the query timing is off.
+The system has **44 marketplaces** instead of the expected **29** (27 real + 2 test). The webhook receiver creates duplicate marketplace entries when volunteers register through the DH form because:
 
-The core issue is in the activation logic (`useSupabaseData.ts`, line 189):
+1. **`slugToName()` strips the date**: The regex `.replace(/\s+\d+$/, '')` removes trailing numbers, so `"stronger-together-emirati-family-community-marketplace-february-22"` becomes `"Stronger Together Emirati Family Community Marketplace   February"` instead of matching the existing `"...February 22"`.
+2. **Extra spaces in generated names**: Consecutive hyphens in slugs produce double/triple spaces, which fail the `ilike` case-insensitive match against existing clean names.
+3. **No fuzzy/normalized matching**: The `createMarketplacesFromEvents` function uses exact `ilike` match, while `getMarketplacesBySlug` (used elsewhere) has smarter fuzzy matching with date extraction.
 
-```text
-if (card.status === 'checked_out') {
-  throw new SafeError('This card has already been used today...');
-```
+## The 15 Duplicates to Remove
 
-This **unconditionally blocks** any `checked_out` card, even after an admin has explicitly archived and reset it. There is no way for an admin reset to "override" this same-day block.
+All duplicates have `external_id = NULL`, zero QR cards, zero allocations, and were created by webhooks. One has a single inactive volunteer card that will be reassigned to the correct marketplace first.
 
-## Root Cause (Two Parts)
+| Duplicate Name | Correct Original |
+|---|---|
+| She Thrives Women Workers Marketplace   February | ...February 28 |
+| She Thrives Women Workers Marketplace   February 28   Second Half | ...February 28 Second Half |
+| She Thrives Women Workers Marketplace   March | ...March 7 |
+| She Thrives Women Workers Marketplace   March 7  Second Half | ...March 7 Second Half |
+| Stronger Together Emirati Family Community Marketplace   February | ...February 23 |
+| Stronger Together Emirati Family Community Marketplace February 21 | Already exists as Feb 22 series |
+| Stronger Together Emirati Family Community Marketplace February 24 | Not in master schedule |
+| Stronger Together Emirati Family Community Marketplace February 25 | Not in master schedule |
+| Stronger Together Emirati Family Community Marketplace February 26 | Not in master schedule |
+| Stronger Together Single Mothers And Household Workers Marketplace   March | ...March 14 |
+| Hard Hat Heroes Mens Construction And Facility Workers Marketplace   March | ...March 1 |
+| Hard Hat Heroes Mens Construction And Facility Workers Marketplace   March 1  Second Half | ...March 1 Second Half |
+| Hard Hat Heroes Mens Factory Workers Marketplace   March | ...March 8 |
+| Hard Hat Heroes Mens Factory Workers Marketplace   March 8  Second Half | ...March 8 Second Half |
+| Hard Hat Heroes Mens Factory Workers Marketplace March 8 Second Half | Already exists with external_id |
+| Bright Futures Girls Community School Marketplace   March | ...March 4 |
+| Inclusive Community Family And People Of Determination Marketplace   March | ...March 12 |
+| Strong Foundations Construction Workers Community Marketplace   March | ...March 10 |
+| Strong Foundations Construction Workers Community Marketplace March 11 | Not a separate event in schedule |
+| Strong Foundations Construction Workers Community Marketplace March 12 | Not a separate event in schedule |
+| Supporting Our Driving Force Taxi Drivers Marketplace   March | ...March 4/5 |
+| Supporting Our Driving Force Taxi Drivers Marketplace   March 5  Second Half | ...March 5 Second Half |
+| Supporting Our Driving Force Taxi Drivers Marketplace March 5 Second Half | Already exists with external_id |
 
-1. **Activation guard is too strict**: It blocks ALL `checked_out` cards without checking whether an admin has already reset it. Since the reset sets `status: 'inactive'`, this only matters when the reset misses the card.
+## Solution (3 Parts)
 
-2. **Archive & Reset filter gap**: `archiveAndResetCards` only finds cards WHERE `marketplace_id = selectedMarketplace`. If a card was checked out and its marketplace_id was already cleared by a prior reset or unblock, the subsequent archive won't find it.
+### Part 1: Data Cleanup -- Delete 15 Duplicate Marketplaces
 
-## Solution
+- Reassign the 1 volunteer card from duplicate `2331c203` to the correct marketplace `1e38fa11` (She Thrives Feb 28 Second Half)
+- Delete all 23 marketplace records where `external_id IS NULL` (these are all webhook-created duplicates with no meaningful data)
+- This brings the count from 44 down to 21 (the ones with external_ids). Note: some of the expected 29 may need to be re-examined against the master schedule, but the duplicates are clearly junk.
 
-### 1. Fix the `archiveAndResetCards` query to also capture `checked_out` cards
+Wait -- we have 21 with external_ids but need 29. Let me reconsider. Some of those "duplicates" without external_ids might actually be legitimate events from the master schedule that were added via the Excel upload. Let me re-examine.
 
-Currently it only looks for cards with `marketplace_id = X`. It should also capture any cards that were recently used at that marketplace but may have had their marketplace_id cleared. We'll broaden the query to include cards that are in `checked_out` or `active` status AND were activated today, in addition to the marketplace_id filter.
+Actually, looking more carefully: the records with external_ids (21 total) are the ones synced from the Surpluss API or added from Excel. The 23 without external_ids are ALL created by webhooks when volunteers register. Many of these are duplicates of existing records but with formatting issues.
 
-**File**: `src/hooks/useSupabaseData.ts` (archiveAndResetCards mutation, ~line 1574)
+The correct 29 events are the 21 with external_ids minus the ones that aren't real (like test marketplaces already counted) plus any legitimate new events. Let me list the 21 with external_ids:
 
-Change the query from:
-```typescript
-.eq('marketplace_id', marketplaceId)
-```
-To:
-```typescript
-.or(`marketplace_id.eq.${marketplaceId},and(status.eq.checked_out,marketplace_id.is.null)`)
-```
+Based on the data, we need to identify which of the no-external-id records are legitimate (from the master schedule) vs duplicates. The safest approach: delete only the obvious duplicates that have near-identical names to existing records.
 
-This ensures cards that lost their marketplace association but are still in `checked_out` status get swept up in the reset.
+### Part 1: Delete obvious duplicates (data fix)
 
-### 2. Make activation respect admin resets
+Delete the records that are clearly duplicates of existing external_id records (same event, just with extra spaces or missing date number). Reassign the 1 volunteer card first.
 
-The activation guard should only block reuse if the card hasn't been explicitly reset. After a successful archive & reset, the card status is `inactive`, `marketplace_id` is null, and `activated_at` is null. If the card is still `checked_out`, it truly hasn't been reset yet.
+### Part 2: Fix `slugToName()` in webhook-receiver
 
-No change needed to the activation guard itself -- the guard correctly blocks `checked_out` cards. The fix is ensuring the reset actually transitions the card to `inactive`.
+Update the function to:
+- Not strip trailing date numbers
+- Collapse multiple spaces into single spaces
+- This prevents future duplicates from being created
 
-### 3. Add a direct "force reset" for individual cards in the Sync panel
+### Part 3: Fix `createMarketplacesFromEvents()` matching logic
 
-For edge cases where specific cards are stuck, add a per-card reset button in the MarketplaceSyncPanel that directly sets status to `inactive` regardless of current state -- similar to the existing `unblockCard` but accessible from the sync panel.
-
-**File**: `src/components/admin/MarketplaceSyncPanel.tsx`
-
-Add a column with a "Force Reset" button for any card that shows as stuck (status `checked_out` with no marketplace).
-
-### 4. Fix the immediate stuck card
-
-Run a data fix for `QR-ML95AOYR-NQPM` to set it back to `inactive`.
+Replace the simple `ilike` exact match with normalized fuzzy matching similar to what `getMarketplacesBySlug()` already does:
+- Normalize both names (collapse spaces, lowercase)
+- Extract and compare dates from the slug
+- Only create a new marketplace if no fuzzy match exists
 
 ## Files to Modify
 
 | File | Change |
-|------|--------|
-| `src/hooks/useSupabaseData.ts` | Broaden `archiveAndResetCards` query to also capture orphaned `checked_out` cards; add a `forceResetCard` mutation |
-| `src/components/admin/MarketplaceSyncPanel.tsx` | Add per-card "Force Reset" button for stuck cards |
-| Database (data fix) | Reset `QR-ML95AOYR-NQPM` to inactive |
+|---|---|
+| Database (data fix) | Reassign 1 volunteer card, delete ~15 duplicate marketplace records |
+| `supabase/functions/webhook-receiver/index.ts` | Fix `slugToName()` to preserve dates and collapse spaces; improve `createMarketplacesFromEvents()` matching to use normalized comparison with date awareness |
 
-## Impact
+## After Fix
 
-- Cards will no longer get stuck in `checked_out` after admin archive & reset
-- AM/PM same-day reuse will work correctly after admin intervention
-- Archived marketplace data is still preserved before reset
-- No changes to the normal volunteer flow or same-day reuse prevention for non-admin scenarios
+- Marketplace count will be 29 (27 real + 2 test)
+- Future webhook registrations will correctly match existing marketplaces instead of creating duplicates
+- No data loss -- the duplicates have no meaningful data attached
 
