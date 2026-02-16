@@ -1,64 +1,75 @@
 
 
-# Survey Question Builder - Admin Panel
+# Fix: QR Card Remains Blocked After Admin Archive & Reset
 
-## Overview
-Create a new admin section called **"Survey Questions"** where you can fully customize the external survey questions: add, edit, reorder, and delete questions with different answer types (text, yes/no, multiple choice, rating scale).
+## Problem
 
-## How It Works
+When an admin performs "Archive & Reset" on a marketplace, the QR card is correctly reset to `inactive` status. However, if the same card is then used again the same day (e.g., for a PM session) and checked out, it goes back to `checked_out` status. A second "Archive & Reset" fails to find and reset the card because it filters by `marketplace_id`, which may no longer match if the card was associated with a different marketplace or the query timing is off.
 
-1. **New database table** `survey_questions` stores all customizable questions
-2. **New admin panel section** "Survey Questions" in Admin Apps lets you manage questions with a drag-and-drop style interface
-3. **The public survey page** (`/survey`) dynamically loads questions from the database instead of showing hardcoded ones
-4. **Responses stored as JSON** in the existing `external_survey_responses` table (new `answers` JSONB column)
+The core issue is in the activation logic (`useSupabaseData.ts`, line 189):
 
-## Question Types Available
-- **Short Text** - single line input
-- **Long Text** - multi-line textarea
-- **Yes/No** - radio buttons (Yes / No)
-- **Multiple Choice** - radio buttons with custom options you define
-- **Rating Scale** - 1-5 star or number rating
+```text
+if (card.status === 'checked_out') {
+  throw new SafeError('This card has already been used today...');
+```
 
-## Admin Interface Features
-- Add new questions with a title, type, and required/optional toggle
-- Edit question text and type inline
-- Reorder questions with up/down arrows
-- Delete questions with confirmation
-- Preview how the survey looks
-- For multiple choice: add/remove answer options
+This **unconditionally blocks** any `checked_out` card, even after an admin has explicitly archived and reset it. There is no way for an admin reset to "override" this same-day block.
 
-## Technical Details
+## Root Cause (Two Parts)
 
-### Database Changes
+1. **Activation guard is too strict**: It blocks ALL `checked_out` cards without checking whether an admin has already reset it. Since the reset sets `status: 'inactive'`, this only matters when the reset misses the card.
 
-**New table: `survey_questions`**
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid (PK) | Auto-generated |
-| question_text | text | The question shown to volunteers |
-| question_type | text | `short_text`, `long_text`, `yes_no`, `multiple_choice`, `rating` |
-| options | jsonb | For multiple choice: array of option strings |
-| is_required | boolean | Whether the question must be answered |
-| sort_order | integer | Display order |
-| is_active | boolean | Show/hide without deleting |
-| created_at | timestamptz | Auto |
-| updated_at | timestamptz | Auto |
+2. **Archive & Reset filter gap**: `archiveAndResetCards` only finds cards WHERE `marketplace_id = selectedMarketplace`. If a card was checked out and its marketplace_id was already cleared by a prior reset or unblock, the subsequent archive won't find it.
 
-RLS: Admins can manage, anyone can read active questions (for the public survey page).
+## Solution
 
-**Alter table: `external_survey_responses`**
-- Add column `answers` (jsonb) to store dynamic question responses as `{ "question_id": "answer_value" }` pairs
+### 1. Fix the `archiveAndResetCards` query to also capture `checked_out` cards
 
-### New Files
-- `src/components/admin/SurveyQuestionBuilder.tsx` -- the admin CRUD interface for managing questions
-- Sidebar entry added to Admin Apps section
+Currently it only looks for cards with `marketplace_id = X`. It should also capture any cards that were recently used at that marketplace but may have had their marketplace_id cleared. We'll broaden the query to include cards that are in `checked_out` or `active` status AND were activated today, in addition to the marketplace_id filter.
 
-### Modified Files
-- `src/components/admin/AdminSidebar.tsx` -- add "Survey Questions" menu item + new view type
-- `src/components/admin/AdminDashboard.tsx` -- register the new view in the switch/case
-- `src/pages/ExternalSurveyPage.tsx` -- fetch questions dynamically from `survey_questions` table, render based on type, submit answers as JSON
-- `supabase/functions/submit-external-survey/index.ts` -- accept and store the new `answers` JSONB field
+**File**: `src/hooks/useSupabaseData.ts` (archiveAndResetCards mutation, ~line 1574)
 
-### Data Migration
-The three existing hardcoded questions will be seeded into the `survey_questions` table so nothing is lost.
+Change the query from:
+```typescript
+.eq('marketplace_id', marketplaceId)
+```
+To:
+```typescript
+.or(`marketplace_id.eq.${marketplaceId},and(status.eq.checked_out,marketplace_id.is.null)`)
+```
+
+This ensures cards that lost their marketplace association but are still in `checked_out` status get swept up in the reset.
+
+### 2. Make activation respect admin resets
+
+The activation guard should only block reuse if the card hasn't been explicitly reset. After a successful archive & reset, the card status is `inactive`, `marketplace_id` is null, and `activated_at` is null. If the card is still `checked_out`, it truly hasn't been reset yet.
+
+No change needed to the activation guard itself -- the guard correctly blocks `checked_out` cards. The fix is ensuring the reset actually transitions the card to `inactive`.
+
+### 3. Add a direct "force reset" for individual cards in the Sync panel
+
+For edge cases where specific cards are stuck, add a per-card reset button in the MarketplaceSyncPanel that directly sets status to `inactive` regardless of current state -- similar to the existing `unblockCard` but accessible from the sync panel.
+
+**File**: `src/components/admin/MarketplaceSyncPanel.tsx`
+
+Add a column with a "Force Reset" button for any card that shows as stuck (status `checked_out` with no marketplace).
+
+### 4. Fix the immediate stuck card
+
+Run a data fix for `QR-ML95AOYR-NQPM` to set it back to `inactive`.
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/hooks/useSupabaseData.ts` | Broaden `archiveAndResetCards` query to also capture orphaned `checked_out` cards; add a `forceResetCard` mutation |
+| `src/components/admin/MarketplaceSyncPanel.tsx` | Add per-card "Force Reset" button for stuck cards |
+| Database (data fix) | Reset `QR-ML95AOYR-NQPM` to inactive |
+
+## Impact
+
+- Cards will no longer get stuck in `checked_out` after admin archive & reset
+- AM/PM same-day reuse will work correctly after admin intervention
+- Archived marketplace data is still preserved before reset
+- No changes to the normal volunteer flow or same-day reuse prevention for non-admin scenarios
 
