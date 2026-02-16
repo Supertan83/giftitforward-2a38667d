@@ -133,12 +133,26 @@ serve(async (req) => {
         continue;
       }
 
-      // Check 2: Fuzzy name match against ALL local marketplaces (including those without external_id)
+      // Check 2: Fuzzy name match against unlinked local marketplaces
       const surplussNorm = normalizeName(title);
       const nameMatch = (existingMarketplaces || []).find((m: any) => {
         if (m.external_id != null) return false; // Already linked, skip
         return namesMatch(normalizeName(m.name), surplussNorm);
       });
+
+      // Check 3: Name matches an already-linked marketplace (different Surpluss event, same real event)
+      if (!nameMatch) {
+        const alreadyLinkedMatch = (existingMarketplaces || []).find((m: any) => {
+          if (m.external_id == null) return false;
+          return namesMatch(normalizeName(m.name), surplussNorm);
+        });
+        if (alreadyLinkedMatch) {
+          console.log(`[fetch-marketplaces] Skipping duplicate Surpluss event "${title}" (ext_id ${eventId}) — already have "${alreadyLinkedMatch.name}" (ext_id ${alreadyLinkedMatch.external_id})`);
+          existing.push({ name: title, external_id: eventId });
+          existingExternalIds.add(eventId);
+          continue;
+        }
+      }
 
       if (nameMatch) {
         // Link existing record instead of creating new one
