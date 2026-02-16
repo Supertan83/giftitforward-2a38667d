@@ -201,6 +201,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   // Add event state
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
   const [selectedEventToAdd, setSelectedEventToAdd] = useState<string>('');
+  // Remove event state
+  const [showRemoveEventDialog, setShowRemoveEventDialog] = useState(false);
+  const [eventToRemove, setEventToRemove] = useState<{ slug: string; name: string } | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -675,6 +678,67 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     onError: (error: Error) => {
       toast({
         title: 'Failed to Add Event',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
+  // Remove event mutation
+  const removeEventMutation = useMutation({
+    mutationFn: async ({ pendingId, eventSlug }: { pendingId: string; eventSlug: string }) => {
+      const volunteer = volunteers.find(v => v.id === pendingId);
+      if (!volunteer) throw new Error('Volunteer not found');
+
+      // Update events_list
+      const currentEvents = volunteer.events_list ? volunteer.events_list.split(',').map(e => e.trim()) : [];
+      const filteredEvents = currentEvents.filter(e => e !== eventSlug);
+      const newEventsList = filteredEvents.length > 0 ? filteredEvents.join(',') : null;
+
+      // Update events_json
+      const currentEventsJson = Array.isArray(volunteer.events_json) ? volunteer.events_json : [];
+      const newEventsJson = (currentEventsJson as any[]).filter((ej: any) => ej.event !== eventSlug);
+
+      const { error } = await supabase
+        .from('pending_volunteers')
+        .update({
+          events_list: newEventsList,
+          events_json: newEventsJson.length > 0 ? newEventsJson : null
+        })
+        .eq('id', pendingId);
+
+      if (error) throw error;
+
+      // Also remove registration_events row if exists
+      // Find matching partner_registration by email to get registration_id
+      const { data: partnerReg } = await supabase
+        .from('partner_registrations')
+        .select('id')
+        .eq('work_email', volunteer.email)
+        .maybeSingle();
+
+      if (partnerReg) {
+        await supabase
+          .from('registration_events')
+          .delete()
+          .eq('registration_id', partnerReg.id)
+          .eq('event_slug', eventSlug);
+      }
+
+      return { success: true, eventSlug };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      setShowRemoveEventDialog(false);
+      setEventToRemove(null);
+      toast({
+        title: 'Event Removed',
+        description: `${formatEventName(data.eventSlug)} has been removed from the volunteer's registration`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to Remove Event',
         description: error.message,
         variant: 'destructive',
       });
@@ -1771,9 +1835,25 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </div>
                 {selectedVolunteer.events_list ? (
                   <div className="flex flex-wrap gap-2">
-                    {selectedVolunteer.events_list.split(',').map((event, idx) => (
-                      <Badge key={idx} variant="secondary">{formatEventName(event.trim())}</Badge>
-                    ))}
+                    {selectedVolunteer.events_list.split(',').map((event, idx) => {
+                      const slug = event.trim();
+                      const name = formatEventName(slug);
+                      return (
+                        <Badge key={idx} variant="secondary" className="flex items-center gap-1 pr-1">
+                          {name}
+                          <button
+                            onClick={() => {
+                              setEventToRemove({ slug, name });
+                              setShowRemoveEventDialog(true);
+                            }}
+                            className="ml-1 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
+                            title={`Remove ${name}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No events registered</p>
@@ -2704,6 +2784,39 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Remove Event Confirmation Dialog */}
+      <AlertDialog open={showRemoveEventDialog} onOpenChange={setShowRemoveEventDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong>{eventToRemove?.name}</strong> from {selectedVolunteer?.first_name} {selectedVolunteer?.last_name}'s registration? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setEventToRemove(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selectedVolunteer && eventToRemove) {
+                  removeEventMutation.mutate({
+                    pendingId: selectedVolunteer.id,
+                    eventSlug: eventToRemove.slug
+                  });
+                }
+              }}
+              disabled={removeEventMutation.isPending}
+            >
+              {removeEventMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Removing...</>
+              ) : (
+                'Remove Event'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
