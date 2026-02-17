@@ -532,7 +532,7 @@ export const DataCleanupManager: React.FC<DataCleanupManagerProps> = ({ onBack }
           </div>
 
           {/* Table */}
-          <ScrollArea className="flex-1 border rounded-md">
+          <ScrollArea className="border rounded-md" style={{ height: 'min(50vh, 400px)' }}>
             {browseLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
