@@ -124,6 +124,36 @@ export type Database = {
           },
         ]
       }
+      cleanup_archive: {
+        Row: {
+          archive_batch_id: string | null
+          archived_at: string
+          archived_by: string | null
+          id: string
+          original_id: string
+          record_data: Json
+          source_table: string
+        }
+        Insert: {
+          archive_batch_id?: string | null
+          archived_at?: string
+          archived_by?: string | null
+          id?: string
+          original_id: string
+          record_data: Json
+          source_table: string
+        }
+        Update: {
+          archive_batch_id?: string | null
+          archived_at?: string
+          archived_by?: string | null
+          id?: string
+          original_id?: string
+          record_data?: Json
+          source_table?: string
+        }
+        Relationships: []
+      }
       email_campaign_recipients: {
         Row: {
           campaign_id: string
