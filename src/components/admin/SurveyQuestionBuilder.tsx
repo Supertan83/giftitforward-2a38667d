@@ -20,8 +20,10 @@ import {
 interface SurveyQuestion {
   id: string;
   question_text: string;
+  question_text_ar: string | null;
   question_type: string;
   options: string[];
+  options_ar: string[];
   is_required: boolean;
   sort_order: number;
   is_active: boolean;
@@ -48,16 +50,20 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
   // New question form
   const [showAdd, setShowAdd] = useState(false);
   const [newText, setNewText] = useState('');
+  const [newTextAr, setNewTextAr] = useState('');
   const [newType, setNewType] = useState('short_text');
   const [newRequired, setNewRequired] = useState(true);
   const [newOptions, setNewOptions] = useState<string[]>(['']);
+  const [newOptionsAr, setNewOptionsAr] = useState<string[]>(['']);
 
   // Edit form
   const [editText, setEditText] = useState('');
+  const [editTextAr, setEditTextAr] = useState('');
   const [editType, setEditType] = useState('short_text');
   const [editRequired, setEditRequired] = useState(true);
   const [editActive, setEditActive] = useState(true);
   const [editOptions, setEditOptions] = useState<string[]>([]);
+  const [editOptionsAr, setEditOptionsAr] = useState<string[]>([]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -68,7 +74,12 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
     if (error) {
       toast({ title: 'Failed to load questions', variant: 'destructive' });
     } else {
-      setQuestions((data || []).map(q => ({ ...q, options: Array.isArray(q.options) ? q.options as string[] : [] })));
+      setQuestions((data || []).map(q => ({
+        ...q,
+        options: Array.isArray(q.options) ? q.options as string[] : [],
+        options_ar: Array.isArray((q as any).options_ar) ? (q as any).options_ar as string[] : [],
+        question_text_ar: (q as any).question_text_ar ?? null,
+      })));
     }
     setLoading(false);
   };
@@ -83,6 +94,7 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
     setSaving(true);
     const maxOrder = questions.length > 0 ? Math.max(...questions.map(q => q.sort_order)) : 0;
     const opts = newType === 'multiple_choice' ? newOptions.filter(o => o.trim()) : [];
+    const optsAr = newType === 'multiple_choice' ? newOptionsAr.filter(o => o.trim()) : [];
     if (newType === 'multiple_choice' && opts.length < 2) {
       toast({ title: 'Multiple choice needs at least 2 options', variant: 'destructive' });
       setSaving(false);
@@ -90,11 +102,13 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
     }
     const { error } = await supabase.from('survey_questions').insert({
       question_text: newText.trim(),
+      question_text_ar: newTextAr.trim() || null,
       question_type: newType,
       options: opts,
+      options_ar: optsAr,
       is_required: newRequired,
       sort_order: maxOrder + 1,
-    });
+    } as any);
     if (error) {
       toast({ title: 'Failed to add question', description: error.message, variant: 'destructive' });
     } else {
@@ -108,23 +122,28 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
   const resetAddForm = () => {
     setShowAdd(false);
     setNewText('');
+    setNewTextAr('');
     setNewType('short_text');
     setNewRequired(true);
     setNewOptions(['']);
+    setNewOptionsAr(['']);
   };
 
   const startEdit = (q: SurveyQuestion) => {
     setEditingId(q.id);
     setEditText(q.question_text);
+    setEditTextAr(q.question_text_ar || '');
     setEditType(q.question_type);
     setEditRequired(q.is_required);
     setEditActive(q.is_active);
     setEditOptions(q.options.length > 0 ? [...q.options] : ['']);
+    setEditOptionsAr(q.options_ar.length > 0 ? [...q.options_ar] : ['']);
   };
 
   const handleSaveEdit = async () => {
     if (!editingId || !editText.trim()) return;
     const opts = editType === 'multiple_choice' ? editOptions.filter(o => o.trim()) : [];
+    const optsAr = editType === 'multiple_choice' ? editOptionsAr.filter(o => o.trim()) : [];
     if (editType === 'multiple_choice' && opts.length < 2) {
       toast({ title: 'Multiple choice needs at least 2 options', variant: 'destructive' });
       return;
@@ -132,11 +151,13 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
     setSaving(true);
     const { error } = await supabase.from('survey_questions').update({
       question_text: editText.trim(),
+      question_text_ar: editTextAr.trim() || null,
       question_type: editType,
       options: opts,
+      options_ar: optsAr,
       is_required: editRequired,
       is_active: editActive,
-    }).eq('id', editingId);
+    } as any).eq('id', editingId);
     if (error) {
       toast({ title: 'Failed to update', description: error.message, variant: 'destructive' });
     } else {
@@ -175,9 +196,9 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
     fetchQuestions();
   };
 
-  const renderOptionsEditor = (options: string[], setOptions: (o: string[]) => void) => (
+  const renderOptionsEditor = (options: string[], setOptions: (o: string[]) => void, label = 'Answer Options') => (
     <div className="space-y-2 mt-2">
-      <Label className="text-xs text-muted-foreground">Answer Options</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       {options.map((opt, i) => (
         <div key={i} className="flex gap-2">
           <Input
@@ -229,8 +250,12 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label>Question Text *</Label>
+              <Label>Question Text (English) *</Label>
               <Input value={newText} onChange={e => setNewText(e.target.value)} placeholder="Enter question..." maxLength={500} />
+            </div>
+            <div>
+              <Label>Question Text (Arabic)</Label>
+              <Input value={newTextAr} onChange={e => setNewTextAr(e.target.value)} placeholder="أدخل السؤال بالعربية..." maxLength={500} dir="rtl" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -247,7 +272,12 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
                 <Label htmlFor="new-required">Required</Label>
               </div>
             </div>
-            {newType === 'multiple_choice' && renderOptionsEditor(newOptions, setNewOptions)}
+            {newType === 'multiple_choice' && (
+              <>
+                {renderOptionsEditor(newOptions, setNewOptions, 'Answer Options (English)')}
+                {renderOptionsEditor(newOptionsAr, setNewOptionsAr, 'Answer Options (Arabic)')}
+              </>
+            )}
             <div className="flex gap-2">
               <Button onClick={handleAdd} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
@@ -278,8 +308,12 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
                   /* Edit mode */
                   <div className="space-y-4">
                     <div>
-                      <Label>Question Text *</Label>
+                      <Label>Question Text (English) *</Label>
                       <Input value={editText} onChange={e => setEditText(e.target.value)} maxLength={500} />
+                    </div>
+                    <div>
+                      <Label>Question Text (Arabic)</Label>
+                      <Input value={editTextAr} onChange={e => setEditTextAr(e.target.value)} maxLength={500} dir="rtl" placeholder="أدخل السؤال بالعربية..." />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -302,7 +336,12 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
                         </div>
                       </div>
                     </div>
-                    {editType === 'multiple_choice' && renderOptionsEditor(editOptions, setEditOptions)}
+                    {editType === 'multiple_choice' && (
+                      <>
+                        {renderOptionsEditor(editOptions, setEditOptions, 'Answer Options (English)')}
+                        {renderOptionsEditor(editOptionsAr, setEditOptionsAr, 'Answer Options (Arabic)')}
+                      </>
+                    )}
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSaveEdit} disabled={saving}>
                         {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
@@ -328,8 +367,12 @@ export const SurveyQuestionBuilder = ({ onBack }: { onBack: () => void }) => {
                         <Badge variant="secondary" className="text-xs">{typeLabel(q.question_type)}</Badge>
                         {q.is_required && <Badge variant="outline" className="text-xs">Required</Badge>}
                         {!q.is_active && <Badge variant="destructive" className="text-xs">Hidden</Badge>}
+                        {q.question_text_ar && <Badge variant="outline" className="text-xs">AR ✓</Badge>}
                       </div>
                       <p className="font-medium text-sm">{q.question_text}</p>
+                      {q.question_text_ar && (
+                        <p className="text-sm text-muted-foreground mt-0.5" dir="rtl">{q.question_text_ar}</p>
+                      )}
                       {q.question_type === 'multiple_choice' && q.options.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {q.options.map((opt, i) => (
