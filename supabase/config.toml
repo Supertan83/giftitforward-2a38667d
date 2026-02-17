@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.cleanup-data]
 verify_jwt = false
+
+[functions.run-email-automations]
+verify_jwt = false

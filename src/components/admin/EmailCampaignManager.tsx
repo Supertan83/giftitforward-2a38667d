@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Send, Clock, Trash2, Eye, Loader2, Users, Mail, CalendarClock, CheckCircle2, XCircle, AlertCircle, ScrollText, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Clock, Trash2, Eye, Loader2, Users, Mail, CalendarClock, CheckCircle2, XCircle, AlertCircle, ScrollText, Pencil, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +18,7 @@ import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { EmailAutomationsTab } from './EmailAutomationsTab';
 
 interface EmailCampaignManagerProps {
   onBack: () => void;
@@ -376,6 +377,7 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="campaigns" className="gap-2"><Mail className="h-4 w-4" /> Campaigns</TabsTrigger>
+          <TabsTrigger value="automations" className="gap-2"><Zap className="h-4 w-4" /> Automations</TabsTrigger>
           <TabsTrigger value="logs" className="gap-2"><ScrollText className="h-4 w-4" /> Logs</TabsTrigger>
         </TabsList>
 
@@ -484,6 +486,10 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="automations">
+          <EmailAutomationsTab />
         </TabsContent>
 
         <TabsContent value="logs">

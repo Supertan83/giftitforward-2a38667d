@@ -154,6 +154,104 @@ export type Database = {
         }
         Relationships: []
       }
+      email_automation_logs: {
+        Row: {
+          automation_id: string
+          campaign_id: string | null
+          id: string
+          notes: string | null
+          recipients_count: number
+          status: string
+          triggered_at: string
+        }
+        Insert: {
+          automation_id: string
+          campaign_id?: string | null
+          id?: string
+          notes?: string | null
+          recipients_count?: number
+          status?: string
+          triggered_at?: string
+        }
+        Update: {
+          automation_id?: string
+          campaign_id?: string | null
+          id?: string
+          notes?: string | null
+          recipients_count?: number
+          status?: string
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_automation_logs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "email_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_automation_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_automations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          name: string
+          recipient_filter: Json
+          template_id: string
+          trigger_days: number
+          trigger_time: string
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name: string
+          recipient_filter?: Json
+          template_id: string
+          trigger_days?: number
+          trigger_time?: string
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name?: string
+          recipient_filter?: Json
+          template_id?: string
+          trigger_days?: number
+          trigger_time?: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_automations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaign_recipients: {
         Row: {
           campaign_id: string
