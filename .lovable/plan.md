@@ -1,49 +1,42 @@
 
 
-## Fix: Campaign Emails Not Showing Dynamic Data (QR, Marketplace Info)
+## Add English/Arabic Language Toggle to Survey Pages
 
-### Problem
-When sending campaign emails, the template tokens `{{marketplace_name}}`, `{{marketplace_date}}`, `{{marketplace_time}}`, `{{marketplace_location}}`, and `{{qr_card_id}}` all render as empty because:
+### Overview
+Add a language toggle (English / Arabic) to both the Volunteer Survey and External Survey pages. When Arabic is selected, the page switches to RTL layout and displays Arabic question text.
 
-1. **Line 247**: `generateCampaignEmailHTML()` is called without any `marketplaceData` argument
-2. **Line 68**: `{{qr_card_id}}` is hardcoded to `''` -- no QR card lookup is performed
-3. The function loads volunteer records but never queries `marketplace_events` or `volunteer_qr_cards`
+### Database Change
+Add two new columns to the `survey_questions` table:
+- `question_text_ar` (text, nullable) -- Arabic translation of the question
+- `options_ar` (jsonb, default '[]') -- Arabic translations of multiple-choice options
 
-### Solution
-Update `supabase/functions/send-campaign-email/index.ts` to look up each volunteer's marketplace and QR card data before generating the email.
+### Admin: Survey Question Builder Update
+Update `src/components/admin/SurveyQuestionBuilder.tsx` to show an "Arabic Text" input field below each question's English text, and an "Arabic Options" section for multiple-choice questions. This lets admins enter translations when creating/editing questions.
 
-### Changes (single file)
+### Survey Pages: Language Toggle
+Update both `src/pages/VolunteerSurveyPage.tsx` and `src/pages/ExternalSurveyPage.tsx`:
 
-**File: `supabase/functions/send-campaign-email/index.ts`**
+1. Add a language state (`en` | `ar`) with a toggle button in the header (e.g., "EN | AR" toggle or "عربي / English" button)
+2. When `ar` is selected:
+   - Set `dir="rtl"` on the page container
+   - Display `question_text_ar` instead of `question_text` (fall back to English if Arabic is empty)
+   - Display `options_ar` instead of `options` for multiple-choice questions
+   - Translate static UI strings (title, button labels, placeholders) to Arabic
+3. Fetch `question_text_ar` and `options_ar` alongside existing fields from the database
 
-**A. After loading volunteer data (~line 237), add marketplace + QR lookups per volunteer:**
+### Static UI Translations
+A simple translations object will handle the fixed strings:
+- Page title: "استبيان ملاحظات المتطوعين"
+- "Please share your experience" -> "يرجى مشاركة تجربتك"
+- "Submit & Get Certificate" -> "إرسال والحصول على الشهادة"
+- "Enter your answer..." -> "...أدخل إجابتك"
+- Yes/No -> نعم / لا
+- Full Name / Email placeholders
+- Certificate section strings
 
-For each volunteer with `events_json`, parse the first event's slug, then query `marketplace_events` for event details (name, date, start_time, end_time, location). If the volunteer has multiple events, build a combined display (same pattern as the welcome email).
+### Files Changed
+1. **Database migration** -- add `question_text_ar` and `options_ar` columns
+2. **`src/components/admin/SurveyQuestionBuilder.tsx`** -- add Arabic text inputs in add/edit forms
+3. **`src/pages/VolunteerSurveyPage.tsx`** -- add language toggle + RTL support + Arabic rendering
+4. **`src/pages/ExternalSurveyPage.tsx`** -- same language toggle + RTL support + Arabic rendering
 
-Query `volunteer_qr_cards` by `volunteer_id` to get the `unique_id` for the QR card token.
-
-**B. Update the `replaceTokens` call (line 68):**
-
-Change `'{{qr_card_id}}'` from hardcoded `''` to accept a value passed in from the lookup.
-
-**C. Update the sending loop (~line 243-247):**
-
-Before generating HTML for each recipient, look up marketplace data from the volunteer's `events_json` and pass it to `generateCampaignEmailHTML`.
-
-### Technical Details
-
-```text
-For each recipient with a volunteer_id:
-
-1. Get volunteer from volunteersMap
-2. Parse volunteer.events_json (array of event objects)
-3. Query marketplace_events for the first event's slug to get:
-   - name, event_date, start_time, end_time, location
-4. Query volunteer_qr_cards for volunteer's unique_id:
-   - SELECT unique_id FROM volunteer_qr_cards WHERE volunteer_id = volunteer.id LIMIT 1
-5. Pass marketplaceData and qrCardId to generateCampaignEmailHTML / replaceTokens
-```
-
-The `replaceTokens` function signature stays the same but will receive actual marketplace data and QR card ID instead of empty defaults.
-
-No database changes needed.
