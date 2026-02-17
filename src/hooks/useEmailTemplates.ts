@@ -119,6 +119,24 @@ export const useEmailTemplateMutations = () => {
 
   const deleteTemplate = useMutation({
     mutationFn: async (id: string) => {
+      // First delete campaign recipients for campaigns using this template
+      const { data: campaigns } = await supabase
+        .from('email_campaigns' as any)
+        .select('id')
+        .eq('template_id', id);
+      
+      if (campaigns && campaigns.length > 0) {
+        const campaignIds = (campaigns as any[]).map((c: any) => c.id);
+        await supabase
+          .from('email_campaign_recipients' as any)
+          .delete()
+          .in('campaign_id', campaignIds);
+        await supabase
+          .from('email_campaigns' as any)
+          .delete()
+          .eq('template_id', id);
+      }
+
       const { error } = await supabase
         .from('email_templates' as any)
         .delete()
