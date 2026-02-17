@@ -54,7 +54,7 @@ interface Volunteer {
   events_json: any;
 }
 
-function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceData?: any): string {
+function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceData?: any, qrCardId?: string): string {
   const tokens: Record<string, string> = {
     '{{first_name}}': volunteer?.first_name || 'Volunteer',
     '{{last_name}}': volunteer?.last_name || '',
@@ -65,7 +65,7 @@ function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceDat
     '{{marketplace_date}}': marketplaceData?.event_date || '',
     '{{marketplace_time}}': marketplaceData?.start_time ? `${marketplaceData.start_time} - ${marketplaceData.end_time || ''}` : '',
     '{{marketplace_location}}': marketplaceData?.location || '',
-    '{{qr_card_id}}': '',
+    '{{qr_card_id}}': qrCardId || '',
     '{{login_url}}': 'https://giftitforward.lovable.app/auth',
     '{{training_url}}': 'https://giftitforward.lovable.app/training',
     '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -82,12 +82,13 @@ function generateCampaignEmailHTML(
   template: EmailTemplate,
   supabaseUrl: string,
   volunteer: Volunteer | null,
-  marketplaceData?: any
+  marketplaceData?: any,
+  qrCardId?: string
 ): string {
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
 
-  const rt = (text: string) => replaceTokens(text, volunteer, marketplaceData);
+  const rt = (text: string) => replaceTokens(text, volunteer, marketplaceData, qrCardId);
 
   let bodySectionsHtml = '';
   for (const section of template.body_sections) {
@@ -131,6 +132,53 @@ ${ctaHtml}
 <td width="50%" valign="middle" style="text-align: right;"><p style="margin: 0; font-size: 13px; color: #54585A; font-style: italic;">For the Good of Tomorrow</p></td>
 </tr></table></td></tr>
 </table></td></tr></table></body></html>`;
+}
+
+async function getVolunteerMarketplaceData(supabase: any, volunteer: Volunteer): Promise<any | null> {
+  try {
+    const eventsJson = volunteer.events_json;
+    if (!eventsJson || !Array.isArray(eventsJson) || eventsJson.length === 0) return null;
+
+    const firstEvent = eventsJson[0];
+    const eventSlug = firstEvent?.slug || firstEvent?.event_slug;
+    if (!eventSlug) return null;
+
+    // Try matching by name containing the slug parts
+    const { data: marketplaces } = await supabase
+      .from("marketplace_events")
+      .select("name, event_date, start_time, end_time, location")
+      .order("event_date", { ascending: true });
+
+    if (marketplaces && marketplaces.length > 0) {
+      // Try to find by slug match or name match
+      const slugParts = eventSlug.toLowerCase().replace(/-/g, ' ').split(' ').filter((p: string) => p.length > 2);
+      const matched = marketplaces.find((m: any) => {
+        const nameLower = (m.name || '').toLowerCase();
+        return slugParts.some((part: string) => nameLower.includes(part));
+      });
+      if (matched) return matched;
+      // Fallback: return first marketplace
+      return marketplaces[0];
+    }
+    return null;
+  } catch (err) {
+    console.error("Error looking up marketplace data:", err);
+    return null;
+  }
+}
+
+async function getVolunteerQrCardId(supabase: any, volunteerId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from("volunteer_qr_cards")
+      .select("unique_id")
+      .eq("volunteer_id", volunteerId)
+      .limit(1)
+      .single();
+    return data?.unique_id || '';
+  } catch {
+    return '';
+  }
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -236,6 +284,23 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // Pre-fetch QR card IDs for all volunteers
+    let qrCardMap: Record<string, string> = {};
+    if (volunteerIds.length > 0) {
+      const { data: qrCards } = await supabase
+        .from("volunteer_qr_cards")
+        .select("volunteer_id, unique_id")
+        .in("volunteer_id", volunteerIds);
+
+      if (qrCards) {
+        for (const qr of qrCards) {
+          if (qr.volunteer_id && !qrCardMap[qr.volunteer_id]) {
+            qrCardMap[qr.volunteer_id] = qr.unique_id;
+          }
+        }
+      }
+    }
+
     const sender = "Gift It Forward <giftitforward@dubaiholding.com>";
     let sentCount = 0;
     let failedCount = 0;
@@ -244,8 +309,17 @@ const handler = async (req: Request): Promise<Response> => {
       try {
         const volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
 
-        const html = generateCampaignEmailHTML(template as unknown as EmailTemplate, supabaseUrl, volunteer);
-        const subject = replaceTokens(template.subject, volunteer);
+        // Look up marketplace data and QR card for this volunteer
+        let marketplaceData = null;
+        let qrCardId = '';
+
+        if (volunteer) {
+          marketplaceData = await getVolunteerMarketplaceData(supabase, volunteer);
+          qrCardId = (recipient.volunteer_id && qrCardMap[recipient.volunteer_id]) || '';
+        }
+
+        const html = generateCampaignEmailHTML(template as unknown as EmailTemplate, supabaseUrl, volunteer, marketplaceData, qrCardId);
+        const subject = replaceTokens(template.subject, volunteer, marketplaceData, qrCardId);
 
         const result = await resend.emails.send({
           from: sender,
