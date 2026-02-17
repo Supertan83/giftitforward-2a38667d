@@ -6,7 +6,8 @@ import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
 import { useCardOperations } from '@/hooks/useSupabaseData';
-import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
+import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
 type Mode = 'distribute' | 'return';
@@ -26,9 +27,9 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { data: allocations = [], isLoading: loadingAllocations, refetch: refetchAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
+  const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
   const { distributeItemSimple, returnItemSimple } = useCardOperations();
-  const { incrementDistributed, decrementDistributed } = useAllocationOperations();
+  const queryClient = useQueryClient();
 
   // Calculate totals from allocations
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
@@ -61,25 +62,24 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
     try {
       if (mode === 'distribute') {
-        // Find first allocation with available items
-        const availableAllocation = allocations.find(
-          a => a.allocatedQuantity - a.distributedQuantity > 0
-        );
-        
-        if (!availableAllocation) {
-          throw new Error('No items available for distribution');
-        }
-
         const result = await distributeItemSimple.mutateAsync({
           uniqueId: code,
           marketplaceId: selectedMarketplaceId
         });
 
-        // Increment distributed count in allocation
-        await incrementDistributed.mutateAsync(availableAllocation.id);
-
-        // Refetch to update UI immediately
-        await refetchAllocations();
+        // Optimistic update: increment distributed count locally
+        queryClient.setQueryData(
+          ['marketplace_allocations', selectedMarketplaceId],
+          (old: any[] | undefined) => {
+            if (!old) return old;
+            const updated = [...old];
+            const idx = updated.findIndex(a => a.allocatedQuantity - a.distributedQuantity > 0);
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], distributedQuantity: updated[idx].distributedQuantity + 1 };
+            }
+            return updated;
+          }
+        );
 
         setFeedback({
           type: 'success',
@@ -88,20 +88,24 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
           credits: result.creditBalance,
         });
       } else {
-        // Return item from card first, then update allocation
         const result = await returnItemSimple.mutateAsync({
           uniqueId: code,
           marketplaceId: selectedMarketplaceId
         });
 
-        // Find allocation to decrement (if any has distributed items)
-        const allocationWithDistributed = allocations.find(a => a.distributedQuantity > 0);
-        if (allocationWithDistributed) {
-          await decrementDistributed.mutateAsync(allocationWithDistributed.id);
-        }
-
-        // Refetch to update UI immediately
-        await refetchAllocations();
+        // Optimistic update: decrement distributed count locally
+        queryClient.setQueryData(
+          ['marketplace_allocations', selectedMarketplaceId],
+          (old: any[] | undefined) => {
+            if (!old) return old;
+            const updated = [...old];
+            const idx = updated.findIndex(a => a.distributedQuantity > 0);
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], distributedQuantity: updated[idx].distributedQuantity - 1 };
+            }
+            return updated;
+          }
+        );
 
         setFeedback({
           type: 'success',
@@ -120,7 +124,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedMarketplaceId, mode, allocations, totalAvailable, distributeItemSimple, returnItemSimple, incrementDistributed, decrementDistributed, refetchAllocations]);
+  }, [selectedMarketplaceId, mode, allocations, totalAvailable, distributeItemSimple, returnItemSimple, queryClient]);
 
   const isLoading = loadingAllocations;
 
