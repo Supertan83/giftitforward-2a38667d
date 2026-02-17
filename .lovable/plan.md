@@ -1,67 +1,98 @@
 
+## Email Automation Workflows
 
-## Scanning Logic: Stop Auto-Deducting from Available Items
+### Overview
+Add a new "Automations" tab inside the Email Campaigns manager where admins can create trigger-based workflows that automatically send email templates to specific recipients based on event timing (e.g., "Send follow-up email 2 days before marketplace to all marketplace volunteers").
 
-### Problem
-When a volunteer scans a beneficiary's QR card in the Marketplace Zone, the system increments `distributed_quantity` on allocations and the UI displays **"Remaining = Allocated - Distributed"**, making it look like inventory is shrinking in real-time. You need both numbers displayed independently:
+### New Database Table: `email_automations`
 
-- **Total Allocated**: Fixed number set by admin (e.g., 18,000) -- never changes during scanning
-- **Total Scanned/Distributed**: Increments with each scan -- tracking only
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| name | text | Workflow name (e.g., "Pre-Marketplace Reminder") |
+| template_id | uuid | FK to email_templates |
+| trigger_type | text | `before_marketplace`, `after_marketplace`, `after_approval`, `after_training` |
+| trigger_days | integer | Days before/after the trigger event (e.g., 2 = two days before) |
+| trigger_time | time | Time of day to send (e.g., 09:00) |
+| recipient_filter | jsonb | Who to target: `{type: "marketplace", marketplace_id: "..."}` or `{type: "all_upcoming"}` |
+| is_active | boolean | Toggle on/off |
+| last_run_at | timestamptz | Last execution timestamp |
+| created_by | uuid | Admin who created it |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
-### What Changes
+RLS: Admin full access, staff read-only (matching existing email table patterns).
 
-#### 1. Update the Marketplace Zone UI (`src/components/zones/MarketplaceZone.tsx`)
+### New Database Table: `email_automation_logs`
 
-- Replace the current "Remaining" stat card with a **"Total Allocated"** stat showing the fixed allocation number
-- Rename "Distributed" to **"Total Scanned"** to clarify it's a tracking counter
-- Remove the logic that disables the scan button when `totalAvailable <= 0` (since we're no longer treating allocated as a stock ceiling)
-- Remove the "No Items Available" check before scanning
-- The large center display will show **Total Scanned** count instead of "Items Available for Distribution"
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| automation_id | uuid | FK to email_automations |
+| campaign_id | uuid | FK to the auto-generated campaign |
+| triggered_at | timestamptz | When the automation fired |
+| recipients_count | integer | How many emails were queued |
+| status | text | `success`, `failed`, `skipped` |
+| notes | text | Details/errors |
 
-#### 2. Update the RPC functions (database)
+### New Edge Function: `run-email-automations`
 
-Modify `distribute_marketplace_item`:
-- Remove the check `IF v_card.credit_balance >= v_limit` that blocks scanning when limit is hit (keep the per-beneficiary credit limit, just remove the allocation exhaustion check)
-- Keep incrementing `distributed_quantity` on allocations (for tracking/reporting purposes)
-- Remove the condition that only finds allocations with remaining stock (`allocated_quantity > distributed_quantity`) -- just find any allocation for the marketplace and increment
+This function will be called on a schedule (via pg_cron, every hour). It will:
 
-Modify `return_marketplace_item`:
-- Keep decrementing `distributed_quantity` on returns (for accurate tracking)
-- No other changes needed
+1. Query all active automations
+2. For each automation, check if it should fire now:
+   - `before_marketplace`: Find marketplace events where `event_date - trigger_days = today` and current time >= trigger_time
+   - `after_marketplace`: Find marketplace events where `event_date + trigger_days = today`
+   - `after_approval`: Find volunteers approved in the last `trigger_days` days who haven't received this automation
+   - `after_training`: Find volunteers who completed training in the last `trigger_days` days who haven't received this automation
+3. If triggered, auto-create a campaign with recipients, then invoke `send-campaign-email`
+4. Log the run to `email_automation_logs`
+5. Update `last_run_at` on the automation
 
-#### 3. Update the `increment_marketplace_allocation_distributed` RPC
-- Remove the check `IF a.distributed_quantity >= a.allocated_quantity` that blocks incrementing past the allocation ceiling
+### UI Changes
 
-#### 4. Update the optimistic UI updates in MarketplaceZone
-- Adjust the optimistic cache updates to match the new display logic (increment scanned count without checking against allocation ceiling)
+#### 1. Add "Automations" tab to EmailCampaignManager
 
-### What Does NOT Change
-- The per-beneficiary credit limit (e.g., 15 items per card) remains enforced
-- The `marketplace_item_allocations` table structure stays the same
-- Admin allocation management stays the same
-- Reports continue to show both allocated and distributed numbers
-- The `item_types.distributed` global counter logic is untouched (only the marketplace-level display changes)
+The existing Campaigns/Logs tabs will get a third tab: **Automations**.
+
+#### 2. Automation List View
+- Table showing all automations with: Name, Template, Trigger (e.g., "2 days before marketplace"), Status (Active/Inactive toggle), Last Run
+- "New Automation" button
+
+#### 3. Create/Edit Automation Dialog
+- **Name**: Text input
+- **Template**: Dropdown of email templates
+- **Trigger Type**: Select from:
+  - "Before Marketplace" -- sends X days before a marketplace event_date
+  - "After Marketplace" -- sends X days after
+  - "After Volunteer Approval" -- sends X days after a volunteer is approved
+  - "After Training Completion" -- sends X days after training is completed
+- **Days**: Number input (0 = same day)
+- **Time**: Time picker for when to send
+- **Recipients**: 
+  - All volunteers for upcoming marketplaces
+  - Specific marketplace volunteers only
+  - All approved volunteers (for non-marketplace triggers)
+- **Active toggle**: Enable/disable
+
+#### 4. Automation Logs
+- Expandable rows or a sub-section showing run history per automation
+
+### Cron Job Setup
+
+A `pg_cron` job will call the `run-email-automations` edge function every hour to check and execute due automations. This will be set up via SQL insert (not migration) since it contains project-specific URLs.
+
+### Files to Create/Modify
+
+- **New migration**: Create `email_automations` and `email_automation_logs` tables
+- **New file**: `supabase/functions/run-email-automations/index.ts` -- the scheduler logic
+- **Modified**: `src/components/admin/EmailCampaignManager.tsx` -- add Automations tab with CRUD UI
+- **Modified**: `src/components/admin/AdminSidebar.tsx` -- update AdminView type (no new sidebar item needed, automations live inside campaigns)
 
 ### Technical Details
 
-```text
-BEFORE (current):
-+--------------------+-------------------+-------------------+
-| Total Allocated    | Distributed       | Remaining         |
-| 18,000             | 5,200             | 12,800            |
-+--------------------+-------------------+-------------------+
-Scan button disabled when Remaining = 0
-
-AFTER (proposed):
-+--------------------+-------------------+
-| Total Allocated    | Total Scanned     |
-| 18,000             | 5,200             |
-+--------------------+-------------------+
-Scan button always enabled (only per-beneficiary limit enforced)
-```
-
-**Files to modify:**
-- `src/components/zones/MarketplaceZone.tsx` -- UI display changes
-- Database RPC: `distribute_marketplace_item` -- remove allocation ceiling check
-- Database RPC: `increment_marketplace_allocation_distributed` -- remove ceiling check
-
+The automation engine uses a "check and fire" pattern:
+- Each hourly run checks `trigger_days` against marketplace `event_date` or volunteer timestamps
+- To prevent duplicate sends, the system checks `email_automation_logs` for existing runs matching the same automation + marketplace/date combination
+- The `recipient_filter` on automations works identically to campaign recipient filters, reusing the same volunteer lookup logic
+- When an automation fires, it creates a real `email_campaign` record (with name prefixed "Auto:") so all existing campaign tracking, logs, and recipient status features work automatically
