@@ -1478,7 +1478,9 @@ export type Database = {
           is_active: boolean
           is_required: boolean
           options: Json | null
+          options_ar: Json | null
           question_text: string
+          question_text_ar: string | null
           question_type: string
           sort_order: number
           updated_at: string
@@ -1489,7 +1491,9 @@ export type Database = {
           is_active?: boolean
           is_required?: boolean
           options?: Json | null
+          options_ar?: Json | null
           question_text: string
+          question_text_ar?: string | null
           question_type?: string
           sort_order?: number
           updated_at?: string
@@ -1500,7 +1504,9 @@ export type Database = {
           is_active?: boolean
           is_required?: boolean
           options?: Json | null
+          options_ar?: Json | null
           question_text?: string
+          question_text_ar?: string | null
           question_type?: string
           sort_order?: number
           updated_at?: string

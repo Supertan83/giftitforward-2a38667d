@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Award, Download, Mail, Check, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { generateCertificatePDF, generateCertificatePDFBlob } from '@/components/certificates/CertificateGenerator';
+import { LanguageToggle } from '@/components/survey/LanguageToggle';
+import { surveyTranslations, type SurveyLanguage } from '@/lib/surveyTranslations';
 
 interface SurveyData {
   id: string;
@@ -24,8 +26,10 @@ interface SurveyData {
 interface SurveyQuestion {
   id: string;
   question_text: string;
+  question_text_ar: string | null;
   question_type: string;
   options: string[];
+  options_ar: string[];
   is_required: boolean;
   sort_order: number;
 }
@@ -36,16 +40,17 @@ export default function VolunteerSurveyPage() {
   const token = searchParams.get('token');
   const { toast } = useToast();
 
+  const [language, setLanguage] = useState<SurveyLanguage>('en');
+  const t = surveyTranslations[language];
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Dynamic questions
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
-  // Certificate state
   const [showCertificate, setShowCertificate] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -62,7 +67,6 @@ export default function VolunteerSurveyPage() {
 
   const fetchSurveyAndQuestions = async () => {
     try {
-      // Fetch survey data and questions in parallel
       const [surveyRes, questionsRes] = await Promise.all([
         fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey?action=get&token=${encodeURIComponent(token!)}`,
@@ -86,7 +90,12 @@ export default function VolunteerSurveyPage() {
       setSurveyData(surveyResult.survey);
 
       if (questionsRes.data) {
-        setQuestions(questionsRes.data.map(q => ({ ...q, options: Array.isArray(q.options) ? q.options as string[] : [] })));
+        setQuestions(questionsRes.data.map(q => ({
+          ...q,
+          options: Array.isArray(q.options) ? q.options as string[] : [],
+          options_ar: Array.isArray((q as any).options_ar) ? (q as any).options_ar as string[] : [],
+          question_text_ar: (q as any).question_text_ar ?? null,
+        })));
       }
 
       if (surveyResult.survey.completed_at) {
@@ -105,11 +114,16 @@ export default function VolunteerSurveyPage() {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
+  const getQuestionText = (q: SurveyQuestion) =>
+    language === 'ar' && q.question_text_ar ? q.question_text_ar : q.question_text;
+
+  const getQuestionOptions = (q: SurveyQuestion) =>
+    language === 'ar' && q.options_ar.length > 0 ? q.options_ar : q.options;
+
   const handleSubmit = async () => {
-    // Check required questions
     for (const q of questions) {
       if (q.is_required && !answers[q.id]?.trim()) {
-        toast({ title: 'Please answer all required questions', variant: 'destructive' });
+        toast({ title: t.answerRequired, variant: 'destructive' });
         return;
       }
     }
@@ -117,10 +131,7 @@ export default function VolunteerSurveyPage() {
     setSubmitting(true);
     try {
       const { data, error: submitError } = await supabase.functions.invoke('submit-survey', {
-        body: {
-          surveyToken: token,
-          answers,
-        },
+        body: { surveyToken: token, answers },
       });
 
       if (submitError) throw submitError;
@@ -128,9 +139,9 @@ export default function VolunteerSurveyPage() {
 
       setShowCertificate(true);
       sendCertificateEmail();
-      toast({ title: 'Survey Submitted!', description: 'Thank you for your feedback.' });
+      toast({ title: t.submitted, description: t.submittedDesc });
     } catch (err: any) {
-      toast({ title: 'Submission Failed', description: err.message || 'Please try again.', variant: 'destructive' });
+      toast({ title: t.submissionFailed, description: err.message || t.tryAgain, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -155,9 +166,9 @@ export default function VolunteerSurveyPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      toast({ title: 'Certificate Downloaded' });
+      toast({ title: t.certificateDownloaded });
     } catch {
-      toast({ title: 'Download Failed', variant: 'destructive' });
+      toast({ title: t.downloadFailed, variant: 'destructive' });
     } finally {
       setIsGenerating(false);
     }
@@ -183,9 +194,9 @@ export default function VolunteerSurveyPage() {
       await supabase.functions.invoke('submit-survey?action=update-certificate-sent', {
         body: { surveyToken: token },
       });
-      toast({ title: 'Certificate Sent!', description: `Emailed to ${surveyData.volunteer_email}` });
+      toast({ title: t.certificateSentTitle, description: t.emailedTo(surveyData.volunteer_email) });
     } catch {
-      toast({ title: 'Email Failed', description: 'Please download your certificate instead.', variant: 'destructive' });
+      toast({ title: t.emailFailed, description: t.emailFailedDesc, variant: 'destructive' });
     } finally {
       setIsSendingEmail(false);
     }
@@ -193,13 +204,15 @@ export default function VolunteerSurveyPage() {
 
   const renderQuestionInput = (q: SurveyQuestion) => {
     const value = answers[q.id] || '';
+    const opts = getQuestionOptions(q);
+
     switch (q.question_type) {
       case 'short_text':
         return (
           <Input
             value={value}
             onChange={e => setAnswer(q.id, e.target.value)}
-            placeholder="Enter your answer..."
+            placeholder={t.enterAnswer}
             className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
             maxLength={500}
           />
@@ -209,7 +222,7 @@ export default function VolunteerSurveyPage() {
           <Textarea
             value={value}
             onChange={e => setAnswer(q.id, e.target.value)}
-            placeholder="Enter your answer..."
+            placeholder={t.enterAnswer}
             className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
             rows={4}
             maxLength={2000}
@@ -220,20 +233,20 @@ export default function VolunteerSurveyPage() {
           <RadioGroup value={value} onValueChange={v => setAnswer(q.id, v)} className="flex gap-6">
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="yes" id={`${q.id}-yes`} className="border-white/40 text-primary" />
-              <Label htmlFor={`${q.id}-yes`} className="text-white cursor-pointer">Yes</Label>
+              <Label htmlFor={`${q.id}-yes`} className="text-white cursor-pointer">{t.yes}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="no" id={`${q.id}-no`} className="border-white/40 text-primary" />
-              <Label htmlFor={`${q.id}-no`} className="text-white cursor-pointer">No</Label>
+              <Label htmlFor={`${q.id}-no`} className="text-white cursor-pointer">{t.no}</Label>
             </div>
           </RadioGroup>
         );
       case 'multiple_choice':
         return (
           <RadioGroup value={value} onValueChange={v => setAnswer(q.id, v)} className="space-y-2">
-            {q.options.map((opt, i) => (
+            {opts.map((opt, i) => (
               <div key={i} className="flex items-center space-x-2">
-                <RadioGroupItem value={opt} id={`${q.id}-${i}`} className="border-white/40 text-primary" />
+                <RadioGroupItem value={q.options[i] || opt} id={`${q.id}-${i}`} className="border-white/40 text-primary" />
                 <Label htmlFor={`${q.id}-${i}`} className="text-white cursor-pointer">{opt}</Label>
               </div>
             ))}
@@ -288,29 +301,29 @@ export default function VolunteerSurveyPage() {
 
   if (showCertificate && surveyData) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-4" dir={language === 'ar' ? 'rtl' : 'ltr'}>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
           <div className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center bg-success/20">
             <Award className="w-12 h-12 text-success" />
           </div>
-          <h2 className="font-display font-bold text-2xl text-white mb-2">Thank You for Volunteering!</h2>
-          <p className="text-white/70 mb-4">{surveyData.volunteer_name}, your certificate of participation is ready.</p>
+          <h2 className="font-display font-bold text-2xl text-white mb-2">{t.thankYou}</h2>
+          <p className="text-white/70 mb-4">{t.certificateReady(surveyData.volunteer_name)}</p>
 
           <div className="mb-6 p-3 rounded-lg bg-white/5 border border-white/10">
             {isSendingEmail ? (
               <div className="flex items-center justify-center gap-2 text-white/70">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Sending certificate to {surveyData.volunteer_email}...</span>
+                <span>{t.sendingCertificate(surveyData.volunteer_email)}</span>
               </div>
             ) : certificateSent ? (
               <div className="flex items-center justify-center gap-2 text-success">
                 <Check className="w-4 h-4" />
-                <span>Certificate sent to {surveyData.volunteer_email}</span>
+                <span>{t.certificateSent(surveyData.volunteer_email)}</span>
               </div>
             ) : (
               <div className="flex items-center justify-center gap-2 text-white/50">
                 <Mail className="w-4 h-4" />
-                <span>Certificate will be sent to {surveyData.volunteer_email}</span>
+                <span>{t.certificateWillSend(surveyData.volunteer_email)}</span>
               </div>
             )}
           </div>
@@ -318,16 +331,16 @@ export default function VolunteerSurveyPage() {
           <div className="flex flex-col gap-3">
             <Button size="lg" onClick={downloadCertificate} disabled={isGenerating} className="w-full">
               {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-              Download Certificate
+              {t.downloadCertificate}
             </Button>
             {!certificateSent && !isSendingEmail && (
               <Button size="lg" variant="outline" onClick={sendCertificateEmail} className="w-full">
                 <Mail className="w-4 h-4 mr-2" />
-                Resend to {surveyData.volunteer_email}
+                {t.resendTo(surveyData.volunteer_email)}
               </Button>
             )}
             <Button size="lg" variant="ghost" onClick={() => navigate('/')} className="w-full text-white/70 hover:text-white">
-              Finish
+              {t.finish}
             </Button>
           </div>
         </motion.div>
@@ -336,18 +349,19 @@ export default function VolunteerSurveyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a]">
+    <div className="min-h-screen bg-[#1a1a1a]" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <header className="bg-[#1a1a1a]/95 backdrop-blur border-b border-white/10 px-4 py-3">
-        <div className="max-w-2xl mx-auto flex items-center justify-center">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
           <BrandLogo size="sm" />
+          <LanguageToggle language={language} onChange={setLanguage} />
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
           <div className="text-center">
-            <h1 className="font-display font-bold text-2xl text-white mb-2">Volunteer Feedback Survey</h1>
-            <p className="text-white/70">Hi {surveyData?.volunteer_name}! Please share your experience.</p>
+            <h1 className="font-display font-bold text-2xl text-white mb-2">{t.pageTitle}</h1>
+            <p className="text-white/70">{t.subtitleWithName(surveyData?.volunteer_name || '')}</p>
           </div>
 
           {/* Dynamic Questions */}
@@ -359,7 +373,7 @@ export default function VolunteerSurveyPage() {
             questions.map(q => (
               <div key={q.id} className="bg-white/5 rounded-xl p-6 border border-white/10">
                 <label className="block text-white font-medium mb-3">
-                  {q.question_text} {q.is_required && '*'}
+                  {getQuestionText(q)} {q.is_required && '*'}
                 </label>
                 {renderQuestionInput(q)}
               </div>
@@ -368,7 +382,7 @@ export default function VolunteerSurveyPage() {
 
           <Button size="lg" onClick={handleSubmit} disabled={submitting} className="w-full">
             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-            Submit & Get Certificate
+            {t.submit}
           </Button>
         </motion.div>
       </main>
