@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.submit-external-survey]
 verify_jwt = false
+
+[functions.cleanup-data]
+verify_jwt = false
