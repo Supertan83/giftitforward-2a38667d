@@ -1,54 +1,44 @@
+## Fix: Resend Welcome Email Missing Event Times/Details
 
-## Fix: Duplicate Item Types and Allocations from Auto-Sync
+### Problem
 
-### Root Cause
-The `syncMaterial` function in `sync-surpluss-event-allocations` uses `.maybeSingle()` to look up an existing `item_type` by `external_material_id`. Once the first duplicate was accidentally created, `.maybeSingle()` started returning an error (it expects 0 or 1 rows), causing the code to treat it as "not found" and create yet another duplicate on every sync cycle (~1 minute). This snowballed into **581 duplicate item_type rows** for material 884 ("Kids Waterbottles") and **602 duplicate allocation rows**.
+The `resend-welcome-email` edge function uses a hardcoded email template with a static event reference ("19th of February at the Ajman, Al Hamidya and Boys' Community School Marketplace"). It does not read the volunteer's actual registered events from `events_json`, so recipients see no dates, times, or locations for their specific marketplace events.
 
-### Fix Plan
+The proper `send-welcome-email` function already handles this correctly by dynamically building event blocks with date, time, and location data.
 
-**1. Fix the edge function (prevent future duplicates)**
+### Solution
 
-In `supabase/functions/sync-surpluss-event-allocations/index.ts`, update the `syncMaterial` function:
+Refactor the `resend-welcome-email` function to reuse the same dynamic event rendering logic from `send-welcome-email`. Specifically:
 
-- Change the item_type lookup from `.maybeSingle()` to `.limit(1).maybeSingle()` so it returns the first match even when duplicates exist
-- Similarly, add `.limit(1)` to the allocation existence check
+**1. Add helper functions** (copied from `send-welcome-email`):
 
-**2. Database cleanup (remove existing duplicates)**
+- `formatTime()` - converts "HH:MM:SS" to "07.00 am" format
+- `formatDate()` - converts date string to "February 19, 2026" format
+- `buildEventBlock()` - renders an event with red left border showing name, date, location, and timings
 
-Run a migration to:
-- For `item_types`: Keep only the oldest row per `external_material_id`, delete all newer duplicates
-- For `marketplace_item_allocations`: Keep only one allocation per `(marketplace_id, item_type_id)` combination, delete orphaned allocations pointing to deleted item_types
-- Add a **unique constraint** on `item_types.external_material_id` (where not null) to prevent this from ever happening again
+**2. Read events from volunteer's `events_json**`:
 
-**3. Add unique constraint on allocations**
+- Parse the volunteer's `events_json` column (array of event objects with name, date, time, location, etc.)
+- For each event, look up the corresponding marketplace record to get `start_time`, `end_time`, `event_date`, and `location`
+- Build the formatted event blocks
 
-Add a unique constraint on `marketplace_item_allocations(marketplace_id, item_type_id)` to prevent duplicate allocation rows per marketplace/item combination.
+**3. Replace the hardcoded intro text and event section** with dynamic content:
 
-### Impact
-- Currently: 581 duplicate item_types, 602 duplicate allocations
-- After fix: 1 item_type per material, 1 allocation per marketplace/item pair
-- The 5-minute auto-sync will correctly update existing records instead of creating new ones
+- Remove the static "19th of February at the Ajman..." paragraph
+- Insert the dynamically built event blocks (same red-bordered design as `send-welcome-email`)
+
+### File Changed
+
+- `supabase/functions/resend-welcome-email/index.ts` - Replace the hardcoded HTML template section with dynamic event rendering
 
 ### Technical Details
 
-Edge function change (line ~164-166 in `syncMaterial`):
+The volunteer's `events_json` contains entries like:
+
 ```text
-Before: .eq('external_material_id', materialId).maybeSingle()
-After:  .eq('external_material_id', materialId).limit(1).maybeSingle()
+[{ "slug": "ajman-boys-feb-19", "name": "Ajman Boys Community School", ... }]
 ```
 
-Same fix for allocation lookup (line ~194-197):
-```text
-Before: .eq('marketplace_id', ...).eq('item_type_id', ...).maybeSingle()
-After:  .eq('marketplace_id', ...).eq('item_type_id', ...).limit(1).maybeSingle()
-```
+For each event slug, we query the `marketplaces` table to get the full event details (date, start_time, end_time, location), then format them using the same helper functions from `send-welcome-email`.
 
-Cleanup SQL:
-```text
-1. Identify the oldest item_type per external_material_id (keep it)
-2. Update all marketplace_item_allocations to point to the kept item_type
-3. Delete orphaned allocations
-4. Delete duplicate item_types
-5. Add UNIQUE constraint on item_types(external_material_id) WHERE external_material_id IS NOT NULL
-6. Add UNIQUE constraint on marketplace_item_allocations(marketplace_id, item_type_id)
-```
+The rest of the email (QR code, training, credentials, footer) remains unchanged.
