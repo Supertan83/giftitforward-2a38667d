@@ -1,44 +1,49 @@
-## Fix: Resend Welcome Email Missing Event Times/Details
+
+
+## Fix: Campaign Emails Not Showing Dynamic Data (QR, Marketplace Info)
 
 ### Problem
+When sending campaign emails, the template tokens `{{marketplace_name}}`, `{{marketplace_date}}`, `{{marketplace_time}}`, `{{marketplace_location}}`, and `{{qr_card_id}}` all render as empty because:
 
-The `resend-welcome-email` edge function uses a hardcoded email template with a static event reference ("19th of February at the Ajman, Al Hamidya and Boys' Community School Marketplace"). It does not read the volunteer's actual registered events from `events_json`, so recipients see no dates, times, or locations for their specific marketplace events.
-
-The proper `send-welcome-email` function already handles this correctly by dynamically building event blocks with date, time, and location data.
+1. **Line 247**: `generateCampaignEmailHTML()` is called without any `marketplaceData` argument
+2. **Line 68**: `{{qr_card_id}}` is hardcoded to `''` -- no QR card lookup is performed
+3. The function loads volunteer records but never queries `marketplace_events` or `volunteer_qr_cards`
 
 ### Solution
+Update `supabase/functions/send-campaign-email/index.ts` to look up each volunteer's marketplace and QR card data before generating the email.
 
-Refactor the `resend-welcome-email` function to reuse the same dynamic event rendering logic from `send-welcome-email`. Specifically:
+### Changes (single file)
 
-**1. Add helper functions** (copied from `send-welcome-email`):
+**File: `supabase/functions/send-campaign-email/index.ts`**
 
-- `formatTime()` - converts "HH:MM:SS" to "07.00 am" format
-- `formatDate()` - converts date string to "February 19, 2026" format
-- `buildEventBlock()` - renders an event with red left border showing name, date, location, and timings
+**A. After loading volunteer data (~line 237), add marketplace + QR lookups per volunteer:**
 
-**2. Read events from volunteer's `events_json**`:
+For each volunteer with `events_json`, parse the first event's slug, then query `marketplace_events` for event details (name, date, start_time, end_time, location). If the volunteer has multiple events, build a combined display (same pattern as the welcome email).
 
-- Parse the volunteer's `events_json` column (array of event objects with name, date, time, location, etc.)
-- For each event, look up the corresponding marketplace record to get `start_time`, `end_time`, `event_date`, and `location`
-- Build the formatted event blocks
+Query `volunteer_qr_cards` by `volunteer_id` to get the `unique_id` for the QR card token.
 
-**3. Replace the hardcoded intro text and event section** with dynamic content:
+**B. Update the `replaceTokens` call (line 68):**
 
-- Remove the static "19th of February at the Ajman..." paragraph
-- Insert the dynamically built event blocks (same red-bordered design as `send-welcome-email`)
+Change `'{{qr_card_id}}'` from hardcoded `''` to accept a value passed in from the lookup.
 
-### File Changed
+**C. Update the sending loop (~line 243-247):**
 
-- `supabase/functions/resend-welcome-email/index.ts` - Replace the hardcoded HTML template section with dynamic event rendering
+Before generating HTML for each recipient, look up marketplace data from the volunteer's `events_json` and pass it to `generateCampaignEmailHTML`.
 
 ### Technical Details
 
-The volunteer's `events_json` contains entries like:
-
 ```text
-[{ "slug": "ajman-boys-feb-19", "name": "Ajman Boys Community School", ... }]
+For each recipient with a volunteer_id:
+
+1. Get volunteer from volunteersMap
+2. Parse volunteer.events_json (array of event objects)
+3. Query marketplace_events for the first event's slug to get:
+   - name, event_date, start_time, end_time, location
+4. Query volunteer_qr_cards for volunteer's unique_id:
+   - SELECT unique_id FROM volunteer_qr_cards WHERE volunteer_id = volunteer.id LIMIT 1
+5. Pass marketplaceData and qrCardId to generateCampaignEmailHTML / replaceTokens
 ```
 
-For each event slug, we query the `marketplaces` table to get the full event details (date, start_time, end_time, location), then format them using the same helper functions from `send-welcome-email`.
+The `replaceTokens` function signature stays the same but will receive actual marketplace data and QR card ID instead of empty defaults.
 
-The rest of the email (QR code, training, credentials, footer) remains unchanged.
+No database changes needed.
