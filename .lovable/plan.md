@@ -1,98 +1,91 @@
 
-## Email Automation Workflows
+
+## Manual Data Entry for CDA Events
 
 ### Overview
-Add a new "Automations" tab inside the Email Campaigns manager where admins can create trigger-based workflows that automatically send email templates to specific recipients based on event timing (e.g., "Send follow-up email 2 days before marketplace to all marketplace volunteers").
+Add a new "Marketplace Data" editor section in the Marketplace Reports page, positioned between the summary stat cards and the Item Distribution section. This follows the same UX pattern as the existing "Beneficiary Demographics" Add Data button -- a card with view/edit modes that allows admins to manually enter post-event marketplace data.
 
-### New Database Table: `email_automations`
+### What Gets Built
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| name | text | Workflow name (e.g., "Pre-Marketplace Reminder") |
-| template_id | uuid | FK to email_templates |
-| trigger_type | text | `before_marketplace`, `after_marketplace`, `after_approval`, `after_training` |
-| trigger_days | integer | Days before/after the trigger event (e.g., 2 = two days before) |
-| trigger_time | time | Time of day to send (e.g., 09:00) |
-| recipient_filter | jsonb | Who to target: `{type: "marketplace", marketplace_id: "..."}` or `{type: "all_upcoming"}` |
-| is_active | boolean | Toggle on/off |
-| last_run_at | timestamptz | Last execution timestamp |
-| created_by | uuid | Admin who created it |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
+#### 1. New Component: `MarketplaceManualDataEditor`
 
-RLS: Admin full access, staff read-only (matching existing email table patterns).
+A card component (same style as `MarketplaceDemographicsEditor`) with:
 
-### New Database Table: `email_automation_logs`
+**View Mode:**
+- Header: "Marketplace Data" with the marketplace name, an "Add Data" / "Edit" button
+- Summary: Total Beneficiaries (manual), Total Items Allocated, Total Items Distributed
+- Item breakdown table matching the report format (grouped by category, showing Name / Allocated / Distributed / Remaining)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| automation_id | uuid | FK to email_automations |
-| campaign_id | uuid | FK to the auto-generated campaign |
-| triggered_at | timestamptz | When the automation fired |
-| recipients_count | integer | How many emails were queued |
-| status | text | `success`, `failed`, `skipped` |
-| notes | text | Details/errors |
+**Edit Mode (after clicking "Add Data"):**
+- **Manual Beneficiary Count** input field (stored as a new column `manual_beneficiary_count` on `marketplace_events`)
+- **Item rows**: Each existing allocation shows editable Allocated and Distributed fields
+- **"Add Item" button**: A searchable dropdown of all `item_types` to add new allocation rows
+- **Delete** button per row to remove an allocation
+- Save/Cancel buttons
 
-### New Edge Function: `run-email-automations`
+This directly writes to:
+- `marketplace_events.manual_beneficiary_count` (new column) for the beneficiary count
+- `marketplace_item_allocations` table for item-level data (using existing mutations)
 
-This function will be called on a schedule (via pg_cron, every hour). It will:
+#### 2. Database Migration
 
-1. Query all active automations
-2. For each automation, check if it should fire now:
-   - `before_marketplace`: Find marketplace events where `event_date - trigger_days = today` and current time >= trigger_time
-   - `after_marketplace`: Find marketplace events where `event_date + trigger_days = today`
-   - `after_approval`: Find volunteers approved in the last `trigger_days` days who haven't received this automation
-   - `after_training`: Find volunteers who completed training in the last `trigger_days` days who haven't received this automation
-3. If triggered, auto-create a campaign with recipients, then invoke `send-campaign-email`
-4. Log the run to `email_automation_logs`
-5. Update `last_run_at` on the automation
+Add one new column to `marketplace_events`:
 
-### UI Changes
+```
+manual_beneficiary_count INTEGER DEFAULT NULL
+```
 
-#### 1. Add "Automations" tab to EmailCampaignManager
+This stores the CDA-provided beneficiary count separately from the live QR card count, so both can coexist. When this value is set, the report summary cards will display it instead of (or alongside) the QR-based count.
 
-The existing Campaigns/Logs tabs will get a third tab: **Automations**.
+#### 3. Update Marketplace Reports to Use Manual Data
 
-#### 2. Automation List View
-- Table showing all automations with: Name, Template, Trigger (e.g., "2 days before marketplace"), Status (Active/Inactive toggle), Last Run
-- "New Automation" button
+In `MarketplaceReports.tsx`:
+- Insert the new `MarketplaceManualDataEditor` component after the Beneficiary Demographics section
+- Update the top-level "Beneficiaries" stat card to show `manual_beneficiary_count` when available (with a label indicating it's manually entered)
 
-#### 3. Create/Edit Automation Dialog
-- **Name**: Text input
-- **Template**: Dropdown of email templates
-- **Trigger Type**: Select from:
-  - "Before Marketplace" -- sends X days before a marketplace event_date
-  - "After Marketplace" -- sends X days after
-  - "After Volunteer Approval" -- sends X days after a volunteer is approved
-  - "After Training Completion" -- sends X days after training is completed
-- **Days**: Number input (0 = same day)
-- **Time**: Time picker for when to send
-- **Recipients**: 
-  - All volunteers for upcoming marketplaces
-  - Specific marketplace volunteers only
-  - All approved volunteers (for non-marketplace triggers)
-- **Active toggle**: Enable/disable
+#### 4. Report Data Integration
 
-#### 4. Automation Logs
-- Expandable rows or a sub-section showing run history per automation
-
-### Cron Job Setup
-
-A `pg_cron` job will call the `run-email-automations` edge function every hour to check and execute due automations. This will be set up via SQL insert (not migration) since it contains project-specific URLs.
-
-### Files to Create/Modify
-
-- **New migration**: Create `email_automations` and `email_automation_logs` tables
-- **New file**: `supabase/functions/run-email-automations/index.ts` -- the scheduler logic
-- **Modified**: `src/components/admin/EmailCampaignManager.tsx` -- add Automations tab with CRUD UI
-- **Modified**: `src/components/admin/AdminSidebar.tsx` -- update AdminView type (no new sidebar item needed, automations live inside campaigns)
+In `useMarketplaceAllocations.ts` (`useMarketplaceReport`):
+- Include `manual_beneficiary_count` in the marketplace query
+- Add it to the `MarketplaceReport` type so the report can display it
 
 ### Technical Details
 
-The automation engine uses a "check and fire" pattern:
-- Each hourly run checks `trigger_days` against marketplace `event_date` or volunteer timestamps
-- To prevent duplicate sends, the system checks `email_automation_logs` for existing runs matching the same automation + marketplace/date combination
-- The `recipient_filter` on automations works identically to campaign recipient filters, reusing the same volunteer lookup logic
-- When an automation fires, it creates a real `email_campaign` record (with name prefixed "Auto:") so all existing campaign tracking, logs, and recipient status features work automatically
+**New file:** `src/components/admin/MarketplaceManualDataEditor.tsx`
+- Props: `marketplaceId`, `marketplaceName`
+- Uses `useMarketplaceAllocations(marketplaceId)` for item data
+- Uses `useItemTypesExtended()` for the item dropdown
+- Uses `useAllocationOperations()` for create/update/delete mutations
+- Directly queries/updates `marketplace_events` for `manual_beneficiary_count`
+
+**Modified files:**
+- `src/components/admin/MarketplaceReports.tsx` -- add the new editor component
+- `src/hooks/useMarketplaceAllocations.ts` -- include `manual_beneficiary_count` in report type and query
+- Database migration -- add `manual_beneficiary_count` column
+
+**Data flow for item entry:**
+- Adding a new item: calls `allocateToMarketplace` mutation (creates `marketplace_item_allocations` row)
+- Editing quantities: calls `updateAllocationQuantities` mutation (updates allocated + distributed)
+- Deleting a row: calls `deleteAllocation` mutation
+- All these mutations already exist and handle cache invalidation
+
+**Component layout (edit mode):**
+
+```text
++--------------------------------------------------+
+| Marketplace Data                    [Cancel][Save]|
+| Young Dreamers Boys Community School               |
++--------------------------------------------------+
+| Manual Beneficiary Count: [_____]                  |
+|                                                    |
+| Item Allocations:                                  |
+| +------+-------------+-----------+----------+----+ |
+| | Item | Allocated   | Distributed          | X  | |
+| +------+-------------+-----------+----------+----+ |
+| | Shoe | [500]       | [320]               | X  | |
+| | Bags | [200]       | [180]               | X  | |
+| +------+-------------+-----------+----------+----+ |
+| [+ Add Item]                                       |
++--------------------------------------------------+
+```
+
