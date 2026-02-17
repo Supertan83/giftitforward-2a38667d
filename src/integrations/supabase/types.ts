@@ -966,6 +966,7 @@ export type Database = {
           external_id: number | null
           id: string
           location: string | null
+          manual_beneficiary_count: number | null
           name: string
           outreach_partner: string | null
           start_time: string | null
@@ -992,6 +993,7 @@ export type Database = {
           external_id?: number | null
           id?: string
           location?: string | null
+          manual_beneficiary_count?: number | null
           name: string
           outreach_partner?: string | null
           start_time?: string | null
@@ -1018,6 +1020,7 @@ export type Database = {
           external_id?: number | null
           id?: string
           location?: string | null
+          manual_beneficiary_count?: number | null
           name?: string
           outreach_partner?: string | null
           start_time?: string | null
