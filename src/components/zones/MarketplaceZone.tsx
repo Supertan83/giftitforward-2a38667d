@@ -33,8 +33,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
   // Calculate totals from allocations
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
-  const totalDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
-  const totalAvailable = totalAllocated - totalDistributed;
+  const totalScanned = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
@@ -48,16 +47,6 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
       return;
     }
 
-    // Check if there are items available
-    if (mode === 'distribute' && totalAvailable <= 0) {
-      setFeedback({
-        type: 'error',
-        title: 'No Items Available',
-        subtitle: 'All allocated items have been distributed',
-      });
-      return;
-    }
-
     setIsProcessing(true);
 
     try {
@@ -67,16 +56,13 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
           marketplaceId: selectedMarketplaceId
         });
 
-        // Optimistic update: increment distributed count locally
+        // Optimistic update: increment scanned count locally
         queryClient.setQueryData(
           ['marketplace_allocations', selectedMarketplaceId],
           (old: any[] | undefined) => {
-            if (!old) return old;
+            if (!old || old.length === 0) return old;
             const updated = [...old];
-            const idx = updated.findIndex(a => a.allocatedQuantity - a.distributedQuantity > 0);
-            if (idx >= 0) {
-              updated[idx] = { ...updated[idx], distributedQuantity: updated[idx].distributedQuantity + 1 };
-            }
+            updated[0] = { ...updated[0], distributedQuantity: updated[0].distributedQuantity + 1 };
             return updated;
           }
         );
@@ -124,7 +110,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedMarketplaceId, mode, allocations, totalAvailable, distributeItemSimple, returnItemSimple, queryClient]);
+  }, [selectedMarketplaceId, mode, distributeItemSimple, returnItemSimple, queryClient]);
 
   const isLoading = loadingAllocations;
 
@@ -150,20 +136,19 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
       {selectedMarketplaceId ? (
         <>
-          {/* Stats - Simplified to show only quantities */}
+          {/* Stats - Total Allocated & Total Scanned */}
           <div className="grid grid-cols-2 gap-2 md:gap-3 mb-4 md:mb-6">
             <StatCard
               icon={Package}
-              label="Distributed"
-              value={isLoading ? '-' : totalDistributed.toLocaleString()}
-              subValue={`of ${totalAllocated.toLocaleString()} allocated`}
-              variant="success"
+              label="Total Allocated"
+              value={isLoading ? '-' : totalAllocated.toLocaleString()}
+              variant="default"
             />
             <StatCard
               icon={ShoppingBag}
-              label="Remaining"
-              value={isLoading ? '-' : totalAvailable.toLocaleString()}
-              variant={totalAvailable < 50 ? 'warning' : 'default'}
+              label="Total Scanned"
+              value={isLoading ? '-' : totalScanned.toLocaleString()}
+              variant="success"
             />
           </div>
 
@@ -177,10 +162,10 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               <Package className="w-8 h-8 text-primary" />
             </div>
             <p className="text-4xl font-bold text-foreground mb-1">
-              {isLoading ? '-' : totalAvailable.toLocaleString()}
+              {isLoading ? '-' : totalScanned.toLocaleString()}
             </p>
             <p className="text-sm text-muted-foreground">
-              Items Available for Distribution
+              Total Items Scanned
             </p>
           </motion.div>
 
@@ -223,7 +208,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               variant={mode === 'distribute' ? 'scan' : 'warning'} 
               size="xl" 
               className="w-full"
-              disabled={isProcessing || (mode === 'distribute' && totalAvailable <= 0)}
+              disabled={isProcessing}
             >
               {isProcessing ? (
                 <Loader2 className="w-6 h-6 animate-spin" />
@@ -233,9 +218,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               {isProcessing 
                 ? 'Processing...'
                 : mode === 'distribute'
-                  ? totalAvailable > 0
-                    ? 'Scan to Distribute Item'
-                    : 'No Items Available'
+                  ? 'Scan to Distribute Item'
                   : 'Scan to Return Item'
               }
             </Button>
