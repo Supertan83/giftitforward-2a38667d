@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Trash2, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Eye, Search, X } from 'lucide-react';
+import { ArrowLeft, Trash2, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Eye, Search, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,7 +19,7 @@ interface DataCleanupManagerProps {
 interface TableColumnConfig {
   key: string;
   label: string;
-  render?: (value: any, row: any) => React.ReactNode;
+  render?: (value: any, row: any, lookups?: { marketplaces: Record<string, string>; items: Record<string, string> }) => React.ReactNode;
 }
 
 const TABLE_COLUMNS: Record<string, TableColumnConfig[]> = {
@@ -35,7 +36,7 @@ const TABLE_COLUMNS: Record<string, TableColumnConfig[]> = {
     { key: 'type', label: 'Type' },
     { key: 'item_type', label: 'Item' },
     { key: 'credit_change', label: 'Change' },
-    { key: 'card_id', label: 'Card', render: (v: string) => v?.slice(0, 8) + '...' },
+    { key: 'card_id', label: 'Card', render: (v: string) => v?.slice(0, 8) + '…' },
     { key: 'timestamp', label: 'Time', render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
   ],
   archived_card_data: [
@@ -70,8 +71,8 @@ const TABLE_COLUMNS: Record<string, TableColumnConfig[]> = {
     { key: 'created_at', label: 'Created', render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
   ],
   marketplace_item_allocations: [
-    { key: 'marketplace_id', label: 'Marketplace', render: (v: string) => v?.slice(0, 8) + '...' },
-    { key: 'item_type_id', label: 'Item', render: (v: string) => v?.slice(0, 8) + '...' },
+    { key: 'marketplace_id', label: 'Marketplace', render: (v: string, _r: any, l?: any) => l?.marketplaces?.[v] || v?.slice(0, 8) + '…' },
+    { key: 'item_type_id', label: 'Item', render: (v: string, _r: any, l?: any) => l?.items?.[v] || v?.slice(0, 8) + '…' },
     { key: 'allocated_quantity', label: 'Allocated' },
     { key: 'distributed_quantity', label: 'Distributed' },
     { key: 'created_at', label: 'Created', render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
@@ -85,13 +86,16 @@ const TABLE_COLUMNS: Record<string, TableColumnConfig[]> = {
     { key: 'allocated_to_marketplace', label: 'Allocated' },
   ],
   marketplace_manual_counts: [
-    { key: 'marketplace_id', label: 'Marketplace', render: (v: string) => v?.slice(0, 8) + '...' },
+    { key: 'marketplace_id', label: 'Marketplace', render: (v: string, _r: any, l?: any) => l?.marketplaces?.[v] || v?.slice(0, 8) + '…' },
+    { key: 'item_type_id', label: 'Item', render: (v: string, _r: any, l?: any) => l?.items?.[v] || v?.slice(0, 8) + '…' },
     { key: 'actual_distributed', label: 'Distributed' },
     { key: 'actual_remaining', label: 'Remaining' },
     { key: 'notes', label: 'Notes' },
     { key: 'counted_at', label: 'Counted', render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
   ],
   warehouse_returns: [
+    { key: 'marketplace_id', label: 'Marketplace', render: (v: string, _r: any, l?: any) => l?.marketplaces?.[v] || v?.slice(0, 8) + '…' },
+    { key: 'item_type_id', label: 'Item', render: (v: string, _r: any, l?: any) => l?.items?.[v] || v?.slice(0, 8) + '…' },
     { key: 'quantity_returned', label: 'Qty' },
     { key: 'return_batch_code', label: 'Batch' },
     { key: 'notes', label: 'Notes' },
@@ -182,6 +186,11 @@ export const DataCleanupManager: React.FC<DataCleanupManagerProps> = ({ onBack }
   const [cleaning, setCleaning] = useState(false);
   const [lastResults, setLastResults] = useState<Record<string, { action: string; count: number }> | null>(null);
 
+  // Lookup maps for resolving IDs to names
+  const [marketplaceNames, setMarketplaceNames] = useState<Record<string, string>>({});
+  const [itemTypeNames, setItemTypeNames] = useState<Record<string, string>>({});
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
   // Browser dialog state
   const [browseTable, setBrowseTable] = useState<string | null>(null);
   const [browseLabel, setBrowseLabel] = useState('');
@@ -194,6 +203,19 @@ export const DataCleanupManager: React.FC<DataCleanupManagerProps> = ({ onBack }
   const [browseDeleteInput, setBrowseDeleteInput] = useState('');
 
   const { toast } = useToast();
+
+  // Fetch lookup maps on mount
+  useEffect(() => {
+    const fetchLookups = async () => {
+      const [mpRes, itRes] = await Promise.all([
+        supabase.from('marketplace_events').select('id, name'),
+        supabase.from('item_types').select('id, name'),
+      ]);
+      if (mpRes.data) setMarketplaceNames(Object.fromEntries(mpRes.data.map(m => [m.id, m.name])));
+      if (itRes.data) setItemTypeNames(Object.fromEntries(itRes.data.map(i => [i.id, i.name])));
+    };
+    fetchLookups();
+  }, []);
 
   const fetchCounts = useCallback(async () => {
     setCountsLoading(true);
@@ -338,8 +360,20 @@ export const DataCleanupManager: React.FC<DataCleanupManagerProps> = ({ onBack }
   };
 
   const columns = browseTable ? (TABLE_COLUMNS[browseTable] || []) : [];
+  const lookups = { marketplaces: marketplaceNames, items: itemTypeNames };
   const isResetTable = browseTable === 'qr_cards' || browseTable === 'item_types';
   const actionWord = isResetTable ? 'reset' : 'delete';
+
+  const resolveValue = (key: string, value: any) => {
+    if (value == null) return '-';
+    if (key === 'marketplace_id' || key === 'marketplace_id') return marketplaceNames[value] || value;
+    if (key === 'item_type_id') return itemTypeNames[value] || value;
+    if (key === 'card_id' || key === 'original_card_id' || key === 'volunteer_card_id' || key === 'volunteer_id' || key === 'allocation_id') return value;
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}T/)) return new Date(value).toLocaleString();
+    return String(value);
+  };
 
   return (
     <div className="py-4 md:py-6 px-4 max-w-5xl mx-auto">
@@ -552,28 +586,48 @@ export const DataCleanupManager: React.FC<DataCleanupManagerProps> = ({ onBack }
                     {columns.map(col => (
                       <TableHead key={col.key} className="text-xs whitespace-nowrap">{col.label}</TableHead>
                     ))}
+                    <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredRecords.map(row => (
-                    <TableRow
-                      key={row.id}
-                      className={browseSelected.has(row.id) ? 'bg-destructive/5' : ''}
-                    >
-                      <TableCell>
-                        <Checkbox
-                          checked={browseSelected.has(row.id)}
-                          onCheckedChange={() => toggleBrowseRow(row.id)}
-                        />
-                      </TableCell>
-                      {columns.map(col => (
-                        <TableCell key={col.key} className="text-xs max-w-[200px] truncate">
-                          {col.render
-                            ? col.render(row[col.key], row)
-                            : (row[col.key] != null ? String(row[col.key]) : '-')}
+                    <React.Fragment key={row.id}>
+                      <TableRow
+                        className={`cursor-pointer ${browseSelected.has(row.id) ? 'bg-destructive/5' : 'hover:bg-muted/50'}`}
+                        onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}
+                      >
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <Checkbox
+                            checked={browseSelected.has(row.id)}
+                            onCheckedChange={() => toggleBrowseRow(row.id)}
+                          />
                         </TableCell>
-                      ))}
-                    </TableRow>
+                        {columns.map(col => (
+                          <TableCell key={col.key} className="text-xs max-w-[200px] truncate">
+                            {col.render
+                              ? col.render(row[col.key], row, lookups)
+                              : (row[col.key] != null ? String(row[col.key]) : '-')}
+                          </TableCell>
+                        ))}
+                        <TableCell className="w-8">
+                          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expandedRowId === row.id ? 'rotate-180' : ''}`} />
+                        </TableCell>
+                      </TableRow>
+                      {expandedRowId === row.id && (
+                        <TableRow>
+                          <TableCell colSpan={columns.length + 2} className="bg-muted/30 p-0">
+                            <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                              {Object.entries(row).map(([key, value]) => (
+                                <div key={key} className="flex gap-2 py-0.5">
+                                  <span className="font-medium text-muted-foreground whitespace-nowrap min-w-[140px]">{key}:</span>
+                                  <span className="break-all">{resolveValue(key, value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>
