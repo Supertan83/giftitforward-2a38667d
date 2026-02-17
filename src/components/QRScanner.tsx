@@ -95,7 +95,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
             navigator.vibrate(100);
           }
 
-          // Submit and start cooldown
+          // Submit and start cooldown - reduced delay for faster response
           setTimeout(() => {
             onScan(decodedText);
             setStatus('cooldown');
@@ -118,7 +118,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
                 onClose();
               }
             }, 50);
-          }, 500);
+          }, 100);
         },
         () => {
           // QR code not found in frame - this is normal, don't show error
