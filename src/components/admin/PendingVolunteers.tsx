@@ -247,18 +247,24 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
-  // Extract unique events from all volunteers
+  // Extract unique events from all volunteers, deduplicating by normalized slug
   const uniqueEvents = useMemo(() => {
-    const eventsSet = new Set<string>();
+    const eventsMap = new Map<string, string>();
     volunteers.forEach(v => {
       if (v.events_list) {
         v.events_list.split(',').forEach(e => {
-          const formatted = formatEventName(e.trim());
-          if (formatted) eventsSet.add(formatted);
+          const trimmed = e.trim();
+          if (!trimmed) return;
+          const formatted = formatEventName(trimmed);
+          // Normalize key: lowercase, collapse whitespace, remove extra separators
+          const normalizedKey = formatted.toLowerCase().replace(/\s+/g, ' ').trim();
+          if (normalizedKey && !eventsMap.has(normalizedKey)) {
+            eventsMap.set(normalizedKey, formatted);
+          }
         });
       }
     });
-    return Array.from(eventsSet).sort();
+    return Array.from(eventsMap.values()).sort();
   }, [volunteers]);
 
   // Filter volunteers by selected event and search query
@@ -267,11 +273,14 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     
     // Event filter
     if (eventFilter !== 'all') {
+      const filterNormalized = eventFilter.toLowerCase().replace(/\s+/g, ' ').trim();
       result = result.filter(v => {
         if (!v.events_list) return false;
-        return v.events_list.split(',').some(e => 
-          formatEventName(e.trim()) === eventFilter
-        );
+        return v.events_list.split(',').some(e => {
+          const formatted = formatEventName(e.trim());
+          const normalizedKey = formatted.toLowerCase().replace(/\s+/g, ' ').trim();
+          return normalizedKey === filterNormalized;
+        });
       });
     }
     
