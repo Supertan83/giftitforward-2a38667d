@@ -22,6 +22,7 @@ export interface MarketplaceReport {
     eventDate: string | null;
     status: string;
     outreachPartner: string | null;
+    manualBeneficiaryCount: number | null;
   };
   beneficiaries: {
     total: number;
@@ -453,6 +454,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           eventDate: marketplace.event_date,
           status: marketplace.status,
           outreachPartner: marketplace.outreach_partner,
+          manualBeneficiaryCount: (marketplace as any).manual_beneficiary_count ?? null,
         },
         beneficiaries: {
           total: allBeneficiaries.length,

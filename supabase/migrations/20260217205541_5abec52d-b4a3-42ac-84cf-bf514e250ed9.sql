@@ -1,0 +1,1 @@
+ALTER TABLE public.marketplace_events ADD COLUMN manual_beneficiary_count INTEGER DEFAULT NULL;

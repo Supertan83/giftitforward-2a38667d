@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
+import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 interface MarketplaceReportsProps {
@@ -202,8 +203,10 @@ export const MarketplaceReports = ({
                         <Users className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-2xl font-bold">{report.beneficiaries.total}</p>
-                        <p className="text-xs text-muted-foreground">Beneficiaries</p>
+                        <p className="text-2xl font-bold">{(report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries.total}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(report.marketplace as any).manualBeneficiaryCount != null ? 'Beneficiaries (Manual)' : 'Beneficiaries'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -244,6 +247,9 @@ export const MarketplaceReports = ({
 
                 {/* Beneficiary Demographics Editor */}
                 <MarketplaceDemographicsEditor marketplaceId={selectedMarketplaceId} marketplaceName={report.marketplace.name} />
+
+                {/* Marketplace Manual Data Editor */}
+                <MarketplaceManualDataEditor marketplaceId={selectedMarketplaceId} marketplaceName={report.marketplace.name} />
 
                 {/* Items Section */}
                 <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
