@@ -273,9 +273,16 @@ export const DataCleanupManager: React.FC<DataCleanupManagerProps> = ({ onBack }
   const filteredRecords = browseRecords.filter(row => {
     if (!browseSearch) return true;
     const q = browseSearch.toLowerCase();
-    return Object.values(row).some(v =>
+    // Check raw values
+    const rawMatch = Object.values(row).some(v =>
       v !== null && v !== undefined && String(v).toLowerCase().includes(q)
     );
+    if (rawMatch) return true;
+    // Check resolved marketplace name
+    if (row.marketplace_id && marketplaceNames[row.marketplace_id]?.toLowerCase().includes(q)) return true;
+    // Check resolved item type name
+    if (row.item_type_id && itemTypeNames[row.item_type_id]?.toLowerCase().includes(q)) return true;
+    return false;
   });
 
   const toggleBrowseRow = (id: string) => {
