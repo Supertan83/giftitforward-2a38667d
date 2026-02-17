@@ -15,8 +15,108 @@ interface ResendEmailRequest {
   force_resend?: boolean;
 }
 
+interface EventInfo {
+  name: string;
+  date: string;
+  time: string;
+  location: string;
+}
+
+// Format time from HH:MM:SS to readable format (07.00 am style)
+function formatTime(time: string | null | undefined): string {
+  if (!time) return '';
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? 'pm' : 'am';
+  const hour12 = hour % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}.${minutes} ${ampm}`;
+}
+
+// Format date to readable format (February 19, 2026)
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// Build HTML for a single event block with red left border
+function buildEventBlock(event: EventInfo): string {
+  return `
+    <tr>
+      <td style="padding: 0 30px 15px 30px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-left: 3px solid #DA291C; padding-left: 15px;">
+          <tr>
+            <td>
+              <p style="margin: 0 0 8px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">${event.name}</p>
+              <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+                ${event.date ? `<li><strong>Date:</strong> ${event.date}</li>` : ''}
+                ${event.location ? `<li><strong>Location:</strong> ${event.location}</li>` : ''}
+                ${event.time ? `<li><strong>Timings:</strong> ${event.time}</li>` : ''}
+              </ul>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `;
+}
+
+// Build dynamic event blocks from volunteer's events_json
+async function buildEventsHtml(
+  supabase: ReturnType<typeof createClient>,
+  eventsJson: unknown
+): Promise<string> {
+  if (!eventsJson || !Array.isArray(eventsJson) || eventsJson.length === 0) {
+    return '';
+  }
+
+  const eventBlocks: string[] = [];
+
+  for (const evt of eventsJson) {
+    const slug = evt.slug || evt.event_slug;
+    const eventName = evt.name || evt.event_name || slug || 'Gift It Forward marketplace';
+
+    // Try to look up marketplace details by matching the slug to marketplace name
+    let eventDate = '';
+    let timeRange = '';
+    let location = '';
+
+    if (slug) {
+      // Query marketplace_events to find matching event
+      const { data: marketplace } = await supabase
+        .from('marketplace_events')
+        .select('name, event_date, start_time, end_time, location')
+        .or(`name.ilike.%${slug.replace(/-/g, '%')}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (marketplace) {
+        eventDate = formatDate(marketplace.event_date);
+        const startTime = formatTime(marketplace.start_time);
+        const endTime = formatTime(marketplace.end_time);
+        timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+        location = marketplace.location || '';
+      }
+    }
+
+    // Fall back to data from events_json itself
+    if (!eventDate && evt.date) eventDate = formatDate(evt.date);
+    if (!eventDate && evt.event_date) eventDate = formatDate(evt.event_date);
+    if (!location && evt.location) location = evt.location;
+    if (!timeRange && evt.time) timeRange = evt.time;
+
+    eventBlocks.push(buildEventBlock({
+      name: eventName,
+      date: eventDate,
+      time: timeRange,
+      location: location,
+    }));
+  }
+
+  return eventBlocks.join('');
+}
+
 serve(async (req: Request) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -96,7 +196,6 @@ serve(async (req: Request) => {
     const primaryQR = qrCards?.[0]?.unique_id || 'N/A';
     const familyQRs = qrCards?.slice(1) || [];
 
-    // Handle different email types
     if (email_type === 'welcome') {
       const appUrl = 'https://gif.thesurpluss.com';
       const loginUrl = `${appUrl}/auth`;
@@ -104,10 +203,12 @@ serve(async (req: Request) => {
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(primaryQR)}`;
       const trackingPixelUrl = `${supabaseUrl}/functions/v1/email-tracker?id=${pending_volunteer_id}`;
 
-      // Email assets URLs
-      const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
-      const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
-      const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+      const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg?v=2`;
+      const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg?v=2`;
+      const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png?v=2`;
+
+      // Build dynamic event blocks from events_json
+      const eventsHtml = await buildEventsHtml(supabase, volunteer.events_json);
 
       // Build family QR sections
       const familyQRSections = familyQRs.map((fam, index) => {
@@ -141,10 +242,7 @@ serve(async (req: Request) => {
       ` : '';
 
       const emailSubject = "[Resent] Thank you for registering as a Gift It Forward volunteer";
-
-      // Use stored temp password or indicate it needs reset
       const tempPasswordDisplay = volunteer.temp_password || 'Please use "Forgot Password" to reset';
-
       const sender = "Gift It Forward <giftitforward@dubaiholding.com>";
       
       const emailResult = await resend.emails.send({
@@ -172,18 +270,11 @@ serve(async (req: Request) => {
                       </td>
                     </tr>
                     
-                    <!-- Execution Partner Label -->
-                    <tr>
-                      <td style="padding: 20px 30px 10px 30px; text-align: center;">
-                        <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
-                      </td>
-                    </tr>
-                    
                     <!-- Main Title -->
                     <tr>
-                      <td style="padding: 0 30px 20px 30px; text-align: center;">
-                        <h1 style="margin: 0; font-size: 24px; color: #1a1a1a; font-weight: bold; line-height: 1.3;">
-                          Thank you for Registering as a<br>Gift It Forward Volunteer!
+                      <td style="padding: 30px 30px 20px 30px; text-align: center;">
+                        <h1 style="margin: 0; font-size: 28px; color: #1a1a1a; font-weight: normal; line-height: 1.3;">
+                          Thank you for registering<br>as a Gift It Forward volunteer
                         </h1>
                       </td>
                     </tr>
@@ -199,42 +290,106 @@ serve(async (req: Request) => {
                     <tr>
                       <td style="padding: 0 30px 15px 30px;">
                         <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                          Thank you for registering as a Gift It Forward Volunteer. We're delighted to have you join us on the <strong>19th of February</strong> at the <strong>Ajman, Al Hamidya</strong> and <strong>Boys' Community School Marketplace</strong>.
+                          Your volunteer registration has been <strong>successfully confirmed</strong> for the <strong>Gift It Forward marketplace</strong> taking place on:
                         </p>
                       </td>
                     </tr>
                     
+                    <!-- Dynamic Event Details -->
+                    ${eventsHtml}
+                    
+                    <!-- Helpful Reminders -->
                     <tr>
                       <td style="padding: 0 30px 20px 30px;">
-                        <p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">
-                          Your volunteer registration has been successfully confirmed.<br>Below are the key details you'll need to prepare for your volunteering experience:
-                        </p>
+                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #333333;">Here are a few helpful reminders before the event:</p>
+                        <table width="100%" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="padding: 5px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                              <strong>a. Arrival:</strong> Gates open 15 minutes before the marketplace begins. We recommend arriving a bit early to allow time for a smooth check-in.
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 5px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                              <strong>b. Your QR code:</strong> Please have your QR code ready on your phone – it helps us clock you in and out quickly.
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 5px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                              <strong>c. Bring this email:</strong> Having this confirmation handy will help us welcome you at the venue without any delays.
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 5px 0; font-size: 14px; color: #333333; line-height: 1.6;">
+                              <strong>d. Your registration:</strong> This registration is linked to your name, so please make sure you're the one attending.
+                            </td>
+                          </tr>
+                        </table>
                       </td>
                     </tr>
                     
                     <!-- QR Code Section -->
                     <tr>
-                      <td style="padding: 0 30px 10px 30px;">
-                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">Your Volunteer QR Code - <span style="color: #DA291C;">Don't forget to bring this with you.</span></h3>
+                      <td style="padding: 0 30px 10px 30px; background-color: #f8f8f8;">
+                        <h3 style="margin: 20px 0 10px 0; font-size: 16px; color: #1a1a1a; font-weight: bold;">Your volunteer QR code</h3>
                         <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                          Please keep this QR code handy. It will be scanned at both check-in and check-out at each marketplace you attend. This allows us to record your attendance and issue your volunteer certificate.
+                          We recommend saving it on your phone and keeping a screenshot available offline.
                         </p>
                       </td>
                     </tr>
                     
                     <tr>
-                      <td style="padding: 0 30px 10px 30px;">
+                      <td style="padding: 0 30px 10px 30px; background-color: #f8f8f8;">
                         <img src="${qrCodeUrl}" alt="Volunteer QR Code" width="150" height="150" style="display: block;" />
                       </td>
                     </tr>
                     
                     <tr>
-                      <td style="padding: 0 30px 25px 30px;">
+                      <td style="padding: 0 30px 15px 30px; background-color: #f8f8f8;">
                         <p style="margin: 0; font-size: 12px; color: #666666;">QR Card ID: ${primaryQR}</p>
                       </td>
                     </tr>
                     
+                    <!-- QR Code Benefits -->
+                    <tr>
+                      <td style="padding: 0 30px 20px 30px; background-color: #f8f8f8;">
+                        <p style="margin: 0 0 8px 0; font-size: 14px; color: #333333; font-weight: bold;">Your QR code allows you to:</p>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333333; line-height: 1.8;">
+                          <li>Record your attendance.</li>
+                          <li>Track volunteer hours.</li>
+                          <li>Receive your official <strong>Gift It Forward 2026 volunteer certificate</strong>.</li>
+                        </ul>
+                      </td>
+                    </tr>
+                    
                     ${familySection}
+                    
+                    <!-- Login Credentials Section -->
+                    <tr>
+                      <td style="padding: 20px 30px 10px 30px; border-top: 2px solid #e5e7eb;">
+                        <p style="margin: 0 0 15px 0; font-size: 14px; color: #333333; text-decoration: underline; font-weight: bold;">Your login credentials for the training & marketplace platform</p>
+                        <p style="margin: 0 0 10px 0; font-size: 13px; color: #333333; line-height: 1.6;">
+                          You'll need these details to complete the <strong>Circular Economy Training Module</strong> and access the <strong>marketplace platform</strong> on event day:
+                        </p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 5px 30px;">
+                        <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Email:</strong> ${volunteer.email}</p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 15px 30px;">
+                        <p style="margin: 0; font-size: 13px; color: #333333;"><strong>Temporary Password:</strong> ${tempPasswordDisplay}</p>
+                      </td>
+                    </tr>
+                    
+                    <tr>
+                      <td style="padding: 0 30px 25px 30px;">
+                        <p style="margin: 0; font-size: 13px; color: #DA291C; font-weight: bold;">Please save these credentials – you'll need them to start the training below.</p>
+                      </td>
+                    </tr>
                     
                     <!-- Training Section -->
                     <tr>
@@ -245,9 +400,9 @@ serve(async (req: Request) => {
                               <img src="${trainingImageUrl}" alt="Your Role in the Circular Economy" width="270" style="display: block; width: 100%; height: auto;" />
                             </td>
                             <td width="50%" valign="top" style="padding: 20px;">
-                              <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Complimentary Circular Economy Training</h3>
+                              <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">Circular Economy Training Module</h3>
                               <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
-                                Before attending your first marketplace, we encourage all volunteers to complete a short circular economy training. It introduces the campaign's sustainability goals and highlights how your actions contribute to reducing waste and creating impact.
+                                Before attending your first marketplace, we encourage volunteers to complete this short module. It introduces the campaign's sustainability goals and highlights how actions contribute to reducing waste. Volunteers who complete the training receive a certificate of completion.
                               </p>
                               <a href="${trainingUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Start Training</a>
                             </td>
@@ -259,40 +414,28 @@ serve(async (req: Request) => {
                     <!-- On-site Marketplace Access -->
                     <tr>
                       <td style="padding: 0 30px 10px 30px;">
-                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">On-site Marketplace Access</h3>
+                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">On-site marketplace access</h3>
                         <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
                           During the marketplace, you may be asked to use the Gift It Forward marketplace management platform via your web browser, which supports on-site activities such as inventory tracking and beneficiary flow, depending on your assigned role.
                         </p>
-                        <p style="margin: 0 0 5px 0; font-size: 13px; color: #333333;">Your login credentials are as follows:</p>
-                      </td>
-                    </tr>
-                    
-                    <tr>
-                      <td style="padding: 0 30px 5px 30px;">
-                        <p style="margin: 0; font-size: 13px; color: #333333;">Email: [${volunteer.email}]</p>
-                      </td>
-                    </tr>
-                    
-                    <tr>
-                      <td style="padding: 0 30px 15px 30px;">
-                        <p style="margin: 0; font-size: 13px; color: #333333;">Temporary Password: [${tempPasswordDisplay}]</p>
                       </td>
                     </tr>
                     
                     <tr>
                       <td style="padding: 0 30px 25px 30px;">
-                        <a href="${loginUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the Marketplace</a>
+                        <a href="${loginUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 10px 20px; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px;">Login to the platform</a>
                       </td>
                     </tr>
                     
                     <!-- What's Next Section -->
                     <tr>
                       <td style="padding: 0 30px 20px 30px;">
-                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What's Next?</h3>
+                        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1a1a1a; font-weight: bold;">What's next?</h3>
                         <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #333333; line-height: 1.8;">
-                          <li>Mark your calendar</li>
-                          <li>Look out for reminder emails and WhatsApp notifications closer to each event</li>
-                          <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a></li>
+                          <li>Save this event to your calendar.</li>
+                          <li>Look out for reminder emails and WhatsApp notifications closer to each event.</li>
+                          <li>If you have any questions, please contact <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a>.</li>
+                          <li>If you or a family member have any specific medical conditions, please contact The Surpluss team ahead of the event so we can ensure a safe and supportive volunteering experience. You can reach the team at <a href="mailto:giftitforward@dubaiholding.com" style="color: #0D4A6F;">giftitforward@dubaiholding.com</a>.</li>
                         </ul>
                       </td>
                     </tr>
@@ -303,8 +446,8 @@ serve(async (req: Request) => {
                         <p style="margin: 0 0 15px 0; font-size: 13px; color: #333333; line-height: 1.5;">
                           Thank you for being part of this meaningful initiative. We look forward to welcoming you on-site.
                         </p>
-                        <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best Regards,</p>
-                        <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward Team</p>
+                        <p style="margin: 0 0 3px 0; font-size: 13px; color: #333333;">Best regards,</p>
+                        <p style="margin: 0; font-size: 13px; color: #1a1a1a; font-weight: 600;">Gift It Forward team</p>
                       </td>
                     </tr>
                     
@@ -335,7 +478,6 @@ serve(async (req: Request) => {
       });
 
       if (emailResult.error) {
-        // Log failed attempt
         await supabase.from('email_send_logs').insert({
           pending_volunteer_id,
           email_type: 'welcome',
@@ -353,7 +495,6 @@ serve(async (req: Request) => {
         );
       }
 
-      // Log successful attempt
       await supabase.from('email_send_logs').insert({
         pending_volunteer_id,
         email_type: 'welcome',
@@ -365,7 +506,6 @@ serve(async (req: Request) => {
         response_data: { status: 'sent' }
       });
 
-      // Update volunteer email status
       await supabase
         .from('pending_volunteers')
         .update({
