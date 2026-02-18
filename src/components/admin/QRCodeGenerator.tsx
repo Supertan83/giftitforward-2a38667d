@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import JSZip from 'jszip';
+import { jsPDF } from 'jspdf';
 import { 
   ArrowLeft, 
   Printer, 
@@ -440,6 +441,112 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
 
   const hasActiveCards = activeCardIds.length > 0;
 
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState(0);
+
+  const generateQrDataUrl = useCallback((uniqueId: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+
+      const root = createRoot(tempDiv);
+      root.render(React.createElement(QRCodeSVG, { value: uniqueId, size: 300, level: 'M' }));
+
+      setTimeout(() => {
+        const svg = tempDiv.querySelector('svg');
+        if (!svg) {
+          root.unmount();
+          tempDiv.remove();
+          return reject(new Error('SVG not found'));
+        }
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 300;
+          canvas.height = 300;
+          const ctx = canvas.getContext('2d')!;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, 300, 300);
+          ctx.drawImage(img, 0, 0, 300, 300);
+          URL.revokeObjectURL(url);
+          root.unmount();
+          tempDiv.remove();
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          root.unmount();
+          tempDiv.remove();
+          reject(new Error('Image load failed'));
+        };
+        img.src = url;
+      }, 50);
+    });
+  }, []);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (activeCardIds.length === 0) return;
+
+    setIsPdfGenerating(true);
+    setPdfProgress(0);
+
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = 210;
+      const pageH = 297;
+      const cols = 4;
+      const rows = 5;
+      const cellW = pageW / cols;
+      const cellH = pageH / rows;
+      const qrSize = 38;
+      const cardsPerPage = cols * rows;
+
+      for (let i = 0; i < activeCardIds.length; i++) {
+        if (i > 0 && i % cardsPerPage === 0) {
+          doc.addPage();
+        }
+
+        const idx = i % cardsPerPage;
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const x = col * cellW;
+        const y = row * cellH;
+
+        // Cell border
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.3);
+        doc.rect(x, y, cellW, cellH);
+
+        // QR code
+        const dataUrl = await generateQrDataUrl(activeCardIds[i]);
+        const qrX = x + (cellW - qrSize) / 2;
+        const qrY = y + (cellH - qrSize - 14) / 2;
+        doc.addImage(dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+        // ID text
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(30, 30, 30);
+        doc.text(activeCardIds[i], x + cellW / 2, qrY + qrSize + 5, { align: 'center' });
+
+        setPdfProgress(Math.round(((i + 1) / activeCardIds.length) * 100));
+      }
+
+      doc.save(`qr-cards-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast({ title: 'PDF downloaded', description: `${activeCardIds.length} QR cards exported` });
+    } catch (error) {
+      toast({ title: 'PDF generation failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+    } finally {
+      setIsPdfGenerating(false);
+      setPdfProgress(0);
+    }
+  }, [activeCardIds, generateQrDataUrl, toast]);
+
   const handleDownloadAllZip = useCallback(async () => {
     if (activeCardIds.length === 0) return;
     
@@ -646,9 +753,13 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
               </div>
             </div>
             <div className="flex gap-2 ml-9 sm:ml-0">
-              <Button size="sm" onClick={handleDownloadAllZip} disabled={!hasActiveCards || isDownloadingZip} className="text-xs">
+              <Button size="sm" onClick={handleDownloadPDF} disabled={!hasActiveCards || isPdfGenerating} className="text-xs">
+                {isPdfGenerating ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <FileDown className="w-3 h-3 md:w-4 md:h-4" />}
+                <span className="hidden sm:inline">{isPdfGenerating ? `PDF ${pdfProgress}%` : `PDF${activeTab === 'registered' && selectedCards.size > 0 ? ` (${selectedCards.size})` : ''}`}</span>
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleDownloadAllZip} disabled={!hasActiveCards || isDownloadingZip} className="text-xs">
                 {isDownloadingZip ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Download className="w-3 h-3 md:w-4 md:h-4" />}
-                <span className="hidden sm:inline">{isDownloadingZip ? `${zipProgress}%` : `Download${activeTab === 'registered' && selectedCards.size > 0 ? ` (${selectedCards.size})` : ' All'}`}</span>
+                <span className="hidden sm:inline">{isDownloadingZip ? `${zipProgress}%` : `ZIP${activeTab === 'registered' && selectedCards.size > 0 ? ` (${selectedCards.size})` : ''}`}</span>
               </Button>
               <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!hasActiveCards} className="text-xs">
                 <FileText className="w-3 h-3 md:w-4 md:h-4" />
