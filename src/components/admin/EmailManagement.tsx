@@ -415,12 +415,13 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       // Look up their QR card
       let qrCardId = 'N/A';
       if (volunteer) {
-        const { data: qrCard } = await supabase
+        const { data: qrCards } = await supabase
           .from('volunteer_qr_cards')
           .select('unique_id')
           .eq('volunteer_id', volunteer.id)
-          .maybeSingle();
-        if (qrCard) qrCardId = qrCard.unique_id;
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (qrCards && qrCards.length > 0) qrCardId = qrCards[0].unique_id;
       }
 
       // Look up marketplace details from events_json
