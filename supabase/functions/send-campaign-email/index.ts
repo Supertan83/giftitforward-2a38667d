@@ -137,29 +137,55 @@ ${ctaHtml}
 async function getVolunteerMarketplaceData(supabase: any, volunteer: Volunteer): Promise<any | null> {
   try {
     const eventsJson = volunteer.events_json;
-    if (!eventsJson || !Array.isArray(eventsJson) || eventsJson.length === 0) return null;
+    const firstEvent = Array.isArray(eventsJson) && eventsJson.length > 0 ? eventsJson[0] : null;
 
-    const firstEvent = eventsJson[0];
-    const eventSlug = firstEvent?.slug || firstEvent?.event_slug;
-    if (!eventSlug) return null;
+    // Strategy 1: Match by slug from events_json
+    const slug = firstEvent?.slug || firstEvent?.event_slug || firstEvent?.event || '';
+    if (slug) {
+      const slugWords = slug.toLowerCase().replace(/-/g, ' ');
+      const keywords = slugWords.split(' ').filter((w: string) => w.length > 3).slice(0, 2);
+      
+      if (keywords.length > 0) {
+        const pattern = `%${keywords.join('%')}%`;
+        const { data: marketplaces } = await supabase
+          .from("marketplace_events")
+          .select("name, event_date, start_time, end_time, location")
+          .ilike("name", pattern)
+          .limit(5);
 
-    // Try matching by name containing the slug parts
-    const { data: marketplaces } = await supabase
-      .from("marketplace_events")
-      .select("name, event_date, start_time, end_time, location")
-      .order("event_date", { ascending: true });
-
-    if (marketplaces && marketplaces.length > 0) {
-      // Try to find by slug match or name match
-      const slugParts = eventSlug.toLowerCase().replace(/-/g, ' ').split(' ').filter((p: string) => p.length > 2);
-      const matched = marketplaces.find((m: any) => {
-        const nameLower = (m.name || '').toLowerCase();
-        return slugParts.some((part: string) => nameLower.includes(part));
-      });
-      if (matched) return matched;
-      // Fallback: return first marketplace
-      return marketplaces[0];
+        if (marketplaces && marketplaces.length > 0) {
+          return marketplaces[0];
+        }
+      }
     }
+
+    // Strategy 2: Match by events_list string
+    if (volunteer.events_list) {
+      const eventsListLower = volunteer.events_list.toLowerCase().trim();
+      const { data: allMarketplaces } = await supabase
+        .from("marketplace_events")
+        .select("name, event_date, start_time, end_time, location");
+
+      if (allMarketplaces) {
+        const matched = allMarketplaces.find((m: any) => {
+          const nameLower = (m.name || '').toLowerCase();
+          return eventsListLower.includes(nameLower) || nameLower.includes(eventsListLower);
+        });
+        if (matched) return matched;
+      }
+    }
+
+    // Strategy 3: Use inline event data from events_json (no DB match needed)
+    if (firstEvent) {
+      const inlineData: any = {};
+      inlineData.name = firstEvent.name || firstEvent.event_name || slug || volunteer.events_list || '';
+      inlineData.event_date = firstEvent.eventDate || firstEvent.date || firstEvent.event_date || '';
+      inlineData.location = firstEvent.eventLocation || firstEvent.location || '';
+      inlineData.start_time = firstEvent.eventTime || firstEvent.time || firstEvent.start_time || '';
+      inlineData.end_time = firstEvent.end_time || '';
+      if (inlineData.name || inlineData.event_date) return inlineData;
+    }
+
     return null;
   } catch (err) {
     console.error("Error looking up marketplace data:", err);
@@ -173,9 +199,9 @@ async function getVolunteerQrCardId(supabase: any, volunteerId: string): Promise
       .from("volunteer_qr_cards")
       .select("unique_id")
       .eq("volunteer_id", volunteerId)
-      .limit(1)
-      .single();
-    return data?.unique_id || '';
+      .order("created_at", { ascending: false })
+      .limit(1);
+    return data && data.length > 0 ? data[0].unique_id : '';
   } catch {
     return '';
   }
