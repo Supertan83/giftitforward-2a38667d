@@ -322,94 +322,61 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      // Render QR code SVG to image
-      const svgNs = 'http://www.w3.org/2000/svg';
-      const qrSvg = document.createElementNS(svgNs, 'svg');
-      qrSvg.setAttribute('xmlns', svgNs);
-      
-      // Create a temporary container to render QRCodeSVG
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      document.body.appendChild(tempDiv);
-      
-      // Use the actual QRCodeSVG by finding or creating one
-      const tempRoot = document.createElement('div');
-      tempDiv.appendChild(tempRoot);
-      
-      // Import ReactDOM to render
-      import('react-dom/client').then(({ createRoot }) => {
-        import('react').then((React) => {
-          const root = createRoot(tempRoot);
-          root.render(React.createElement(QRCodeSVG, { value: uniqueId, size: 280, level: 'H', includeMargin: false }));
-          
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              const svgEl = tempRoot.querySelector('svg');
-              if (!svgEl) {
-                document.body.removeChild(tempDiv);
-                return reject(new Error('SVG not found'));
-              }
-              
-              const svgData = new XMLSerializer().serializeToString(svgEl);
-              const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-              const svgUrl = URL.createObjectURL(svgBlob);
-              
-              const img = new Image();
-              img.onload = () => {
-                // Draw QR code centered
-                const qrX = (width - 280) / 2;
-                const qrY = 40;
-                ctx.drawImage(img, qrX, qrY, 280, 280);
-                
-                // Draw unique ID text
-                ctx.fillStyle = '#1a1a1a';
-                ctx.font = 'bold 18px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(uniqueId, width / 2, 360);
-                
-                // Draw separator line
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(60, 390);
-                ctx.lineTo(width - 60, 390);
-                ctx.stroke();
-                
-                // Draw branding
-                ctx.fillStyle = '#6b7280';
-                ctx.font = '600 14px sans-serif';
-                ctx.fillText('GIF (GIFT IT FORWARD)', width / 2, 420);
-                
-                ctx.fillStyle = '#9ca3af';
-                ctx.font = '11px sans-serif';
-                ctx.fillText('15 Item Credits', width / 2, 445);
-                
-                // Draw border
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.lineWidth = 2;
-                ctx.roundRect(4, 4, width - 8, height - 8, 12);
-                ctx.stroke();
-                
-                canvas.toBlob((blob) => {
-                  URL.revokeObjectURL(svgUrl);
-                  root.unmount();
-                  document.body.removeChild(tempDiv);
-                  if (blob) resolve(blob);
-                  else reject(new Error('Failed to create blob'));
-                }, 'image/png');
-              };
-              img.onerror = () => {
-                URL.revokeObjectURL(svgUrl);
-                root.unmount();
-                document.body.removeChild(tempDiv);
-                reject(new Error('Failed to load SVG'));
-              };
-              img.src = svgUrl;
-            });
-          });
-        });
-      });
+      // Find the already-rendered SVG in the DOM
+      const wrapper = document.querySelector(`[data-qr-id="${uniqueId}"]`);
+      const svgEl = wrapper?.querySelector('svg');
+      if (!svgEl) return reject(new Error('SVG not found for ' + uniqueId));
+
+      const clonedSvg = svgEl.cloneNode(true) as SVGSVGElement;
+      clonedSvg.setAttribute('width', '280');
+      clonedSvg.setAttribute('height', '280');
+
+      const svgData = new XMLSerializer().serializeToString(clonedSvg);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const qrX = (width - 280) / 2;
+        const qrY = 40;
+        ctx.drawImage(img, qrX, qrY, 280, 280);
+
+        ctx.fillStyle = '#1a1a1a';
+        ctx.font = 'bold 18px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(uniqueId, width / 2, 360);
+
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(60, 390);
+        ctx.lineTo(width - 60, 390);
+        ctx.stroke();
+
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '600 14px sans-serif';
+        ctx.fillText('GIF (GIFT IT FORWARD)', width / 2, 420);
+
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('15 Item Credits', width / 2, 445);
+
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 2;
+        ctx.roundRect(4, 4, width - 8, height - 8, 12);
+        ctx.stroke();
+
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(svgUrl);
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to create blob'));
+        }, 'image/png');
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+        reject(new Error('Failed to load SVG'));
+      };
+      img.src = svgUrl;
     });
   }, []);
 
@@ -947,7 +914,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                   {/* Card Content */}
                   <div className="flex flex-col items-center">
                     {/* QR Code */}
-                    <div className="bg-white p-2 rounded-lg mb-2">
+                    <div className="bg-white p-2 rounded-lg mb-2" data-qr-id={card.uniqueId}>
                       <QRCodeSVG
                         value={card.uniqueId}
                         size={sizeConfig[cardSize].qr}
