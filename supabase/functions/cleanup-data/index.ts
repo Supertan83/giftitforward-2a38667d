@@ -138,14 +138,6 @@ async function archiveAndDeleteRecords(
     return { action: 'archived_and_reset', count: data?.length || 0 }
   }
 
-  // item_types: reset counters
-  if (table === 'item_types') {
-    const { data } = await client.from('item_types').update({
-      distributed: 0, allocated_to_marketplace: 0,
-    }).in('id', ids).select('id')
-    return { action: 'archived_and_reset_counters', count: data?.length || 0 }
-  }
-
   const { data } = await client.from(table).delete().in('id', ids).select('id')
   return { action: 'archived_and_deleted', count: data?.length || 0 }
 }
