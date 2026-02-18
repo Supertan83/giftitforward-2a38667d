@@ -136,27 +136,36 @@ serve(async (req: Request) => {
             .eq("status", "approved");
 
           if (volunteers) {
-            for (const v of volunteers) {
-              const eventsList = (v.events_list || "").toLowerCase();
-              const eventsJson = v.events_json || [];
+            // Helper: convert DB date "2026-03-07" to "March 7, 2026" format
+            const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+            const formatDbDate = (dbDate: string): string => {
+              const [y, m, d] = dbDate.split("-");
+              const monthIdx = parseInt(m, 10) - 1;
+              const day = parseInt(d, 10);
+              return `${monthNames[monthIdx]} ${day}, ${y}`;
+            };
 
-              // Check if volunteer is assigned to any of the target marketplaces
-              const matchesByName = targetMarketplaces.some((m: any) =>
-                eventsList.includes((m.name || "").toLowerCase())
+            // Pre-compute formatted dates and slugs for target marketplaces
+            const mpMatchers = targetMarketplaces.map((m: any) => ({
+              formattedDate: m.event_date ? formatDbDate(m.event_date) : null,
+              slug: (m.name || "").toLowerCase().trim(),
+            }));
+
+            for (const v of volunteers) {
+              const eventsJson = v.events_json || [];
+              if (!Array.isArray(eventsJson) || eventsJson.length === 0) continue;
+
+              const matched = mpMatchers.some((mp: any) =>
+                eventsJson.some((ev: any) => {
+                  // Primary: exact date match
+                  if (mp.formattedDate && ev.eventDate === mp.formattedDate) return true;
+                  // Secondary: exact slug match
+                  const volSlug = (ev.event || "").toLowerCase().trim();
+                  return volSlug !== "" && volSlug === mp.slug;
+                })
               );
 
-              // Also check events_json for slug/name matching
-              const matchesByJson = Array.isArray(eventsJson) && targetMarketplaces.some((m: any) => {
-                const mpName = (m.name || "").toLowerCase();
-                return eventsJson.some((ev: any) => {
-                  const slug = (ev.slug || ev.event_slug || "").toLowerCase();
-                  const name = (ev.name || ev.event_name || "").toLowerCase();
-                  return slug.includes(mpName) || mpName.includes(slug) ||
-                    name.includes(mpName) || mpName.includes(name);
-                });
-              });
-
-              if (matchesByName || matchesByJson) {
+              if (matched) {
                 recipients.push({
                   email: v.email,
                   name: `${v.first_name} ${v.last_name}`,
