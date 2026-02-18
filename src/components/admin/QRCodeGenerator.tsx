@@ -454,9 +454,17 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
       const root = createRoot(tempDiv);
       root.render(React.createElement(QRCodeSVG, { value: uniqueId, size: 300, level: 'M' }));
 
-      setTimeout(() => {
+      // Poll for SVG to appear (React render can take variable time under load)
+      const maxAttempts = 20;
+      let attempts = 0;
+      const poll = () => {
+        attempts++;
         const svg = tempDiv.querySelector('svg');
         if (!svg) {
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 50);
+            return;
+          }
           root.unmount();
           tempDiv.remove();
           return reject(new Error('SVG not found'));
@@ -485,7 +493,8 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
           reject(new Error('Image load failed'));
         };
         img.src = url;
-      }, 50);
+      };
+      setTimeout(poll, 50);
     });
   }, []);
 
