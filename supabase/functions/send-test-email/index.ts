@@ -23,6 +23,7 @@ interface VolunteerData {
   marketplace_date?: string;
   marketplace_location?: string;
   marketplace_time?: string;
+  qr_card_id?: string;
 }
 
 interface CustomTemplateData {
@@ -645,7 +646,7 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
     '{{marketplace_date}}': volunteerData?.marketplace_date || 'TBD',
     '{{marketplace_time}}': volunteerData?.marketplace_time || 'TBD',
     '{{marketplace_location}}': volunteerData?.marketplace_location || 'TBD',
-    '{{qr_card_id}}': 'VOL-TEST-1234',
+    '{{qr_card_id}}': volunteerData?.qr_card_id || 'VOL-TEST-1234',
     '{{login_url}}': 'https://giftitforward.lovable.app/auth',
     '{{training_url}}': 'https://giftitforward.lovable.app/training',
     '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
