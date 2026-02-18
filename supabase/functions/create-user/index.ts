@@ -175,27 +175,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // If volunteer role, create a volunteer QR card linked to this user
+    // If volunteer role, create pending_volunteers record first (needed for QR card FK)
     let volunteerQRCode: string | null = null;
     if (role === 'volunteer') {
-      volunteerQRCode = generateVolunteerQRCode();
-      
-      const { error: qrError } = await supabaseAdmin
-        .from('volunteer_qr_cards')
-        .insert({
-          unique_id: volunteerQRCode,
-          volunteer_id: newUser.user.id,
-          status: 'inactive'
-        });
-
-      if (qrError) {
-        console.error('QR card creation error:', qrError);
-        // Don't fail the whole operation, just log the error
-        volunteerQRCode = null;
-      }
-
-      // Also create pending_volunteers record for tracking
-      const { error: pvError } = await supabaseAdmin
+      // Create pending_volunteers record first (volunteer_qr_cards has FK to this table)
+      const { data: pvData, error: pvError } = await supabaseAdmin
         .from('pending_volunteers')
         .insert({
           email: email.trim().toLowerCase(),
@@ -208,10 +192,30 @@ Deno.serve(async (req) => {
           external_company: companyName?.trim() || null,
           is_employee: isDhEmployee === true || String(isDhEmployee ?? '').toLowerCase() === 'yes',
           events_list: eventName?.trim() || null,
-        });
+        })
+        .select('id')
+        .single();
 
       if (pvError) {
         console.error('Pending volunteer creation error:', pvError);
+      }
+
+      // Now create volunteer QR card linked to the pending_volunteers record
+      if (pvData) {
+        volunteerQRCode = generateVolunteerQRCode();
+        
+        const { error: qrError } = await supabaseAdmin
+          .from('volunteer_qr_cards')
+          .insert({
+            unique_id: volunteerQRCode,
+            volunteer_id: pvData.id,
+            status: 'inactive'
+          });
+
+        if (qrError) {
+          console.error('QR card creation error:', qrError);
+          volunteerQRCode = null;
+        }
       }
     }
 
