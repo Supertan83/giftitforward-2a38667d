@@ -398,8 +398,18 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     }
   }, [renderCardToPngBlob, toast]);
 
+  // Determine which card IDs the header buttons should act on
+  const activeCardIds = useMemo(() => {
+    if (activeTab === 'registered' && selectedCards.size > 0) {
+      return Array.from(selectedCards);
+    }
+    return cards.map(c => c.uniqueId);
+  }, [activeTab, selectedCards, cards]);
+
+  const hasActiveCards = activeCardIds.length > 0;
+
   const handleDownloadAllZip = useCallback(async () => {
-    if (cards.length === 0) return;
+    if (activeCardIds.length === 0) return;
     
     setIsDownloadingZip(true);
     setZipProgress(0);
@@ -407,10 +417,10 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     try {
       const zip = new JSZip();
       
-      for (let i = 0; i < cards.length; i++) {
-        const blob = await renderCardToPngBlob(cards[i].uniqueId);
-        zip.file(`${cards[i].uniqueId}.png`, blob);
-        setZipProgress(Math.round(((i + 1) / cards.length) * 100));
+      for (let i = 0; i < activeCardIds.length; i++) {
+        const blob = await renderCardToPngBlob(activeCardIds[i]);
+        zip.file(`${activeCardIds[i]}.png`, blob);
+        setZipProgress(Math.round(((i + 1) / activeCardIds.length) * 100));
       }
       
       const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -423,7 +433,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
       
       toast({
         title: 'Download complete',
-        description: `${cards.length} QR codes downloaded as ZIP`,
+        description: `${activeCardIds.length} QR codes downloaded as ZIP`,
       });
     } catch (error) {
       toast({
@@ -435,7 +445,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
       setIsDownloadingZip(false);
       setZipProgress(0);
     }
-  }, [cards, renderCardToPngBlob, toast]);
+  }, [activeCardIds, renderCardToPngBlob, toast]);
 
   const handleGenerate = () => {
     const qty = parseInt(quantity);
@@ -473,19 +483,31 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   };
 
   const handlePrint = () => {
-    if (cards.length === 0) {
+    if (activeCardIds.length === 0) {
       toast({
         title: 'No cards to print',
-        description: 'Generate some cards first',
+        description: 'Generate cards or select registered cards first',
         variant: 'destructive',
       });
+      return;
+    }
+    // If on registered tab with selected cards, use print preview approach
+    if (activeTab === 'registered' && selectedCards.size > 0) {
+      setCardsToPreview(Array.from(selectedCards));
+      setShowPreviewDialog(true);
       return;
     }
     window.print();
   };
 
   const handleExportCSV = () => {
-    if (cards.length === 0) return;
+    if (activeCardIds.length === 0) return;
+
+    // If on registered tab, export selected registered cards with more details
+    if (activeTab === 'registered' && selectedCards.size > 0) {
+      handleExportSelectedCSV();
+      return;
+    }
 
     const csv = [
       'Unique ID,Created At',
@@ -592,19 +614,21 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
               </div>
             </div>
             <div className="flex gap-2 ml-9 sm:ml-0">
-              <Button size="sm" onClick={handleDownloadAllZip} disabled={cards.length === 0 || isDownloadingZip} className="text-xs">
+              <Button size="sm" onClick={handleDownloadAllZip} disabled={!hasActiveCards || isDownloadingZip} className="text-xs">
                 {isDownloadingZip ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Download className="w-3 h-3 md:w-4 md:h-4" />}
-                <span className="hidden sm:inline">{isDownloadingZip ? `${zipProgress}%` : 'Download All'}</span>
+                <span className="hidden sm:inline">{isDownloadingZip ? `${zipProgress}%` : `Download${activeTab === 'registered' && selectedCards.size > 0 ? ` (${selectedCards.size})` : ' All'}`}</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={cards.length === 0} className="text-xs">
+              <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!hasActiveCards} className="text-xs">
                 <FileText className="w-3 h-3 md:w-4 md:h-4" />
                 <span className="hidden sm:inline">CSV</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0 || isRegistering} className="text-xs">
-                {isRegistering ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <CreditCard className="w-3 h-3 md:w-4 md:h-4" />}
-                <span className="hidden sm:inline">{isRegistering ? 'Registering...' : 'Register'}</span>
-              </Button>
-              <Button variant="outline" size="sm" onClick={handlePrint} disabled={cards.length === 0} className="text-xs">
+              {activeTab !== 'registered' && (
+                <Button variant="outline" size="sm" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0 || isRegistering} className="text-xs">
+                  {isRegistering ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <CreditCard className="w-3 h-3 md:w-4 md:h-4" />}
+                  <span className="hidden sm:inline">{isRegistering ? 'Registering...' : 'Register'}</span>
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handlePrint} disabled={!hasActiveCards} className="text-xs">
                 <Printer className="w-3 h-3 md:w-4 md:h-4" />
                 <span className="hidden sm:inline">Print</span>
               </Button>
