@@ -61,13 +61,15 @@ export const useQRCards = () => {
         status: mapDbStatusToApp(card.status as DbCardStatus),
         creditBalance: card.credit_balance,
         totalItemsCollected: card.total_items_collected,
-        transactions: [], // Transactions are fetched separately if needed
+        transactions: [],
         marketplaceId: card.marketplace_id || undefined,
         activatedAt: card.activated_at || undefined,
         gender: card.gender || undefined,
         maritalStatus: card.marital_status || undefined,
         childrenCount: card.children_count || undefined,
         nationality: card.nationality || undefined,
+        registrationBatch: (card as any).registration_batch || undefined,
+        createdAt: card.created_at || undefined,
       }));
     }
   });
@@ -561,12 +563,14 @@ export const useCardOperations = () => {
 
   const addCards = useMutation({
     mutationFn: async (uniqueIds: string[]) => {
+      const batchId = crypto.randomUUID();
       const cards = uniqueIds.map(uniqueId => ({
         unique_id: uniqueId,
         status: 'inactive' as DbCardStatus,
         credit_balance: 0,
         total_items_collected: 0,
-        collected_items: [] as Json
+        collected_items: [] as Json,
+        registration_batch: batchId
       }));
 
       const { data, error } = await supabase

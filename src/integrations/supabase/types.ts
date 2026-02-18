@@ -1403,6 +1403,7 @@ export type Database = {
           marital_status: string | null
           marketplace_id: string | null
           nationality: string | null
+          registration_batch: string | null
           status: Database["public"]["Enums"]["card_status"]
           total_items_collected: number
           unique_id: string
@@ -1419,6 +1420,7 @@ export type Database = {
           marital_status?: string | null
           marketplace_id?: string | null
           nationality?: string | null
+          registration_batch?: string | null
           status?: Database["public"]["Enums"]["card_status"]
           total_items_collected?: number
           unique_id: string
@@ -1435,6 +1437,7 @@ export type Database = {
           marital_status?: string | null
           marketplace_id?: string | null
           nationality?: string | null
+          registration_batch?: string | null
           status?: Database["public"]["Enums"]["card_status"]
           total_items_collected?: number
           unique_id?: string

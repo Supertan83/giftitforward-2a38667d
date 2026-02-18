@@ -27,6 +27,8 @@ export interface QRCard {
   maritalStatus?: string;
   childrenCount?: number;
   nationality?: string;
+  registrationBatch?: string;
+  createdAt?: string;
 }
 
 export interface ItemType {

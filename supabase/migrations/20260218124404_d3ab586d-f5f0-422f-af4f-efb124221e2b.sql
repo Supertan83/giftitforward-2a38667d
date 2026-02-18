@@ -1,0 +1,1 @@
+ALTER TABLE public.qr_cards ADD COLUMN registration_batch UUID DEFAULT NULL;
