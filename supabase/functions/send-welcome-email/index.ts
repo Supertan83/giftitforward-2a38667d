@@ -500,8 +500,9 @@ Deno.serve(async (req) => {
 
     const { volunteerId, email, firstName, lastName, tempPassword, qrCodeId, marketplaceId, events } = body;
 
-    // Validate required fields
-    if (!email || !firstName || !lastName || !tempPassword || !qrCodeId) {
+    // Validate required fields (lastName is optional as some volunteers may not have one)
+    if (!email || !firstName || !tempPassword || !qrCodeId) {
+      console.error('Missing required fields:', { email: !!email, firstName: !!firstName, tempPassword: !!tempPassword, qrCodeId: !!qrCodeId });
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
