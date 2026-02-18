@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import JSZip from 'jszip';
@@ -322,24 +323,16 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
 
-      // Find the already-rendered SVG in the DOM
+      // Try to find existing SVG in DOM first, otherwise generate via external API
       const wrapper = document.querySelector(`[data-qr-id="${uniqueId}"]`);
       const svgEl = wrapper?.querySelector('svg');
-      if (!svgEl) return reject(new Error('SVG not found for ' + uniqueId));
+      
+      let svgUrl: string;
 
-      const clonedSvg = svgEl.cloneNode(true) as SVGSVGElement;
-      clonedSvg.setAttribute('width', '280');
-      clonedSvg.setAttribute('height', '280');
-
-      const svgData = new XMLSerializer().serializeToString(clonedSvg);
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const svgUrl = URL.createObjectURL(svgBlob);
-
-      const img = new Image();
-      img.onload = () => {
+      const drawCard = (qrImage: HTMLImageElement) => {
         const qrX = (width - 280) / 2;
         const qrY = 40;
-        ctx.drawImage(img, qrX, qrY, 280, 280);
+        ctx.drawImage(qrImage, qrX, qrY, 280, 280);
 
         ctx.fillStyle = '#1a1a1a';
         ctx.font = 'bold 18px monospace';
@@ -367,16 +360,55 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
         ctx.stroke();
 
         canvas.toBlob((blob) => {
-          URL.revokeObjectURL(svgUrl);
+          if (svgUrl) URL.revokeObjectURL(svgUrl);
           if (blob) resolve(blob);
           else reject(new Error('Failed to create blob'));
         }, 'image/png');
       };
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onerror = () => {
-        URL.revokeObjectURL(svgUrl);
-        reject(new Error('Failed to load SVG'));
+        if (svgUrl) URL.revokeObjectURL(svgUrl);
+        reject(new Error('Failed to load QR image'));
       };
-      img.src = svgUrl;
+      img.onload = () => drawCard(img);
+
+      if (svgEl) {
+        const clonedSvg = svgEl.cloneNode(true) as SVGSVGElement;
+        clonedSvg.setAttribute('width', '280');
+        clonedSvg.setAttribute('height', '280');
+        const svgData = new XMLSerializer().serializeToString(clonedSvg);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        svgUrl = URL.createObjectURL(svgBlob);
+        img.src = svgUrl;
+      } else {
+        // Generate QR programmatically using a temporary off-screen element
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        document.body.appendChild(tempDiv);
+        
+        const root = createRoot(tempDiv);
+        root.render(React.createElement(QRCodeSVG, { value: uniqueId, size: 280, level: 'H' }));
+        
+        // Wait for render
+        setTimeout(() => {
+          const generatedSvg = tempDiv.querySelector('svg');
+          if (!generatedSvg) {
+            root.unmount();
+            tempDiv.remove();
+            return reject(new Error('Failed to generate QR SVG'));
+          }
+          const svgData = new XMLSerializer().serializeToString(generatedSvg);
+          const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+          svgUrl = URL.createObjectURL(svgBlob);
+          img.src = svgUrl;
+          root.unmount();
+          tempDiv.remove();
+        }, 50);
+      }
     });
   }, []);
 
