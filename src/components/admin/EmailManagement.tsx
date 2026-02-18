@@ -388,7 +388,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
     });
   };
 
-  // Send custom template as test email
+  // Send custom template as test email — looks up real volunteer data from DB
   const handleSendTemplateEmail = async () => {
     if (!templateTestEmail.trim() || !selectedTemplateId) {
       toast({
@@ -405,6 +405,81 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
     setIsSendingTemplate(true);
 
     try {
+      // Look up the volunteer by email in pending_volunteers
+      const { data: volunteer } = await supabase
+        .from('pending_volunteers')
+        .select('*')
+        .eq('email', templateTestEmail.trim().toLowerCase())
+        .maybeSingle();
+
+      // Look up their QR card
+      let qrCardId = 'N/A';
+      if (volunteer) {
+        const { data: qrCard } = await supabase
+          .from('volunteer_qr_cards')
+          .select('unique_id')
+          .eq('volunteer_id', volunteer.id)
+          .maybeSingle();
+        if (qrCard) qrCardId = qrCard.unique_id;
+      }
+
+      // Look up marketplace details from events_json
+      let marketplaceName = '';
+      let marketplaceDate = '';
+      let marketplaceLocation = '';
+      let marketplaceTime = '';
+      if (volunteer?.events_json) {
+        const eventsJson = volunteer.events_json as any[];
+        if (Array.isArray(eventsJson) && eventsJson.length > 0) {
+          const firstEvent = eventsJson[0];
+          const mpId = firstEvent?.marketplace_id || firstEvent?.id;
+          if (mpId) {
+            const { data: mp } = await supabase
+              .from('marketplace_events')
+              .select('name, event_date, start_time, end_time, location')
+              .eq('id', mpId)
+              .maybeSingle();
+            if (mp) {
+              marketplaceName = mp.name || '';
+              marketplaceDate = mp.event_date || '';
+              marketplaceLocation = mp.location || '';
+              const formatT = (t: string | null) => {
+                if (!t) return '';
+                const [h, m] = t.split(':');
+                const hr = parseInt(h, 10);
+                return `${String(hr % 12 || 12).padStart(2, '0')}.${m} ${hr >= 12 ? 'pm' : 'am'}`;
+              };
+              marketplaceTime = mp.start_time && mp.end_time
+                ? `${formatT(mp.start_time)} - ${formatT(mp.end_time)}`
+                : '';
+            }
+          }
+        }
+      }
+
+      const volData = volunteer
+        ? {
+            first_name: volunteer.first_name,
+            last_name: volunteer.last_name,
+            name: `${volunteer.first_name} ${volunteer.last_name}`,
+            phone: volunteer.phone_number || '',
+            marketplace_name: marketplaceName,
+            marketplace_date: marketplaceDate,
+            marketplace_location: marketplaceLocation,
+            marketplace_time: marketplaceTime,
+            qr_card_id: qrCardId,
+          }
+        : {
+            first_name: simulatedVolunteer.first_name,
+            last_name: simulatedVolunteer.last_name,
+            name: `${simulatedVolunteer.first_name} ${simulatedVolunteer.last_name}`,
+            phone: simulatedVolunteer.phone_number,
+            marketplace_name: simulatedVolunteer.marketplace_name,
+            marketplace_date: simulatedVolunteer.marketplace_date,
+            marketplace_location: simulatedVolunteer.marketplace_location,
+            marketplace_time: simulatedVolunteer.marketplace_time,
+          };
+
       const { data, error } = await supabase.functions.invoke('send-test-email', {
         body: {
           email_type: 'custom_template',
@@ -418,16 +493,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
             cta_text: template.cta_text,
             cta_url: template.cta_url,
           },
-          volunteer_data: {
-            first_name: simulatedVolunteer.first_name,
-            last_name: simulatedVolunteer.last_name,
-            name: `${simulatedVolunteer.first_name} ${simulatedVolunteer.last_name}`,
-            phone: simulatedVolunteer.phone_number,
-            marketplace_name: simulatedVolunteer.marketplace_name,
-            marketplace_date: simulatedVolunteer.marketplace_date,
-            marketplace_location: simulatedVolunteer.marketplace_location,
-            marketplace_time: simulatedVolunteer.marketplace_time,
-          }
+          volunteer_data: volData,
         }
       });
 
@@ -436,7 +502,9 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
       if (data?.success) {
         toast({
           title: 'Template Email Sent!',
-          description: `"${template.name}" sent to ${templateTestEmail}`,
+          description: volunteer
+            ? `"${template.name}" sent to ${templateTestEmail} with real volunteer data`
+            : `"${template.name}" sent to ${templateTestEmail} (email not found in DB, used simulated data)`,
         });
       } else {
         throw new Error(data?.error || 'Failed to send template email');
@@ -1394,7 +1462,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                             <div className="p-3 bg-muted/50 rounded-lg border text-sm">
                               <p className="font-medium mb-1">Subject: {tpl.subject}</p>
                               <p className="text-muted-foreground text-xs">
-                                Tokens like {'{{first_name}}'}, {'{{marketplace_name}}'} will be replaced with the volunteer simulation data above.
+                                If the recipient email exists in the database, real volunteer data (name, QR code, marketplace) will be used. Otherwise, simulated data from above is used.
                               </p>
                             </div>
                           );
