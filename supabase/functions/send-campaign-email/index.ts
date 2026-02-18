@@ -217,7 +217,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { campaign_id } = await req.json();
+    const { campaign_id, retry_failed_only } = await req.json();
 
     if (!campaign_id) {
       return new Response(
@@ -226,7 +226,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Processing campaign: ${campaign_id}`);
+    console.log(`Processing campaign: ${campaign_id}, retry_failed_only: ${retry_failed_only}`);
 
     // Load campaign
     const { data: campaign, error: campaignError } = await supabase
@@ -249,8 +249,8 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // If re-running a sent campaign, reset failed recipients to pending so they get retried
-    if (campaign.status === 'sent') {
+    // If re-running a sent campaign (or retry_failed_only), reset failed recipients to pending
+    if (campaign.status === 'sent' || retry_failed_only) {
       await supabase
         .from("email_campaign_recipients")
         .update({ status: 'pending', error_message: null })
@@ -344,6 +344,18 @@ const handler = async (req: Request): Promise<Response> => {
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     for (const recipient of recipients) {
+      // Check if campaign was cancelled mid-send
+      const { data: currentCampaign } = await supabase
+        .from("email_campaigns")
+        .select("status")
+        .eq("id", campaign_id)
+        .single();
+      
+      if (currentCampaign && currentCampaign.status !== 'sending') {
+        console.log(`Campaign ${campaign_id} was cancelled/stopped. Halting.`);
+        break;
+      }
+
       try {
         const volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
 
