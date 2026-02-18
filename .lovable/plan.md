@@ -1,54 +1,71 @@
 
 
-## Fix Beneficiary QR Code Generator: Unlimited Quantity + PNG/ZIP Download
+## Batch-Grouped Registered QR Cards
 
-### Problems
-1. Quantity is capped at 100 -- users need to create more at once
-2. Download currently exports a CSV of IDs, not actual QR code images
-3. No way to download individual QR codes as PNG or bulk download as ZIP
+### Overview
+Add a batch registration system so that each time cards are registered, they get a shared batch ID. The "Registered" tab will display cards grouped by batch (newest first), with collapsible sections. Each batch can be selected entirely for bulk deletion.
 
-### Changes
+### What Changes
 
-#### 1. Remove the 100-card limit
-- Change max from 100 to 1000 in both the validation logic and the HTML input `max` attribute
-- Update the error message accordingly
+#### 1. Database Migration
+Add a `registration_batch` column to the `qr_cards` table:
+```sql
+ALTER TABLE public.qr_cards 
+  ADD COLUMN registration_batch UUID DEFAULT NULL;
+```
 
-#### 2. Add individual PNG download per card
-- Each generated QR card gets a small download icon button (next to the existing delete button)
-- Clicking it renders the QR SVG to a canvas, converts to PNG, and triggers a download named `{uniqueId}.png`
+When cards are registered together, they all share the same batch UUID.
 
-#### 3. Replace "Export CSV" with "Download All (ZIP)"
-- Install `jszip` package (lightweight ZIP library)
-- The "Download All" button renders every QR card to PNG in-memory, bundles them into a ZIP file using JSZip, and triggers download as `qr-cards-YYYY-MM-DD.zip`
-- Each PNG inside the ZIP is named `{uniqueId}.png`
-- Show a progress indicator during ZIP generation for large batches
+#### 2. Update `addCards` mutation in `useSupabaseData.ts`
+- Generate a single `crypto.randomUUID()` as the batch ID
+- Pass it to every card in the insert call via the new `registration_batch` column
 
-#### 4. Keep CSV export as secondary option
-- Move CSV export to a smaller/secondary button so users can still get the ID list if needed
+#### 3. Redesign the "Registered" tab in `QRCodeGenerator.tsx`
+
+**Current:** Flat table of all registered cards with individual checkboxes.
+
+**New:** Cards grouped by batch in collapsible sections:
+
+```text
++--------------------------------------------------+
+| Registered Cards (150)                            |
++--------------------------------------------------+
+| [v] Batch: Feb 18, 2026 14:30 (50 cards)  [Select All] |
+|   [ ] QR-ABC123  inactive  0/15  [Preview][Remove]     |
+|   [ ] QR-DEF456  inactive  0/15  [Preview][Remove]     |
+|   ...                                                    |
++--------------------------------------------------+
+| [v] Batch: Feb 17, 2026 09:15 (100 cards) [Select All] |
+|   [ ] QR-GHI789  inactive  0/15  [Preview][Remove]     |
+|   ...                                                    |
++--------------------------------------------------+
+| [>] Ungrouped (legacy cards)                            |
++--------------------------------------------------+
+```
+
+Key behaviors:
+- Each batch section is collapsible (using Collapsible component)
+- "Select All" per batch selects all cards in that batch
+- Top-level "Unregister Selected" button works across batches
+- Batches sorted newest first
+- Cards without a batch ID (existing/legacy) go into an "Ungrouped" section at the bottom
+
+#### 4. Grouping Logic (frontend)
+
+Group `qrCards` by `registration_batch`:
+- Cards with a batch UUID are grouped together
+- The batch timestamp is derived from the earliest `created_at` in the group
+- Cards with `null` batch go to "Ungrouped"
 
 ### Technical Details
 
-**New dependency:** `jszip` (for creating ZIP files in the browser)
+**Files modified:**
+- Database migration -- add `registration_batch` column
+- `src/hooks/useSupabaseData.ts` -- update `addCards` mutation to include batch ID; update `useQRCards` query to include the new column
+- `src/components/admin/QRCodeGenerator.tsx` -- redesign the "Registered" tab with batch grouping, collapsible sections, per-batch select-all
 
-**PNG generation approach:**
-- Use the existing `QRCodeSVG` component's SVG output
-- Create an offscreen canvas, draw SVG as image, add the card ID text and branding below the QR code
-- Export as PNG blob
+**No new dependencies needed** -- already have `@radix-ui/react-collapsible` installed.
 
-**File modified:** `src/components/admin/QRCodeGenerator.tsx`
-- `handleGenerate`: change max from 100 to 1000
-- New `downloadCardAsPng(uniqueId)` function: renders a single QR card to PNG
-- New `handleDownloadAllZip()` function: loops through all cards, generates PNGs, bundles into ZIP
-- Update header buttons: "Download All" (ZIP) as primary, CSV as secondary
-- Add download icon button to each card in the grid
-
-**Helper function (PNG rendering):**
-```text
-1. Create canvas (e.g. 400x500)
-2. Fill white background
-3. Draw QR code (from SVG -> Image -> canvas)
-4. Draw card ID text below QR
-5. Draw "GIF (GIFT IT FORWARD)" branding
-6. Export canvas.toBlob('image/png')
-```
+**Data model change:**
+- `qr_cards.registration_batch` (UUID, nullable) -- null for legacy cards, shared UUID for batch-registered cards
 
