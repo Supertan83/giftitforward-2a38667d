@@ -1,71 +1,49 @@
 
 
-## Batch-Grouped Registered QR Cards
+## PDF Download for QR Cards
 
 ### Overview
-Add a batch registration system so that each time cards are registered, they get a shared batch ID. The "Registered" tab will display cards grouped by batch (newest first), with collapsible sections. Each batch can be selected entirely for bulk deletion.
+Add a "Download PDF" button that generates a PDF matching the sample layout: a 4x5 grid of QR cards per page, each cell containing a large QR code with the unique ID text below, separated by thin border lines. This works for both newly generated cards and selected registered card batches.
 
-### What Changes
+### PDF Layout (matching sample)
+- Page size: A4 portrait
+- Grid: 4 columns x 5 rows = 20 cards per page
+- Each cell: QR code (large, centered) + unique ID text below in monospace font
+- Thin gray border lines between cells
+- No extra branding/labels in cells -- just QR + ID
+- Pages auto-paginate for large batches (e.g., 500 cards = 25 pages)
 
-#### 1. Database Migration
-Add a `registration_batch` column to the `qr_cards` table:
-```sql
-ALTER TABLE public.qr_cards 
-  ADD COLUMN registration_batch UUID DEFAULT NULL;
-```
+### Changes
 
-When cards are registered together, they all share the same batch UUID.
+#### 1. Add PDF generation function to `QRCodeGenerator.tsx`
+- Import `jsPDF` (already installed in the project)
+- Create a `handleDownloadPDF` function that:
+  - Creates A4 jsPDF document
+  - For each card, generates a QR code SVG off-screen, serializes to canvas, then draws onto the PDF page
+  - Lays out cards in a 4x5 grid with borders
+  - Adds the unique ID text below each QR code in monospace font
+  - Auto-adds new pages every 20 cards
 
-#### 2. Update `addCards` mutation in `useSupabaseData.ts`
-- Generate a single `crypto.randomUUID()` as the batch ID
-- Pass it to every card in the insert call via the new `registration_batch` column
+#### 2. Add PDF button to the header actions
+- Add a new "PDF" button next to the existing Download/CSV/Print buttons
+- Uses the same `activeCardIds` logic so it works for both generated and selected registered cards
 
-#### 3. Redesign the "Registered" tab in `QRCodeGenerator.tsx`
-
-**Current:** Flat table of all registered cards with individual checkboxes.
-
-**New:** Cards grouped by batch in collapsible sections:
-
-```text
-+--------------------------------------------------+
-| Registered Cards (150)                            |
-+--------------------------------------------------+
-| [v] Batch: Feb 18, 2026 14:30 (50 cards)  [Select All] |
-|   [ ] QR-ABC123  inactive  0/15  [Preview][Remove]     |
-|   [ ] QR-DEF456  inactive  0/15  [Preview][Remove]     |
-|   ...                                                    |
-+--------------------------------------------------+
-| [v] Batch: Feb 17, 2026 09:15 (100 cards) [Select All] |
-|   [ ] QR-GHI789  inactive  0/15  [Preview][Remove]     |
-|   ...                                                    |
-+--------------------------------------------------+
-| [>] Ungrouped (legacy cards)                            |
-+--------------------------------------------------+
-```
-
-Key behaviors:
-- Each batch section is collapsible (using Collapsible component)
-- "Select All" per batch selects all cards in that batch
-- Top-level "Unregister Selected" button works across batches
-- Batches sorted newest first
-- Cards without a batch ID (existing/legacy) go into an "Ungrouped" section at the bottom
-
-#### 4. Grouping Logic (frontend)
-
-Group `qrCards` by `registration_batch`:
-- Cards with a batch UUID are grouped together
-- The batch timestamp is derived from the earliest `created_at` in the group
-- Cards with `null` batch go to "Ungrouped"
+#### 3. QR rendering approach
+- Reuse the existing off-screen `createRoot` + `QRCodeSVG` technique for programmatic SVG generation
+- Serialize SVG to data URL, draw onto a shared canvas, then use `canvas.toDataURL()` to get image data for jsPDF
+- Process cards sequentially with progress indicator
 
 ### Technical Details
 
 **Files modified:**
-- Database migration -- add `registration_batch` column
-- `src/hooks/useSupabaseData.ts` -- update `addCards` mutation to include batch ID; update `useQRCards` query to include the new column
-- `src/components/admin/QRCodeGenerator.tsx` -- redesign the "Registered" tab with batch grouping, collapsible sections, per-batch select-all
+- `src/components/admin/QRCodeGenerator.tsx` -- add `handleDownloadPDF` function and PDF button in header
 
-**No new dependencies needed** -- already have `@radix-ui/react-collapsible` installed.
+**Key implementation:**
+- Use `jsPDF` with A4 dimensions (210mm x 297mm)
+- Cell size: ~52.5mm wide x ~59.4mm tall (4 cols x 5 rows)
+- QR code size: ~40mm centered in each cell
+- Text: 8pt monospace, centered below QR
+- Grid lines: 0.3pt gray strokes
+- Progress toast/state for large batches
 
-**Data model change:**
-- `qr_cards.registration_batch` (UUID, nullable) -- null for legacy cards, shared UUID for batch-registered cards
-
+**No new dependencies** -- `jspdf` is already installed.
