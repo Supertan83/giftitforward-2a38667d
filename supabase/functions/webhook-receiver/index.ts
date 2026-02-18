@@ -4869,12 +4869,7 @@ serve(async (req) => {
         );
       }
 
-      if (!volunteer.temp_password) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'No temporary password found for this volunteer' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const tempPasswordDisplay = volunteer.temp_password || 'Please use "Forgot Password" to reset';
 
       // Fetch volunteer's QR cards
       const { data: qrCards } = await supabase
@@ -4910,7 +4905,7 @@ serve(async (req) => {
         volunteer.email,
         volunteer.first_name,
         volunteer.last_name || '',
-        volunteer.temp_password,
+        tempPasswordDisplay,
         loginUrl,
         trainingUrl,
         volunteerQrId,

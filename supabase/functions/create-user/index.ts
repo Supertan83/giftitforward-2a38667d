@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
           external_company: companyName?.trim() || null,
           is_employee: isDhEmployee === true || String(isDhEmployee ?? '').toLowerCase() === 'yes',
           events_list: eventName?.trim() || null,
+          temp_password: password,
         })
         .select('id')
         .single();
