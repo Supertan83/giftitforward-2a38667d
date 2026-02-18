@@ -1,103 +1,54 @@
 
 
-## CDA Volunteer Survey -- Auto-Create Volunteer Profile on Submission
+## Fix Beneficiary QR Code Generator: Unlimited Quantity + PNG/ZIP Download
 
-### Overview
-When a CDA volunteer submits the external survey at `/survey`, the system will automatically create their volunteer account if one doesn't already exist, and link the survey response to their profile. This ensures every CDA survey respondent is captured in the GIF volunteer system.
+### Problems
+1. Quantity is capped at 100 -- users need to create more at once
+2. Download currently exports a CSV of IDs, not actual QR code images
+3. No way to download individual QR codes as PNG or bulk download as ZIP
 
-### Current Flow
-1. CDA volunteer receives SMS with link to `gif.thesurpluss.com/survey`
-2. They enter name, email, and answer survey questions
-3. The `submit-external-survey` edge function saves data to `external_survey_responses` table
-4. A participation certificate is generated and emailed
+### Changes
 
-### New Flow (additions in bold)
-1. CDA volunteer receives SMS with link to `gif.thesurpluss.com/survey`
-2. They enter name, email, and answer survey questions
-3. The `submit-external-survey` edge function:
-   - Saves data to `external_survey_responses` table (existing)
-   - **Checks if a user with this email already exists in `auth.users`**
-   - **If NOT: creates a new auth user + `pending_volunteers` record with status `approved` and source `cda_survey`**
-   - **If YES: updates the existing `pending_volunteers` record to note the survey completion**
-   - **Links the survey response ID to the volunteer profile**
-4. A participation certificate is generated and emailed
+#### 1. Remove the 100-card limit
+- Change max from 100 to 1000 in both the validation logic and the HTML input `max` attribute
+- Update the error message accordingly
 
-### What Changes
+#### 2. Add individual PNG download per card
+- Each generated QR card gets a small download icon button (next to the existing delete button)
+- Clicking it renders the QR SVG to a canvas, converts to PNG, and triggers a download named `{uniqueId}.png`
 
-#### 1. Edge Function: `submit-external-survey` (modified)
+#### 3. Replace "Export CSV" with "Download All (ZIP)"
+- Install `jszip` package (lightweight ZIP library)
+- The "Download All" button renders every QR card to PNG in-memory, bundles them into a ZIP file using JSZip, and triggers download as `qr-cards-YYYY-MM-DD.zip`
+- Each PNG inside the ZIP is named `{uniqueId}.png`
+- Show a progress indicator during ZIP generation for large batches
 
-After saving the survey response, add auto-registration logic:
-
-- **Check existing user**: Query `auth.users` by email using the admin client
-- **If new volunteer**:
-  - Create auth user with `supabase.auth.admin.createUser()` (auto-confirmed, random password)
-  - Insert into `pending_volunteers` with: first_name, last_name, email, status = `approved`, source = `cda_survey`
-  - Insert into `user_roles` with role = `volunteer`
-  - Generate a volunteer QR card (`volunteer_qr_cards`) for tracking
-- **If existing volunteer**:
-  - No new account created (skip silently)
-- **In both cases**: Update the `external_survey_responses` record with a reference to the volunteer (store `created_user_id` or email linkage)
-
-The function already runs with the service role key, so it has the permissions needed to create auth users.
-
-#### 2. Database: Add column to `external_survey_responses`
-
-Add `volunteer_user_id UUID DEFAULT NULL` column to link survey responses to volunteer profiles for traceability.
-
-#### 3. No UI Changes Needed
-
-The survey page (`ExternalSurveyPage.tsx`) stays exactly the same -- the volunteer doesn't see any difference. The auto-registration happens silently in the backend.
+#### 4. Keep CSV export as secondary option
+- Move CSV export to a smaller/secondary button so users can still get the ID list if needed
 
 ### Technical Details
 
-**Edge function logic (pseudo-code):**
-```
-// After saving survey response...
+**New dependency:** `jszip` (for creating ZIP files in the browser)
 
-// 1. Check if user exists
-const { data: existingUsers } = await supabase.auth.admin.listUsers()
-// Filter by email match
+**PNG generation approach:**
+- Use the existing `QRCodeSVG` component's SVG output
+- Create an offscreen canvas, draw SVG as image, add the card ID text and branding below the QR code
+- Export as PNG blob
 
-// 2. If not exists, create account
-if (!existingUser) {
-  const nameParts = volunteer_name.split(' ')
-  const firstName = nameParts[0]
-  const lastName = nameParts.slice(1).join(' ')
-  const tempPassword = generateRandomPassword()
-  
-  // Create auth user (auto-confirmed)
-  const { data: newUser } = await supabase.auth.admin.createUser({
-    email, password: tempPassword, 
-    email_confirm: true,
-    user_metadata: { first_name: firstName, last_name: lastName }
-  })
-  
-  // Create pending_volunteers record
-  await supabase.from('pending_volunteers').insert({
-    email, first_name: firstName, last_name: lastName,
-    status: 'approved', source: 'cda_survey',
-    created_user_id: newUser.user.id
-  })
-  
-  // Create volunteer QR card
-  await supabase.from('volunteer_qr_cards').insert({
-    volunteer_id: newUser.user.id,
-    unique_id: generateQRCode(),
-    status: 'inactive'
-  })
-}
+**File modified:** `src/components/admin/QRCodeGenerator.tsx`
+- `handleGenerate`: change max from 100 to 1000
+- New `downloadCardAsPng(uniqueId)` function: renders a single QR card to PNG
+- New `handleDownloadAllZip()` function: loops through all cards, generates PNGs, bundles into ZIP
+- Update header buttons: "Download All" (ZIP) as primary, CSV as secondary
+- Add download icon button to each card in the grid
 
-// 3. Link survey response to user
-await supabase.from('external_survey_responses')
-  .update({ volunteer_user_id: userId })
-  .eq('id', surveyResponseId)
+**Helper function (PNG rendering):**
+```text
+1. Create canvas (e.g. 400x500)
+2. Fill white background
+3. Draw QR code (from SVG -> Image -> canvas)
+4. Draw card ID text below QR
+5. Draw "GIF (GIFT IT FORWARD)" branding
+6. Export canvas.toBlob('image/png')
 ```
 
-**Files modified:**
-- `supabase/functions/submit-external-survey/index.ts` -- add auto-registration logic
-- Database migration -- add `volunteer_user_id` column to `external_survey_responses`
-
-**Security notes:**
-- The auto-created account uses a random password (the volunteer won't need to log in -- this is for data linkage)
-- The `pending_volunteers` record is created with `approved` status since CDA has already vetted them
-- Duplicate submissions with the same email are handled gracefully (no duplicate accounts)
