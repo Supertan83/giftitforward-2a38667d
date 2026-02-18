@@ -255,15 +255,15 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
     },
   });
 
-  const handleSendNow = async (campaignId: string) => {
+  const handleSendNow = async (campaignId: string, retryFailedOnly = false) => {
     setIsSending(campaignId);
     try {
       const { data, error } = await supabase.functions.invoke('send-campaign-email', {
-        body: { campaign_id: campaignId },
+        body: { campaign_id: campaignId, retry_failed_only: retryFailedOnly },
       });
       if (error) throw error;
       toast({
-        title: 'Campaign Sent',
+        title: retryFailedOnly ? 'Failed Emails Resent' : 'Campaign Sent',
         description: `Sent: ${data?.sent || 0}, Failed: ${data?.failed || 0}`,
       });
       queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
@@ -275,6 +275,25 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       });
     } finally {
       setIsSending(null);
+    }
+  };
+
+  const handleCancelSending = async (campaignId: string) => {
+    try {
+      await supabase
+        .from('email_campaigns' as any)
+        .update({ status: 'sent' })
+        .eq('id', campaignId);
+      // Reset any remaining pending recipients to failed so they can be retried later
+      await supabase
+        .from('email_campaign_recipients' as any)
+        .update({ status: 'failed', error_message: 'Cancelled by admin' })
+        .eq('campaign_id', campaignId)
+        .eq('status', 'pending');
+      toast({ title: 'Campaign Cancelled', description: 'Remaining unsent emails have been stopped. You can retry failed ones later.' });
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+    } catch (error) {
+      toast({ title: 'Error', description: (error as Error).message, variant: 'destructive' });
     }
   };
 
@@ -469,6 +488,31 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
                                   {isSending === campaign.id
                                     ? <Loader2 className="h-4 w-4 animate-spin" />
                                     : <Send className="h-4 w-4 text-emerald-600" />}
+                                </Button>
+                              )}
+                              {campaign.status === 'sent' && campaign.failed_count > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isSending === campaign.id}
+                                  onClick={() => handleSendNow(campaign.id, true)}
+                                  className="text-orange-600 text-xs gap-1"
+                                >
+                                  {isSending === campaign.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Send className="h-3.5 w-3.5" />}
+                                  Retry {campaign.failed_count} Failed
+                                </Button>
+                              )}
+                              {campaign.status === 'sending' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCancelSending(campaign.id)}
+                                  className="text-destructive text-xs gap-1"
+                                >
+                                  <XCircle className="h-3.5 w-3.5" />
+                                  Cancel
                                 </Button>
                               )}
                               {campaign.status !== 'sending' && (
