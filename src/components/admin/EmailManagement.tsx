@@ -432,14 +432,19 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
         const eventsJson = volunteer.events_json as any[];
         if (Array.isArray(eventsJson) && eventsJson.length > 0) {
           const firstEvent = eventsJson[0];
-          const mpId = firstEvent?.marketplace_id || firstEvent?.id;
-          if (mpId) {
-            const { data: mp } = await supabase
+          const slug = firstEvent?.slug || firstEvent?.event_slug || firstEvent?.event || '';
+          
+          // Try to find marketplace by slug pattern match
+          if (slug) {
+            const slugWords = slug.replace(/-/g, ' ');
+            const { data: marketplaces } = await supabase
               .from('marketplace_events')
               .select('name, event_date, start_time, end_time, location')
-              .eq('id', mpId)
-              .maybeSingle();
-            if (mp) {
+              .ilike('name', `%${slugWords.split(' ').filter((w: string) => w.length > 3).slice(0, 2).join('%')}%`)
+              .limit(5);
+            
+            if (marketplaces && marketplaces.length > 0) {
+              const mp = marketplaces[0];
               marketplaceName = mp.name || '';
               marketplaceDate = mp.event_date || '';
               marketplaceLocation = mp.location || '';
@@ -454,7 +459,21 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
                 : '';
             }
           }
+          
+          // Fallback: use inline event data from events_json
+          if (!marketplaceName) marketplaceName = firstEvent?.name || firstEvent?.event_name || slug || '';
+          if (!marketplaceDate && firstEvent?.eventDate) marketplaceDate = firstEvent.eventDate;
+          if (!marketplaceDate && firstEvent?.date) marketplaceDate = firstEvent.date;
+          if (!marketplaceLocation && firstEvent?.eventLocation) marketplaceLocation = firstEvent.eventLocation;
+          if (!marketplaceLocation && firstEvent?.location) marketplaceLocation = firstEvent.location;
+          if (!marketplaceTime && firstEvent?.eventTime) marketplaceTime = firstEvent.eventTime;
+          if (!marketplaceTime && firstEvent?.time) marketplaceTime = firstEvent.time;
         }
+      }
+      
+      // Additional fallback: use events_list string
+      if (!marketplaceName && volunteer?.events_list) {
+        marketplaceName = volunteer.events_list;
       }
 
       const volData = volunteer
