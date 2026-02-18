@@ -60,6 +60,7 @@ export const EmailAutomationsTab: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [forceRunId, setForceRunId] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -267,6 +268,33 @@ export const EmailAutomationsTab: React.FC = () => {
                           Last: {format(new Date(a.last_run_at), 'MMM d, HH:mm')}
                         </span>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Run now"
+                        disabled={forceRunId === a.id}
+                        onClick={async () => {
+                          setForceRunId(a.id);
+                          try {
+                            const { data, error } = await supabase.functions.invoke('run-email-automations', {
+                              body: { automation_id: a.id },
+                            });
+                            if (error) throw error;
+                            toast({
+                              title: 'Automation Triggered',
+                              description: `Processed: ${data?.processed || 0}, Fired: ${data?.fired || 0}`,
+                            });
+                            queryClient.invalidateQueries({ queryKey: ['email-automations'] });
+                            queryClient.invalidateQueries({ queryKey: ['email-automation-logs'] });
+                          } catch (err: any) {
+                            toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                          } finally {
+                            setForceRunId(null);
+                          }
+                        }}
+                      >
+                        {forceRunId === a.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 text-green-600" />}
+                      </Button>
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="icon" title="View logs">
                           <History className="h-4 w-4" />
