@@ -1,0 +1,1 @@
+ALTER TABLE public.external_survey_responses ADD COLUMN volunteer_user_id UUID DEFAULT NULL;

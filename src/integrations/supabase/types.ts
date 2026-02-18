@@ -841,6 +841,7 @@ export type Database = {
           marketplace_id: string | null
           volunteer_email: string
           volunteer_name: string
+          volunteer_user_id: string | null
           would_volunteer_again: boolean | null
         }
         Insert: {
@@ -855,6 +856,7 @@ export type Database = {
           marketplace_id?: string | null
           volunteer_email: string
           volunteer_name: string
+          volunteer_user_id?: string | null
           would_volunteer_again?: boolean | null
         }
         Update: {
@@ -869,6 +871,7 @@ export type Database = {
           marketplace_id?: string | null
           volunteer_email?: string
           volunteer_name?: string
+          volunteer_user_id?: string | null
           would_volunteer_again?: boolean | null
         }
         Relationships: []
