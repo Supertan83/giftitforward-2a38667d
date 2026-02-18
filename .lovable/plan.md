@@ -1,49 +1,36 @@
 
 
-## PDF Download for QR Cards
+## Fix: Volunteers receiving reminder emails for wrong marketplace dates
 
-### Overview
-Add a "Download PDF" button that generates a PDF matching the sample layout: a 4x5 grid of QR cards per page, each cell containing a large QR code with the unique ID text below, separated by thin border lines. This works for both newly generated cards and selected registered card batches.
+### Problem
+The email automation system matches volunteers to marketplace events using **substring matching** (`string.includes()`). This causes false positives:
+- A volunteer registered for **March 1** (`...march-1`) also matches **March 10, 11, 12** etc., because `"march-1"` is a substring of `"march-10"`, `"march-11"`, `"march-12"`.
 
-### PDF Layout (matching sample)
-- Page size: A4 portrait
-- Grid: 4 columns x 5 rows = 20 cards per page
-- Each cell: QR code (large, centered) + unique ID text below in monospace font
-- Thin gray border lines between cells
-- No extra branding/labels in cells -- just QR + ID
-- Pages auto-paginate for large batches (e.g., 500 cards = 25 pages)
+### Solution
+Replace the fuzzy `includes()` matching with **exact event date matching** using the structured `events_json` data, which contains precise event slugs and dates.
 
 ### Changes
 
-#### 1. Add PDF generation function to `QRCodeGenerator.tsx`
-- Import `jsPDF` (already installed in the project)
-- Create a `handleDownloadPDF` function that:
-  - Creates A4 jsPDF document
-  - For each card, generates a QR code SVG off-screen, serializes to canvas, then draws onto the PDF page
-  - Lays out cards in a 4x5 grid with borders
-  - Adds the unique ID text below each QR code in monospace font
-  - Auto-adds new pages every 20 cards
+**File: `supabase/functions/run-email-automations/index.ts`**
 
-#### 2. Add PDF button to the header actions
-- Add a new "PDF" button next to the existing Download/CSV/Print buttons
-- Uses the same `activeCardIds` logic so it works for both generated and selected registered cards
+Replace the volunteer-to-marketplace matching block (lines ~138-166) with date-based matching:
 
-#### 3. QR rendering approach
-- Reuse the existing off-screen `createRoot` + `QRCodeSVG` technique for programmatic SVG generation
-- Serialize SVG to data URL, draw onto a shared canvas, then use `canvas.toDataURL()` to get image data for jsPDF
-- Process cards sequentially with progress indicator
+1. **Primary match: by `eventDate`** -- Compare the volunteer's `events_json[].eventDate` (e.g., "March 1, 2026") against the marketplace's actual `event_date` from the database. This is the most reliable match since dates are unambiguous.
 
-### Technical Details
+2. **Secondary match: by exact slug** -- If a volunteer's `events_json[].event` slug exactly equals the marketplace name (normalized to slug format), it's a match. Use exact equality (`===`) instead of `includes()`.
 
-**Files modified:**
-- `src/components/admin/QRCodeGenerator.tsx` -- add `handleDownloadPDF` function and PDF button in header
+3. **Remove the `events_list` substring matching** -- The `matchesByName` check using `eventsList.includes(...)` is the root cause of false positives and will be removed entirely.
 
-**Key implementation:**
-- Use `jsPDF` with A4 dimensions (210mm x 297mm)
-- Cell size: ~52.5mm wide x ~59.4mm tall (4 cols x 5 rows)
-- QR code size: ~40mm centered in each cell
-- Text: 8pt monospace, centered below QR
-- Grid lines: 0.3pt gray strokes
-- Progress toast/state for large batches
+### Technical Detail
 
-**No new dependencies** -- `jspdf` is already installed.
+```text
+BEFORE (broken):
+  slug "...march-1".includes("march-12" normalized) => partial match => WRONG
+
+AFTER (fixed):
+  volunteer eventDate "March 1, 2026" vs marketplace event_date "2026-03-12" => no match => CORRECT
+  volunteer slug "...march-1" === marketplace slug "...march-12" => no match => CORRECT
+```
+
+The fix normalizes marketplace `event_date` (e.g., `2026-03-01`) into the same format volunteers store (e.g., `"March 1, 2026"`) for reliable date comparison, and uses exact slug equality as a fallback.
+
