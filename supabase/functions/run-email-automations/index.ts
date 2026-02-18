@@ -132,16 +132,31 @@ serve(async (req: Request) => {
           // Get volunteers for these marketplaces
           const { data: volunteers } = await supabase
             .from("pending_volunteers")
-            .select("id, first_name, last_name, email, events_list")
+            .select("id, first_name, last_name, email, events_list, events_json")
             .eq("status", "approved");
 
           if (volunteers) {
             for (const v of volunteers) {
               const eventsList = (v.events_list || "").toLowerCase();
-              const matches = targetMarketplaces.some((m: any) =>
+              const eventsJson = v.events_json || [];
+
+              // Check if volunteer is assigned to any of the target marketplaces
+              const matchesByName = targetMarketplaces.some((m: any) =>
                 eventsList.includes((m.name || "").toLowerCase())
               );
-              if (matches || filter.type === "all_upcoming") {
+
+              // Also check events_json for slug/name matching
+              const matchesByJson = Array.isArray(eventsJson) && targetMarketplaces.some((m: any) => {
+                const mpName = (m.name || "").toLowerCase();
+                return eventsJson.some((ev: any) => {
+                  const slug = (ev.slug || ev.event_slug || "").toLowerCase();
+                  const name = (ev.name || ev.event_name || "").toLowerCase();
+                  return slug.includes(mpName) || mpName.includes(slug) ||
+                    name.includes(mpName) || mpName.includes(name);
+                });
+              });
+
+              if (matchesByName || matchesByJson) {
                 recipients.push({
                   email: v.email,
                   name: `${v.first_name} ${v.last_name}`,
