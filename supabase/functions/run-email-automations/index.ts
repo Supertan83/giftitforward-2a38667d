@@ -17,18 +17,28 @@ serve(async (req: Request) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Check if force-running a specific automation
+    let forceAutomationId: string | null = null;
+    try {
+      const body = await req.json();
+      forceAutomationId = body?.automation_id || null;
+    } catch { /* no body = scheduled run */ }
+
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const todayStr = now.toISOString().split("T")[0];
     const currentHour = now.getUTCHours();
     const currentMinute = now.getUTCMinutes();
 
-    console.log(`[run-email-automations] Running at ${now.toISOString()}, today=${todayStr}`);
+    console.log(`[run-email-automations] Running at ${now.toISOString()}, today=${todayStr}, force=${forceAutomationId || 'none'}`);
 
-    // Fetch all active automations
-    const { data: automations, error: autoErr } = await supabase
-      .from("email_automations")
-      .select("*")
-      .eq("is_active", true);
+    // Fetch automations
+    let autoQuery = supabase.from("email_automations").select("*");
+    if (forceAutomationId) {
+      autoQuery = autoQuery.eq("id", forceAutomationId);
+    } else {
+      autoQuery = autoQuery.eq("is_active", true);
+    }
+    const { data: automations, error: autoErr } = await autoQuery;
 
     if (autoErr) {
       console.error("Error fetching automations:", autoErr);
@@ -57,13 +67,16 @@ serve(async (req: Request) => {
         const triggerHour = parseInt(timeParts[0], 10);
         const triggerMinute = parseInt(timeParts[1] || "0", 10);
 
-        // Only fire if current hour matches (within the hour window)
-        if (currentHour !== triggerHour) {
-          continue;
-        }
-        // Only fire in the first 30 minutes of the hour to avoid double-firing
-        if (currentMinute > 30) {
-          continue;
+        // Skip time checks when force-running
+        if (!forceAutomationId) {
+          // Only fire if current hour matches (within the hour window)
+          if (currentHour !== triggerHour) {
+            continue;
+          }
+          // Only fire in the first 30 minutes of the hour to avoid double-firing
+          if (currentMinute > 30) {
+            continue;
+          }
         }
 
         const triggerType = automation.trigger_type;
@@ -109,7 +122,7 @@ serve(async (req: Request) => {
             .gte("triggered_at", todayStr + "T00:00:00Z")
             .lte("triggered_at", todayStr + "T23:59:59Z");
 
-          if (existingLogs && existingLogs.length > 0) {
+          if (!forceAutomationId && existingLogs && existingLogs.length > 0) {
             // Already fired today for this automation
             continue;
           }
@@ -150,7 +163,7 @@ serve(async (req: Request) => {
             .eq("automation_id", automation.id)
             .gte("triggered_at", todayStr + "T00:00:00Z");
 
-          if (existingLogs && existingLogs.length > 0) continue;
+          if (!forceAutomationId && existingLogs && existingLogs.length > 0) continue;
 
           const { data: volunteers } = await supabase
             .from("pending_volunteers")
@@ -178,7 +191,7 @@ serve(async (req: Request) => {
             .eq("automation_id", automation.id)
             .gte("triggered_at", todayStr + "T00:00:00Z");
 
-          if (existingLogs && existingLogs.length > 0) continue;
+          if (!forceAutomationId && existingLogs && existingLogs.length > 0) continue;
 
           const { data: volunteers } = await supabase
             .from("pending_volunteers")
