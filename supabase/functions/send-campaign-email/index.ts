@@ -242,11 +242,20 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    if (campaign.status === 'sent' || campaign.status === 'sending') {
+    if (campaign.status === 'sending') {
       return new Response(
-        JSON.stringify({ success: false, error: `Campaign is already ${campaign.status}` }),
+        JSON.stringify({ success: false, error: "Campaign is currently sending" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // If re-running a sent campaign, reset failed recipients to pending so they get retried
+    if (campaign.status === 'sent') {
+      await supabase
+        .from("email_campaign_recipients")
+        .update({ status: 'pending', error_message: null })
+        .eq("campaign_id", campaign_id)
+        .eq("status", "failed");
     }
 
     // Load template
@@ -331,6 +340,9 @@ const handler = async (req: Request): Promise<Response> => {
     let sentCount = 0;
     let failedCount = 0;
 
+    // Helper: delay to respect Resend rate limit (2 req/sec → 600ms between sends)
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     for (const recipient of recipients) {
       try {
         const volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
@@ -346,6 +358,9 @@ const handler = async (req: Request): Promise<Response> => {
 
         const html = generateCampaignEmailHTML(template as unknown as EmailTemplate, supabaseUrl, volunteer, marketplaceData, qrCardId);
         const subject = replaceTokens(template.subject, volunteer, marketplaceData, qrCardId);
+
+        // Rate limit: wait 600ms between sends (Resend allows 2 req/sec)
+        await delay(600);
 
         const result = await resend.emails.send({
           from: sender,
