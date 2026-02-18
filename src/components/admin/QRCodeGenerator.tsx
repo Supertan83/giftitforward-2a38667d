@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
+import JSZip from 'jszip';
 import { 
   ArrowLeft, 
   Printer, 
@@ -16,7 +17,9 @@ import {
   Database,
   XCircle,
   Eye,
-  X
+  X,
+  FileDown,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +54,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { CSVImport } from '@/components/admin/CSVImport';
 import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
@@ -251,12 +255,178 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     large: { qr: 160, card: 'w-56', cols: 'grid-cols-2 md:grid-cols-3' },
   };
 
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [zipProgress, setZipProgress] = useState(0);
+
+  const renderCardToPngBlob = useCallback((uniqueId: string): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas not supported'));
+
+      const width = 400;
+      const height = 500;
+      canvas.width = width;
+      canvas.height = height;
+
+      // White background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+
+      // Render QR code SVG to image
+      const svgNs = 'http://www.w3.org/2000/svg';
+      const qrSvg = document.createElementNS(svgNs, 'svg');
+      qrSvg.setAttribute('xmlns', svgNs);
+      
+      // Create a temporary container to render QRCodeSVG
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+      
+      // Use the actual QRCodeSVG by finding or creating one
+      const tempRoot = document.createElement('div');
+      tempDiv.appendChild(tempRoot);
+      
+      // Import ReactDOM to render
+      import('react-dom/client').then(({ createRoot }) => {
+        import('react').then((React) => {
+          const root = createRoot(tempRoot);
+          root.render(React.createElement(QRCodeSVG, { value: uniqueId, size: 280, level: 'H', includeMargin: false }));
+          
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const svgEl = tempRoot.querySelector('svg');
+              if (!svgEl) {
+                document.body.removeChild(tempDiv);
+                return reject(new Error('SVG not found'));
+              }
+              
+              const svgData = new XMLSerializer().serializeToString(svgEl);
+              const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+              const svgUrl = URL.createObjectURL(svgBlob);
+              
+              const img = new Image();
+              img.onload = () => {
+                // Draw QR code centered
+                const qrX = (width - 280) / 2;
+                const qrY = 40;
+                ctx.drawImage(img, qrX, qrY, 280, 280);
+                
+                // Draw unique ID text
+                ctx.fillStyle = '#1a1a1a';
+                ctx.font = 'bold 18px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(uniqueId, width / 2, 360);
+                
+                // Draw separator line
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(60, 390);
+                ctx.lineTo(width - 60, 390);
+                ctx.stroke();
+                
+                // Draw branding
+                ctx.fillStyle = '#6b7280';
+                ctx.font = '600 14px sans-serif';
+                ctx.fillText('GIF (GIFT IT FORWARD)', width / 2, 420);
+                
+                ctx.fillStyle = '#9ca3af';
+                ctx.font = '11px sans-serif';
+                ctx.fillText('15 Item Credits', width / 2, 445);
+                
+                // Draw border
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 2;
+                ctx.roundRect(4, 4, width - 8, height - 8, 12);
+                ctx.stroke();
+                
+                canvas.toBlob((blob) => {
+                  URL.revokeObjectURL(svgUrl);
+                  root.unmount();
+                  document.body.removeChild(tempDiv);
+                  if (blob) resolve(blob);
+                  else reject(new Error('Failed to create blob'));
+                }, 'image/png');
+              };
+              img.onerror = () => {
+                URL.revokeObjectURL(svgUrl);
+                root.unmount();
+                document.body.removeChild(tempDiv);
+                reject(new Error('Failed to load SVG'));
+              };
+              img.src = svgUrl;
+            });
+          });
+        });
+      });
+    });
+  }, []);
+
+  const handleDownloadSinglePng = useCallback(async (uniqueId: string) => {
+    try {
+      const blob = await renderCardToPngBlob(uniqueId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${uniqueId}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: 'Download failed',
+        description: 'Could not generate PNG',
+        variant: 'destructive',
+      });
+    }
+  }, [renderCardToPngBlob, toast]);
+
+  const handleDownloadAllZip = useCallback(async () => {
+    if (cards.length === 0) return;
+    
+    setIsDownloadingZip(true);
+    setZipProgress(0);
+    
+    try {
+      const zip = new JSZip();
+      
+      for (let i = 0; i < cards.length; i++) {
+        const blob = await renderCardToPngBlob(cards[i].uniqueId);
+        zip.file(`${cards[i].uniqueId}.png`, blob);
+        setZipProgress(Math.round(((i + 1) / cards.length) * 100));
+      }
+      
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qr-cards-${new Date().toISOString().split('T')[0]}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: 'Download complete',
+        description: `${cards.length} QR codes downloaded as ZIP`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Download failed',
+        description: 'Could not generate ZIP file',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDownloadingZip(false);
+      setZipProgress(0);
+    }
+  }, [cards, renderCardToPngBlob, toast]);
+
   const handleGenerate = () => {
     const qty = parseInt(quantity);
-    if (isNaN(qty) || qty < 1 || qty > 100) {
+    if (isNaN(qty) || qty < 1 || qty > 1000) {
       toast({
         title: 'Invalid quantity',
-        description: 'Please enter a number between 1 and 100',
+        description: 'Please enter a number between 1 and 1000',
         variant: 'destructive',
       });
       return;
@@ -389,15 +559,19 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
               </div>
             </div>
             <div className="flex gap-2 ml-9 sm:ml-0">
+              <Button size="sm" onClick={handleDownloadAllZip} disabled={cards.length === 0 || isDownloadingZip} className="text-xs">
+                {isDownloadingZip ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Download className="w-3 h-3 md:w-4 md:h-4" />}
+                <span className="hidden sm:inline">{isDownloadingZip ? `${zipProgress}%` : 'Download All'}</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={cards.length === 0} className="text-xs">
-                <Download className="w-3 h-3 md:w-4 md:h-4" />
-                <span className="hidden sm:inline">Export</span>
+                <FileText className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">CSV</span>
               </Button>
               <Button variant="outline" size="sm" onClick={handleRegisterGeneratedCards} disabled={cards.length === 0 || isRegistering} className="text-xs">
                 {isRegistering ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <CreditCard className="w-3 h-3 md:w-4 md:h-4" />}
                 <span className="hidden sm:inline">{isRegistering ? 'Registering...' : 'Register'}</span>
               </Button>
-              <Button size="sm" onClick={handlePrint} disabled={cards.length === 0} className="text-xs">
+              <Button variant="outline" size="sm" onClick={handlePrint} disabled={cards.length === 0} className="text-xs">
                 <Printer className="w-3 h-3 md:w-4 md:h-4" />
                 <span className="hidden sm:inline">Print</span>
               </Button>
@@ -448,7 +622,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     min={1}
-                    max={100}
+                    max={1000}
                     placeholder="10"
                     className="text-sm"
                   />
@@ -617,6 +791,15 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
 
           {/* Preview info */}
           <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground mt-4 pt-4 border-t border-border">
+            {isDownloadingZip && (
+              <div className="w-full mb-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Generating ZIP... {zipProgress}%</span>
+                </div>
+                <Progress value={zipProgress} className="h-2" />
+              </div>
+            )}
             <span className="flex items-center gap-1">
               <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
               {cards.length} cards in queue
@@ -661,7 +844,16 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     sizeConfig[cardSize].card
                   )}
                 >
-                  {/* Remove button - Hidden in print */}
+                  {/* Action buttons - Hidden in print */}
+                  <div className="absolute -top-2 right-4 flex gap-1 print:hidden">
+                    <button
+                      onClick={() => handleDownloadSinglePng(card.uniqueId)}
+                      className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:bg-primary/90"
+                      title="Download PNG"
+                    >
+                      <FileDown className="w-3 h-3" />
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleRemoveCard(card.id)}
                     className="absolute -top-2 -right-2 w-6 h-6 bg-danger text-danger-foreground rounded-full flex items-center justify-center hover:bg-danger/90 print:hidden"
