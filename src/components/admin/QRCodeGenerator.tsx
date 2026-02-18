@@ -506,6 +506,23 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
     });
   };
 
+  const handleExportSelectedCSV = useCallback(() => {
+    if (selectedCards.size === 0) return;
+    const selected = qrCards.filter(c => selectedCards.has(c.uniqueId));
+    const csv = [
+      'Unique ID,Status,Credit Balance,Created At',
+      ...selected.map(c => `${c.uniqueId},${c.status},${c.creditBalance},${c.createdAt || ''}`),
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `registered-cards-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV exported', description: `${selected.length} registered card IDs exported` });
+  }, [selectedCards, qrCards, toast]);
+
   const handleCSVImport = useCallback(async (uniqueIds: string[]) => {
     setIsRegistering(true);
     try {
@@ -700,23 +717,34 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex flex-wrap gap-2 shrink-0">
                     {selectedCards.size > 0 && (
                       <>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={handlePreviewSelected}
+                          className="text-xs"
                         >
-                          <Eye className="w-4 h-4 mr-1" />
+                          <Eye className="w-3.5 h-3.5 mr-1" />
                           Preview ({selectedCards.size})
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleExportSelectedCSV}
+                          className="text-xs"
+                        >
+                          <FileText className="w-3.5 h-3.5 mr-1" />
+                          CSV
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
                           onClick={() => setShowBulkConfirm(true)}
+                          className="text-xs"
                         >
-                          <Trash2 className="w-4 h-4 mr-1" />
+                          <Trash2 className="w-3.5 h-3.5 mr-1" />
                           Unregister ({selectedCards.size})
                         </Button>
                       </>
