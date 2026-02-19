@@ -19,6 +19,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
     title: string;
     subtitle?: string;
     credits?: number;
+    creditLimit?: number;
   } | null>(null);
   const [lastActivatedCard, setLastActivatedCard] = useState<QRCard | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -88,7 +89,8 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
           type: 'success',
           title: 'Card Activated!',
           subtitle: `${creditLimit} Credits Assigned`,
-          credits: creditLimit,
+          credits: 0,
+          creditLimit,
         });
       }
     } catch (error) {
@@ -229,6 +231,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
             title={feedback.title}
             subtitle={feedback.subtitle}
             credits={feedback.credits}
+            creditLimit={feedback.creditLimit}
             isVisible={!!feedback}
             onComplete={() => setFeedback(null)}
           />

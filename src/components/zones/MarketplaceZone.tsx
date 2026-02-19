@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { useCardOperations } from '@/hooks/useSupabaseData';
+import { useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -24,12 +24,17 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     title: string;
     subtitle?: string;
     credits?: number;
+    creditLimit?: number;
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
   const { distributeItemSimple, returnItemSimple } = useCardOperations();
+  const { data: marketplaces = [] } = useMarketplaces();
   const queryClient = useQueryClient();
+
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
+  const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
 
   // Calculate totals from allocations
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
@@ -70,8 +75,9 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
         setFeedback({
           type: 'success',
           title: 'Item Distributed!',
-          subtitle: `Items collected: ${result.creditBalance}`,
+          subtitle: `Credits remaining: ${creditLimit - result.creditBalance}/${creditLimit}`,
           credits: result.creditBalance,
+          creditLimit,
         });
       } else {
         const result = await returnItemSimple.mutateAsync({
@@ -96,8 +102,9 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
         setFeedback({
           type: 'success',
           title: 'Item Returned!',
-          subtitle: `Items collected: ${result.creditBalance}`,
+          subtitle: `Credits remaining: ${creditLimit - result.creditBalance}/${creditLimit}`,
           credits: result.creditBalance,
+          creditLimit,
         });
       }
     } catch (error) {
@@ -247,6 +254,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
             title={feedback.title}
             subtitle={feedback.subtitle}
             credits={feedback.credits}
+            creditLimit={feedback.creditLimit}
             isVisible={!!feedback}
             onComplete={() => setFeedback(null)}
           />
