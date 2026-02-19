@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
+import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 
 interface ExitZoneProps {
   selectedMarketplaceId: string;
@@ -26,6 +26,10 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
 
   const { data: qrCards = [], isLoading } = useQRCards();
   const { checkoutCard, findCardByUniqueId } = useCardOperations();
+  const { data: marketplaces = [] } = useMarketplaces();
+
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
+  const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
 
   // Filter stats by marketplace if selected
   const filteredCards = selectedMarketplaceId 
@@ -52,7 +56,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
       setFeedback({
         type: 'success',
         title: 'Check-Out Complete!',
-        subtitle: `Collected ${itemsCollected}/15 items. Card is locked until tomorrow.`,
+        subtitle: `Collected ${itemsCollected}/${creditLimit} items. Card is locked until tomorrow.`,
       });
     } catch (error) {
       setFeedback({
@@ -63,7 +67,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [checkoutCard, findCardByUniqueId]);
+  }, [checkoutCard, findCardByUniqueId, creditLimit]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -161,7 +165,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
               <p className="text-xs md:text-sm text-muted-foreground mb-0.5 md:mb-1">Items Collected</p>
               <p className="text-3xl md:text-4xl font-display font-bold text-success">
                 {lastCheckout.itemsCollected}
-                <span className="text-base md:text-lg text-muted-foreground">/15</span>
+                <span className="text-base md:text-lg text-muted-foreground">/{creditLimit}</span>
               </p>
             </div>
 

@@ -195,7 +195,7 @@ export const useCardOperations = () => {
       // Update card with beneficiary info - start with 0 items collected (credit_balance = 0)
       const updateData: Record<string, unknown> = {
         status: 'active' as DbCardStatus,
-        credit_balance: 0, // Start with 0 items, max is 15
+        credit_balance: 0, // Start with 0 items collected, limit is set per marketplace
         total_items_collected: 0,
         collected_items: [],
         activated_at: new Date().toISOString()
@@ -246,7 +246,17 @@ export const useCardOperations = () => {
 
       if (findError || !card) throw new SafeError('Card not found');
       if (card.status !== 'active') throw new SafeError('Card is not active. Please check in first.');
-      if (card.credit_balance >= 15) throw new SafeError('LIMIT REACHED (15/15). Maximum items already collected.');
+      // Get credit limit from marketplace
+      let creditLimitValue = 15;
+      if (card.marketplace_id) {
+        const { data: mp } = await supabase
+          .from('marketplace_events')
+          .select('beneficiary_credit_limit')
+          .eq('id', card.marketplace_id)
+          .maybeSingle();
+        if (mp) creditLimitValue = mp.beneficiary_credit_limit;
+      }
+      if (card.credit_balance >= creditLimitValue) throw new SafeError(`LIMIT REACHED (${creditLimitValue}/${creditLimitValue}). Maximum items already collected.`);
 
       // Check item availability from global stock
       const { data: item, error: itemError } = await supabase
