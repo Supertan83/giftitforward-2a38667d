@@ -94,10 +94,12 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
         });
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Please check the QR code and try again';
+      const isNotFound = message === 'Card not found';
       setFeedback({
-        type: 'error',
-        title: 'Card Not Found',
-        subtitle: error instanceof Error ? error.message : 'Please check the QR code and try again',
+        type: isNotFound ? 'error' : 'warning',
+        title: isNotFound ? 'Card Not Found' : 'Cannot Activate',
+        subtitle: message,
       });
     } finally {
       setIsProcessing(false);
