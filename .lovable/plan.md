@@ -1,57 +1,66 @@
 
 
-# Fix Distribution Count and Items Left Accuracy
+# Fix Volunteer Checkout Timing Bug
 
-## Problem Summary
-The "Items Given" shows 8,714 and "Items Left" shows 10,154. On-ground staff report only a few boxes remain, so 10,154 is clearly wrong. The root causes are:
+## Problem
+When a volunteer is checked out and then re-checked-in, the system updates `checked_in_at` but does NOT clear `checked_out_at`. This leaves stale checkout timestamps that appear earlier than the check-in time, producing incorrect timing data.
 
-1. **Many beneficiaries were capped at the old 15-item limit** before it was changed to 25. 243 cards collected only 1-15 items (2,700 total), while 282 cards that came after the change collected 16-25 items (5,603 total). This means the system blocked roughly 243 people from collecting their full 25 items.
+Example from today: Taleen El Beaini shows check-in at 05:01 but check-out at 04:43 (18 minutes before check-in). She was checked out at 04:43, then re-checked-in at 05:01, but the old checkout time was never cleared.
 
-2. **The "Items Left" calculation** = Total Allocated (18,868) minus Items Given (8,714) = 10,154. This is mathematically correct based on the data, but the **allocation total (18,868) does not reflect reality** if items were physically distributed beyond what the system tracked, or if allocations were set higher than actual physical stock.
+Additionally, 3 volunteers (Jawaher x2 and bassam) show check-in to check-out durations of only 10-25 seconds, indicating accidental checkouts.
 
-3. **38 beneficiary cards had 0 distributions** -- activated at entrance but never scanned at marketplace stations.
+## Changes
 
-4. **16 stale transactions from January 5** are mixed into today's count (minor: 8,714 includes 16 old + 8,698 today).
+### 1. Fix `checkInVolunteer` mutation in `src/hooks/useSupabaseData.ts` (line 1386-1394)
 
-## Data Breakdown
+Clear `checked_out_at` when re-checking in a volunteer so stale checkout timestamps don't persist.
 
-```text
-Cards with 1-15 items:   243 cards -> 2,700 items  (many hit old 15 limit)
-Cards with 16-25 items:  282 cards -> 5,603 items  (new 25 limit)
-Cards with 26+ items:     14 cards ->   411 items  (over-limit edge cases)
-Cards with 0 items:       38 cards ->     0 items  (no marketplace scan)
-                         ----          -----
-Total:                   577 cards    8,714 items
+```typescript
+// Current code (missing checked_out_at reset):
+.update({
+  status: 'checked_in',
+  checked_in_at: now,
+  marketplace_id: marketplaceId || null,
+  assigned_zone: assignedZone || null
+})
+
+// Fixed code:
+.update({
+  status: 'checked_in',
+  checked_in_at: now,
+  checked_out_at: null,          // Clear stale checkout time
+  marketplace_id: marketplaceId || null,
+  assigned_zone: assignedZone || null
+})
 ```
 
-If all 577 had gotten 25: expected = 14,425 items. Actual = 8,714. Gap = 5,711.
+### 2. Fix `checkOutVolunteer` mutation -- add minimum duration guard (line 1432-1434)
 
-## Proposed Fixes
+Add a guard to prevent accidental checkouts that happen within seconds of check-in. If less than 1 minute has passed since check-in, reject the checkout with an error message.
 
-### Fix 1: Correct the "Items Left" Calculation
-The "Items Left" should reflect physical reality. Two options:
+```typescript
+const hoursWorked = (now.getTime() - checkedInAt.getTime()) / (1000 * 60 * 60);
 
-**Option A (Recommended)**: Use the marketplace's manual count data if available, or calculate "Items Left" as `Total Allocated - actual distributions from transactions` (which is what it does now). The real issue is the **allocation number (18,868) is too high** relative to actual stock. The admin should adjust allocations to match physical inventory.
+// Prevent accidental immediate checkouts (less than 1 minute)
+if (hoursWorked < (1 / 60)) {
+  throw new SafeError('Cannot check out within 1 minute of check-in. Please wait.');
+}
+```
 
-**Option B**: Show "Items Left" based on the manual item counts entered by volunteers in the Manual Count zone, which reflects actual physical remaining stock. If manual counts exist, prefer those over the calculated value.
+### 3. Data Fix (SQL) -- Correct today's stale data
 
-### Fix 2: Clean Up Stale Transactions
-Remove the 16 January 5th transactions from the count by filtering the `get_marketplace_distribution_count` RPC to only count today's transactions (or transactions after the marketplace became active).
+Clear the stale `checked_out_at` on Taleen's card (currently checked_in but showing old checkout time):
 
-### Fix 3: Prevent Future Old-Limit Capping
-The `distribute_marketplace_item` RPC already reads `beneficiary_credit_limit` dynamically from the marketplace. The client-side `distributeItem` mutation also reads it dynamically. No code change needed -- the limit was already updated to 25 and future cards will respect it.
+```sql
+UPDATE volunteer_qr_cards
+SET checked_out_at = NULL
+WHERE id = 'aee4e72f-40db-4c13-8d16-98de60eaf0cd'
+  AND status = 'checked_in';
+```
 
-### Fix 4: Update "Items Left" to Use Manual Counts When Available
-In `useMarketplaceAllocations.ts`, when calculating `totalRemaining`, check if `marketplace_manual_counts` has data for this marketplace. If manual remaining counts exist, use `SUM(actual_remaining)` from that table instead of `totalAllocated - totalDistributed`.
+## Summary of Changes
 
-## Technical Changes
-
-### 1. Update `get_marketplace_distribution_count` RPC (SQL migration)
-Add a date filter to exclude stale transactions from previous events on recycled cards.
-
-### 2. Update `useMarketplaceAllocations.ts` report hook
-When computing `totalRemaining`, query `marketplace_manual_counts` for the marketplace. If data exists, use the sum of `actual_remaining` as the "Items Left" value. This gives on-ground accuracy.
-
-### 3. Update MarketplaceReports display
-Add a visual indicator when "Items Left" is based on manual counts vs calculated from allocations, so admins know which source is being used.
+- **1 SQL data fix** to correct today's stale checkout timestamp
+- **1 line added** to `checkInVolunteer`: clear `checked_out_at` on re-check-in
+- **3 lines added** to `checkOutVolunteer`: reject checkouts less than 1 minute after check-in
 
