@@ -1,30 +1,30 @@
 
 
-## Fix: Volunteer Dashboard Not Showing Marketplaces
+## Fix: Volunteer Dashboard Shows "No Marketplace" for Completed Events
 
 ### Root Cause
 
-When an employee checks in a volunteer using the Volunteer Zone scanner, the marketplace selection is **optional** -- if the employee forgets to select a marketplace before scanning, the volunteer's QR card gets saved with `marketplace_id = null`. 
+The volunteer dashboard filters marketplaces to only show `upcoming` or `active` status. When a volunteer is checked into a marketplace that later gets marked as `completed`, their card still references that marketplace ID -- but the UI can't find it in the filtered list, so it shows "No marketplace".
 
-On the volunteer's own dashboard (`VolunteerInterface`), the marketplace name is pulled from this card field. Since it's null, the volunteer sees "No marketplace".
-
-Currently, 3 out of 10 recently checked-in volunteer cards have no marketplace assigned.
+For example, volunteer `princesssweenavillaluz@gmail.com` is checked into "Lea's Marketplace" (Feb 2), which now has `status: completed`. The dashboard filters it out, resulting in "No marketplace" display.
 
 ### Fix
 
-Two changes to prevent this:
+**File: `src/components/VolunteerInterface.tsx`**
 
-1. **Block check-in without marketplace selection** -- In `VolunteerZone.tsx` (the employee-facing check-in screen), require the employee to select a marketplace before the "Scan to Check In" button becomes active. Show a warning if no marketplace is selected.
+Instead of only looking up the marketplace name from the filtered `availableMarketplaces` list, look it up from the **full** `marketplaces` list. The filtering should only apply to marketplace selection dropdowns (employee-facing), not to the volunteer's own display.
 
-2. **Auto-select today's active marketplace** -- If there is exactly one marketplace with today's date or with `status = 'active'`, auto-select it so the employee doesn't have to manually pick it every time.
+Changes:
+1. Find `selectedMarketplace` from the full `marketplaces` array instead of `availableMarketplaces`
+2. This ensures the volunteer sees "Lea's Marketplace" even after the event is marked completed
 
-### Technical Changes
+This is a one-line change on line 47:
+- Before: `const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);`
+- After: `const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);`
 
-**File: `src/components/zones/VolunteerZone.tsx`**
+### Why This Is Safe
 
-- Add a `useEffect` that auto-selects a marketplace if one matches today's date or has `active` status
-- Disable the "Scan to Check In" button when no marketplace is selected (check-out can proceed without one)
-- Show a small inline warning below the scan button if marketplace is not selected during check-in mode
-
-**No database or edge function changes needed.**
+- The `availableMarketplaces` filtered list is not used anywhere else in `VolunteerInterface.tsx` (no marketplace selector dropdown exists on the volunteer side)
+- The volunteer only needs to **display** the marketplace name, not select one
+- The employee-facing `VolunteerZone.tsx` already has its own separate filtering logic
 
