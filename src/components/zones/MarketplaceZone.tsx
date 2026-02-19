@@ -109,10 +109,13 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Operation failed';
+      const isLimit = message.includes('LIMIT');
       setFeedback({
-        type: message.includes('LIMIT') ? 'error' : 'warning',
-        title: message.includes('LIMIT') ? 'Limit Reached!' : 'Action Failed',
-        subtitle: message,
+        type: isLimit ? 'error' : 'warning',
+        title: isLimit ? 'Limit Reached!' : 'Action Failed',
+        subtitle: isLimit ? 'Maximum items already collected.' : message,
+        credits: isLimit ? creditLimit : undefined,
+        creditLimit: isLimit ? creditLimit : undefined,
       });
     } finally {
       setIsProcessing(false);
