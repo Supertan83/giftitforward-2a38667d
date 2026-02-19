@@ -1670,27 +1670,41 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     QR Codes ({selectedVolunteer.volunteer_qr_cards.length})
                   </h3>
                   <div className="space-y-2">
-                    {selectedVolunteer.volunteer_qr_cards.map((card, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs font-mono bg-background px-2 py-1 rounded">{card.unique_id}</code>
-                          <Badge variant={card.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                            {card.status}
-                          </Badge>
+                    {selectedVolunteer.volunteer_qr_cards.map((card, idx) => {
+                      const isFamily = /-F\d+[A-Z0-9]+$/.test(card.unique_id);
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <code className="text-xs font-mono bg-background px-2 py-1 rounded">{card.unique_id}</code>
+                            {isFamily ? (
+                              <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/30 text-xs">
+                                <Users className="w-3 h-3 mr-1" />
+                                Family
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/30 text-xs">
+                                <User className="w-3 h-3 mr-1" />
+                                Volunteer
+                              </Badge>
+                            )}
+                            <Badge variant={card.status === 'checked_in' ? 'default' : 'secondary'} className="text-xs">
+                              {card.status}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => {
+                              navigator.clipboard.writeText(card.unique_id);
+                              toast({ title: 'QR code copied!' });
+                            }}
+                          >
+                            <Copy className="w-3 h-3" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => {
-                            navigator.clipboard.writeText(card.unique_id);
-                            toast({ title: 'QR code copied!' });
-                          }}
-                        >
-                          <Copy className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1733,6 +1747,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               {(() => {
                 const deps = extractUniqueDependents(selectedVolunteer.events_json);
                 if (deps.length === 0) return null;
+                // Get family QR cards for matching
+                const familyCards = (selectedVolunteer.volunteer_qr_cards || []).filter(c => /-F\d+[A-Z0-9]+$/.test(c.unique_id));
                 return (
                   <div>
                     <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
@@ -1740,17 +1756,42 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       Family Members ({deps.length})
                     </h3>
                     <div className="space-y-2">
-                      {deps.map((dep, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={dep.type === 'adult' ? 'default' : 'secondary'} className="text-xs">
-                              {dep.type === 'adult' ? 'Adult' : 'Child'}
-                            </Badge>
-                            <span className="font-medium">{dep.name}</span>
-                            {dep.gender && <span className="text-muted-foreground text-sm">({dep.gender})</span>}
+                      {deps.map((dep, idx) => {
+                        // Try to match family card by index (F1, F2, etc.)
+                        const matchingCard = familyCards.find(c => {
+                          const match = c.unique_id.match(/-F(\d+)[A-Z0-9]+$/);
+                          return match && parseInt(match[1]) === idx + 1;
+                        });
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant={dep.type === 'adult' ? 'default' : 'secondary'} className="text-xs">
+                                {dep.type === 'adult' ? 'Adult' : 'Child'}
+                              </Badge>
+                              <span className="font-medium">{dep.name}</span>
+                              {dep.gender && <span className="text-muted-foreground text-sm">({dep.gender})</span>}
+                            </div>
+                            {matchingCard && (
+                              <div className="flex items-center gap-1">
+                                <code className="text-xs font-mono bg-background px-2 py-0.5 rounded text-muted-foreground">
+                                  {matchingCard.unique_id}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(matchingCard.unique_id);
+                                    toast({ title: 'Family QR code copied!' });
+                                  }}
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
