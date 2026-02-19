@@ -44,7 +44,7 @@ export const VolunteerInterface = () => {
 
   // Filter to show only upcoming or active marketplaces
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
-  const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
   // Set active zone to assigned zone when check-in status loads
   useEffect(() => {
