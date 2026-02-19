@@ -7,6 +7,7 @@ interface FeedbackOverlayProps {
   title: string;
   subtitle?: string;
   credits?: number;
+  creditLimit?: number;
   isVisible: boolean;
   onComplete?: () => void;
 }
@@ -16,6 +17,7 @@ export const FeedbackOverlay = ({
   title, 
   subtitle, 
   credits,
+  creditLimit,
   isVisible, 
   onComplete 
 }: FeedbackOverlayProps) => {
@@ -89,7 +91,7 @@ export const FeedbackOverlay = ({
           </motion.p>
         )}
         
-        {credits !== undefined && (
+        {credits !== undefined && creditLimit !== undefined && (
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -97,7 +99,7 @@ export const FeedbackOverlay = ({
             className="mt-6"
           >
             <div className="text-6xl font-display font-bold">
-              {credits}/15
+              {creditLimit - credits}/{creditLimit}
             </div>
             <div className="text-lg opacity-80">Credits Remaining</div>
           </motion.div>
