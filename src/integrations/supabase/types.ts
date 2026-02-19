@@ -2030,6 +2030,10 @@ export type Database = {
         Args: { p_marketplace_id: string; p_unique_id: string }
         Returns: Json
       }
+      get_marketplace_distribution_count: {
+        Args: { p_marketplace_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

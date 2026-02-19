@@ -127,6 +127,22 @@ export const useMarketplaceAllocations = (marketplaceId?: string) => {
   return query;
 };
 
+// Fetch the true distribution count from transactions table (source of truth)
+export const useMarketplaceDistributionCount = (marketplaceId?: string) => {
+  return useQuery({
+    queryKey: ['marketplace_distribution_count', marketplaceId],
+    queryFn: async (): Promise<number> => {
+      if (!marketplaceId) return 0;
+      const { data, error } = await supabase.rpc('get_marketplace_distribution_count', {
+        p_marketplace_id: marketplaceId,
+      });
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return Number(data) || 0;
+    },
+    enabled: !!marketplaceId,
+  });
+};
+
 // Allocation operations
 export const useAllocationOperations = () => {
   const queryClient = useQueryClient();
@@ -351,6 +367,11 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         `)
         .eq('marketplace_id', marketplaceId);
 
+      // Get true distribution count from transactions (source of truth)
+      const { data: trueCount } = await supabase.rpc('get_marketplace_distribution_count', {
+        p_marketplace_id: marketplaceId,
+      });
+
       const itemsByType = (allocations || []).map((alloc: any) => ({
         itemId: alloc.item_type_id,
         itemName: alloc.item_types?.name || 'Unknown',
@@ -376,7 +397,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       });
 
       const totalAllocated = itemsByType.reduce((sum, item) => sum + item.allocated, 0);
-      const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
+      const totalDistributed = Number(trueCount) || 0;
 
       // Fetch volunteer data - QR cards for this marketplace
       const { data: volunteerCards } = await supabase
@@ -518,8 +539,13 @@ export const useAllMarketplaceReports = () => {
             .select('allocated_quantity, distributed_quantity')
             .eq('marketplace_id', mp.id);
 
+          // Get true distribution count from transactions
+          const { data: trueCount } = await supabase.rpc('get_marketplace_distribution_count', {
+            p_marketplace_id: mp.id,
+          });
+
           const totalAllocated = allocations?.reduce((sum, a) => sum + a.allocated_quantity, 0) || 0;
-          const totalDistributed = allocations?.reduce((sum, a) => sum + a.distributed_quantity, 0) || 0;
+          const totalDistributed = Number(trueCount) || 0;
 
           return {
             id: mp.id,
