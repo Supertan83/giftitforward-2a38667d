@@ -448,6 +448,11 @@ export const useCardOperations = () => {
         throw new SafeError('Card is already unblocked and ready to use');
       }
 
+      // Preserve marketplace_id for today's cards so transaction counts remain accurate
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isFromToday = card.activated_at && new Date(card.activated_at) >= today;
+
       const { error: updateError } = await supabase
         .from('qr_cards')
         .update({
@@ -455,8 +460,8 @@ export const useCardOperations = () => {
           credit_balance: 0,
           total_items_collected: 0,
           collected_items: [],
-          marketplace_id: null,
-          activated_at: null
+          marketplace_id: isFromToday ? card.marketplace_id : null,
+          activated_at: isFromToday ? card.activated_at : null
         })
         .eq('id', card.id);
 
@@ -1641,6 +1646,19 @@ export const useMarketplaceSyncOperations = () => {
 
   const forceResetCard = useMutation({
     mutationFn: async (cardId: string) => {
+      // Fetch card first to check if it's from today
+      const { data: card, error: fetchError } = await supabase
+        .from('qr_cards')
+        .select('activated_at, marketplace_id')
+        .eq('id', cardId)
+        .maybeSingle();
+
+      if (fetchError) throw new SafeError(mapDatabaseError(fetchError), fetchError);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isFromToday = card?.activated_at && new Date(card.activated_at) >= today;
+
       const { error } = await supabase
         .from('qr_cards')
         .update({
@@ -1652,8 +1670,9 @@ export const useMarketplaceSyncOperations = () => {
           marital_status: null,
           nationality: null,
           children_count: 0,
-          marketplace_id: null,
-          activated_at: null
+          // Preserve marketplace_id for today's cards so transaction counts remain accurate
+          marketplace_id: isFromToday ? card.marketplace_id : null,
+          activated_at: isFromToday ? card.activated_at : null
         })
         .eq('id', cardId);
 
