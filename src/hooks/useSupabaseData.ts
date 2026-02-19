@@ -1388,6 +1388,7 @@ export const useVolunteerCardOperations = () => {
         .update({
           status: 'checked_in',
           checked_in_at: now,
+          checked_out_at: null,
           marketplace_id: marketplaceId || null,
           assigned_zone: assignedZone || null
         })
@@ -1432,6 +1433,11 @@ export const useVolunteerCardOperations = () => {
       const now = new Date();
       const checkedInAt = new Date(card.checked_in_at);
       const hoursWorked = (now.getTime() - checkedInAt.getTime()) / (1000 * 60 * 60);
+
+      // Prevent accidental immediate checkouts (less than 1 minute)
+      if (hoursWorked < (1 / 60)) {
+        throw new SafeError('Cannot check out within 1 minute of check-in. Please wait.');
+      }
 
       const { error: updateError } = await supabase
         .from('volunteer_qr_cards')
