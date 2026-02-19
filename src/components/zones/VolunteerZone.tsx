@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCheck, QrCode, Clock, Scan, Loader2, MapPin, UserX, Users, LogIn, ShoppingBag, LogOut } from 'lucide-react';
+import { UserCheck, QrCode, Clock, Scan, Loader2, MapPin, UserX, Users, LogIn, ShoppingBag, LogOut, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
@@ -58,6 +58,25 @@ export const VolunteerZone = () => {
   // Filter to show only upcoming or active marketplaces
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
   const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
+
+  // Auto-select marketplace: prefer today's date match, then active status
+  useEffect(() => {
+    if (selectedMarketplaceId || availableMarketplaces.length === 0) return;
+    
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const todayMatch = availableMarketplaces.filter(m => m.event_date === today);
+    if (todayMatch.length === 1) {
+      setSelectedMarketplaceId(todayMatch[0].id);
+      return;
+    }
+    
+    const activeOnes = availableMarketplaces.filter(m => m.status === 'active');
+    if (activeOnes.length === 1) {
+      setSelectedMarketplaceId(activeOnes[0].id);
+    }
+  }, [availableMarketplaces, selectedMarketplaceId]);
+
+  const isCheckInBlocked = actionMode === 'check-in' && !selectedMarketplaceId;
 
   // Stats for selected marketplace
   const marketplaceStats = useMemo(() => {
@@ -298,7 +317,7 @@ export const VolunteerZone = () => {
           variant={actionMode === 'check-in' ? 'default' : 'secondary'}
           size="xl" 
           className="w-full"
-          disabled={isProcessing}
+          disabled={isProcessing || isCheckInBlocked}
         >
           {isProcessing ? (
             <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
@@ -307,6 +326,13 @@ export const VolunteerZone = () => {
           )}
           {isProcessing ? 'Processing...' : `Scan to ${actionMode === 'check-in' ? 'Check In' : 'Check Out'}`}
         </Button>
+
+        {isCheckInBlocked && (
+          <div className="flex items-center gap-2 mt-3 p-2.5 rounded-lg bg-warning/10 border border-warning/20 text-warning text-xs">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>Please select a marketplace above before checking in volunteers.</span>
+          </div>
+        )}
       </motion.div>
 
       {/* Recently Checked-In Volunteers */}
