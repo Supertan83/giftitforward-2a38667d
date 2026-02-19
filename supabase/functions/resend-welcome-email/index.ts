@@ -73,7 +73,7 @@ async function buildEventsHtml(
   const eventBlocks: string[] = [];
 
   for (const evt of eventsJson) {
-    const slug = evt.slug || evt.event_slug;
+    const slug = evt.event || evt.slug || evt.event_slug;
     const eventName = evt.name || evt.event_name || slug || 'Gift It Forward marketplace';
 
     // Try to look up marketplace details by matching the slug to marketplace name
@@ -100,9 +100,12 @@ async function buildEventsHtml(
     }
 
     // Fall back to data from events_json itself
+    if (!eventDate && evt.eventDate) eventDate = evt.eventDate;
     if (!eventDate && evt.date) eventDate = formatDate(evt.date);
     if (!eventDate && evt.event_date) eventDate = formatDate(evt.event_date);
+    if (!location && evt.eventLocation) location = evt.eventLocation;
     if (!location && evt.location) location = evt.location;
+    if (!timeRange && evt.eventTime) timeRange = evt.eventTime;
     if (!timeRange && evt.time) timeRange = evt.time;
 
     eventBlocks.push(buildEventBlock({
