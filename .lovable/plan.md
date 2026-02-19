@@ -1,28 +1,53 @@
 
 
-# Fix Distribution Counter for Young Dreamers Marketplace
+# Permanent Fix: Distribution Counter Always Accurate
 
 ## Problem
-The volunteer screen shows only ~54 distributed items, but the actual transaction count is **3,481**.
+The "Total Scanned" counter on the volunteer screen and marketplace reports keeps falling out of sync. We've manually corrected it 3 times now. The root cause is that the `distribute_marketplace_item` RPC only increments one allocation record, and various edge cases (resets, old code paths, race conditions) cause the counter to drift.
 
-## Root Cause
-The `distribute_marketplace_item` RPC increments only the first allocation record, but most early scans used an older code path that skipped the allocation increment entirely.
+## Solution
+Instead of relying on the `distributed_quantity` column in `marketplace_item_allocations`, read the actual count directly from the `transactions` table -- which is the single source of truth since every scan creates a transaction record.
 
-## Fix
+## Changes
 
-### Data Correction
-Update the first allocation record to reflect the true transaction count of 3,481:
+### 1. New database function: `get_marketplace_distribution_count`
+Create an RPC function that counts actual Distribution transactions for a given marketplace. This is a simple COUNT query on the transactions table joined with qr_cards.
 
+### 2. Update `useMarketplaceAllocations` hook
+After fetching allocations, also call the new RPC to get the true distribution count. Override the `distributedQuantity` total with the real transaction count so the volunteer screen shows accurate numbers.
+
+### 3. Update `useMarketplaceReport` hook
+In the report generation, replace the sum of `distributed_quantity` from allocations with the actual transaction count from the new RPC. This fixes the marketplace reports as well.
+
+### 4. Immediate data correction
+Update the primary allocation record to match the current actual count (4,196) so that the allocation table is also in sync right now.
+
+## Technical Details
+
+**New SQL function:**
 ```sql
-UPDATE marketplace_item_allocations
-SET distributed_quantity = 3481
-WHERE id = 'e0251656-0060-4d0f-bb10-450607cc2586';
+CREATE OR REPLACE FUNCTION get_marketplace_distribution_count(p_marketplace_id uuid)
+RETURNS bigint
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+  SELECT COUNT(*)
+  FROM transactions t
+  JOIN qr_cards q ON t.card_id = q.id
+  WHERE q.marketplace_id = p_marketplace_id
+    AND t.type = 'Distribution';
+$$;
 ```
 
-This is the only change needed. The code already uses the correct RPC path (`distributeItemSimple`) going forward, so future scans will continue incrementing correctly from 3,481.
+**MarketplaceZone changes:**
+- The `totalScanned` variable will use the transaction-based count instead of summing `distributed_quantity` from allocations
+- This ensures the big center number and the "Total Scanned" stat card are always correct
 
-### After the Fix
-- "Total Scanned" on the volunteer screen will show **3,481** instead of 54
-- All future scans will increment from there (3,482, 3,483, etc.)
-- No code changes required
+**Report changes:**
+- `totalDistributed` in the report will come from the transaction count
+- Individual item-level distribution breakdowns will remain from allocation records (for per-item reporting)
 
+## What This Fixes
+- Volunteer screen "Total Scanned" will always be accurate (currently showing ~90, should be 4,196)
+- Marketplace reports will show correct totals
+- No more manual database corrections needed
+- Future scans will be reflected immediately since transactions are always written
