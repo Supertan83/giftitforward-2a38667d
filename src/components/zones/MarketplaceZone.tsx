@@ -6,6 +6,7 @@ import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
 import { useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useMarketplaceDistributionCount } from '@/hooks/useMarketplaceAllocations';
 import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
+  const { data: trueDistributionCount = 0, isLoading: loadingCount } = useMarketplaceDistributionCount(selectedMarketplaceId || undefined);
   const { distributeItemSimple, returnItemSimple } = useCardOperations();
   const { data: marketplaces = [] } = useMarketplaces();
   const queryClient = useQueryClient();
@@ -36,9 +38,9 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
   const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
 
-  // Calculate totals from allocations
+  // Calculate totals - use transaction-based count as source of truth for scanned
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
-  const totalScanned = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
+  const totalScanned = trueDistributionCount;
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
@@ -61,16 +63,8 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
           marketplaceId: selectedMarketplaceId
         });
 
-        // Optimistic update: increment scanned count locally
-        queryClient.setQueryData(
-          ['marketplace_allocations', selectedMarketplaceId],
-          (old: any[] | undefined) => {
-            if (!old || old.length === 0) return old;
-            const updated = [...old];
-            updated[0] = { ...updated[0], distributedQuantity: updated[0].distributedQuantity + 1 };
-            return updated;
-          }
-        );
+        // Invalidate the transaction-based count to refresh
+        queryClient.invalidateQueries({ queryKey: ['marketplace_distribution_count', selectedMarketplaceId] });
 
         setFeedback({
           type: 'success',
@@ -85,19 +79,8 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
           marketplaceId: selectedMarketplaceId
         });
 
-        // Optimistic update: decrement distributed count locally
-        queryClient.setQueryData(
-          ['marketplace_allocations', selectedMarketplaceId],
-          (old: any[] | undefined) => {
-            if (!old) return old;
-            const updated = [...old];
-            const idx = updated.findIndex(a => a.distributedQuantity > 0);
-            if (idx >= 0) {
-              updated[idx] = { ...updated[idx], distributedQuantity: updated[idx].distributedQuantity - 1 };
-            }
-            return updated;
-          }
-        );
+        // Invalidate the transaction-based count to refresh
+        queryClient.invalidateQueries({ queryKey: ['marketplace_distribution_count', selectedMarketplaceId] });
 
         setFeedback({
           type: 'success',
@@ -122,7 +105,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     }
   }, [selectedMarketplaceId, mode, distributeItemSimple, returnItemSimple, queryClient]);
 
-  const isLoading = loadingAllocations;
+  const isLoading = loadingAllocations || loadingCount;
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
