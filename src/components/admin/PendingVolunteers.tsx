@@ -185,6 +185,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [generatingFamilyQRs, setGeneratingFamilyQRs] = useState(false);
   
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1109,6 +1110,42 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)} className="gap-2">
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  setGeneratingFamilyQRs(true);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('generate-missing-family-qrs');
+                    if (error) throw error;
+                    if (data?.totalCardsCreated > 0) {
+                      toast({
+                        title: 'Family QR Cards Generated',
+                        description: `Created ${data.totalCardsCreated} family QR card(s) for ${data.volunteersFixed} volunteer(s).`,
+                      });
+                      refetch();
+                    } else {
+                      toast({
+                        title: 'No Missing Cards',
+                        description: 'All volunteers with family members already have their QR cards.',
+                      });
+                    }
+                  } catch (err) {
+                    toast({
+                      title: 'Generation Failed',
+                      description: err instanceof Error ? err.message : 'Unknown error',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setGeneratingFamilyQRs(false);
+                  }
+                }}
+                disabled={generatingFamilyQRs}
+                className="gap-2"
+              >
+                {generatingFamilyQRs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                <span className="hidden sm:inline">Fix Family QRs</span>
               </Button>
               <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
                 <RefreshCw className="w-4 h-4" />
