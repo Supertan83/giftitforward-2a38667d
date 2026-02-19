@@ -225,7 +225,7 @@ export const VolunteerInterface = () => {
             {/* Marketplace Display */}
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <MapPin className="w-3.5 h-3.5" />
-              <span>{selectedMarketplace?.name || 'No marketplace'}</span>
+              <span>{selectedMarketplace?.name || 'Marketplace assigned'}</span>
             </div>
           </div>
         </div>
