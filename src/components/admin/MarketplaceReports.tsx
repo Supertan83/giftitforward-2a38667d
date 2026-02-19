@@ -228,12 +228,7 @@ export const MarketplaceReports = ({
                       </div>
                       <div>
                         <p className="text-2xl font-bold">{report.items.totalRemaining}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Items Left
-                          {report.manualCountsUsed && (
-                            <span className="ml-1 text-emerald-600 font-medium">(Manual)</span>
-                          )}
-                        </p>
+                        <p className="text-xs text-muted-foreground">Items Left</p>
                       </div>
                     </div>
                   </div>
@@ -280,12 +275,9 @@ export const MarketplaceReports = ({
                           <p className="text-2xl font-bold text-emerald-600">{report.items.totalDistributed}</p>
                           <p className="text-xs text-muted-foreground">Distributed</p>
                         </div>
-                        <div className={`${report.manualCountsUsed ? 'bg-emerald-500/10' : 'bg-amber-500/10'} rounded-lg p-4 text-center`}>
-                          <p className={`text-2xl font-bold ${report.manualCountsUsed ? 'text-emerald-600' : 'text-amber-600'}`}>{report.items.totalRemaining}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Remaining
-                            {report.manualCountsUsed && <span className="block text-emerald-600 font-medium">📋 Manual Count</span>}
-                          </p>
+                        <div className="bg-amber-500/10 rounded-lg p-4 text-center">
+                          <p className="text-2xl font-bold text-amber-600">{report.items.totalRemaining}</p>
+                          <p className="text-xs text-muted-foreground">Remaining</p>
                         </div>
                       </div>
 

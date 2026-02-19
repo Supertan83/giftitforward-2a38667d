@@ -15,7 +15,6 @@ export interface MarketplaceAllocation {
 }
 
 export interface MarketplaceReport {
-  manualCountsUsed?: boolean;
   marketplace: {
     id: string;
     name: string;
@@ -400,22 +399,6 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalAllocated = itemsByType.reduce((sum, item) => sum + item.allocated, 0);
       const totalDistributed = Number(trueCount) || 0;
 
-      // Fetch manual counts to determine if physical remaining data exists
-      const { data: manualCounts } = await supabase
-        .from('marketplace_manual_counts')
-        .select('actual_remaining')
-        .eq('marketplace_id', marketplaceId);
-
-      let totalRemaining: number;
-      let manualCountsUsed = false;
-
-      if (manualCounts && manualCounts.length > 0) {
-        totalRemaining = manualCounts.reduce((sum, mc) => sum + (mc.actual_remaining || 0), 0);
-        manualCountsUsed = true;
-      } else {
-        totalRemaining = totalAllocated - totalDistributed;
-      }
-
       // Fetch volunteer data - QR cards for this marketplace
       const { data: volunteerCards } = await supabase
         .from('volunteer_qr_cards')
@@ -485,7 +468,6 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const volDropoutRate = totalVolunteers > 0 ? Math.round(((totalVolunteers - totalAttended) / totalVolunteers) * 100) : 0;
 
       return {
-        manualCountsUsed,
         marketplace: {
           id: marketplace.id,
           name: marketplace.name,
@@ -505,7 +487,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         items: {
           totalAllocated,
           totalDistributed,
-          totalRemaining,
+          totalRemaining: totalAllocated - totalDistributed,
           byItemType: itemsByType,
           byCategory,
         },
@@ -565,21 +547,6 @@ export const useAllMarketplaceReports = () => {
           const totalAllocated = allocations?.reduce((sum, a) => sum + a.allocated_quantity, 0) || 0;
           const totalDistributed = Number(trueCount) || 0;
 
-          // Check for manual counts
-          const { data: manualCounts } = await supabase
-            .from('marketplace_manual_counts')
-            .select('actual_remaining')
-            .eq('marketplace_id', mp.id);
-
-          let totalRemaining: number;
-          let manualCountsUsed = false;
-          if (manualCounts && manualCounts.length > 0) {
-            totalRemaining = manualCounts.reduce((sum, mc) => sum + (mc.actual_remaining || 0), 0);
-            manualCountsUsed = true;
-          } else {
-            totalRemaining = totalAllocated - totalDistributed;
-          }
-
           return {
             id: mp.id,
             name: mp.name,
@@ -589,8 +556,7 @@ export const useAllMarketplaceReports = () => {
             beneficiaryCount: (archivedCount || 0) + (activeCount || 0),
             totalAllocated,
             totalDistributed,
-            totalRemaining,
-            manualCountsUsed,
+            totalRemaining: totalAllocated - totalDistributed,
           };
         })
       );
