@@ -1,30 +1,45 @@
 
 
-## Fix: Volunteer Dashboard Shows "No Marketplace" for Completed Events
+## Fix: Volunteers See "No Marketplace" on Dashboard
 
-### Root Cause
+### Problem
 
-The volunteer dashboard filters marketplaces to only show `upcoming` or `active` status. When a volunteer is checked into a marketplace that later gets marked as `completed`, their card still references that marketplace ID -- but the UI can't find it in the filtered list, so it shows "No marketplace".
+Many volunteers are reporting they see "No marketplace" on their dashboard. There are two causes:
 
-For example, volunteer `princesssweenavillaluz@gmail.com` is checked into "Lea's Marketplace" (Feb 2), which now has `status: completed`. The dashboard filters it out, resulting in "No marketplace" display.
+1. **Published site is outdated**: The fix we already made (looking up marketplace from the full list instead of the filtered list) has not been published yet. Volunteers on completed marketplaces (like "Lea's Marketplace") still can't see the name on the live site.
 
-### Fix
+2. **Some volunteer cards have no marketplace assigned**: Three volunteer cards were checked in before marketplace selection was enforced, so their `marketplace_id` is NULL. No code fix can display a marketplace name that doesn't exist in the data.
 
-**File: `src/components/VolunteerInterface.tsx`**
+### Plan
 
-Instead of only looking up the marketplace name from the filtered `availableMarketplaces` list, look it up from the **full** `marketplaces` list. The filtering should only apply to marketplace selection dropdowns (employee-facing), not to the volunteer's own display.
+**Step 1: Data Fix -- Assign missing marketplace IDs**
 
-Changes:
-1. Find `selectedMarketplace` from the full `marketplaces` array instead of `availableMarketplaces`
-2. This ensures the volunteer sees "Lea's Marketplace" even after the event is marked completed
+Run a database update to assign the correct marketplace to the 3 cards with NULL marketplace_id. Based on their check-in dates, they should be assigned to the marketplace that was active at that time (Lea's Marketplace).
 
-This is a one-line change on line 47:
-- Before: `const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);`
-- After: `const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);`
+**Step 2: Improve the UI fallback display**
 
-### Why This Is Safe
+Update `VolunteerInterface.tsx` so that instead of showing "No marketplace" when the marketplace can't be found, it shows a more helpful message like "Marketplace assigned" -- confirming the volunteer is checked in even if the name can't be resolved.
 
-- The `availableMarketplaces` filtered list is not used anywhere else in `VolunteerInterface.tsx` (no marketplace selector dropdown exists on the volunteer side)
-- The volunteer only needs to **display** the marketplace name, not select one
-- The employee-facing `VolunteerZone.tsx` already has its own separate filtering logic
+**Step 3: Publish**
+
+After both changes, publish the app so the live site at gif.thesurpluss.com gets the updates.
+
+---
+
+### Technical Details
+
+**Database migration**: Update the 3 NULL marketplace_id cards:
+
+```sql
+UPDATE volunteer_qr_cards
+SET marketplace_id = 'c98b7887-d68a-45b5-914d-814292663092'
+WHERE id IN (
+  '5c80f281-48e0-4516-9c89-04316c98365d',
+  'c6f1778e-5122-42dc-b490-2bb860bdd310',
+  '77252019-053e-416e-a862-b57b9d9dd808'
+) AND marketplace_id IS NULL;
+```
+
+**File change** in `src/components/VolunteerInterface.tsx`:
+- Change the fallback text from `'No marketplace'` to `'Marketplace assigned'` so it doesn't alarm volunteers if the name lookup fails for any reason.
 
