@@ -1,51 +1,28 @@
 
 
-# Fix Distribution Counter Mismatch
+# Fix Distribution Counter for Young Dreamers Marketplace
 
 ## Problem
-The "Young Dreamers Boys Community School Marketplace" has **3,253 actual distribution transactions** recorded, but the allocation tracking table (`marketplace_item_allocations`) only shows **22 total distributed**. This means the "Total Scanned" counter on the volunteer screen is showing ~22 instead of the real number.
+The volunteer screen shows only ~54 distributed items, but the actual transaction count is **3,481**.
 
 ## Root Cause
-The database RPC function `distribute_marketplace_item` picks the **first allocation** (by `created_at`) and increments its `distributed_quantity`. This has been working, but it appears the bulk of early scans happened through a different code path (the older `distributeItem` function in `useSupabaseData.ts`) that updates the card and creates a transaction but does NOT increment the allocation's `distributed_quantity`. Only recent scans using the newer `distributeItemSimple` (which calls the RPC) correctly updated the counter.
+The `distribute_marketplace_item` RPC increments only the first allocation record, but most early scans used an older code path that skipped the allocation increment entirely.
 
 ## Fix
 
-### Step 1: Data Correction (Database Update)
-Update the first allocation record for this marketplace to reflect the true total of 3,253 distributions (from the transactions table). Since the system doesn't track per-item-type distributions (it's a generic scan), all counts go to the first allocation:
+### Data Correction
+Update the first allocation record to reflect the true transaction count of 3,481:
 
 ```sql
--- Set distributed_quantity on the first allocation to match actual transaction count
 UPDATE marketplace_item_allocations
-SET distributed_quantity = 3253
-WHERE id = (
-  SELECT id FROM marketplace_item_allocations
-  WHERE marketplace_id = '49fb6332-2eb5-417d-a076-d3a66af20ba9'
-  ORDER BY created_at ASC
-  LIMIT 1
-);
-
--- Reset the small count on any other allocation that got a stray increment
-UPDATE marketplace_item_allocations
-SET distributed_quantity = 0
-WHERE marketplace_id = '49fb6332-2eb5-417d-a076-d3a66af20ba9'
-  AND id != (
-    SELECT id FROM marketplace_item_allocations
-    WHERE marketplace_id = '49fb6332-2eb5-417d-a076-d3a66af20ba9'
-    ORDER BY created_at ASC
-    LIMIT 1
-  )
-  AND distributed_quantity > 0;
+SET distributed_quantity = 3481
+WHERE id = 'e0251656-0060-4d0f-bb10-450607cc2586';
 ```
 
-### Step 2: Remove Old Code Path
-The older `distributeItem` function in `useSupabaseData.ts` (the non-RPC path) is no longer used by the Marketplace Zone but still exists. To prevent future mismatches, verify that **only** `distributeItemSimple` (which calls the atomic RPC) is used for marketplace scanning. No code change needed since the MarketplaceZone already uses `distributeItemSimple`.
+This is the only change needed. The code already uses the correct RPC path (`distributeItemSimple`) going forward, so future scans will continue incrementing correctly from 3,481.
 
-### Step 3: Publish
-Push the updated app to the live site so volunteers see the correct "Total Scanned" number.
-
-## Technical Details
-- **Marketplace ID**: `49fb6332-2eb5-417d-a076-d3a66af20ba9`
-- **Actual distributions** (from `transactions` table): 3,253
-- **Current allocation tracking**: 22 (wrong)
-- **Cards with items**: 583 credit_balance across active cards (net current, lower because checkouts reset balances)
+### After the Fix
+- "Total Scanned" on the volunteer screen will show **3,481** instead of 54
+- All future scans will increment from there (3,482, 3,483, etc.)
+- No code changes required
 
