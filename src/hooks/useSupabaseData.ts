@@ -51,7 +51,8 @@ export const useQRCards = () => {
       const { data, error } = await supabase
         .from('qr_cards')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
 
