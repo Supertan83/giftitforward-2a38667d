@@ -1,37 +1,46 @@
 
 
-# Generate Missing Family Member QR Cards
+# Fix: Distributed Quantity Resets to 0 After Manual Edit
 
 ## Problem
-Some volunteers registered via webhook have family members listed in their `events_json` (with `dependents` data), but no corresponding family QR cards were created in `volunteer_qr_cards`. This affects at least 7 volunteers (e.g., souheil.alaimi@alshaya.com who has dependent "Farah Zitouni" but only 1 QR card for themselves).
+When an admin manually edits the "Distributed" quantity for an item allocation (e.g., setting "Boys Clothing" to 300), the save succeeds but the value reverts to 0 shortly after. 
 
-This happened because these volunteers were processed before the family QR generation logic was added to the webhook-receiver.
+## Root Cause
+The `sync-surpluss-event-allocations` edge function runs periodically (via cron) and overwrites **both** `allocated_quantity` and `distributed_quantity` with whatever the Surpluss API returns. Since the Surpluss API typically reports `distributed_amount: 0` for these CDA/manual events, every sync cycle resets the manually entered distributed values back to 0.
+
+The problematic code is in `supabase/functions/sync-surpluss-event-allocations/index.ts`, line 200-201:
+
+```text
+await supabase.from('marketplace_item_allocations')
+  .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, ... })
+  .eq('id', existingAlloc.id);
+```
 
 ## Solution
-
-### 1. New Edge Function: `generate-missing-family-qrs`
-Create a backend function that:
-- Fetches all `pending_volunteers` with `events_json` containing dependents
-- For each, checks if family QR cards already exist (by counting cards with `-F` suffix linked to that volunteer)
-- If dependents exist but family cards are missing, generates the family QR cards using the same naming convention (`VOL-XXXXX-F1XX`, `-F2XX`, etc.)
-- Returns a summary of what was created
-
-### 2. Admin UI: Add "Fix Missing Family QR Cards" button
-In the `PendingVolunteers.tsx` component (Volunteers Added section), add a utility button that:
-- Calls the new edge function
-- Shows a toast with results (how many family cards were generated)
-- Placed near the existing bulk action buttons for admin convenience
+Modify the `syncMaterial` function to **preserve the higher value** of `distributed_quantity`. If the existing database value is greater than what the API reports, keep the existing value. This ensures:
+- Manual edits by admins are preserved
+- If Surpluss API eventually reports real distribution data, it will be picked up when it exceeds the manual value
 
 ## Technical Details
 
-**Edge Function** (`supabase/functions/generate-missing-family-qrs/index.ts`):
-- Reuses the same `extractUniqueDependents` logic from webhook-receiver
-- Reuses the same `generateFamilyQRId` pattern (base volunteer QR + `-F{index}{random}`)
-- For each volunteer: count existing family cards vs expected dependents; generate only the missing ones
-- Inserts new cards into `volunteer_qr_cards` with `status: 'inactive'` and linked `volunteer_id`
+**File:** `supabase/functions/sync-surpluss-event-allocations/index.ts`
 
-**Frontend** (`src/components/admin/PendingVolunteers.tsx`):
-- Add a "Generate Missing Family QRs" button with a Users icon
-- On click, invoke the edge function and display results via toast
-- Include count of affected volunteers and cards created
+In the `syncMaterial` function (around line 199-202), change the update logic:
+
+**Before:**
+```typescript
+await supabase.from('marketplace_item_allocations')
+  .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, updated_at: new Date().toISOString() })
+  .eq('id', existingAlloc.id);
+```
+
+**After:**
+```typescript
+const finalDistributed = Math.max(existingAlloc.distributed_quantity || 0, distributedAmount);
+await supabase.from('marketplace_item_allocations')
+  .update({ allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() })
+  .eq('id', existingAlloc.id);
+```
+
+This single change ensures the sync never overwrites a manually entered distributed count with a lower API value.
 
