@@ -48,15 +48,26 @@ export const useQRCards = () => {
   const query = useQuery({
     queryKey: ['qr_cards'],
     queryFn: async (): Promise<QRCard[]> => {
-      const { data, error } = await supabase
-        .from('qr_cards')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5000);
+      const allData: any[] = [];
+      const pageSize = 1000;
+      let from = 0;
 
-      if (error) throw new SafeError(mapDatabaseError(error), error);
+      while (true) {
+        const { data, error } = await supabase
+          .from('qr_cards')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
 
-      return (data || []).map(card => ({
+        if (error) throw new SafeError(mapDatabaseError(error), error);
+        if (!data || data.length === 0) break;
+
+        allData.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allData.map(card => ({
         id: card.id,
         uniqueId: card.unique_id,
         status: mapDbStatusToApp(card.status as DbCardStatus),
