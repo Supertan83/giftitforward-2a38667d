@@ -1,46 +1,29 @@
 
 
-# Fix: Distributed Quantity Resets to 0 After Manual Edit
+# Fix: QR Cards Not Visible (1,000 Row Limit)
 
 ## Problem
-When an admin manually edits the "Distributed" quantity for an item allocation (e.g., setting "Boys Clothing" to 300), the save succeeds but the value reverts to 0 shortly after. 
+You created 2,000 QR cards on Feb 18, but many are not visible in the app. The cards are **still safely in the database** (2,100 total) -- nothing was deleted.
 
 ## Root Cause
-The `sync-surpluss-event-allocations` edge function runs periodically (via cron) and overwrites **both** `allocated_quantity` and `distributed_quantity` with whatever the Surpluss API returns. Since the Surpluss API typically reports `distributed_amount: 0` for these CDA/manual events, every sync cycle resets the manually entered distributed values back to 0.
-
-The problematic code is in `supabase/functions/sync-surpluss-event-allocations/index.ts`, line 200-201:
-
-```text
-await supabase.from('marketplace_item_allocations')
-  .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, ... })
-  .eq('id', existingAlloc.id);
-```
+The database has a default limit of 1,000 rows per query. The `useQRCards` hook fetches cards with no explicit limit, so it silently caps at 1,000. Since cards are sorted newest-first, the older batch of Feb 18 cards falls beyond the cutoff.
 
 ## Solution
-Modify the `syncMaterial` function to **preserve the higher value** of `distributed_quantity`. If the existing database value is greater than what the API reports, keep the existing value. This ensures:
-- Manual edits by admins are preserved
-- If Surpluss API eventually reports real distribution data, it will be picked up when it exceeds the manual value
+Update the `useQRCards` data hook to fetch cards in pages or raise the limit so all cards are returned. Additionally, add pagination to the QR Code Generator's "Registered" tab so large card sets are navigable.
 
 ## Technical Details
 
-**File:** `supabase/functions/sync-surpluss-event-allocations/index.ts`
+### 1. Update `useQRCards` hook (`src/hooks/useSupabaseData.ts`)
+- Add `.limit(5000)` or use range-based pagination to fetch all cards
+- Since `useQRCards` is used across many components (employee dashboard, exit zone, unblock zone, statistics, sync panel), raising the limit is the simplest fix
 
-In the `syncMaterial` function (around line 199-202), change the update logic:
+### 2. Add pagination to QR Code Generator registered tab (`src/components/admin/QRCodeGenerator.tsx`)
+- Add server-side pagination with page controls (next/previous, page size selector)
+- Show total card count so admins know how many exist
+- This prevents performance issues when rendering thousands of cards in a table
 
-**Before:**
-```typescript
-await supabase.from('marketplace_item_allocations')
-  .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, updated_at: new Date().toISOString() })
-  .eq('id', existingAlloc.id);
-```
+### 3. Batch-based filtering (existing feature enhancement)
+- The registered tab already groups by `registration_batch` -- ensure this grouping works with the full dataset
+- Allow filtering by batch so admins can quickly find the Feb 18 batch
 
-**After:**
-```typescript
-const finalDistributed = Math.max(existingAlloc.distributed_quantity || 0, distributedAmount);
-await supabase.from('marketplace_item_allocations')
-  .update({ allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() })
-  .eq('id', existingAlloc.id);
-```
-
-This single change ensures the sync never overwrites a manually entered distributed count with a lower API value.
-
+This fix will make all 2,100 cards visible immediately.
