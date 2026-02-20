@@ -197,8 +197,9 @@ async function syncMaterial(
     .eq('marketplace_id', marketplace.id).eq('item_type_id', itemType.id).limit(1).maybeSingle();
 
   if (existingAlloc) {
+    const finalDistributed = Math.max(existingAlloc.distributed_quantity || 0, distributedAmount);
     await supabase.from('marketplace_item_allocations')
-      .update({ allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount, updated_at: new Date().toISOString() })
+      .update({ allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() })
       .eq('id', existingAlloc.id);
   } else {
     await supabase.from('marketplace_item_allocations')
