@@ -62,6 +62,9 @@ import { Progress } from '@/components/ui/progress';
 import { CSVImport } from '@/components/admin/CSVImport';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
+import { RegisteredCardsList } from '@/components/admin/RegisteredCardsList';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -934,110 +937,17 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     <p className="text-sm">No registered cards in system</p>
                   </div>
                 ) : (
-                  <div className="max-h-[400px] overflow-y-auto space-y-2">
-                    {batchGroups.map(([batchId, batchCards]) => {
-                      const isExpanded = expandedBatches.has(batchId);
-                      const batchIds = batchCards.map(c => c.uniqueId);
-                      const allSelected = batchIds.every(id => selectedCards.has(id));
-                      const someSelected = batchIds.some(id => selectedCards.has(id));
-                      const isUngrouped = batchId === '__ungrouped__';
-                      const batchDate = batchCards[0]?.createdAt 
-                        ? format(new Date(batchCards[0].createdAt), 'MMM d, yyyy HH:mm')
-                        : 'Unknown date';
-
-                      return (
-                        <Collapsible key={batchId} open={isExpanded} onOpenChange={() => toggleBatchExpand(batchId)}>
-                          <div className="border border-border rounded-lg overflow-hidden">
-                            <CollapsibleTrigger asChild>
-                              <div className="flex items-center gap-2 p-2 md:p-3 bg-muted/50 hover:bg-muted cursor-pointer">
-                                {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-xs md:text-sm font-medium">
-                                    {isUngrouped ? 'Ungrouped (legacy)' : `Batch: ${batchDate}`}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground ml-2">
-                                    ({batchCards.length} card{batchCards.length !== 1 ? 's' : ''})
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <Checkbox
-                                    checked={allSelected}
-                                    // Use indeterminate-like styling via data attribute
-                                    className={someSelected && !allSelected ? 'opacity-70' : ''}
-                                    onCheckedChange={() => toggleBatchSelectAll(batchCards)}
-                                    aria-label={`Select all in batch`}
-                                  />
-                                  <span className="text-xs text-muted-foreground hidden sm:inline">Select All</span>
-                                </div>
-                              </div>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                              <table className="w-full text-xs md:text-sm">
-                                <thead className="bg-muted/30">
-                                  <tr>
-                                    <th className="p-2 w-10"></th>
-                                    <th className="text-left p-2 font-medium">Card ID</th>
-                                    <th className="text-left p-2 font-medium">Status</th>
-                                    <th className="text-left p-2 font-medium">Credits</th>
-                                    <th className="text-right p-2 font-medium">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {batchCards.map((card) => (
-                                    <tr key={card.id} className={cn(
-                                      "border-t border-border hover:bg-muted/50",
-                                      selectedCards.has(card.uniqueId) && "bg-primary/5"
-                                    )}>
-                                      <td className="p-2">
-                                        <Checkbox
-                                          checked={selectedCards.has(card.uniqueId)}
-                                          onCheckedChange={() => toggleCardSelection(card.uniqueId)}
-                                          aria-label={`Select ${card.uniqueId}`}
-                                        />
-                                      </td>
-                                      <td className="p-2 font-mono">{card.uniqueId}</td>
-                                      <td className="p-2">
-                                        <span className={cn(
-                                          'px-2 py-0.5 rounded-full text-xs',
-                                          card.status === 'active' ? 'bg-success/20 text-success' :
-                                          card.status === 'checked_out' ? 'bg-warning/20 text-warning' :
-                                          'bg-muted text-muted-foreground'
-                                        )}>
-                                          {card.status}
-                                        </span>
-                                      </td>
-                                      <td className="p-2">{card.creditBalance}/15</td>
-                                      <td className="p-2 text-right">
-                                        <div className="flex justify-end gap-1">
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handlePreviewCard(card.uniqueId)}
-                                            className="text-primary hover:text-primary hover:bg-primary/10 h-7 px-2"
-                                          >
-                                            <Eye className="w-3.5 h-3.5" />
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setCardToUnregister(card.uniqueId)}
-                                            disabled={isUnregistering}
-                                            className="text-danger hover:text-danger hover:bg-danger/10 h-7 px-2"
-                                          >
-                                            <XCircle className="w-3.5 h-3.5" />
-                                          </Button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </CollapsibleContent>
-                          </div>
-                        </Collapsible>
-                      );
-                    })}
-                  </div>
+                  <RegisteredCardsList
+                    batchGroups={batchGroups}
+                    expandedBatches={expandedBatches}
+                    selectedCards={selectedCards}
+                    isUnregistering={isUnregistering}
+                    toggleBatchExpand={toggleBatchExpand}
+                    toggleBatchSelectAll={toggleBatchSelectAll}
+                    toggleCardSelection={toggleCardSelection}
+                    handlePreviewCard={handlePreviewCard}
+                    setCardToUnregister={setCardToUnregister}
+                  />
                 )}
               </div>
             </TabsContent>
