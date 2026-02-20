@@ -46,10 +46,12 @@ interface AllocationDetail {
   updated_at: string;
 }
 const SYNC_INTERVAL_OPTIONS = [
+  { value: 0, label: 'Off' },
   { value: 1, label: '1 min' },
   { value: 3, label: '3 min' },
   { value: 5, label: '5 min' },
   { value: 15, label: '15 min' },
+  { value: 30, label: '30 min' },
 ];
 
 export const SurplussSyncMonitor = ({
@@ -162,6 +164,10 @@ export const SurplussSyncMonitor = ({
 
   // Countdown timer based on clock schedule
   useEffect(() => {
+    if (syncInterval === 0) {
+      setCountdown('Disabled');
+      return;
+    }
     const updateCountdown = () => {
       const now = new Date();
       const mins = now.getMinutes();
@@ -271,6 +277,7 @@ export const SurplussSyncMonitor = ({
     const now = new Date();
     const mins = now.getMinutes();
     const secs = now.getSeconds();
+    if (syncInterval === 0) return 0;
     const elapsed = mins % syncInterval * 60 + secs;
     const total = syncInterval * 60;
     return elapsed / total * 100;
@@ -285,8 +292,10 @@ export const SurplussSyncMonitor = ({
       if (error) throw error;
       setSyncInterval(newInterval);
       toast({
-        title: 'Schedule Updated',
-        description: `Auto-sync now runs every ${newInterval} minute(s)`
+        title: newInterval === 0 ? 'Auto-Sync Disabled' : 'Schedule Updated',
+        description: newInterval === 0 
+          ? 'Auto-sync has been turned off' 
+          : `Auto-sync now runs every ${newInterval} minute(s)`
       });
     } catch (error) {
       toast({
@@ -341,7 +350,9 @@ export const SurplussSyncMonitor = ({
           </div>
           <div>
             <h2 className="font-semibold">Scheduled Auto-Sync</h2>
-            <p className="text-sm text-muted-foreground">Cron job runs every {syncInterval} minute(s) via pg_cron</p>
+            <p className="text-sm text-muted-foreground">
+              {syncInterval === 0 ? 'Auto-sync is currently disabled' : `Runs every ${syncInterval} minute(s)`}
+            </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground whitespace-nowrap">Interval:</span>
@@ -362,8 +373,8 @@ export const SurplussSyncMonitor = ({
               </SelectContent>
             </Select>
             {isUpdatingInterval && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-              <Activity className="w-3 h-3 mr-1" /> Active
+            <Badge variant="outline" className={syncInterval === 0 ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"}>
+              <Activity className="w-3 h-3 mr-1" /> {syncInterval === 0 ? 'Disabled' : 'Active'}
             </Badge>
           </div>
         </div>
@@ -384,7 +395,7 @@ export const SurplussSyncMonitor = ({
               addSuffix: true
             }) : 'No syncs recorded yet'}
             </span>
-            <span className="text-xs text-muted-foreground">Schedule: every {syncInterval} min</span>
+            <span className="text-xs text-muted-foreground">{syncInterval === 0 ? 'Schedule: disabled' : `Schedule: every ${syncInterval} min`}</span>
           </div>
         </div>
 

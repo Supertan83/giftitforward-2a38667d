@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
 
     const { interval_minutes } = await req.json();
 
-    const validIntervals = [1, 3, 5, 15];
+    const validIntervals = [0, 1, 3, 5, 15, 30];
     if (!validIntervals.includes(interval_minutes)) {
       return new Response(
         JSON.stringify({ error: `Invalid interval. Must be one of: ${validIntervals.join(', ')}` }),
@@ -37,25 +37,44 @@ Deno.serve(async (req) => {
       );
     }
 
-    const schedule = `*/${interval_minutes} * * * *`;
-    const functionUrl = `${supabaseUrl}/functions/v1/sync-surpluss-event-allocations`;
-
     // Use Deno postgres to update the cron job
     const { Client } = await import('https://deno.land/x/postgres@v0.19.3/mod.ts');
     const client = new Client(dbUrl);
     await client.connect();
     
+    // Unschedule existing job
     try {
-      // Unschedule existing job by name (more reliable than by ID)
       await client.queryObject(`SELECT cron.unschedule('sync-surpluss-allocations')`);
     } catch (e) {
-      console.log('No existing job to unschedule by name, trying by id:', e.message);
+      console.log('No existing job to unschedule:', e.message);
       try {
         await client.queryObject(`SELECT cron.unschedule(4)`);
       } catch (_) {
         console.log('No job with id 4 either');
       }
     }
+
+    // If interval is 0 (off), just unschedule and don't create a new job
+    if (interval_minutes === 0) {
+      await client.end();
+
+      await supabase.from('surpluss_api_audit_log').insert({
+        action: 'sync_schedule_updated',
+        environment: 'production',
+        request_payload: { interval_minutes: 0, schedule: 'disabled' },
+        response_status: 200,
+        response_body: { message: 'Auto-sync has been disabled' },
+        success: true,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, interval_minutes: 0, schedule: 'disabled', message: 'Auto-sync has been disabled' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const schedule = `*/${interval_minutes} * * * *`;
+    const functionUrl = `${supabaseUrl}/functions/v1/sync-surpluss-event-allocations`;
 
     // Schedule new job
     await client.queryObject(`
