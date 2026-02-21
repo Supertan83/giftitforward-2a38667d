@@ -1,39 +1,52 @@
 
 
-# Fix: Today's Marketplace Event Not Appearing in Dropdown
+# Review Survey Section for Volunteer App
 
-## Problem
-The "Stronger Together Emirati Family Community Marketplace February 21" event exists in the database with status `active` but does not appear in the Volunteer Zone marketplace dropdown. Events starting from February 22 show up, but today's event is missing.
+## What This Does
+Adds a new "Review Survey" tab in the volunteer app's bottom navigation bar. Volunteers can browse all completed survey responses (both internal and external) grouped by respondent name, with their answers displayed in an expandable card format.
 
-## Root Cause: Timezone Bug in Client-Side Status Guard
+## How It Will Look
 
-The `useMarketplaces` hook has a client-side guard that marks events as "completed" if their date+time has passed. The bug is in how the event date string is parsed:
+The bottom navigation bar will get a 4th tab with a clipboard icon labeled "Surveys". Tapping it shows a scrollable list of completed surveys, each as a card showing:
+- Volunteer/respondent name
+- Completion date
+- Expandable section showing each question and their answer
 
-```
-new Date("2026-02-21")  -->  Feb 21 00:00 UTC  -->  Feb 20 20:00 in Dubai (UTC+4)
-setHours(23, 30)        -->  Feb 20 23:30 local (Dubai)
-```
+A search bar at the top lets volunteers filter by name.
 
-Because `new Date("YYYY-MM-DD")` parses as **UTC midnight**, the resulting date is actually the **previous evening** in Dubai time. So at 6:38 AM on Feb 21, the system thinks the event ended on Feb 20 at 23:30 -- and marks it `completed`. The Volunteer Zone then filters it out since it only shows `upcoming` or `active` events.
+## Access Approach
 
-## Fix
+Since volunteers don't have direct database access to survey tables, a new backend function will securely fetch completed surveys and return them without exposing sensitive tokens or IDs.
 
-### File: `src/hooks/useSupabaseData.ts` (~line 1191)
+---
 
-Parse the event date as a **local date** instead of UTC by splitting the date string manually:
+## Technical Details
 
-**Before:**
-```typescript
-const eventDate = new Date(item.event_date);
-```
+### 1. New Backend Function: `get-survey-reviews/index.ts`
 
-**After:**
-```typescript
-const [year, month, day] = item.event_date.split('-').map(Number);
-const eventDate = new Date(year, month - 1, day);
-```
+- Accepts GET requests with optional `search` query param
+- Queries both `volunteer_surveys` and `external_survey_responses` where `completed_at IS NOT NULL`
+- Also fetches `survey_questions` to map question IDs to question text
+- Returns a unified list: `{ name, completedAt, source: 'internal'|'external', answers }` 
+- Requires authenticated user with staff role (volunteers are staff via `is_staff`)
+- Does NOT return survey tokens, emails, or IDs -- only name, date, and answers
 
-This ensures the date is constructed in the **local timezone** (e.g., Feb 21 00:00 Dubai time), so `setHours(23, 30)` correctly sets it to Feb 21 23:30 Dubai time.
+### 2. New Component: `src/components/zones/ReviewSurveyZone.tsx`
 
-This is a one-line change in a single file. No backend or database changes needed.
+- Calls the edge function on mount using `useQuery`
+- Renders a search input and a list of survey cards
+- Each card uses an Accordion to expand/collapse answers
+- Maps answer keys to question text from `survey_questions`
+- Shows "No surveys yet" empty state if none found
+
+### 3. Update: `src/components/VolunteerInterface.tsx`
+
+- Add `'surveys'` to the `Zone` type: `type Zone = 'entrance' | 'marketplace' | 'exit' | 'surveys'`
+- Add a 4th item to the `zones` array with `ClipboardList` icon
+- The surveys tab is always accessible (not zone-restricted) -- all volunteers can view it regardless of assigned zone
+- Add `case 'surveys'` to `renderZone()` switch
+
+### 4. No Database Changes Needed
+
+Both tables already exist with the right data. The edge function reads using the service role key, so no RLS changes are needed.
 
