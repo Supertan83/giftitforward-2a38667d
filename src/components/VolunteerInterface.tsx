@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, ShoppingBag, LogOut, User, MapPin, AlertCircle, Loader2 } from 'lucide-react';
+import { LogIn, ShoppingBag, LogOut, User, MapPin, AlertCircle, Loader2, ClipboardList } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { EntranceZone } from '@/components/zones/EntranceZone';
 import { MarketplaceZone } from '@/components/zones/MarketplaceZone';
 import { ExitZone } from '@/components/zones/ExitZone';
+import { ReviewSurveyZone } from '@/components/zones/ReviewSurveyZone';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useVolunteerCheckInStatus, VolunteerZone as VolunteerZoneType } from '@/hooks/useVolunteerCheckInStatus';
@@ -27,12 +28,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-type Zone = 'entrance' | 'marketplace' | 'exit';
+type Zone = 'entrance' | 'marketplace' | 'exit' | 'surveys';
 
 const zones = [
   { id: 'entrance' as Zone, label: 'Entrance', icon: LogIn, color: 'text-primary' },
   { id: 'marketplace' as Zone, label: 'Marketplace', icon: ShoppingBag, color: 'text-warning' },
   { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
+  { id: 'surveys' as Zone, label: 'Surveys', icon: ClipboardList, color: 'text-primary' },
 ];
 
 export const VolunteerInterface = () => {
@@ -167,6 +169,8 @@ export const VolunteerInterface = () => {
         return <MarketplaceZone selectedMarketplaceId={selectedMarketplaceId} />;
       case 'exit':
         return <ExitZone selectedMarketplaceId={selectedMarketplaceId} />;
+      case 'surveys':
+        return <ReviewSurveyZone />;
     }
   };
 
@@ -241,10 +245,10 @@ export const VolunteerInterface = () => {
         <div className="flex">
           {zones.map((zone) => {
             const Icon = zone.icon;
-            const isAssigned = zone.id === assignedZone;
-            const isActive = zone.id === (assignedZone || activeZone);
+            const isAssigned = zone.id === assignedZone || zone.id === 'surveys';
+            const isActive = zone.id === activeZone;
             
-            // Only the assigned zone is clickable
+            // Only the assigned zone and surveys are clickable
             if (!isAssigned) {
               return (
                 <div
