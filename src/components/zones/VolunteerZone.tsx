@@ -145,8 +145,13 @@ export const VolunteerZone = () => {
     
     try {
       const result = await checkOutVolunteer.mutateAsync(code);
-      const surveySentMessage = result.surveySent 
-        ? 'Survey email sent!' 
+      const messages: string[] = [];
+      if (result.surveySent) messages.push('Survey email sent!');
+      if (result.familyCertificatesSent > 0) {
+        messages.push(`${result.familyCertificatesSent} family certificate(s) sent`);
+      }
+      const surveySentMessage = messages.length > 0 
+        ? messages.join(' • ') 
         : 'Hours logged successfully';
       setFeedback({
         type: 'success',
