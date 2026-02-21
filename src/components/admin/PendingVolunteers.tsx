@@ -1815,7 +1815,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       {deps.map((dep, idx) => {
                         // Try to match family card by index (F1, F2, etc.)
                         const matchingCard = familyCards.find(c => {
-                          const match = c.unique_id.match(/-F(\d+)[A-Z0-9]+$/);
+                          const match = c.unique_id.match(/-F(\d)[A-Z0-9]+$/);
                           return match && parseInt(match[1]) === idx + 1;
                         });
                         return (
@@ -3010,7 +3010,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                           </TableRow>
                           {/* Individual family member rows */}
                           {fCards.map((fc: any) => {
-                            const fMatch = fc.unique_id.match(/-F(\d+)/);
+                            const fMatch = fc.unique_id.match(/-F(\d)/);
                             const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
                             let memberName = `Family Member ${familyIndex || 1}`;
                             if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
