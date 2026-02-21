@@ -186,6 +186,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [generatingFamilyQRs, setGeneratingFamilyQRs] = useState(false);
+  const [sendingFamilyCerts, setSendingFamilyCerts] = useState(false);
   
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1146,6 +1147,110 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               >
                 {generatingFamilyQRs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
                 <span className="hidden sm:inline">Fix Family QRs</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  setSendingFamilyCerts(true);
+                  try {
+                    // Find all family cards that are checked_out but haven't received certificates
+                    const { data: familyCards, error: fetchErr } = await supabase
+                      .from('volunteer_qr_cards')
+                      .select(`
+                        *,
+                        volunteer:pending_volunteers(id, first_name, last_name, email, events_json)
+                      `)
+                      .eq('status', 'checked_out')
+                      .is('survey_completed_at', null)
+                      .like('unique_id', '%-F%');
+
+                    if (fetchErr) throw fetchErr;
+                    if (!familyCards || familyCards.length === 0) {
+                      toast({
+                        title: 'No Pending Certificates',
+                        description: 'All checked-out family members already have certificates.',
+                      });
+                      return;
+                    }
+
+                    let sentCount = 0;
+                    let failCount = 0;
+                    const { generateCertificatePDF } = await import('@/components/certificates/CertificateGenerator');
+
+                    for (const fc of familyCards) {
+                      const vol = fc.volunteer as any;
+                      if (!vol?.email) { failCount++; continue; }
+
+                      try {
+                        // Extract family member index from card ID
+                        const fMatch = fc.unique_id.match(/-F(\d+)/);
+                        const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
+
+                        // Map to dependent name
+                        const deps = extractUniqueDependents(vol.events_json);
+                        let familyFirstName = `Family Member ${familyIndex || 1}`;
+                        let familyLastName = '';
+                        if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
+                          const dep = deps[familyIndex - 1];
+                          const nameParts = dep.name.trim().split(/\s+/);
+                          familyFirstName = nameParts[0] || familyFirstName;
+                          familyLastName = nameParts.slice(1).join(' ') || '';
+                        }
+
+                        const hoursWorked = fc.total_hours_worked || 0;
+                        const certificateBase64 = await generateCertificatePDF({
+                          firstName: familyFirstName,
+                          lastName: familyLastName,
+                          type: 'attendance',
+                        });
+
+                        await supabase.functions.invoke('send-certificate', {
+                          body: {
+                            firstName: familyFirstName,
+                            lastName: familyLastName,
+                            email: vol.email,
+                            certificateBase64,
+                            certificateType: 'attendance',
+                            marketplaceId: fc.marketplace_id,
+                            hoursWorked,
+                            isFamilyMember: true,
+                          },
+                        });
+
+                        // Mark as sent
+                        await supabase
+                          .from('volunteer_qr_cards')
+                          .update({ survey_completed_at: new Date().toISOString() })
+                          .eq('id', fc.id);
+
+                        sentCount++;
+                      } catch (certErr) {
+                        console.error(`Failed cert for ${fc.unique_id}:`, certErr);
+                        failCount++;
+                      }
+                    }
+
+                    toast({
+                      title: 'Family Certificates Sent',
+                      description: `${sentCount} certificate(s) sent${failCount > 0 ? `, ${failCount} failed` : ''}`,
+                    });
+                    refetch();
+                  } catch (err) {
+                    toast({
+                      title: 'Failed',
+                      description: err instanceof Error ? err.message : 'Unknown error',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setSendingFamilyCerts(false);
+                  }
+                }}
+                disabled={sendingFamilyCerts}
+                className="gap-2"
+              >
+                {sendingFamilyCerts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
+                <span className="hidden sm:inline">Send Family Certs</span>
               </Button>
               <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
                 <RefreshCw className="w-4 h-4" />
