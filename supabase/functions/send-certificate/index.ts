@@ -21,6 +21,7 @@ interface SendCertificateRequest {
   certificateType?: CertificateType;
   marketplaceId?: string;
   hoursWorked?: number;
+  isFamilyMember?: boolean;
 }
 
 interface EmailConfig {
@@ -341,7 +342,8 @@ const handler = async (req: Request): Promise<Response> => {
       certificateBase64, 
       certificateType = 'completion',
       marketplaceId, 
-      hoursWorked 
+      hoursWorked,
+      isFamilyMember = false
     }: SendCertificateRequest = await req.json();
 
     // Trim whitespace from names
@@ -400,9 +402,11 @@ const handler = async (req: Request): Promise<Response> => {
       ? getAttendanceEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails)
       : getCompletionEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails);
 
-    // Email subject based on certificate type
+    // Email subject based on certificate type and family member flag
     const emailSubject = certificateType === 'attendance'
-      ? 'Your Gift It Forward Certificate of Attendance'
+      ? (isFamilyMember 
+          ? `Family Member Attendance Certificate – ${fullName}`
+          : 'Your Gift It Forward Certificate of Attendance')
       : 'Your Circular Economy Training Certificate of Completion';
 
     console.log(`Attempting to send ${certificateType} certificate email to ${cleanEmail} with filename ${filename}`);

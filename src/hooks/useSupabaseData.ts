@@ -5,6 +5,23 @@ import { useEffect } from 'react';
 import { Json } from '@/integrations/supabase/types';
 import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
 
+// Extract unique dependents from volunteer's events_json for family card name mapping
+const extractFamilyDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
+  if (!eventsJson || !Array.isArray(eventsJson)) return [];
+  const dependentsMap = new Map<string, { name: string; type: string }>();
+  for (const event of eventsJson) {
+    if (event.dependents && Array.isArray(event.dependents)) {
+      for (const dep of event.dependents) {
+        const key = dep.name?.toLowerCase()?.trim();
+        if (key && !dependentsMap.has(key)) {
+          dependentsMap.set(key, { name: dep.name, type: dep.type || 'adult' });
+        }
+      }
+    }
+  }
+  return Array.from(dependentsMap.values());
+};
+
 // Type helpers for database mapping
 type DbCardStatus = 'inactive' | 'active' | 'checked_out';
 type DbTransactionType = 'CheckIn' | 'Distribution' | 'Return' | 'CheckOut';
@@ -1433,7 +1450,8 @@ export const useVolunteerCardOperations = () => {
             id,
             first_name,
             last_name,
-            email
+            email,
+            events_json
           )
         `)
         .ilike('unique_id', uniqueId)
@@ -1504,7 +1522,123 @@ export const useVolunteerCardOperations = () => {
         }
       }
 
-      return { hoursWorked: hoursWorked.toFixed(2), surveySent: !!volunteer?.email };
+      // === FAMILY MEMBER AUTO-CHECKOUT & CERTIFICATES ===
+      let familyCertificatesSent = 0;
+      if (card.volunteer_id) {
+        try {
+          // Find sibling family cards that are checked in
+          const { data: familyCards } = await supabase
+            .from('volunteer_qr_cards')
+            .select('*')
+            .eq('volunteer_id', card.volunteer_id)
+            .eq('status', 'checked_in')
+            .neq('id', card.id);
+
+          if (familyCards && familyCards.length > 0) {
+            // Extract dependents from volunteer's events_json for name mapping
+            const eventsJson = volunteer?.events_json;
+            const dependents = extractFamilyDependents(eventsJson);
+
+            for (const familyCard of familyCards) {
+              // Only process family cards (with -F suffix)
+              if (!/-F\d+/.test(familyCard.unique_id)) continue;
+
+              const familyCheckedInAt = new Date(familyCard.checked_in_at);
+              const familyHoursWorked = (now.getTime() - familyCheckedInAt.getTime()) / (1000 * 60 * 60);
+
+              // Check out the family card
+              await supabase
+                .from('volunteer_qr_cards')
+                .update({
+                  status: 'checked_out',
+                  checked_out_at: now.toISOString(),
+                  total_hours_worked: (familyCard.total_hours_worked || 0) + familyHoursWorked
+                })
+                .eq('id', familyCard.id);
+
+              // Update family card attendance record
+              const { data: familyAttendance } = await supabase
+                .from('volunteer_attendance')
+                .select('*')
+                .eq('volunteer_card_id', familyCard.id)
+                .is('check_out_time', null)
+                .order('check_in_time', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (familyAttendance) {
+                await supabase
+                  .from('volunteer_attendance')
+                  .update({
+                    check_out_time: now.toISOString(),
+                    hours_worked: familyHoursWorked
+                  })
+                  .eq('id', familyAttendance.id);
+              }
+
+              // Generate and send certificate for this family member
+              if (volunteer?.email && !familyCard.survey_completed_at) {
+                try {
+                  // Extract family member index from card ID (e.g., VOL-1234-F1ABCD -> 1)
+                  const fMatch = familyCard.unique_id.match(/-F(\d+)/);
+                  const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
+
+                  // Map to dependent name
+                  let familyFirstName = `Family Member ${familyIndex || 1}`;
+                  let familyLastName = '';
+                  if (dependents.length > 0 && familyIndex > 0 && familyIndex <= dependents.length) {
+                    const dep = dependents[familyIndex - 1];
+                    const nameParts = dep.name.trim().split(/\s+/);
+                    familyFirstName = nameParts[0] || familyFirstName;
+                    familyLastName = nameParts.slice(1).join(' ') || '';
+                  }
+
+                  // Generate certificate PDF on client side
+                  const { generateCertificatePDF } = await import('@/components/certificates/CertificateGenerator');
+                  const certificateBase64 = await generateCertificatePDF({
+                    firstName: familyFirstName,
+                    lastName: familyLastName,
+                    type: 'attendance',
+                  });
+
+                  // Send certificate via edge function
+                  await supabase.functions.invoke('send-certificate', {
+                    body: {
+                      firstName: familyFirstName,
+                      lastName: familyLastName,
+                      email: volunteer.email,
+                      certificateBase64,
+                      certificateType: 'attendance',
+                      marketplaceId: card.marketplace_id,
+                      hoursWorked: familyHoursWorked,
+                      isFamilyMember: true,
+                    },
+                  });
+
+                  // Mark certificate as sent to prevent duplicates
+                  await supabase
+                    .from('volunteer_qr_cards')
+                    .update({ survey_completed_at: now.toISOString() })
+                    .eq('id', familyCard.id);
+
+                  familyCertificatesSent++;
+                  console.log(`Family certificate sent for ${familyFirstName} ${familyLastName} to ${volunteer.email}`);
+                } catch (certError) {
+                  console.error(`Failed to send family certificate for card ${familyCard.unique_id}:`, certError);
+                }
+              }
+            }
+          }
+        } catch (familyError) {
+          console.error('Failed to process family cards:', familyError);
+        }
+      }
+
+      return { 
+        hoursWorked: hoursWorked.toFixed(2), 
+        surveySent: !!volunteer?.email,
+        familyCertificatesSent 
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['volunteer_qr_cards'] });
