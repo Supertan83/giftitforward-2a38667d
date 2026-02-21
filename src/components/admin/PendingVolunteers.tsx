@@ -2893,10 +2893,10 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       {/* Family Certificates Dialog */}
       <Dialog open={showFamilyCertsDialog} onOpenChange={setShowFamilyCertsDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Send Family Member Certificates</DialogTitle>
-            <DialogDescription>Select a completed marketplace and send attendance certificates to family members.</DialogDescription>
+            <DialogDescription>Select a completed marketplace to view all family members and their attendance status.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -2906,25 +2906,39 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 setFamilyCertsMarketplace(val);
                 setLoadingFamilyCertsVolunteers(true);
                 try {
-                  // Get family cards for this marketplace that are checked_out
-                  const { data: familyCards } = await supabase
+                  // Get ALL family cards for volunteers who have any card at this marketplace
+                  // First get volunteer IDs that have cards at this marketplace
+                  const { data: mpCards } = await supabase
                     .from('volunteer_qr_cards')
-                    .select(`
-                      id, unique_id, status, total_hours_worked, survey_completed_at, marketplace_id,
-                      volunteer:pending_volunteers!volunteer_qr_cards_volunteer_id_fkey(id, first_name, last_name, email, events_json)
-                    `)
+                    .select('volunteer_id')
                     .eq('marketplace_id', val)
-                    .eq('status', 'checked_out')
                     .like('unique_id', '%-F%');
 
-                  if (!familyCards || familyCards.length === 0) {
+                  const volunteerIds = [...new Set((mpCards || []).map(c => c.volunteer_id).filter(Boolean))];
+
+                  if (volunteerIds.length === 0) {
+                    setFamilyCertsVolunteers([]);
+                    return;
+                  }
+
+                  // Now get ALL family cards for these volunteers (any status, any marketplace)
+                  const { data: allFamilyCards } = await supabase
+                    .from('volunteer_qr_cards')
+                    .select(`
+                      id, unique_id, status, total_hours_worked, survey_completed_at, marketplace_id, checked_in_at, checked_out_at,
+                      volunteer:pending_volunteers!volunteer_qr_cards_volunteer_id_fkey(id, first_name, last_name, email, events_json)
+                    `)
+                    .in('volunteer_id', volunteerIds)
+                    .like('unique_id', '%-F%');
+
+                  if (!allFamilyCards || allFamilyCards.length === 0) {
                     setFamilyCertsVolunteers([]);
                     return;
                   }
 
                   // Group by volunteer
                   const volMap = new Map<string, { volunteer: any; familyCards: any[] }>();
-                  for (const fc of familyCards) {
+                  for (const fc of allFamilyCards) {
                     const vol = fc.volunteer as any;
                     if (!vol?.id) continue;
                     if (!volMap.has(vol.id)) {
@@ -2965,113 +2979,149 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             )}
 
             {!loadingFamilyCertsVolunteers && familyCertsVolunteers.length > 0 && (
-              <ScrollArea className="max-h-[400px]">
+              <ScrollArea className="max-h-[450px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Volunteer</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Family Cards</TableHead>
+                      <TableHead>Family Member</TableHead>
+                      <TableHead>QR Code</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Cert</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {familyCertsVolunteers.map(({ volunteer: vol, familyCards: fCards }) => {
-                      const allSent = fCards.every((fc: any) => fc.survey_completed_at);
-                      const pendingCount = fCards.filter((fc: any) => !fc.survey_completed_at).length;
+                      const deps = extractUniqueDependents(vol.events_json);
                       return (
-                        <TableRow key={vol.id}>
-                          <TableCell className="font-medium">{vol.first_name === vol.last_name ? vol.first_name : `${vol.first_name} ${vol.last_name}`}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{vol.email}</TableCell>
-                          <TableCell>
-                            <Badge variant={allSent ? 'secondary' : 'default'}>
-                              {allSent ? `${fCards.length} sent` : `${pendingCount} pending`}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {allSent ? (
-                              <span className="text-xs text-muted-foreground">✓ All sent</span>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={sendingCertForVolunteer === vol.id}
-                                onClick={async () => {
-                                  setSendingCertForVolunteer(vol.id);
-                                  try {
-                                    const { generateCertificatePDF } = await import('@/components/certificates/CertificateGenerator');
-                                    const deps = extractUniqueDependents(vol.events_json);
-                                    let sentCount = 0;
+                        <>
+                          {/* Volunteer header row */}
+                          <TableRow key={`vol-${vol.id}`} className="bg-muted/40">
+                            <TableCell colSpan={5} className="py-2">
+                              <div className="flex items-center gap-2">
+                                <Users className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-semibold text-sm">
+                                  {vol.first_name === vol.last_name ? vol.first_name : `${vol.first_name} ${vol.last_name}`}
+                                </span>
+                                <span className="text-xs text-muted-foreground">({vol.email})</span>
+                                <span className="text-xs text-muted-foreground ml-auto">{fCards.length} family card(s)</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {/* Individual family member rows */}
+                          {fCards.map((fc: any) => {
+                            const fMatch = fc.unique_id.match(/-F(\d+)/);
+                            const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
+                            let memberName = `Family Member ${familyIndex || 1}`;
+                            if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
+                              memberName = deps[familyIndex - 1].name;
+                            }
 
-                                    for (const fc of fCards) {
-                                      if (fc.survey_completed_at) continue;
-                                      const fMatch = fc.unique_id.match(/-F(\d+)/);
-                                      const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
-                                      let familyFirstName = `Family Member ${familyIndex || 1}`;
-                                      let familyLastName = '';
-                                      if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
-                                        const dep = deps[familyIndex - 1];
-                                        const nameParts = dep.name.trim().split(/\s+/);
-                                        familyFirstName = nameParts[0] || familyFirstName;
-                                        familyLastName = nameParts.slice(1).join(' ') || '';
-                                      }
-                                      const certificateBase64 = await generateCertificatePDF({
-                                        firstName: familyFirstName,
-                                        lastName: familyLastName,
-                                        type: 'attendance',
-                                      });
-                                      await supabase.functions.invoke('send-certificate', {
-                                        body: {
-                                          firstName: familyFirstName,
-                                          lastName: familyLastName,
-                                          email: vol.email,
-                                          certificateBase64,
-                                          certificateType: 'attendance',
-                                          marketplaceId: fc.marketplace_id,
-                                          hoursWorked: fc.total_hours_worked || 0,
-                                          isFamilyMember: true,
-                                        },
-                                      });
-                                      await supabase
-                                        .from('volunteer_qr_cards')
-                                        .update({ survey_completed_at: new Date().toISOString() })
-                                        .eq('id', fc.id);
-                                      sentCount++;
-                                    }
+                            // Determine status
+                            const isCertSent = !!fc.survey_completed_at;
+                            let statusLabel = 'Inactive';
+                            let statusClass = 'border-muted-foreground/30 text-muted-foreground';
+                            if (isCertSent) {
+                              statusLabel = 'Checked Out';
+                              statusClass = 'bg-green-100 text-green-800 border-green-200';
+                            } else if (fc.status === 'checked_out') {
+                              statusLabel = 'Checked Out';
+                              statusClass = 'bg-green-100 text-green-800 border-green-200';
+                            } else if (fc.status === 'checked_in') {
+                              statusLabel = 'Checked In';
+                              statusClass = 'bg-blue-100 text-blue-800 border-blue-200';
+                            }
 
-                                    toast({
-                                      title: 'Certificates Sent',
-                                      description: `${sentCount} family certificate(s) sent to ${vol.email}`,
-                                    });
+                            const canSend = fc.status === 'checked_out' && !fc.survey_completed_at;
 
-                                    // Refresh the list for this marketplace
-                                    const triggerEl = document.querySelector<HTMLButtonElement>('[data-family-certs-refresh]');
-                                    // Just re-select the marketplace to refresh
-                                    const currentMp = familyCertsMarketplace;
-                                    setFamilyCertsMarketplace('');
-                                    setTimeout(() => setFamilyCertsMarketplace(currentMp), 100);
-                                  } catch (err) {
-                                    toast({
-                                      title: 'Failed',
-                                      description: err instanceof Error ? err.message : 'Unknown error',
-                                      variant: 'destructive',
-                                    });
-                                  } finally {
-                                    setSendingCertForVolunteer(null);
-                                  }
-                                }}
-                                className="gap-1"
-                              >
-                                {sendingCertForVolunteer === vol.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <Send className="w-3 h-3" />
-                                )}
-                                Send
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                            return (
+                              <TableRow key={fc.id} className="text-sm">
+                                <TableCell className="pl-8">{memberName}</TableCell>
+                                <TableCell className="font-mono text-xs text-muted-foreground">{fc.unique_id}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className={statusClass}>
+                                    {statusLabel}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {isCertSent ? (
+                                    <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">Sent</Badge>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {canSend ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={sendingCertForVolunteer === fc.id}
+                                      onClick={async () => {
+                                        setSendingCertForVolunteer(fc.id);
+                                        try {
+                                          const { generateCertificatePDF } = await import('@/components/certificates/CertificateGenerator');
+                                          const nameParts = memberName.trim().split(/\s+/);
+                                          const familyFirstName = nameParts[0] || memberName;
+                                          const familyLastName = nameParts.slice(1).join(' ') || '';
+
+                                          const certificateBase64 = await generateCertificatePDF({
+                                            firstName: familyFirstName,
+                                            lastName: familyLastName,
+                                            type: 'attendance',
+                                          });
+                                          await supabase.functions.invoke('send-certificate', {
+                                            body: {
+                                              firstName: familyFirstName,
+                                              lastName: familyLastName,
+                                              email: vol.email,
+                                              certificateBase64,
+                                              certificateType: 'attendance',
+                                              marketplaceId: fc.marketplace_id,
+                                              hoursWorked: fc.total_hours_worked || 0,
+                                              isFamilyMember: true,
+                                            },
+                                          });
+                                          await supabase
+                                            .from('volunteer_qr_cards')
+                                            .update({ survey_completed_at: new Date().toISOString() })
+                                            .eq('id', fc.id);
+
+                                          toast({
+                                            title: 'Certificate Sent',
+                                            description: `Certificate for ${memberName} sent to ${vol.email}`,
+                                          });
+
+                                          // Refresh
+                                          const currentMp = familyCertsMarketplace;
+                                          setFamilyCertsMarketplace('');
+                                          setTimeout(() => setFamilyCertsMarketplace(currentMp), 100);
+                                        } catch (err) {
+                                          toast({
+                                            title: 'Failed',
+                                            description: err instanceof Error ? err.message : 'Unknown error',
+                                            variant: 'destructive',
+                                          });
+                                        } finally {
+                                          setSendingCertForVolunteer(null);
+                                        }
+                                      }}
+                                      className="gap-1"
+                                    >
+                                      {sendingCertForVolunteer === fc.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Send className="w-3 h-3" />
+                                      )}
+                                      Send
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </>
                       );
                     })}
                   </TableBody>
