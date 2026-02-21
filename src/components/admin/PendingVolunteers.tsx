@@ -2981,7 +2981,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                       const pendingCount = fCards.filter((fc: any) => !fc.survey_completed_at).length;
                       return (
                         <TableRow key={vol.id}>
-                          <TableCell className="font-medium">{vol.first_name} {vol.last_name}</TableCell>
+                          <TableCell className="font-medium">{vol.first_name === vol.last_name ? vol.first_name : `${vol.first_name} ${vol.last_name}`}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{vol.email}</TableCell>
                           <TableCell>
                             <Badge variant={allSent ? 'secondary' : 'default'}>
