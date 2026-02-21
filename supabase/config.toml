@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.generate-missing-family-qrs]
 verify_jwt = false
+
+[functions.get-survey-reviews]
+verify_jwt = false
