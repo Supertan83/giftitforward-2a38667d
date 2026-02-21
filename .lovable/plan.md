@@ -1,46 +1,56 @@
 
-# Fix: All 2,100 QR Cards Not Loading (Server-Side 1,000 Row Cap)
+
+# Add Attendance Certificates for Family Members
 
 ## Problem
-Despite setting `.limit(5000)` in the query, the server still returns only 1,000 cards. The database has 2,100 cards across 4 batches, but only the newest 1,000 are visible (the Feb 19 batch). The Feb 18 batches (495 + 500 cards) and the legacy batch (105 cards) are hidden.
-
-## Root Cause
-The hosted database has a server-side maximum of 1,000 rows per request. The client-side `.limit(5000)` cannot override this server setting. The query returns exactly 1,000 rows silently.
+When a volunteer is checked out, they receive a survey email and can get an attendance certificate. However, family members (who have their own QR cards with `-F1`, `-F2` suffixes) share the same volunteer record and don't have individual email addresses. When family member cards are checked out, no certificate is generated or sent for them.
 
 ## Solution
-Modify the `useQRCards` hook to fetch cards in multiple pages of 1,000 using `.range()`, then combine all results. This ensures all cards are retrieved regardless of the server limit.
+When a volunteer card is checked out, automatically detect all family member cards for the same volunteer that are also checked in at the same marketplace, check them out together, and generate + send attendance certificates for each family member to the volunteer's email address.
 
-## Technical Details
+## How It Works
 
-### File: `src/hooks/useSupabaseData.ts` (useQRCards hook, lines 48-75)
+1. **During volunteer checkout**: After checking out the main volunteer card, the system finds all sibling family cards (same `volunteer_id`, status `checked_in`) and checks them out too
+2. **Certificate for each family member**: For each family member card, generate an attendance certificate using the family member's name (stored in `events_json` dependents or extracted from the card's metadata)
+3. **Send all certificates in one email**: Bundle the family member certificates and send them to the volunteer's email, or send individual emails per family member
 
-Replace the single query with a paginated fetch loop:
+## Technical Changes
 
-```typescript
-queryFn: async (): Promise<QRCard[]> => {
-  const allData: any[] = [];
-  const pageSize = 1000;
-  let from = 0;
-  
-  while (true) {
-    const { data, error } = await supabase
-      .from('qr_cards')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(from, from + pageSize - 1);
+### 1. Update `checkOutVolunteer` mutation (`src/hooks/useSupabaseData.ts`)
+- After checking out the scanned card, query for sibling family cards with the same `volunteer_id` that are `checked_in`
+- Check out each family card (update status, calculate hours, update attendance records)
+- Collect family member names from the card unique IDs and the volunteer's `events_json` dependents data
+- For each family member, invoke `send-certificate` with `certificateType: 'attendance'` using the family member's name and the volunteer's email
 
-    if (error) throw new SafeError(mapDatabaseError(error), error);
-    if (!data || data.length === 0) break;
-    
-    allData.push(...data);
-    if (data.length < pageSize) break; // last page
-    from += pageSize;
-  }
+### 2. Update `send-certificate` edge function (`supabase/functions/send-certificate/index.ts`)
+- Add support for a `isFamilyMember: true` flag to slightly customize the email wording (e.g., "Family Member Attendance Certificate")
+- No other structural changes needed -- the function already accepts `firstName`, `lastName`, `email`, and `certificateType`
 
-  return allData.map(card => ({
-    // ... same mapping as before
-  }));
-}
+### 3. Map family card IDs to names
+- Family cards have IDs like `VOL-XXXX-F1ABCD` where the suffix indicates family member index
+- The volunteer's `pending_volunteers.events_json` contains a `dependents` array with names and types
+- Match family card index to dependent name using the existing `extractUniqueDependents` pattern from `VolunteerQRCardsViewer.tsx`
+- If no name mapping is found, fall back to "Family Member 1", "Family Member 2", etc.
+
+### 4. Track certificate status for family cards
+- Update the `volunteer_qr_cards` table's existing `survey_completed_at` field for family cards when their certificate is generated
+- This prevents duplicate certificate generation on re-checkout
+
+## Flow Summary
+
+```text
+Volunteer scans out (card VOL-1234)
+  |
+  +--> Check out volunteer card
+  +--> Send survey email to volunteer
+  +--> Find family cards: VOL-1234-F1XX, VOL-1234-F2XX (status: checked_in)
+       |
+       +--> Check out each family card
+       +--> Generate attendance certificate PDF for each family member name
+       +--> Send certificate email(s) to volunteer's email address
 ```
 
-This loops through pages of 1,000 until all records are fetched, combining them into a single array. No other files need changes -- the existing UI pagination and batch grouping will work with the full dataset.
+## What the Volunteer Receives
+- 1 survey email (existing behavior, unchanged)
+- 1 certificate email per family member, each with a personalized PDF using the family member's name, sent to the volunteer's email
+
