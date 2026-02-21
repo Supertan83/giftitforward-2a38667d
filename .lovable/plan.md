@@ -1,50 +1,59 @@
 
 
-# Fix: Marketplace Events Stuck on "Active" After End Time
+# Enhanced Family Members Detail View in Send Family Certs Dialog
 
 ## Problem
-"Young Dreamers Boys Community School Marketplace" (Feb 19, 7:00 AM - 1:30 PM) and "Stronger Together Emirati Family Community Marketplace February 21" (Feb 21, 7:30 PM - 11:30 PM) are still showing as "active" even though their event times have passed. The system has no automatic mechanism to transition marketplace status from "active" to "completed".
+The current dialog only shows a summary badge like "1 Pending / 1 Sent" per volunteer. The user wants to see each individual family member listed with their name and attendance/certificate status (inactive, checked in, checked out, certificate sent).
 
-## Solution (Two Parts)
+## Solution
+Expand the table to show each family member as a sub-row under their volunteer, with individual status indicators and per-member send buttons.
 
-### Part 1 -- Immediate Data Fix
-Update the two marketplace records to "completed" status directly in the database.
+## Changes
 
-### Part 2 -- Automatic Status Transition
-Add logic to automatically mark marketplaces as "completed" when their event date + end time has passed. This will be implemented as a database function called via a scheduled edge function (or integrated into the existing `auto-unblock-cards` function which already runs daily and resets cards from previous days).
+### File: `src/components/admin/PendingVolunteers.tsx`
 
-**Approach**: Add a simple SQL update inside the existing `auto-unblock-cards` edge function that sets `status = 'completed'` for any marketplace where:
-- `status = 'active'`
-- `event_date + end_time < now()` (or just `event_date < today` if no end_time is set)
+1. **Update the query** to fetch ALL family cards for the volunteer (not just `checked_out` ones for the selected marketplace). Include cards with any status and any marketplace (including null) so we can show the full picture.
 
-This keeps things simple with no new functions to deploy or maintain.
+2. **Redesign the table layout** to an expandable/nested view:
+   - Volunteer row shows name, email, and overall summary
+   - Below each volunteer, list each family member with:
+     - **Name**: Mapped from `events_json` dependents (e.g., `-F1` maps to first dependent)
+     - **QR Code**: The `unique_id` of their card
+     - **Status badge**: Shows the card's current state:
+       - "Inactive" (grey) -- card exists but never used
+       - "Checked In" (blue) -- currently at marketplace
+       - "Checked Out" (green) -- attended and left
+       - "Cert Sent" (purple) -- certificate already delivered
+     - **Send button**: Only enabled for cards that are `checked_out` and have no `survey_completed_at`
 
-## Technical Details
+3. **Filter logic**: When a marketplace is selected, show volunteers who have ANY family cards associated with that marketplace. Also show family cards with no marketplace (as "Not Assigned") so admins see the full picture.
 
-### 1. Data Fix (SQL update)
-```sql
-UPDATE marketplace_events
-SET status = 'completed', updated_at = now()
-WHERE id IN (
-  '49fb6332-2eb5-417d-a076-d3a66af20ba9',  -- Young Dreamers
-  '956e826c-e54a-49e7-9cc5-ed6d4cb10e34'   -- Stronger Together Feb 21
-);
+4. **Individual send**: Keep per-family-member certificate sending, but now each row has its own button rather than a bulk button per volunteer.
+
+### Visual Layout
+
+```text
++------------------+-------------------------+---------------+-----------+--------+
+| Family Member    | QR Code                 | Status        | Cert      | Action |
++------------------+-------------------------+---------------+-----------+--------+
+| Volunteer: Arish Shrestha (nyx.bas-uae@alshaya.com)                             |
++------------------+-------------------------+---------------+-----------+--------+
+| [dep name from   | VOL-ML0L423B-4GQR-F13X  | Checked Out   | Sent      |   --   |
+|  events_json]    |                         |               |           |        |
++------------------+-------------------------+---------------+-----------+--------+
+| [dep name 2]     | VOL-ML0L423B-4GQR-F2X1  | Inactive      | --        |   --   |
++------------------+-------------------------+---------------+-----------+--------+
 ```
 
-### 2. Update `supabase/functions/auto-unblock-cards/index.ts`
-Add a step before the card unblocking that automatically transitions marketplace status:
+### Status Badge Colors
+- **Inactive**: `variant="outline"` (grey)
+- **Checked In**: `className="bg-blue-100 text-blue-800"`
+- **Checked Out**: `className="bg-green-100 text-green-800"`
+- **Cert Sent**: `variant="secondary"` (indicates completed)
 
-```typescript
-// Auto-complete marketplaces whose event date+end_time has passed
-const { data: completedMarketplaces } = await supabase
-  .from('marketplace_events')
-  .select('id, name, event_date, end_time')
-  .eq('status', 'active');
-
-// For each active marketplace, check if event_date + end_time < now
-// Update to 'completed' if so
-```
-
-### 3. Also add client-side guard in `src/hooks/useSupabaseData.ts`
-In the `useMarketplaces` hook, add a computed check so that even if the DB hasn't been updated yet, the UI shows the correct status based on current time. This provides immediate visual correctness while the scheduled job handles the DB update.
-
+### Key Technical Details
+- Extract dependent names from `events_json` using the existing `extractUniqueDependents` helper
+- Map family card suffix (`-F1`, `-F2`, etc.) to dependent index to get names
+- Change the query from `.eq('status', 'checked_out')` to remove that filter, so all family cards for the marketplace appear
+- Also include cards with `marketplace_id IS NULL` that belong to the same volunteer, shown as "Not Assigned"
+- Disable the "Send" button for cards that are not `checked_out` or already have `survey_completed_at`
