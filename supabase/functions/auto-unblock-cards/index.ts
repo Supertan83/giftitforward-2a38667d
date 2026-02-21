@@ -19,6 +19,50 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // --- Step 1: Auto-complete active marketplaces whose event has ended ---
+    const { data: activeMarketplaces, error: mpFetchError } = await supabase
+      .from("marketplace_events")
+      .select("id, name, event_date, end_time")
+      .eq("status", "active");
+
+    if (mpFetchError) {
+      console.error("Error fetching active marketplaces:", mpFetchError);
+    } else if (activeMarketplaces && activeMarketplaces.length > 0) {
+      const now = new Date();
+      const idsToComplete: string[] = [];
+
+      for (const mp of activeMarketplaces) {
+        if (!mp.event_date) continue;
+        const eventEnd = new Date(mp.event_date);
+        if (mp.end_time) {
+          const [h, m] = mp.end_time.split(":").map(Number);
+          eventEnd.setHours(h, m, 0, 0);
+        } else {
+          eventEnd.setHours(23, 59, 59, 999);
+        }
+        if (now > eventEnd) {
+          idsToComplete.push(mp.id);
+          console.log(`Marketplace "${mp.name}" has ended, marking completed`);
+        }
+      }
+
+      if (idsToComplete.length > 0) {
+        const { error: mpUpdateError } = await supabase
+          .from("marketplace_events")
+          .update({ status: "completed", updated_at: new Date().toISOString() })
+          .in("id", idsToComplete);
+
+        if (mpUpdateError) {
+          console.error("Error completing marketplaces:", mpUpdateError);
+        } else {
+          console.log(`Auto-completed ${idsToComplete.length} marketplace(s)`);
+        }
+      } else {
+        console.log("No active marketplaces need completing");
+      }
+    }
+
+    // --- Step 2: Unblock cards from previous days ---
     // Get the start of today (midnight)
     const today = new Date();
     today.setHours(0, 0, 0, 0);

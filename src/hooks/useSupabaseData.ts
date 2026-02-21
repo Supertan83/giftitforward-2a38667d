@@ -1183,10 +1183,25 @@ export const useMarketplaces = () => {
         .order('event_date', { ascending: true });
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
-      return (data || []).map(item => ({
-        ...item,
-        status: item.status as 'upcoming' | 'active' | 'completed'
-      }));
+      const now = new Date();
+      return (data || []).map(item => {
+        let computedStatus = item.status as 'upcoming' | 'active' | 'completed';
+        // Client-side guard: if marketplace is "active" but event has ended, show as "completed"
+        if (computedStatus === 'active' && item.event_date) {
+          const eventDate = new Date(item.event_date);
+          if (item.end_time) {
+            const [hours, minutes] = item.end_time.split(':').map(Number);
+            eventDate.setHours(hours, minutes, 0, 0);
+          } else {
+            // No end_time: assume end of day
+            eventDate.setHours(23, 59, 59, 999);
+          }
+          if (now > eventDate) {
+            computedStatus = 'completed';
+          }
+        }
+        return { ...item, status: computedStatus };
+      });
     }
   });
 
