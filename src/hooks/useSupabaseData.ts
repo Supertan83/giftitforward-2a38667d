@@ -1188,7 +1188,8 @@ export const useMarketplaces = () => {
         let computedStatus = item.status as 'upcoming' | 'active' | 'completed';
         // Client-side guard: if marketplace is "active" but event has ended, show as "completed"
         if (computedStatus === 'active' && item.event_date) {
-          const eventDate = new Date(item.event_date);
+          const [year, month, day] = item.event_date.split('-').map(Number);
+          const eventDate = new Date(year, month - 1, day);
           if (item.end_time) {
             const [hours, minutes] = item.end_time.split(':').map(Number);
             eventDate.setHours(hours, minutes, 0, 0);
