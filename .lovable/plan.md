@@ -1,27 +1,39 @@
 
 
-# Fix: Family Member Names Showing as "Family Member 18" Instead of Actual Names
+# Fix: Today's Marketplace Event Not Appearing in Dropdown
 
 ## Problem
-Family member rows display generic labels like "Family Member 18" or "Family Member 13" instead of the actual dependent names from `events_json`.
+The "Stronger Together Emirati Family Community Marketplace February 21" event exists in the database with status `active` but does not appear in the Volunteer Zone marketplace dropdown. Events starting from February 22 show up, but today's event is missing.
 
-## Root Cause
-The QR card ID format is `-F{index}{2_random_chars}` (e.g., `-F1GP`, `-F2XK`). But sometimes the random characters start with a digit (e.g., `-F18G`, `-F13X`). The current regex `/-F(\d+)/` greedily captures all consecutive digits, so `-F13X` yields `13` instead of `1`, and `-F18G` yields `18` instead of `1`. The code then tries to look up `deps[12]` or `deps[17]`, which don't exist, so it falls back to "Family Member 13/18".
+## Root Cause: Timezone Bug in Client-Side Status Guard
+
+The `useMarketplaces` hook has a client-side guard that marks events as "completed" if their date+time has passed. The bug is in how the event date string is parsed:
+
+```
+new Date("2026-02-21")  -->  Feb 21 00:00 UTC  -->  Feb 20 20:00 in Dubai (UTC+4)
+setHours(23, 30)        -->  Feb 20 23:30 local (Dubai)
+```
+
+Because `new Date("YYYY-MM-DD")` parses as **UTC midnight**, the resulting date is actually the **previous evening** in Dubai time. So at 6:38 AM on Feb 21, the system thinks the event ended on Feb 20 at 23:30 -- and marks it `completed`. The Volunteer Zone then filters it out since it only shows `upcoming` or `active` events.
 
 ## Fix
 
-### File: `src/components/admin/PendingVolunteers.tsx` (line ~3013)
+### File: `src/hooks/useSupabaseData.ts` (~line 1191)
 
-Change the regex from:
-```
-/-F(\d+)/
-```
-to:
-```
-/-F(\d)/
+Parse the event date as a **local date** instead of UTC by splitting the date string manually:
+
+**Before:**
+```typescript
+const eventDate = new Date(item.event_date);
 ```
 
-This captures only a single digit after `-F`, matching the actual index (1, 2, 3, etc.) and ignoring the random suffix characters that may start with digits.
+**After:**
+```typescript
+const [year, month, day] = item.event_date.split('-').map(Number);
+const eventDate = new Date(year, month - 1, day);
+```
 
-This same fix should be applied everywhere this pattern is used in the file (the family certs dialog and any other places using the same regex to extract the family index).
+This ensures the date is constructed in the **local timezone** (e.g., Feb 21 00:00 Dubai time), so `setHours(23, 30)` correctly sets it to Feb 21 23:30 Dubai time.
+
+This is a one-line change in a single file. No backend or database changes needed.
 
