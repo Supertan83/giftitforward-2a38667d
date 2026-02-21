@@ -1,56 +1,50 @@
 
 
-# Add Attendance Certificates for Family Members
+# Fix: Marketplace Events Stuck on "Active" After End Time
 
 ## Problem
-When a volunteer is checked out, they receive a survey email and can get an attendance certificate. However, family members (who have their own QR cards with `-F1`, `-F2` suffixes) share the same volunteer record and don't have individual email addresses. When family member cards are checked out, no certificate is generated or sent for them.
+"Young Dreamers Boys Community School Marketplace" (Feb 19, 7:00 AM - 1:30 PM) and "Stronger Together Emirati Family Community Marketplace February 21" (Feb 21, 7:30 PM - 11:30 PM) are still showing as "active" even though their event times have passed. The system has no automatic mechanism to transition marketplace status from "active" to "completed".
 
-## Solution
-When a volunteer card is checked out, automatically detect all family member cards for the same volunteer that are also checked in at the same marketplace, check them out together, and generate + send attendance certificates for each family member to the volunteer's email address.
+## Solution (Two Parts)
 
-## How It Works
+### Part 1 -- Immediate Data Fix
+Update the two marketplace records to "completed" status directly in the database.
 
-1. **During volunteer checkout**: After checking out the main volunteer card, the system finds all sibling family cards (same `volunteer_id`, status `checked_in`) and checks them out too
-2. **Certificate for each family member**: For each family member card, generate an attendance certificate using the family member's name (stored in `events_json` dependents or extracted from the card's metadata)
-3. **Send all certificates in one email**: Bundle the family member certificates and send them to the volunteer's email, or send individual emails per family member
+### Part 2 -- Automatic Status Transition
+Add logic to automatically mark marketplaces as "completed" when their event date + end time has passed. This will be implemented as a database function called via a scheduled edge function (or integrated into the existing `auto-unblock-cards` function which already runs daily and resets cards from previous days).
 
-## Technical Changes
+**Approach**: Add a simple SQL update inside the existing `auto-unblock-cards` edge function that sets `status = 'completed'` for any marketplace where:
+- `status = 'active'`
+- `event_date + end_time < now()` (or just `event_date < today` if no end_time is set)
 
-### 1. Update `checkOutVolunteer` mutation (`src/hooks/useSupabaseData.ts`)
-- After checking out the scanned card, query for sibling family cards with the same `volunteer_id` that are `checked_in`
-- Check out each family card (update status, calculate hours, update attendance records)
-- Collect family member names from the card unique IDs and the volunteer's `events_json` dependents data
-- For each family member, invoke `send-certificate` with `certificateType: 'attendance'` using the family member's name and the volunteer's email
+This keeps things simple with no new functions to deploy or maintain.
 
-### 2. Update `send-certificate` edge function (`supabase/functions/send-certificate/index.ts`)
-- Add support for a `isFamilyMember: true` flag to slightly customize the email wording (e.g., "Family Member Attendance Certificate")
-- No other structural changes needed -- the function already accepts `firstName`, `lastName`, `email`, and `certificateType`
+## Technical Details
 
-### 3. Map family card IDs to names
-- Family cards have IDs like `VOL-XXXX-F1ABCD` where the suffix indicates family member index
-- The volunteer's `pending_volunteers.events_json` contains a `dependents` array with names and types
-- Match family card index to dependent name using the existing `extractUniqueDependents` pattern from `VolunteerQRCardsViewer.tsx`
-- If no name mapping is found, fall back to "Family Member 1", "Family Member 2", etc.
-
-### 4. Track certificate status for family cards
-- Update the `volunteer_qr_cards` table's existing `survey_completed_at` field for family cards when their certificate is generated
-- This prevents duplicate certificate generation on re-checkout
-
-## Flow Summary
-
-```text
-Volunteer scans out (card VOL-1234)
-  |
-  +--> Check out volunteer card
-  +--> Send survey email to volunteer
-  +--> Find family cards: VOL-1234-F1XX, VOL-1234-F2XX (status: checked_in)
-       |
-       +--> Check out each family card
-       +--> Generate attendance certificate PDF for each family member name
-       +--> Send certificate email(s) to volunteer's email address
+### 1. Data Fix (SQL update)
+```sql
+UPDATE marketplace_events
+SET status = 'completed', updated_at = now()
+WHERE id IN (
+  '49fb6332-2eb5-417d-a076-d3a66af20ba9',  -- Young Dreamers
+  '956e826c-e54a-49e7-9cc5-ed6d4cb10e34'   -- Stronger Together Feb 21
+);
 ```
 
-## What the Volunteer Receives
-- 1 survey email (existing behavior, unchanged)
-- 1 certificate email per family member, each with a personalized PDF using the family member's name, sent to the volunteer's email
+### 2. Update `supabase/functions/auto-unblock-cards/index.ts`
+Add a step before the card unblocking that automatically transitions marketplace status:
+
+```typescript
+// Auto-complete marketplaces whose event date+end_time has passed
+const { data: completedMarketplaces } = await supabase
+  .from('marketplace_events')
+  .select('id, name, event_date, end_time')
+  .eq('status', 'active');
+
+// For each active marketplace, check if event_date + end_time < now
+// Update to 'completed' if so
+```
+
+### 3. Also add client-side guard in `src/hooks/useSupabaseData.ts`
+In the `useMarketplaces` hook, add a computed check so that even if the DB hasn't been updated yet, the UI shows the correct status based on current time. This provides immediate visual correctness while the scheduled job handles the DB update.
 
