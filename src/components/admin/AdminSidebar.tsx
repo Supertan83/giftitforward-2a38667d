@@ -2,7 +2,7 @@ import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
   QrCode, Store, PieChart, RefreshCw, Unlock,
   Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText,
-  ChevronRight, Archive, Megaphone, LinkIcon, Trash2
+  ChevronRight, Archive, Megaphone, LinkIcon, Trash2, ClipboardList
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -38,6 +38,7 @@ const volunteerItems = [
   { view: 'training-completion' as AdminView, label: 'Training Completion', icon: Award, color: 'text-emerald-500' },
   { view: 'training-assessments' as AdminView, label: 'Training Assessments', icon: FileQuestion, color: 'text-purple-500' },
   { view: 'volunteer-schema-export' as AdminView, label: 'Schema Export', icon: FileText, color: 'text-cyan-500' },
+  { view: 'survey-reviews' as AdminView, label: 'Review Surveys', icon: ClipboardList, color: 'text-pink-500' },
 ];
 
 const beneficiaryItems = [
