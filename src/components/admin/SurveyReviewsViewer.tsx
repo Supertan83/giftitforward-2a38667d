@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, ClipboardList, Loader2, ArrowLeft } from 'lucide-react';
+import { Search, ClipboardList, Loader2, ArrowLeft, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import { jsPDF } from 'jspdf';
 
 interface SurveyReview {
   name: string;
@@ -55,16 +56,94 @@ export const SurveyReviewsViewer = ({ onBack }: SurveyReviewsViewerProps) => {
     return questionMap[key] || key;
   };
 
+  const generateSurveyPDF = (surveyList: SurveyReview[], qMap: Record<string, string>) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    const checkPageBreak = (needed: number) => {
+      if (y + needed > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        y = 20;
+      }
+    };
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Survey Reviews Report', margin, y);
+    y += 8;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy HH:mm')}`, margin, y);
+    y += 12;
+
+    surveyList.forEach((survey, idx) => {
+      checkPageBreak(30);
+      if (idx > 0) {
+        doc.setDrawColor(200);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 8;
+      }
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(survey.name, margin, y);
+      y += 6;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const meta = `${format(new Date(survey.completedAt), 'MMM d, yyyy')} · ${survey.source === 'internal' ? 'Volunteer' : 'External'}`;
+      doc.text(meta, margin, y);
+      y += 8;
+
+      Object.entries(survey.answers).forEach(([key, value]) => {
+        checkPageBreak(16);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        const qLabel = qMap[key] || key;
+        const qLines = doc.splitTextToSize(qLabel, maxWidth);
+        doc.text(qLines, margin, y);
+        y += qLines.length * 4.5;
+
+        doc.setFont('helvetica', 'normal');
+        const aLines = doc.splitTextToSize(String(value), maxWidth);
+        doc.text(aLines, margin, y);
+        y += aLines.length * 4.5 + 4;
+      });
+
+      y += 4;
+    });
+
+    return doc;
+  };
+
   return (
     <div className="py-4 md:py-6 px-4 max-w-4xl mx-auto space-y-4">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">Survey Reviews</h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">Survey Reviews</h2>
+          </div>
         </div>
+        {surveys.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const doc = generateSurveyPDF(surveys, questionMap);
+              doc.save('survey-reviews.pdf');
+            }}
+          >
+            <Download className="w-4 h-4 mr-1" />
+            Download All
+          </Button>
+        )}
       </div>
 
       <div className="relative">
@@ -118,6 +197,18 @@ export const SurveyReviewsViewer = ({ onBack }: SurveyReviewsViewerProps) => {
                     {Object.keys(survey.answers).length === 0 && (
                       <p className="text-xs text-muted-foreground italic">No answers recorded</p>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 text-xs"
+                      onClick={() => {
+                        const doc = generateSurveyPDF([survey], questionMap);
+                        doc.save(`survey-${survey.name.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+                      }}
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      Download PDF
+                    </Button>
                   </div>
                 </AccordionContent>
               </AccordionItem>
