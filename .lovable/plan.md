@@ -1,52 +1,33 @@
 
 
-# Review Survey Section for Volunteer App
+# PDF Download for Survey Reviews
 
 ## What This Does
-Adds a new "Review Survey" tab in the volunteer app's bottom navigation bar. Volunteers can browse all completed survey responses (both internal and external) grouped by respondent name, with their answers displayed in an expandable card format.
+Adds two download options to the Survey Reviews section:
+1. **Download All** button in the header -- exports all currently visible surveys as a single PDF report
+2. **Download** button on each individual survey card -- exports that single survey as a PDF
 
 ## How It Will Look
-
-The bottom navigation bar will get a 4th tab with a clipboard icon labeled "Surveys". Tapping it shows a scrollable list of completed surveys, each as a card showing:
-- Volunteer/respondent name
-- Completion date
-- Expandable section showing each question and their answer
-
-A search bar at the top lets volunteers filter by name.
-
-## Access Approach
-
-Since volunteers don't have direct database access to survey tables, a new backend function will securely fetch completed surveys and return them without exposing sensitive tokens or IDs.
-
----
+- A "Download PDF" button with a download icon appears next to the "Survey Reviews" title
+- Inside each expanded survey accordion, a small "Download" button appears at the bottom of the answers
+- The PDF will be a clean, formatted document showing the volunteer name, date, source type, and all question/answer pairs
 
 ## Technical Details
 
-### 1. New Backend Function: `get-survey-reviews/index.ts`
+### Changes to `src/components/admin/SurveyReviewsViewer.tsx`
 
-- Accepts GET requests with optional `search` query param
-- Queries both `volunteer_surveys` and `external_survey_responses` where `completed_at IS NOT NULL`
-- Also fetches `survey_questions` to map question IDs to question text
-- Returns a unified list: `{ name, completedAt, source: 'internal'|'external', answers }` 
-- Requires authenticated user with staff role (volunteers are staff via `is_staff`)
-- Does NOT return survey tokens, emails, or IDs -- only name, date, and answers
+- Import `jsPDF` (already installed in the project)
+- Import `Download` icon from lucide-react
+- Add a helper function `generateSurveyPDF(surveys, questionMap)` that:
+  - Creates an A4 portrait PDF using jsPDF
+  - Adds a "Survey Reviews Report" title with date
+  - For each survey: prints name, completion date, source badge, then each question and answer
+  - Handles page breaks automatically when content exceeds page height
+  - Returns the jsPDF doc instance
+- Add a "Download All" button in the header bar that calls `generateSurveyPDF` with all visible surveys and triggers `doc.save('survey-reviews.pdf')`
+- Add a "Download" button inside each AccordionContent that calls `generateSurveyPDF` with just that single survey and saves as `survey-{name}.pdf`
 
-### 2. New Component: `src/components/zones/ReviewSurveyZone.tsx`
-
-- Calls the edge function on mount using `useQuery`
-- Renders a search input and a list of survey cards
-- Each card uses an Accordion to expand/collapse answers
-- Maps answer keys to question text from `survey_questions`
-- Shows "No surveys yet" empty state if none found
-
-### 3. Update: `src/components/VolunteerInterface.tsx`
-
-- Add `'surveys'` to the `Zone` type: `type Zone = 'entrance' | 'marketplace' | 'exit' | 'surveys'`
-- Add a 4th item to the `zones` array with `ClipboardList` icon
-- The surveys tab is always accessible (not zone-restricted) -- all volunteers can view it regardless of assigned zone
-- Add `case 'surveys'` to `renderZone()` switch
-
-### 4. No Database Changes Needed
-
-Both tables already exist with the right data. The edge function reads using the service role key, so no RLS changes are needed.
+### No other files need changes
+- `jsPDF` is already a project dependency
+- No backend changes needed -- PDF is generated client-side from already-fetched data
 
