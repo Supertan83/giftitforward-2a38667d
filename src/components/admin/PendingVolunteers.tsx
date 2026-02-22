@@ -182,6 +182,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [exportEndDate, setExportEndDate] = useState<Date | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('excel');
+  const [exportMarketplace, setExportMarketplace] = useState<string>('all');
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
@@ -215,7 +216,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Fetch marketplaces for adding events
+  // Fetch marketplaces for adding events and export filter
   const { data: marketplaces = [] } = useMarketplaces();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
@@ -951,14 +952,34 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         query = query.or('source.is.null,source.neq.bulk_upload');
       }
 
-      const { data, error } = await query;
+      const { data: rawData, error } = await query;
 
       if (error) throw error;
+
+      // Apply marketplace filter client-side (events_list is comma-separated text)
+      let data = rawData || [];
+      if (exportMarketplace !== 'all') {
+        const selectedMkt = marketplaces.find(m => m.id === exportMarketplace);
+        if (selectedMkt) {
+          const mktSlug = selectedMkt.name.toLowerCase().replace(/\s+/g, '-');
+          const mktNormalized = selectedMkt.name.toLowerCase().replace(/\s+/g, ' ').trim();
+          data = data.filter(v => {
+            if (!v.events_list) return false;
+            return v.events_list.split(',').some((e: string) => {
+              const trimmed = e.trim();
+              // Match by slug substring or formatted name
+              if (trimmed === mktSlug || trimmed.includes(mktSlug)) return true;
+              const formatted = formatEventName(trimmed).toLowerCase().replace(/\s+/g, ' ').trim();
+              return formatted === mktNormalized;
+            });
+          });
+        }
+      }
 
       if (!data || data.length === 0) {
         toast({
           title: 'No Data',
-          description: 'No volunteers found in the selected date range',
+          description: 'No volunteers found for the selected criteria',
           variant: 'destructive',
         });
         setIsExporting(false);
@@ -996,7 +1017,10 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       const startStr = format(exportStartDate, 'yyyy-MM-dd');
       const endStr = format(exportEndDate, 'yyyy-MM-dd');
-      const baseFilename = `volunteers-report-${startStr}-to-${endStr}`;
+      const mktSuffix = exportMarketplace !== 'all' 
+        ? `-${(marketplaces.find(m => m.id === exportMarketplace)?.name || '').toLowerCase().replace(/\s+/g, '-')}`
+        : '';
+      const baseFilename = `volunteers-report${mktSuffix}-${startStr}-to-${endStr}`;
 
       if (exportFormat === 'excel') {
         // Create Excel workbook
@@ -2458,6 +2482,22 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               </Popover>
             </div>
 
+            {/* Marketplace Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Marketplace</label>
+              <Select value={exportMarketplace} onValueChange={setExportMarketplace}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Marketplaces" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Marketplaces</SelectItem>
+                  {marketplaces.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Export Format Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium">Export Format</label>
@@ -2486,6 +2526,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             {exportStartDate && exportEndDate && (
               <p className="text-sm text-muted-foreground">
                 Export will include volunteers from {format(exportStartDate, "MMM d, yyyy")} to {format(exportEndDate, "MMM d, yyyy")}
+                {exportMarketplace !== 'all' && ` for ${marketplaces.find(m => m.id === exportMarketplace)?.name || ''}`}
               </p>
             )}
           </div>
