@@ -367,22 +367,32 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         `)
         .eq('marketplace_id', marketplaceId);
 
-      // Get true distribution count from transactions (source of truth)
-      const { data: trueCount } = await supabase.rpc('get_marketplace_distribution_count', {
-        p_marketplace_id: marketplaceId,
-      });
+      // Fetch manual counts for this marketplace
+      const { data: manualCounts } = await supabase
+        .from('marketplace_manual_counts')
+        .select('*')
+        .eq('marketplace_id', marketplaceId);
 
-      const itemsByType = (allocations || []).map((alloc: any) => ({
-        itemId: alloc.item_type_id,
-        itemName: alloc.item_types?.name || 'Unknown',
-        itemIcon: alloc.item_types?.icon || '📦',
-        category: alloc.item_types?.category || null,
-        subcategory: alloc.item_types?.subcategory || null,
-        externalMaterialId: alloc.item_types?.external_material_id || null,
-        allocated: alloc.allocated_quantity,
-        distributed: alloc.distributed_quantity,
-        remaining: alloc.allocated_quantity - alloc.distributed_quantity,
-      }));
+      const manualCountMap = new Map(
+        (manualCounts || []).map((mc: any) => [mc.item_type_id, mc])
+      );
+
+      const hasManualCounts = (manualCounts || []).length > 0;
+
+      const itemsByType = (allocations || []).map((alloc: any) => {
+        const manual = manualCountMap.get(alloc.item_type_id);
+        return {
+          itemId: alloc.item_type_id,
+          itemName: alloc.item_types?.name || 'Unknown',
+          itemIcon: alloc.item_types?.icon || '📦',
+          category: alloc.item_types?.category || null,
+          subcategory: alloc.item_types?.subcategory || null,
+          externalMaterialId: alloc.item_types?.external_material_id || null,
+          allocated: alloc.allocated_quantity,
+          distributed: manual ? manual.actual_distributed : alloc.distributed_quantity,
+          remaining: manual ? manual.actual_remaining : (alloc.allocated_quantity - alloc.distributed_quantity),
+        };
+      });
 
       // Calculate by category
       const byCategory: Record<string, { allocated: number; distributed: number; remaining: number }> = {};
@@ -397,7 +407,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       });
 
       const totalAllocated = itemsByType.reduce((sum, item) => sum + item.allocated, 0);
-      const totalDistributed = Number(trueCount) || 0;
+      const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
+      const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
       // Fetch volunteer data - QR cards for this marketplace
       const { data: volunteerCards } = await supabase
@@ -491,7 +502,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         items: {
           totalAllocated,
           totalDistributed,
-          totalRemaining: totalAllocated - totalDistributed,
+          totalRemaining,
           byItemType: itemsByType,
           byCategory,
         },
@@ -540,16 +551,29 @@ export const useAllMarketplaceReports = () => {
           // Get allocation totals
           const { data: allocations } = await supabase
             .from('marketplace_item_allocations')
-            .select('allocated_quantity, distributed_quantity')
+            .select('allocated_quantity, distributed_quantity, item_type_id')
             .eq('marketplace_id', mp.id);
 
-          // Get true distribution count from transactions
-          const { data: trueCount } = await supabase.rpc('get_marketplace_distribution_count', {
-            p_marketplace_id: mp.id,
-          });
+          // Fetch manual counts for this marketplace
+          const { data: manualCounts } = await supabase
+            .from('marketplace_manual_counts')
+            .select('item_type_id, actual_distributed, actual_remaining')
+            .eq('marketplace_id', mp.id);
 
-          const totalAllocated = allocations?.reduce((sum, a) => sum + a.allocated_quantity, 0) || 0;
-          const totalDistributed = Number(trueCount) || 0;
+          const manualMap = new Map(
+            (manualCounts || []).map((mc: any) => [mc.item_type_id, mc])
+          );
+
+          let totalAllocated = 0;
+          let totalDistributed = 0;
+          let totalRemaining = 0;
+
+          (allocations || []).forEach((a: any) => {
+            const manual = manualMap.get(a.item_type_id);
+            totalAllocated += a.allocated_quantity;
+            totalDistributed += manual ? manual.actual_distributed : a.distributed_quantity;
+            totalRemaining += manual ? manual.actual_remaining : (a.allocated_quantity - a.distributed_quantity);
+          });
 
           return {
             id: mp.id,
@@ -560,7 +584,7 @@ export const useAllMarketplaceReports = () => {
             beneficiaryCount: (archivedCount || 0) + (activeCount || 0),
             totalAllocated,
             totalDistributed,
-            totalRemaining: totalAllocated - totalDistributed,
+            totalRemaining,
           };
         })
       );
