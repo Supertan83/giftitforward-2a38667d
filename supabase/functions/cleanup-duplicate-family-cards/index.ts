@@ -76,12 +76,16 @@ serve(async (req) => {
         .filter(c => /-F\d+/.test(c.unique_id))
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-      if (familyCards.length <= dependents.length) continue;
+      if (familyCards.length === 0) continue;
 
-      // Keep the earliest N cards (N = dependent count), delete the rest if inactive
-      const toKeep = familyCards.slice(0, dependents.length);
-      const excess = familyCards.slice(dependents.length);
-      const toDelete = excess.filter(c => c.status === 'inactive');
+      // If volunteer has 0 dependents, ALL family cards are erroneous
+      // Otherwise keep the earliest N cards (N = dependent count), delete the rest
+      const excess = dependents.length === 0 
+        ? familyCards 
+        : (familyCards.length <= dependents.length ? [] : familyCards.slice(dependents.length));
+      
+      // Delete inactive or checked_out cards (skip checked_in -- actively in use)
+      const toDelete = excess.filter(c => c.status !== 'checked_in');
 
       if (toDelete.length === 0) continue;
 
