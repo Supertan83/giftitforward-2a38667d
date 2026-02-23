@@ -1,39 +1,43 @@
 
 
-# Fix Family Sub-Row: Add Eye Icon and Fix Badge Position
+# Fix Marketplace Status: Mark Past "Upcoming" Events as Completed
 
-## What's Wrong
+## The Problem
 
-Looking at the screenshot, two issues in the family member sub-rows under each volunteer:
+Marketplaces that were never manually set to "active" before their event date passed remain stuck as "upcoming" forever. The current status guard only handles `active` -> `completed` transitions, not `upcoming` -> `completed`.
 
-1. **Missing eye icon**: There's no way to preview a family member's certificate from the sub-row. The user wants an eye icon (similar to the volunteer row's certificate preview icon) so they can view the family member's attendance certificate.
-
-2. **"Not Sent" badge misaligned**: The certificate status badge ("Not Sent" / "Cert Sent") is not aligned under the correct column. It appears shifted because the sub-row table cells don't match the parent row's column structure (9 columns: Checkbox, Name, Email, Company, Family, Events, Submitted, Email Status, Actions).
+For example, "Stronger Together... February 21" still shows as "upcoming" even though today is February 23.
 
 ## The Fix
 
-### 1. Fix column alignment in family sub-rows
+### 1. Extend client-side status guard in `useMarketplaces` (useSupabaseData.ts, ~line 1188)
 
-Restructure the sub-row cells to align properly with the 9-column parent table:
-- Cell 1 (Checkbox): empty
-- Cell 2 (Name): family member name with user icon, indented
-- Cell 3 (Email): QR code ID in mono font
-- Cell 4 (Company, hidden md): empty
-- Cell 5 (Family, hidden lg): empty
-- Cell 6 (Events, hidden lg): empty
-- Cell 7 (Submitted, hidden sm): certificate status badge ("Cert Sent" or "Not Sent") -- moves badge to a visible, aligned column
-- Cell 8 (Email Status, hidden md): empty
-- Cell 9 (Actions): eye icon button to preview the family member's certificate
+Add a second condition: if a marketplace is `upcoming` and its event date (+ end time) has passed, compute its status as `completed`.
 
-### 2. Add eye icon for certificate preview
+```
+// Current: only handles active -> completed
+// New: also handles upcoming -> completed for past events
+if ((computedStatus === 'active' || computedStatus === 'upcoming') && item.event_date) {
+  // ... same date parsing logic ...
+  if (now > eventDate) {
+    computedStatus = 'completed';
+  }
+}
+```
 
-In the Actions cell of each family sub-row, add an eye icon button that opens the `CertificatePreviewDialog` with the family member's resolved name (split into first/last) and their certificate status.
+This is a one-line change to the condition on line 1190.
 
-## Technical Details
+### 2. Extend the auto-unblock edge function (auto-unblock-cards/index.ts, ~line 26)
 
-### File: `src/components/admin/PendingVolunteers.tsx`
+Update the database query to also find `upcoming` marketplaces that have ended, so the persisted status in the database also gets corrected:
 
-**Lines 1751-1779** (the sub-row rendering): Replace the current cell layout with properly aligned cells matching the parent columns, and add an eye icon button in the last cell that sets `certificatePreviewVolunteer` to a temporary object with the family member's name.
+Change `.eq("status", "active")` to `.in("status", ["active", "upcoming"])`.
 
-Since `CertificatePreviewDialog` expects `firstName` and `lastName` props, the eye icon click handler will split the resolved `memberName` into first/last name parts and set a synthetic preview object.
+This ensures the next time the auto-unblock job runs, it permanently marks these stale "upcoming" events as "completed" in the database too.
 
+## Files to Change
+
+1. **`src/hooks/useSupabaseData.ts`** -- Extend the client-side guard condition (line 1190) to include `upcoming`
+2. **`supabase/functions/auto-unblock-cards/index.ts`** -- Query both `active` and `upcoming` statuses (line 26)
+
+## No database changes needed
