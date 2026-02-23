@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const { data: activeMarketplaces, error: mpFetchError } = await supabase
       .from("marketplace_events")
       .select("id, name, event_date, end_time")
-      .eq("status", "active");
+      .in("status", ["active", "upcoming"]);
 
     if (mpFetchError) {
       console.error("Error fetching active marketplaces:", mpFetchError);

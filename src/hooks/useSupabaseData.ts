@@ -1187,7 +1187,7 @@ export const useMarketplaces = () => {
       return (data || []).map(item => {
         let computedStatus = item.status as 'upcoming' | 'active' | 'completed';
         // Client-side guard: if marketplace is "active" but event has ended, show as "completed"
-        if (computedStatus === 'active' && item.event_date) {
+        if ((computedStatus === 'active' || computedStatus === 'upcoming') && item.event_date) {
           const [year, month, day] = item.event_date.split('-').map(Number);
           const eventDate = new Date(year, month - 1, day);
           if (item.end_time) {
