@@ -1,38 +1,52 @@
 
 
-# Add "or" Divider Between Date Range and Marketplace Filter
+# Fix Items Given and Items Left to Use Manual Counts
 
-## What Changes
+## Problem
 
-**File: `src/components/admin/PendingVolunteers.tsx` (line 2722-2724)**
+The "Items Given" and "Items Left" stats in Marketplace Reports only use system-tracked allocation data (`distributed_quantity` from allocations and the `get_marketplace_distribution_count` RPC). After an event, admins manually enter actual distribution and remaining counts via the Manual Item Count feature, but those manual values are ignored in the report summary cards.
 
-Add a visual "or" divider between the End Date field and the Marketplace dropdown, so users understand these are alternative filtering methods:
+## Solution
 
-- Use date range to filter by registration date (when "All Marketplaces" is selected)
-- OR choose a specific marketplace to get all volunteers for that event
+Update the data-fetching logic in `src/hooks/useMarketplaceAllocations.ts` to incorporate manual counts from the `marketplace_manual_counts` table. When manual counts exist for a marketplace, use those as the source of truth for "Items Given" (sum of `actual_distributed`) and "Items Left" (sum of `actual_remaining`). Fall back to the current system-calculated values when no manual counts exist.
 
-### UI Addition
+## Changes
 
-Insert a styled "or" separator between the date fields and the marketplace selector (after line 2721, before line 2723):
+### File: `src/hooks/useMarketplaceAllocations.ts`
+
+**1. `useMarketplaceReport` (line ~362-494)**
+
+- After fetching allocations, also fetch manual counts for the marketplace from `marketplace_manual_counts`
+- For each item in `itemsByType`, check if a manual count exists for that `item_type_id`:
+  - If yes: use `actual_distributed` and `actual_remaining` from the manual count
+  - If no: keep the current allocation-based values
+- Recalculate `totalDistributed` and `totalRemaining` as sums of the per-item values (which now incorporate manual overrides)
+
+**2. `useAllMarketplaceReports` (line ~514-571)**
+
+- For each marketplace, also fetch manual counts
+- If manual counts exist, use `sum(actual_distributed)` for totalDistributed and `sum(actual_remaining)` for totalRemaining
+- If no manual counts, fall back to current allocation-based calculation
+
+### Per-Item Logic
 
 ```text
-[Start Date picker]
-[End Date picker]
-  ── or ──
-[Marketplace dropdown]
+For each allocated item:
+  manual = manual_counts.find(item_type_id matches)
+  if manual exists:
+    distributed = manual.actual_distributed
+    remaining = manual.actual_remaining
+  else:
+    distributed = allocation.distributed_quantity
+    remaining = allocation.allocated_quantity - allocation.distributed_quantity
 ```
 
-The divider will use a horizontal line with "or" centered, similar to common "or" separators (a flex row with two lines and "or" text in the middle).
+### Summary Totals
 
-### Also update the dialog description
+```text
+totalDistributed = sum of all per-item distributed values (manual-aware)
+totalRemaining = sum of all per-item remaining values (manual-aware)
+```
 
-Change the subtitle from:
-> "Select a date range and format to export volunteer data"
-
-To:
-> "Use a date range or select a marketplace to export volunteer data"
-
-This makes the either/or behavior clear from the start.
-
-### One file, ~6 lines added
+This ensures the top-level stat cards, the item distribution table, and the category aggregates all reflect manual corrections when they exist.
 
