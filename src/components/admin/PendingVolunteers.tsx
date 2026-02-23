@@ -56,6 +56,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { FamilyMembersTab } from '@/components/admin/FamilyMembersTab';
 
 type ExportFormat = 'excel' | 'csv';
 
@@ -161,7 +162,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded' | 'pending_missing_email' | 'duplicates'>('approved');
+  const [activeTab, setActiveTab] = useState<'approved' | 'bulk_uploaded' | 'pending_missing_email' | 'duplicates' | 'family_members'>('approved');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [eventFilter, setEventFilter] = useState<string>('all');
   const [showCertificatePreview, setShowCertificatePreview] = useState(false);
@@ -948,7 +949,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       // Query volunteers within date range
       let query = supabase
         .from('pending_volunteers')
-        .select('*')
+        .select(`*, volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (id, unique_id, status, checked_in_at, checked_out_at, survey_completed_at)`)
         .gte('created_at', exportStartDate.toISOString())
         .lte('created_at', endOfDay.toISOString())
         .eq('status', 'approved')
@@ -995,9 +996,59 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         return;
       }
 
-      // Create data rows
+      // Fetch family QR cards for these volunteers
+      const volunteerIds = data.map(v => v.id);
+      const { data: familyCards } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id, unique_id, volunteer_id, status, checked_in_at, checked_out_at, survey_completed_at')
+        .in('volunteer_id', volunteerIds)
+        .like('unique_id', '%-F%');
+
+      // Build a map of volunteer_id -> family cards
+      const familyCardsByVolunteer = new Map<string, typeof familyCards>();
+      for (const fc of (familyCards || [])) {
+        if (!fc.volunteer_id) continue;
+        const existing = familyCardsByVolunteer.get(fc.volunteer_id) || [];
+        existing.push(fc);
+        familyCardsByVolunteer.set(fc.volunteer_id, existing);
+      }
+
+      // Helper to extract dependents
+      const extractDeps = (eventsJson: unknown): Array<{ name: string }> => {
+        if (!eventsJson || !Array.isArray(eventsJson)) return [];
+        const map = new Map<string, string>();
+        for (const ev of eventsJson) {
+          if (ev.dependents && Array.isArray(ev.dependents)) {
+            for (const dep of ev.dependents) {
+              const key = dep.name?.toLowerCase()?.trim();
+              if (key && !map.has(key)) map.set(key, dep.name);
+            }
+          }
+        }
+        return Array.from(map.values()).map(name => ({ name }));
+      };
+
+      // Resolve family member name
+      const resolveName = (cardUniqueId: string, eventsJson: unknown, allSiblingCards: any[], volFirstName: string, volLastName: string): string => {
+        const deps = extractDeps(eventsJson);
+        if (deps.length === 0) return `Family of ${volFirstName} ${volLastName}`;
+        const fMatch = cardUniqueId.match(/-F(\d+)/);
+        const idx = fMatch ? parseInt(fMatch[1], 10) : 0;
+        if (idx > 0 && idx <= deps.length) return deps[idx - 1].name;
+        const sorted = allSiblingCards.filter((c: any) => /-F\d+/.test(c.unique_id)).sort((a: any, b: any) => {
+          const aI = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+          const bI = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+          return aI - bI;
+        });
+        const posIdx = sorted.findIndex((c: any) => c.unique_id === cardUniqueId);
+        if (posIdx >= 0 && posIdx < deps.length) return deps[posIdx].name;
+        return `Family of ${volFirstName} ${volLastName}`;
+      };
+
+      // Create data rows with Type column
       const headers = [
         'Full Name',
+        'Type',
         'Email',
         'Phone Number',
         'Gender',
@@ -1005,24 +1056,79 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         'Employee ID',
         'Company/Vertical',
         'Events Registered',
+        'QR Card ID',
+        'Attendance Status',
+        'Certificate Sent',
         'Training Completed',
         'Email Sent',
         'Created Date'
       ];
 
-      const rows = data.map(v => [
-        `${v.first_name} ${v.last_name}`,
-        v.email || '',
-        v.phone_number || '',
-        v.gender || '',
-        v.is_employee ? 'Yes' : 'No',
-        v.employee_number || '',
-        v.is_employee ? (v.employee_vertical || 'Dubai Holding') : (v.external_company || ''),
-        v.events_list?.split(',').map((e: string) => formatEventName(e.trim())).join('; ') || '',
-        v.training_completed ? 'Yes' : 'No',
-        v.email_sent ? 'Yes' : 'No',
-        new Date(v.created_at).toLocaleDateString()
-      ]);
+      const rows: string[][] = [];
+      let totalPrimary = 0;
+      let totalFamily = 0;
+      let totalAttended = 0;
+
+      for (const v of data) {
+        totalPrimary++;
+        // Check if primary volunteer attended (has any checked_out card)
+        const primaryCards = (v as any).volunteer_qr_cards as VolunteerQRCard[] | undefined;
+        const primaryAttended = primaryCards?.some(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id));
+        if (primaryAttended) totalAttended++;
+
+        rows.push([
+          `${v.first_name} ${v.last_name}`,
+          'Primary',
+          v.email || '',
+          v.phone_number || '',
+          v.gender || '',
+          v.is_employee ? 'Yes' : 'No',
+          v.employee_number || '',
+          v.is_employee ? (v.employee_vertical || 'Dubai Holding') : (v.external_company || ''),
+          v.events_list?.split(',').map((e: string) => formatEventName(e.trim())).join('; ') || '',
+          primaryCards?.find(c => !/-F\d+/.test(c.unique_id))?.unique_id || '',
+          primaryAttended ? 'Attended' : (primaryCards?.some(c => c.status === 'checked_in') ? 'Checked In' : 'Registered'),
+          v.certificate_sent_at ? 'Yes' : 'No',
+          v.training_completed ? 'Yes' : 'No',
+          v.email_sent ? 'Yes' : 'No',
+          new Date(v.created_at).toLocaleDateString()
+        ]);
+
+        // Add family member rows
+        const volFamilyCards = familyCardsByVolunteer.get(v.id) || [];
+        for (const fc of volFamilyCards) {
+          totalFamily++;
+          const memberName = resolveName(fc.unique_id, v.events_json, volFamilyCards, v.first_name, v.last_name);
+          const familyAttended = fc.status === 'checked_out';
+          if (familyAttended) totalAttended++;
+
+          rows.push([
+            memberName,
+            'Family Member',
+            `via ${v.first_name} ${v.last_name} (${v.email})`,
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            fc.unique_id,
+            familyAttended ? 'Attended' : (fc.status === 'checked_in' ? 'Checked In' : 'Registered'),
+            fc.survey_completed_at ? 'Yes' : 'No',
+            '',
+            '',
+            ''
+          ]);
+        }
+      }
+
+      // Add summary rows
+      rows.push(Array(headers.length).fill(''));
+      rows.push(['SUMMARY', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push([`Total Registrations: ${totalPrimary + totalFamily}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push([`Primary Volunteers: ${totalPrimary}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push([`Family Members: ${totalFamily}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push([`Actual Attendance (Checked Out): ${totalAttended}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 
       const startStr = format(exportStartDate, 'yyyy-MM-dd');
       const endStr = format(exportEndDate, 'yyyy-MM-dd');
@@ -1032,42 +1138,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       const baseFilename = `volunteers-report${mktSuffix}-${startStr}-to-${endStr}`;
 
       if (exportFormat === 'excel') {
-        // Create Excel workbook
         const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        
-        // Set column widths
         worksheet['!cols'] = [
-          { wch: 25 }, // Full Name
-          { wch: 30 }, // Email
+          { wch: 30 }, // Full Name
+          { wch: 15 }, // Type
+          { wch: 35 }, // Email
           { wch: 15 }, // Phone
           { wch: 10 }, // Gender
           { wch: 10 }, // Employee
           { wch: 15 }, // Employee ID
           { wch: 20 }, // Company
           { wch: 40 }, // Events
+          { wch: 22 }, // QR Card ID
+          { wch: 15 }, // Attendance Status
+          { wch: 15 }, // Certificate Sent
           { wch: 15 }, // Training
           { wch: 12 }, // Email Sent
           { wch: 12 }, // Created Date
         ];
-
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Volunteers');
         XLSX.writeFile(workbook, `${baseFilename}.xlsx`);
       } else {
-        // Create CSV content
         const escapeCsvValue = (value: string) => {
           if (value.includes(',') || value.includes('"') || value.includes('\n')) {
             return `"${value.replace(/"/g, '""')}"`;
           }
           return value;
         };
-
         const csvContent = [
           headers.join(','),
           ...rows.map(row => row.map(escapeCsvValue).join(','))
         ].join('\n');
-
-        // Create and download file
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1081,7 +1183,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       toast({
         title: 'Export Complete',
-        description: `Exported ${data.length} volunteers to ${exportFormat === 'excel' ? 'Excel' : 'CSV'}`,
+        description: `Exported ${totalPrimary} volunteers + ${totalFamily} family members to ${exportFormat === 'excel' ? 'Excel' : 'CSV'}`,
       });
       setShowExportDialog(false);
     } catch (error: unknown) {
@@ -1244,7 +1346,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded' | 'pending_missing_email' | 'duplicates'); setSelectedIds(new Set()); }}>
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'approved' | 'bulk_uploaded' | 'pending_missing_email' | 'duplicates' | 'family_members'); setSelectedIds(new Set()); }}>
           <TabsList className="mb-4 flex-wrap h-auto gap-1">
             <TabsTrigger value="approved" className="gap-2">
               <Check className="w-4 h-4" />
@@ -1258,6 +1360,10 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   {bulkUploadedCount.data}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="family_members" className="gap-2">
+              <Users className="w-4 h-4" />
+              Family Members
             </TabsTrigger>
             <TabsTrigger value="pending_missing_email" className="gap-2">
               <AlertCircle className="w-4 h-4" />
@@ -1279,7 +1385,16 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value={activeTab}>
+          {/* Family Members Tab */}
+          <TabsContent value="family_members">
+            <FamilyMembersTab 
+              marketplaces={marketplaces}
+              searchQuery={searchQuery}
+              eventFilter={eventFilter}
+            />
+          </TabsContent>
+
+          <TabsContent value={activeTab === 'family_members' ? '__none__' : activeTab}>
             <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
