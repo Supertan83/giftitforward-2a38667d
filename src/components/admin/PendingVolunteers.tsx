@@ -950,10 +950,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       let query = supabase
         .from('pending_volunteers')
         .select(`*, volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (id, unique_id, status, checked_in_at, checked_out_at, survey_completed_at)`)
-        .gte('created_at', exportStartDate.toISOString())
-        .lte('created_at', endOfDay.toISOString())
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
+
+      // Only apply date range filter when exporting all marketplaces
+      if (exportMarketplace === 'all') {
+        query = query.gte('created_at', exportStartDate.toISOString()).lte('created_at', endOfDay.toISOString());
+      }
 
       // Apply tab filter
       if (activeTab === 'bulk_uploaded') {
