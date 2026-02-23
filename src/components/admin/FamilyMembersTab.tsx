@@ -30,18 +30,28 @@ interface FamilyMembersTabProps {
 // Extract unique dependents from events_json
 const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string; gender?: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
-  const dependentsMap = new Map<string, { name: string; type: string; gender?: string }>();
+  const dependents: Array<{ name: string; type: string; gender?: string }> = [];
   for (const event of eventsJson) {
     if (event.dependents && Array.isArray(event.dependents)) {
       for (const dep of event.dependents) {
-        const key = dep.name?.toLowerCase()?.trim();
-        if (key && !dependentsMap.has(key)) {
-          dependentsMap.set(key, { name: dep.name, type: dep.type || 'adult', gender: dep.gender || undefined });
+        const name = dep.name?.trim();
+        if (!name) continue;
+        const nameLower = name.toLowerCase();
+        
+        const existingIdx = dependents.findIndex(d => {
+          const existing = d.name.toLowerCase();
+          return existing === nameLower || existing.includes(nameLower) || nameLower.includes(existing);
+        });
+        
+        if (existingIdx === -1) {
+          dependents.push({ name: dep.name, type: dep.type || 'adult', gender: dep.gender || undefined });
+        } else if (nameLower.length > dependents[existingIdx].name.length) {
+          dependents[existingIdx] = { name: dep.name, type: dep.type || dependents[existingIdx].type, gender: dep.gender || dependents[existingIdx].gender };
         }
       }
     }
   }
-  return Array.from(dependentsMap.values());
+  return dependents;
 };
 
 // Resolve family member name from card unique_id and volunteer's events_json

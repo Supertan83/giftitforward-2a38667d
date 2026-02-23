@@ -16,24 +16,41 @@ function generateFamilyQRId(volunteerQRId: string, index: number): string {
 function extractUniqueDependents(eventsJson: unknown): Array<{ name: string; type: string; gender: string | null }> {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
   
-  const dependentsMap = new Map<string, { name: string; type: string; gender: string | null }>();
+  const dependents: Array<{ name: string; type: string; gender: string | null }> = [];
   
   for (const event of eventsJson) {
     if (event.dependents && Array.isArray(event.dependents)) {
       for (const dep of event.dependents) {
-        const key = dep.name?.toLowerCase()?.trim();
-        if (key && !dependentsMap.has(key)) {
-          dependentsMap.set(key, {
+        const name = dep.name?.trim();
+        if (!name) continue;
+        const nameLower = name.toLowerCase();
+        
+        // Check if this name is a duplicate or substring of an existing entry (or vice versa)
+        const existingIdx = dependents.findIndex(d => {
+          const existing = d.name.toLowerCase();
+          return existing === nameLower || existing.includes(nameLower) || nameLower.includes(existing);
+        });
+        
+        if (existingIdx === -1) {
+          // New unique dependent
+          dependents.push({
             name: dep.name,
             type: dep.type || 'adult',
             gender: dep.gender || null
           });
+        } else if (nameLower.length > dependents[existingIdx].name.length) {
+          // Keep the longer (more complete) name
+          dependents[existingIdx] = {
+            name: dep.name,
+            type: dep.type || dependents[existingIdx].type,
+            gender: dep.gender || dependents[existingIdx].gender
+          };
         }
       }
     }
   }
   
-  return Array.from(dependentsMap.values());
+  return dependents;
 }
 
 serve(async (req) => {
@@ -75,14 +92,14 @@ serve(async (req) => {
       }
 
       // Find the primary volunteer QR card (the one without -F suffix)
-      const primaryCard = (existingCards || []).find(c => !/-F\d+[A-Z0-9]+$/.test(c.unique_id));
+      const primaryCard = (existingCards || []).find(c => !/-F\d+/.test(c.unique_id));
       if (!primaryCard) {
         console.log(`No primary QR card found for ${vol.email}, skipping`);
         continue;
       }
 
       // Count existing family cards
-      const existingFamilyCards = (existingCards || []).filter(c => /-F\d+[A-Z0-9]+$/.test(c.unique_id));
+      const existingFamilyCards = (existingCards || []).filter(c => /-F\d+/.test(c.unique_id));
       
       if (existingFamilyCards.length >= dependents.length) {
         // Already has enough family cards
