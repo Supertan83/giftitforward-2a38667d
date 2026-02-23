@@ -2661,7 +2661,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           <DialogHeader>
             <DialogTitle>Export Volunteer Report</DialogTitle>
             <DialogDescription>
-              Select a date range and format to export volunteer data
+              Use a date range or select a marketplace to export volunteer data
             </DialogDescription>
           </DialogHeader>
           
@@ -2718,6 +2718,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                   />
                 </PopoverContent>
               </Popover>
+            </div>
+
+            {/* Or Divider */}
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground font-medium uppercase">or</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
 
             {/* Marketplace Filter */}
