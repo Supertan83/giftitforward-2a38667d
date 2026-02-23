@@ -130,12 +130,16 @@ export default function VolunteerSurveyPage() {
 
     setSubmitting(true);
     try {
-      const { data, error: submitError } = await supabase.functions.invoke('submit-survey', {
-        body: { surveyToken: token, answers },
-      });
-
-      if (submitError) throw submitError;
-      if (data && !data.success) throw new Error(data.error || 'Failed to submit survey');
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ surveyToken: token, answers }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to submit survey');
 
       setShowCertificate(true);
       sendCertificateEmail();
@@ -191,9 +195,14 @@ export default function VolunteerSurveyPage() {
       });
       if (error) throw error;
       setCertificateSent(true);
-      await supabase.functions.invoke('submit-survey?action=update-certificate-sent', {
-        body: { surveyToken: token },
-      });
+      await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey?action=update-certificate-sent`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ surveyToken: token }),
+        }
+      );
       toast({ title: t.certificateSentTitle, description: t.emailedTo(surveyData.volunteer_email) });
     } catch {
       toast({ title: t.emailFailed, description: t.emailFailedDesc, variant: 'destructive' });

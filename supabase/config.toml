@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.get-survey-reviews]
 verify_jwt = false
+
+[functions.submit-survey]
+verify_jwt = false
