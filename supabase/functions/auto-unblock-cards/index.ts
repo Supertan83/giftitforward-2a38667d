@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     // --- Step 1: Auto-complete active marketplaces whose event has ended ---
     const { data: activeMarketplaces, error: mpFetchError } = await supabase
       .from("marketplace_events")
-      .select("id, name, event_date, end_time")
+      .select("id, name, event_date, end_time, status_locked_by_admin")
       .in("status", ["active", "upcoming"]);
 
     if (mpFetchError) {
@@ -33,6 +33,7 @@ Deno.serve(async (req) => {
 
       for (const mp of activeMarketplaces) {
         if (!mp.event_date) continue;
+        if (mp.status_locked_by_admin) continue; // Skip admin-locked events
         const eventEnd = new Date(mp.event_date);
         if (mp.end_time) {
           const [h, m] = mp.end_time.split(":").map(Number);

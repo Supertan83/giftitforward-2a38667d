@@ -974,6 +974,7 @@ export type Database = {
           outreach_partner: string | null
           start_time: string | null
           status: string
+          status_locked_by_admin: boolean
           updated_at: string
         }
         Insert: {
@@ -1001,6 +1002,7 @@ export type Database = {
           outreach_partner?: string | null
           start_time?: string | null
           status?: string
+          status_locked_by_admin?: boolean
           updated_at?: string
         }
         Update: {
@@ -1028,6 +1030,7 @@ export type Database = {
           outreach_partner?: string | null
           start_time?: string | null
           status?: string
+          status_locked_by_admin?: boolean
           updated_at?: string
         }
         Relationships: []
