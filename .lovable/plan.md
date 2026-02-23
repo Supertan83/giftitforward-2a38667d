@@ -1,43 +1,37 @@
 
 
-# Add Edit Button to Volunteer List in Marketplace Reports
+# Fix Family Member Names on Certificates
 
 ## The Problem
-Some volunteers forget to scan out on the correct day, resulting in inflated hours (e.g., 37.7h or 38.1h instead of ~4h). This skews the volunteer hours in marketplace reports and demographics.
+When certificates are sent for family members (during checkout or via the admin dialog), they sometimes display generic names like "Family Member 1" instead of the actual dependent's name (e.g., "Archana", "MANISHA SITLANI").
 
-## The Solution
-Add an "Edit" button (pencil icon) next to each volunteer row in the Volunteer List table. Clicking it opens a dialog where the admin can manually correct:
-- **Check-in time** (date and time)
-- **Check-out time** (date and time)
-- **Hours worked** (auto-calculated from the times, or manually overridden)
+## Root Cause
+The name mapping extracts an index number from the QR card ID (e.g., `-F1`, `-F3`) and uses it to look up the dependent in a list extracted from registration data. This breaks when:
+- The regex in the admin dialog only captures single digits (`-F(\d)`) so F10+ fails
+- Manually added family members or cards generated with offset indices create misaligned lookups
+- The dependents list is shorter than expected due to deduplication differences
 
-Changes save directly to the `volunteer_qr_cards` table in the database.
+## The Fix
 
-## Technical Details
+### 1. Fix single-digit regex in `PendingVolunteers.tsx` (line 3054)
+Change `/-F(\d)/` to `/-F(\d+)/` so it correctly captures multi-digit family indices (F10, F11, etc.).
 
-### 1. Update `MarketplaceReports.tsx`
-- Add a 6th column "Actions" to the volunteer list table (both desktop and mobile)
-- Add a pencil/edit icon button in each row
-- Import and render a new `VolunteerHoursEditDialog` component
-- Track which volunteer card is being edited via local state
-- The volunteer list data needs to include the `cardId` -- update the data shape to pass it through
+### 2. Add positional fallback in `useSupabaseData.ts` (lines 1596-1610)
+When the index-based lookup fails (dependents array is empty or too short):
+- Sort all family cards for this volunteer by their F-index
+- Find this card's position in the sorted list
+- Use that position to look up the dependent name
+- As a last resort, use "Family of [Volunteer Name]" instead of the generic "Family Member N"
 
-### 2. Update `useMarketplaceAllocations.ts` (volunteer list builder)
-- Include `card.id` (the volunteer_qr_cards ID) and `checked_in_at` / `checked_out_at` in the `volunteerList` array so the edit dialog can reference and pre-fill the correct record
+### 3. Add the same positional fallback in `PendingVolunteers.tsx` (lines 3053-3059)
+Apply the same logic so the admin certificate dialog also resolves names correctly:
+- Sort the family cards by F-index
+- Match each card's position to the dependents array
+- Fall back to "Family of [Volunteer Name]" if still unresolved
 
-### 3. Create new component `src/components/admin/VolunteerHoursEditDialog.tsx`
-- A dialog with:
-  - Volunteer name displayed (read-only)
-  - Check-in date/time input (pre-filled from current data)
-  - Check-out date/time input (pre-filled from current data)
-  - Hours worked (auto-calculated when both times are set, with option to override)
-- On save: updates `volunteer_qr_cards` table with new `checked_in_at`, `checked_out_at`, and `total_hours_worked`
-- Invalidates the `marketplace_report` query cache so the table refreshes immediately
+## Files to Change
+1. **`src/hooks/useSupabaseData.ts`** -- Add positional fallback for name resolution during auto-checkout
+2. **`src/components/admin/PendingVolunteers.tsx`** -- Fix regex and add positional fallback in admin certificate dialog
 
-### 4. Column layout adjustment
-- Adjust the `colgroup` widths to accommodate the new narrow Actions column
-- Desktop: Name 25%, Category 16%, Company 16%, Status 16%, Hours 14%, Actions 13%
-
-### No database changes needed
-The `volunteer_qr_cards` table already has `checked_in_at`, `checked_out_at`, and `total_hours_worked` columns. Staff already have UPDATE permission via the existing RLS policy "Staff can manage volunteer cards".
-
+## No database changes needed
+All required data (`events_json`, `volunteer_qr_cards`) is already available.
