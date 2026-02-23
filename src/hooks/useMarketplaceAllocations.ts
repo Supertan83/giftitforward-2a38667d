@@ -3,6 +3,37 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
 import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
 
+// Extract unique dependents from events_json (same logic as FamilyMembersTab)
+const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
+  if (!eventsJson || !Array.isArray(eventsJson)) return [];
+  const dependentsMap = new Map<string, { name: string; type: string }>();
+  for (const event of eventsJson) {
+    if (event.dependents && Array.isArray(event.dependents)) {
+      for (const dep of event.dependents) {
+        const key = dep.name?.toLowerCase()?.trim();
+        if (key && !dependentsMap.has(key)) {
+          dependentsMap.set(key, { name: dep.name, type: dep.type || 'adult' });
+        }
+      }
+    }
+  }
+  return Array.from(dependentsMap.values());
+};
+
+// Resolve family member name from card unique_id
+const resolveFamilyName = (uniqueId: string, vol: any): { name: string; isFamily: boolean } => {
+  const fMatch = uniqueId.match(/-F(\d+)/);
+  if (!fMatch) return { name: `${vol.first_name || ''} ${vol.last_name || ''}`.trim() || 'Unknown', isFamily: false };
+
+  const familyIndex = parseInt(fMatch[1], 10);
+  const dependents = extractUniqueDependents(vol.events_json);
+
+  if (familyIndex > 0 && familyIndex <= dependents.length) {
+    return { name: `${dependents[familyIndex - 1].name} (Family)`, isFamily: true };
+  }
+  return { name: `Family Member ${familyIndex} (Family)`, isFamily: true };
+};
+
 export interface MarketplaceAllocation {
   id: string;
   marketplaceId: string;
@@ -410,10 +441,10 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
       const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
-      // Fetch volunteer data via attendance records (per-marketplace source of truth)
+// Fetch volunteer data via attendance records (per-marketplace source of truth)
       const { data: attendanceRecords } = await supabase
         .from('volunteer_attendance')
-        .select('*, volunteer_qr_cards(id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender))')
+        .select('*, volunteer_qr_cards(id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender, events_json))')
         .eq('marketplace_id', marketplaceId);
 
       // Group attendance by volunteer_card_id and sum hours per volunteer for THIS marketplace
@@ -464,7 +495,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       // Also fetch volunteer QR cards assigned to this marketplace (for registered but not-yet-checked-in volunteers)
       const { data: assignedCards } = await supabase
         .from('volunteer_qr_cards')
-        .select('id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender)')
+        .select('id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender, events_json)')
         .eq('marketplace_id', marketplaceId);
 
       // Add any assigned volunteers who don't have attendance records yet
@@ -498,8 +529,11 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         cardId: string; checkedInAt: string | null; checkedOutAt: string | null;
       }> = [];
 
-      for (const [, entry] of volCardMap) {
+      for (const [cardId, entry] of volCardMap) {
         const vol = entry.vol;
+        const card = (attendanceRecords || []).find(a => a.volunteer_card_id === cardId)?.volunteer_qr_cards as any
+          || (assignedCards || []).find(c => c.id === cardId);
+        const cardUniqueId = card?.unique_id || '';
 
         let categoryKey: string;
         if (vol.is_employee) {
@@ -511,9 +545,10 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
 
         const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
+        const { name: resolvedName } = resolveFamilyName(cardUniqueId, vol);
 
         volunteerList.push({
-          name: `${vol.first_name || ''} ${vol.last_name || ''}`.trim() || 'Unknown',
+          name: resolvedName,
           status: entry.status,
           hoursWorked: entry.totalHours,
           category: categoryKey,
