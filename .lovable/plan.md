@@ -1,81 +1,68 @@
 
 
-# Fix: Duplicate Family QR Cards - Regex Bug
+# Fix: Remaining Broken Regex + Cleanup Excess Family Cards
 
-## Root Cause
+## Problem Summary
 
-The regex `/-F\d+[A-Z0-9]+$/` used to identify family QR cards **fails** when the 2-character random suffix is all digits.
+The screenshot shows "Family of Ahlam AlHashemi" repeated 3 times in the marketplace report. This volunteer has **zero dependents** in her registration data, yet somehow has 3 family QR cards that were used (status: checked_out).
 
-**How QR IDs are generated:** `{volunteerQRId}-F{index}{2-random-chars}` where random chars come from `Math.random().toString(36).substring(2,4).toUpperCase()` (can produce digits like "07", "71", "00").
+Two issues remain:
 
-**Examples of broken IDs:**
-- `VOL-...-F207` -- regex thinks `\d+` = "207", nothing left for `[A-Z0-9]+` = **no match**
-- `VOL-...-F100` -- regex thinks `\d+` = "100", nothing left = **no match**
+1. **Broken regex still exists in webhook-receiver** (lines 4780 and 4789): The manual "add family member" endpoint still uses the old buggy pattern `/-F\d+[A-Z0-9]+$/` which miscounts existing family cards when suffixes are all-numeric (e.g., `-F100`), causing duplicate card creation.
 
-This means the `generate-missing-family-qrs` function undercounts existing family cards and creates extras. At least 18 cards in the database have this issue, affecting multiple volunteers.
+2. **The previous cleanup only deleted `inactive` cards** -- it skipped the `checked_out` ones. For volunteers with **zero dependents**, ALL family cards are erroneous and should be removed regardless of status.
 
-A secondary issue: `extractUniqueDependents` deduplicates by exact name match, so the same family member registered across events with slightly different names (e.g., "AZAAN BIN MISBA" vs "AZAAN") creates additional phantom dependents, leading to even more excess cards.
+Additionally, some volunteers have more family cards than dependents even after the first cleanup (e.g., Jaswinder Singh: 4 family cards, 2 dependents -- 2 new ones were created after the cleanup because the `generate-missing-family-qrs` was re-run).
 
-## Fix Plan
+## Plan
 
-### 1. Fix the Regex Everywhere (3 files)
+### 1. Fix the last broken regex in webhook-receiver (lines 4780 + 4789)
 
-Replace all instances of `/-F\d+[A-Z0-9]+$/` with a simpler, correct pattern: `/-F\d+/`
+Replace `/-F\d+[A-Z0-9]+$/` with `/-F\d+/` in both occurrences. This is the same fix already applied elsewhere but missed in the manual "add family member" handler.
 
-This matches any card ID containing `-F` followed by one or more digits, which is sufficient to identify family cards. The regex is used in:
+### 2. Update and re-run the cleanup function
 
-- **`supabase/functions/generate-missing-family-qrs/index.ts`** (lines 78, 85) -- primary card detection and family card counting
-- **`src/hooks/useMarketplaceAllocations.ts`** -- family name resolution uses a similar pattern for sorting/filtering
+Update `cleanup-duplicate-family-cards` to:
+- Delete ALL family cards (any status) when a volunteer has 0 dependents
+- Delete excess `inactive` OR `checked_out` family cards when the count exceeds the actual dependent count (keep earliest N cards)
+- Still skip cards with `checked_in` status (actively in use today)
 
-### 2. Fix the generate-missing-family-qrs Function
+### 3. Deploy and execute
 
-Update the function to use the corrected regex so it accurately counts existing family cards and stops creating duplicates.
-
-### 3. Fix the webhook-receiver Function
-
-Update the regex in `webhook-receiver/index.ts` if any similar patterns exist there for family card detection.
-
-### 4. Clean Up Duplicate Cards (SQL)
-
-Write a cleanup query to identify and delete the excess family QR cards that were erroneously created. For each volunteer:
-- Keep the original family cards (earliest `created_at`)
-- Delete extras that exceed the actual number of dependents
-- Only delete cards with status `inactive` (never used) to be safe
-- Cards that are `checked_in` should be investigated manually
-
-### 5. Improve extractUniqueDependents Deduplication
-
-Improve the name matching logic to handle minor variations (e.g., partial names). Use first-name matching or fuzzy comparison so "AZAAN" and "AZAAN BIN MISBA" are recognized as the same person.
+Deploy both updated functions, then run the cleanup to remove the remaining duplicates.
 
 ## Technical Details
 
-### File Changes
+### File: `supabase/functions/webhook-receiver/index.ts`
 
-**`supabase/functions/generate-missing-family-qrs/index.ts`**
-- Line 78: Change `!/-F\d+[A-Z0-9]+$/.test(c.unique_id)` to `!/-F\d+/.test(c.unique_id)`
-- Line 85: Change `/-F\d+[A-Z0-9]+$/.test(c.unique_id)` to `/-F\d+/.test(c.unique_id)`
+**Line 4780:** Change `!/-F\d+[A-Z0-9]+$/.test(c.unique_id)` to `!/-F\d+/.test(c.unique_id)`
 
-**`src/hooks/useMarketplaceAllocations.ts`**
-- Update all regex patterns for family card detection to use `/-F\d+/`
+**Line 4789:** Change `/-F\d+[A-Z0-9]+$/.test(c.unique_id)` to `/-F\d+/.test(c.unique_id)`
 
-**`supabase/functions/generate-missing-family-qrs/index.ts` and `supabase/functions/webhook-receiver/index.ts`**
-- Improve `extractUniqueDependents` to normalize names before deduplication: trim, lowercase, and also check if one name is a substring of another (e.g., "azaan" matches "azaan bin misba")
+### File: `supabase/functions/cleanup-duplicate-family-cards/index.ts`
 
-### Cleanup SQL
+Update the deletion filter to include `checked_out` cards (not just `inactive`):
 
-```sql
--- Delete excess family QR cards (only inactive ones)
--- Step 1: Identify volunteers with more family cards than dependents
--- Step 2: Keep earliest N family cards (N = actual dependent count)
--- Step 3: Delete the rest where status = 'inactive'
+```text
+// Before: only deleted inactive
+const toDelete = excess.filter(c => c.status === 'inactive');
+
+// After: delete inactive or checked_out (skip checked_in -- in active use)
+const toDelete = excess.filter(c => c.status !== 'checked_in');
 ```
 
-This will be executed after the code fix is deployed to prevent the issue from recurring.
+Also handle the zero-dependents case: if a volunteer has 0 dependents, ALL family cards are excess.
+
+### Execution
+
+1. Deploy both edge functions
+2. Run cleanup with `dryRun: false`
+3. Verify affected volunteers (Ahlam AlHashemi, Jaswinder Singh, etc.) now show correct card counts
 
 ## What Does Not Change
 
-- The check-in/check-out flow
-- The primary QR card generation
-- The webhook-receiver's initial family card creation (first registration)
-- Card statuses or attendance records
+- Primary QR card creation
+- Check-in/check-out flows
+- Attendance records (only QR card records are cleaned)
+- Report rendering logic (already handles name resolution correctly)
 
