@@ -220,6 +220,21 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       return;
     }
 
+    // Determine the original status from the fetched marketplace data
+    const originalMarketplace = marketplaces.find(m => m.id === editingMarketplace.id);
+    const originalStatus = originalMarketplace?.status;
+    const statusChanged = originalStatus !== editingMarketplace.status;
+
+    // If admin manually changed the status, set the lock flag
+    let statusLockedByAdmin: boolean | undefined;
+    if (statusChanged) {
+      if (editingMarketplace.status === 'completed') {
+        statusLockedByAdmin = false; // Release lock so auto-logic can resume
+      } else {
+        statusLockedByAdmin = true; // Lock it so auto-complete won't override
+      }
+    }
+
     try {
       await updateMarketplace.mutateAsync({
         id: editingMarketplace.id,
@@ -231,6 +246,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         start_time: editingMarketplace.startTime || null,
         end_time: editingMarketplace.endTime || null,
         beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit,
+        ...(statusLockedByAdmin !== undefined && { status_locked_by_admin: statusLockedByAdmin }),
       });
       toast({
         title: 'Marketplace Updated',

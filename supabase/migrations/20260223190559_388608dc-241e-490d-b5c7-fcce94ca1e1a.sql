@@ -1,0 +1,1 @@
+ALTER TABLE marketplace_events ADD COLUMN status_locked_by_admin boolean NOT NULL DEFAULT false;

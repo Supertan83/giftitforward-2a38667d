@@ -1225,7 +1225,7 @@ export const useMarketplaces = () => {
       return (data || []).map(item => {
         let computedStatus = item.status as 'upcoming' | 'active' | 'completed';
         // Client-side guard: if marketplace is "active" but event has ended, show as "completed"
-        if ((computedStatus === 'active' || computedStatus === 'upcoming') && item.event_date) {
+        if (!(item as any).status_locked_by_admin && (computedStatus === 'active' || computedStatus === 'upcoming') && item.event_date) {
           const [year, month, day] = item.event_date.split('-').map(Number);
           const eventDate = new Date(year, month - 1, day);
           if (item.end_time) {
@@ -1320,6 +1320,7 @@ export const useUpdateMarketplace = () => {
       start_time?: string | null;
       end_time?: string | null;
       beneficiary_credit_limit?: number;
+      status_locked_by_admin?: boolean;
     }) => {
       const { id, ...updates } = marketplace;
       const { error } = await supabase
