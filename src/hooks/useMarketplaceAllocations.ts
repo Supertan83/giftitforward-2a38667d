@@ -6,18 +6,28 @@ import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
 // Extract unique dependents from events_json (same logic as FamilyMembersTab)
 const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
-  const dependentsMap = new Map<string, { name: string; type: string }>();
+  const dependents: Array<{ name: string; type: string }> = [];
   for (const event of eventsJson) {
     if (event.dependents && Array.isArray(event.dependents)) {
       for (const dep of event.dependents) {
-        const key = dep.name?.toLowerCase()?.trim();
-        if (key && !dependentsMap.has(key)) {
-          dependentsMap.set(key, { name: dep.name, type: dep.type || 'adult' });
+        const name = dep.name?.trim();
+        if (!name) continue;
+        const nameLower = name.toLowerCase();
+        
+        const existingIdx = dependents.findIndex(d => {
+          const existing = d.name.toLowerCase();
+          return existing === nameLower || existing.includes(nameLower) || nameLower.includes(existing);
+        });
+        
+        if (existingIdx === -1) {
+          dependents.push({ name: dep.name, type: dep.type || 'adult' });
+        } else if (nameLower.length > dependents[existingIdx].name.length) {
+          dependents[existingIdx] = { name: dep.name, type: dep.type || dependents[existingIdx].type };
         }
       }
     }
   }
-  return Array.from(dependentsMap.values());
+  return dependents;
 };
 
 // Resolve family member name from card unique_id using positional matching
