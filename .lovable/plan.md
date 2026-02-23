@@ -1,42 +1,58 @@
 
 
-# Add Marketplace Filter to Volunteer Export
+# Fix Survey Submission Error for Volunteers
 
-## What This Does
-Adds a marketplace dropdown to the existing "Export Volunteer Report" dialog, letting admins filter exported volunteers by a specific marketplace event. This sits between the date pickers and the format selector, matching the dialog layout shown in your screenshot.
+## The Problem
+When volunteer BRAHMPAL VERMA (and potentially others) opens the survey link from their email and tries to submit, they see: **"Submission Failed -- Edge Function returned a non-2xx status code"**.
 
-## How It Will Look
-- A new "Marketplace" dropdown appears after the End Date picker
-- Options include "All Marketplaces" (default) plus every marketplace event from the database
-- When a marketplace is selected, only volunteers registered for that event are included in the export
-- The filename includes the marketplace name when filtered (e.g., `volunteers-report-event-7-cda-2026-02-01-to-2026-02-22.xlsx`)
+## Root Cause
+The `submit-survey` edge function is **not listed** in `supabase/config.toml` with `verify_jwt = false`. This means it defaults to requiring a valid JWT (login token). Since volunteers access the survey via a public email link and are **not logged in**, the function rejects the request.
 
-## Technical Details
+The function already has its own security: it validates the unique `survey_token` before accepting any data. JWT verification is redundant and blocks legitimate survey submissions.
 
-### Changes to `src/components/admin/PendingVolunteers.tsx`
+## The Fix
 
-**New state variable:**
-- `exportMarketplace` -- stores the selected marketplace ID (or `'all'`)
+### 1. Add `submit-survey` to `supabase/config.toml`
 
-**New data fetch:**
-- Query `marketplace_events` table for `id` and `name`, ordered by `event_date` descending
-- Used to populate the marketplace dropdown in the export dialog
+Add this entry to disable JWT verification for the survey function:
 
-**Export dialog update (UI):**
-- Add a `Select` dropdown between End Date and Export Format sections
-- Label: "Marketplace"
-- First option: "All Marketplaces" (value `'all'`)
-- Remaining options: each marketplace event by name
+```toml
+[functions.submit-survey]
+verify_jwt = false
+```
 
-**Export handler update (logic):**
-- When a marketplace is selected (not `'all'`), look up the marketplace name and normalize it to a slug
-- Filter the query results: only include volunteers whose `events_list` contains a matching slug for the selected marketplace
-- The filtering is done client-side after fetch since `events_list` is a comma-separated text field and needs fuzzy slug matching (same normalization pattern used elsewhere in the codebase)
-- Include marketplace name in the export filename
+### 2. Update survey page to use direct fetch instead of `supabase.functions.invoke()`
 
-**Summary line update:**
-- When a marketplace is selected, the info text changes to: "Export will include volunteers from [date] to [date] for [marketplace name]"
+In `src/pages/VolunteerSurveyPage.tsx`, the submission call (line 133) currently uses:
 
-### No other files need changes
-- No database changes needed
-- No new components needed -- uses existing `Select` UI component
+```typescript
+const { data, error } = await supabase.functions.invoke('submit-survey', {
+  body: { surveyToken: token, answers },
+});
+```
+
+This automatically attaches the (missing) auth token. Change it to a direct `fetch()` call (matching how the GET request on line 71 already works), so it does not try to attach auth headers:
+
+```typescript
+const res = await fetch(
+  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-survey`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ surveyToken: token, answers }),
+  }
+);
+const data = await res.json();
+```
+
+### 3. Same fix for the certificate-sent update call (line 194)
+
+The `update-certificate-sent` action call also uses `supabase.functions.invoke`, which has the same auth issue. Switch it to direct `fetch()`.
+
+### No database changes needed
+
+The function's internal security (survey token validation) is already solid. This is purely a configuration and client-side fix.
+
+## Status of BRAHMPAL VERMA
+His survey shows as **completed** (at 05:45 UTC today), so he eventually managed to submit. But this fix will prevent the issue from recurring for him and other volunteers.
+
