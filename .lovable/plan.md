@@ -1,34 +1,38 @@
 
 
-# Fix Export: Remove Date Range Filter When Marketplace Is Selected
+# Add "or" Divider Between Date Range and Marketplace Filter
 
-## The Problem
+## What Changes
 
-The export filters volunteers by their **registration date** (`created_at`), but users expect it to return everyone registered for a selected marketplace event. This causes most volunteers to be missing from exports.
+**File: `src/components/admin/PendingVolunteers.tsx` (line 2722-2724)**
 
-## The Fix
+Add a visual "or" divider between the End Date field and the Marketplace dropdown, so users understand these are alternative filtering methods:
 
-**File: `src/components/admin/PendingVolunteers.tsx` (export handler, ~lines 950-956)**
+- Use date range to filter by registration date (when "All Marketplaces" is selected)
+- OR choose a specific marketplace to get all volunteers for that event
 
-When a specific marketplace is selected in the export dialog, skip the `created_at` date range filter entirely. The marketplace selection alone is sufficient to scope the results.
+### UI Addition
 
-When "All" marketplaces is selected, keep the date range filter as-is.
-
-### Change
+Insert a styled "or" separator between the date fields and the marketplace selector (after line 2721, before line 2723):
 
 ```text
-Current:  Always apply .gte('created_at', startDate) and .lte('created_at', endDate)
-Fixed:    Only apply those filters when exportMarketplace === 'all'
+[Start Date picker]
+[End Date picker]
+  ── or ──
+[Marketplace dropdown]
 ```
 
-### One file, ~4 lines changed
+The divider will use a horizontal line with "or" centered, similar to common "or" separators (a flex row with two lines and "or" text in the middle).
 
-In the `handleExportReport` function (~line 950), wrap the `.gte` and `.lte` calls in a condition:
+### Also update the dialog description
 
-```
-if (exportMarketplace === 'all') {
-  query = query.gte('created_at', startDateStr).lte('created_at', endDateStr);
-}
-```
+Change the subtitle from:
+> "Select a date range and format to export volunteer data"
 
-No other changes needed.
+To:
+> "Use a date range or select a marketplace to export volunteer data"
+
+This makes the either/or behavior clear from the start.
+
+### One file, ~6 lines added
+
