@@ -1721,62 +1721,19 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               </>
                             )}
                           </motion.tr>
-                          {/* Volunteer + Family member sub-rows */}
+                          {/* Family member sub-rows */}
                           {expandedVolunteers.has(volunteer.id) && (() => {
                             const familyCards = (volunteer.volunteer_qr_cards || []).filter(
                               (c) => /-F\d+/.test(c.unique_id)
                             );
-                            const primaryCard = (volunteer.volunteer_qr_cards || []).find(
-                              (c) => !/-F\d+/.test(c.unique_id)
-                            );
+                            if (familyCards.length === 0) return null;
                             const deps = extractUniqueDependents(volunteer.events_json);
                             const sortedCards = [...familyCards].sort((a, b) => {
                               const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
                               const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
                               return aIdx - bIdx;
                             });
-
-                            const volCertSent = !!volunteer.certificate_sent_at;
-
-                            const rows = [];
-
-                            // Volunteer's own certificate row
-                            rows.push(
-                              <tr key={`vol-cert-${volunteer.id}`} className="bg-muted/20 border-b border-muted/50">
-                                <TableCell />
-                                <TableCell colSpan={2} className="py-2 pl-8">
-                                  <div className="flex items-center gap-2">
-                                    <GraduationCap className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-sm font-medium">{volunteer.first_name} {volunteer.last_name}</span>
-                                    <Badge variant="outline" className="text-xs px-1 py-0 bg-primary/10 text-primary border-primary/30">Volunteer</Badge>
-                                    {primaryCard && (
-                                      <span className="text-xs font-mono text-muted-foreground">({primaryCard.unique_id})</span>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell" />
-                                <TableCell className="hidden lg:table-cell py-2">
-                                  {volCertSent ? (
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs px-1.5 py-0">
-                                      <Check className="w-3 h-3 mr-0.5" />
-                                      Cert Sent
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-muted text-muted-foreground text-xs px-1.5 py-0">
-                                      <Clock className="w-3 h-3 mr-0.5" />
-                                      Not Sent
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="hidden lg:table-cell" />
-                                <TableCell className="hidden sm:table-cell" />
-                                <TableCell className="hidden md:table-cell" />
-                                <TableCell />
-                              </tr>
-                            );
-
-                            // Family member rows
-                            sortedCards.forEach((fc, posIdx) => {
+                            return sortedCards.map((fc, posIdx) => {
                               const fMatch = fc.unique_id.match(/-F(\d+)/);
                               const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
                               let memberName = '';
@@ -1791,7 +1748,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                 memberName = `Family of ${volName}`;
                               }
                               const isCertSent = !!fc.survey_completed_at;
-                              rows.push(
+                              return (
                                 <tr key={fc.id} className="bg-muted/30 border-b border-muted/50">
                                   <TableCell />
                                   <TableCell colSpan={2} className="py-2 pl-8">
@@ -1822,8 +1779,6 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                 </tr>
                               );
                             });
-
-                            return rows;
                           })()}
                           </React.Fragment>
                         ))}
