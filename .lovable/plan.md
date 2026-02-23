@@ -1,73 +1,69 @@
 
 
-# Fix: Per-Marketplace Volunteer Hours Tracking
+# Fix Duplicate Volunteer Names in Marketplace Reports
 
 ## Problem
 
-Currently, volunteer hours are tracked as a single cumulative number on `volunteer_qr_cards.total_hours_worked`. When the same volunteer participates in multiple marketplace events, their hours get added together. Reports then show this cumulative total for every marketplace, which is incorrect.
+The volunteer list in Marketplace Reports shows the **same name repeated** for family members. For example:
+- "YOGESH ARORA" appears 3 times (primary card + 2 family cards F1, F2)
+- "Arish Shrestha" appears 2 times (primary + 1 family card)
+- "Aeimy Dissanayake" appears 2 times (primary + 1 family card)
 
-Additionally, `volunteer_qr_cards.marketplace_id` only stores the **last** marketplace the volunteer was checked into, so a volunteer who worked at Marketplace A and later Marketplace B only appears in Marketplace B's report.
-
-## Root Cause
-
-The marketplace report (`useMarketplaceReport`) queries `volunteer_qr_cards` filtered by `marketplace_id`, then reads `card.total_hours_worked`. This means:
-- Volunteers only appear under their **most recent** marketplace
-- Hours shown are the **lifetime total**, not marketplace-specific
+Family QR cards (suffixed like `-F1KZ`, `-F299`) share the same `volunteer_id`, so they all resolve to the parent volunteer's name. The actual family member names are stored in the volunteer's `events_json` dependents array (e.g., "Romika Arora", "Fatima Faiz", "Deepesh Pacheri").
 
 ## Solution
 
-The `volunteer_attendance` table already has per-marketplace records with individual `hours_worked` values. The fix is to use attendance records as the source of truth for marketplace reports instead of relying on the card-level data.
+Add family member name resolution to the marketplace report's volunteer list builder. This reuses the same positional matching logic already used in the Family Members tab and Pending Volunteers section:
 
-## Changes
+1. Detect if a QR card is a family card by checking for the `-F{index}` suffix in `unique_id`
+2. Extract the family index number (e.g., `-F1` = index 1, `-F2` = index 2)
+3. Look up the corresponding dependent name from the volunteer's `events_json`
+4. Display the resolved family member name with a visual indicator (e.g., suffix or label)
 
-### 1. Marketplace Report Query (src/hooks/useMarketplaceAllocations.ts)
+## Technical Changes
 
-**Current approach (line ~414-420):**
-- Fetches `volunteer_qr_cards` where `marketplace_id = marketplaceId`
-- Uses `card.total_hours_worked` for hours
+### File: `src/hooks/useMarketplaceAllocations.ts`
 
-**New approach:**
-- Fetch `volunteer_attendance` records where `marketplace_id = marketplaceId`
-- Join to `volunteer_qr_cards` (to get `volunteer_id`) and then to `pending_volunteers` (for name, company, gender)
-- Use `attendance.hours_worked` for per-event hours
-- If a volunteer has multiple attendance records for the same marketplace (re-checked-in), sum them
-- This ensures volunteers appear in every marketplace they attended, with correct per-event hours
-
-### 2. Volunteer List Building (line ~433-458)
-
-Update the volunteer list construction to:
-- Group attendance records by `volunteer_card_id`
-- Sum `hours_worked` across all attendance records for that volunteer at that marketplace
-- Use `check_in_time` and `check_out_time` from the attendance record (not the card) for the report display
-- Keep category logic (Corporate Internal/External/Outreach) unchanged
-
-### 3. Total Hours Calculation (line ~420)
-
-Replace:
-```text
-totalHours = sum of card.total_hours_worked  (cumulative across all events)
-```
-With:
-```text
-totalHours = sum of attendance.hours_worked  (only this marketplace)
-```
-
-### 4. Hours Edit Dialog Compatibility
-
-The `VolunteerHoursEditDialog` currently updates `volunteer_qr_cards` timestamps and recalculates hours. It will also need to update the corresponding `volunteer_attendance` record to keep both in sync.
-
-## What Does NOT Change
-
-- The check-in/check-out flow (already creates attendance records correctly)
-- The `volunteer_qr_cards.total_hours_worked` field (still useful as a lifetime total)
-- Admin dashboard volunteer cards viewer
-- Certificate generation (already receives hours as a parameter)
-
-## Data Flow After Fix
+1. Add a helper function to resolve family member names from `events_json` (same logic as `FamilyMembersTab`):
 
 ```text
-Check-in:  Creates volunteer_attendance record with marketplace_id + check_in_time
-Check-out: Updates attendance record with check_out_time + hours_worked
-Report:    Queries volunteer_attendance by marketplace_id -> accurate per-event data
+resolveFamilyName(cardUniqueId, eventsJson):
+  - Check if unique_id contains "-F{digit}" pattern
+  - Extract the family index
+  - Flatten all dependents from events_json
+  - Return the dependent at that index, or fallback to "Family Member {index}"
 ```
 
+2. Update the volunteer data fetching to also include `events_json` from `pending_volunteers` in the select query
+
+3. In the volunteer list building loop (where names are constructed), check if the card is a family card:
+   - If it is a family card: resolve the name from dependents and append a "(Family)" label
+   - If it is a primary card: keep the current name logic unchanged
+
+### File: `src/components/admin/MarketplaceReports.tsx`
+
+No structural changes needed. The volunteer list will automatically show resolved family names since the data comes from the hook. Optionally, add a visual badge/tag for family members to make them easily distinguishable.
+
+## Example Result
+
+Before:
+```text
+YOGESH ARORA    Corporate External    Al Gurg Group    Checked In
+YOGESH ARORA    Corporate External    Al Gurg Group    Checked In
+YOGESH ARORA    Corporate External    Al Gurg Group    Checked In
+```
+
+After:
+```text
+YOGESH ARORA           Corporate External    Al Gurg Group    Checked In
+Romika Arora (Family)  Corporate External    Al Gurg Group    Checked In
+Family Member 2        Corporate External    Al Gurg Group    Checked In
+```
+
+## What Does Not Change
+
+- Volunteer counts (family members still count as individual volunteers)
+- Hours tracking (each card tracks independently)
+- Category breakdown logic
+- Check-in/check-out flow
+- Any database schema
