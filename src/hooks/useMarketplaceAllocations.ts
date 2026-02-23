@@ -416,6 +416,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       const volunteerList: Array<{
         name: string; status: string; hoursWorked: number; category: string; company: string; gender: string | null;
+        cardId: string; checkedInAt: string | null; checkedOutAt: string | null;
       }> = [];
 
       for (const card of volunteerCards || []) {
@@ -440,6 +441,9 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           category: categoryKey,
           company,
           gender: vol.gender || null,
+          cardId: card.id,
+          checkedInAt: card.checked_in_at || null,
+          checkedOutAt: card.checked_out_at || null,
         });
 
         if (!volCategoryMap.has(categoryKey)) {
