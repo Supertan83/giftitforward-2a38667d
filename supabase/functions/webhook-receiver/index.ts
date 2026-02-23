@@ -4777,7 +4777,7 @@ serve(async (req) => {
       }
 
       // Find the parent QR (first one without -F pattern)
-      const parentCard = existingCards?.find(c => !/-F\d+[A-Z0-9]+$/.test(c.unique_id));
+      const parentCard = existingCards?.find(c => !/-F\d+/.test(c.unique_id));
       if (!parentCard) {
         return new Response(
           JSON.stringify({ success: false, error: 'No parent volunteer QR card found' }),
@@ -4786,7 +4786,7 @@ serve(async (req) => {
       }
 
       // Count existing family cards to get next index
-      const familyCardCount = existingCards?.filter(c => /-F\d+[A-Z0-9]+$/.test(c.unique_id)).length || 0;
+      const familyCardCount = existingCards?.filter(c => /-F\d+/.test(c.unique_id)).length || 0;
       
       // Generate new family QR ID
       const familyQrCardId = generateFamilyQRId(parentCard.unique_id, familyCardCount + 1);
