@@ -1750,16 +1750,20 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               const isCertSent = !!fc.survey_completed_at;
                               return (
                                 <tr key={fc.id} className="bg-muted/30 border-b border-muted/50">
-                                  <TableCell />
-                                  <TableCell colSpan={2} className="py-2 pl-8">
+                                  <TableCell className="py-2" />
+                                  <TableCell className="py-2 pl-8">
                                     <div className="flex items-center gap-2">
                                       <User className="w-3 h-3 text-muted-foreground" />
                                       <span className="text-sm">{memberName}</span>
-                                      <span className="text-xs font-mono text-muted-foreground">({fc.unique_id})</span>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="hidden md:table-cell" />
-                                  <TableCell className="hidden lg:table-cell py-2">
+                                  <TableCell className="py-2">
+                                    <span className="text-xs font-mono text-muted-foreground">{fc.unique_id}</span>
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell py-2" />
+                                  <TableCell className="hidden lg:table-cell py-2" />
+                                  <TableCell className="hidden lg:table-cell py-2" />
+                                  <TableCell className="hidden sm:table-cell py-2">
                                     {isCertSent ? (
                                       <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs px-1.5 py-0">
                                         <Check className="w-3 h-3 mr-0.5" />
@@ -1772,10 +1776,33 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                       </Badge>
                                     )}
                                   </TableCell>
-                                  <TableCell className="hidden lg:table-cell" />
-                                  <TableCell className="hidden sm:table-cell" />
-                                  <TableCell className="hidden md:table-cell" />
-                                  <TableCell />
+                                  <TableCell className="hidden md:table-cell py-2" />
+                                  <TableCell className="py-2">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => {
+                                            const nameParts = memberName.split(' ');
+                                            const firstName = nameParts[0] || memberName;
+                                            const lastName = nameParts.slice(1).join(' ') || '';
+                                            setCertificatePreviewVolunteer({
+                                              ...volunteer,
+                                              first_name: firstName,
+                                              last_name: lastName,
+                                              certificate_sent_at: fc.survey_completed_at || null,
+                                            });
+                                            setShowCertificatePreview(true);
+                                          }}
+                                        >
+                                          <Award className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>View Certificate</TooltipContent>
+                                    </Tooltip>
+                                  </TableCell>
                                 </tr>
                               );
                             });
