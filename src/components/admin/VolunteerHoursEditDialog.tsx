@@ -14,6 +14,7 @@ interface VolunteerEditData {
   checkedInAt: string | null;
   checkedOutAt: string | null;
   hoursWorked: number;
+  marketplaceId?: string;
 }
 
 interface VolunteerHoursEditDialogProps {
@@ -82,6 +83,30 @@ export const VolunteerHoursEditDialog = ({ volunteer, open, onOpenChange }: Volu
         .eq('id', volunteer.cardId);
 
       if (error) throw error;
+
+      // Also sync the volunteer_attendance record for this marketplace
+      if (volunteer.marketplaceId) {
+        const attUpdate: Record<string, any> = {};
+        if (checkIn) attUpdate.check_in_time = new Date(checkIn).toISOString();
+        if (checkOut) attUpdate.check_out_time = new Date(checkOut).toISOString();
+        attUpdate.hours_worked = parseFloat(hours) || 0;
+
+        // Find the most recent attendance record for this card + marketplace
+        const { data: attRecords } = await supabase
+          .from('volunteer_attendance')
+          .select('id')
+          .eq('volunteer_card_id', volunteer.cardId)
+          .eq('marketplace_id', volunteer.marketplaceId)
+          .order('check_in_time', { ascending: false })
+          .limit(1);
+
+        if (attRecords && attRecords.length > 0) {
+          await supabase
+            .from('volunteer_attendance')
+            .update(attUpdate)
+            .eq('id', attRecords[0].id);
+        }
+      }
 
       toast.success('Volunteer hours updated successfully');
       queryClient.invalidateQueries({ queryKey: ['marketplace_report'] });

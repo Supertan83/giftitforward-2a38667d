@@ -410,17 +410,85 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
       const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
-      // Fetch volunteer data - QR cards for this marketplace
-      const { data: volunteerCards } = await supabase
-        .from('volunteer_qr_cards')
-        .select('*, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender)')
+      // Fetch volunteer data via attendance records (per-marketplace source of truth)
+      const { data: attendanceRecords } = await supabase
+        .from('volunteer_attendance')
+        .select('*, volunteer_qr_cards(id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender))')
         .eq('marketplace_id', marketplaceId);
 
-      const totalVolunteers = volunteerCards?.length || 0;
-      const totalHours = volunteerCards?.reduce((sum, v) => sum + (Number(v.total_hours_worked) || 0), 0) || 0;
-      const totalAttended = volunteerCards?.filter(v => v.status === 'checked_in' || v.status === 'checked_out').length || 0;
+      // Group attendance by volunteer_card_id and sum hours per volunteer for THIS marketplace
+      const volCardMap = new Map<string, {
+        cardId: string;
+        vol: any;
+        status: string;
+        totalHours: number;
+        checkedInAt: string | null;
+        checkedOutAt: string | null;
+        attended: boolean;
+      }>();
 
-      // Build category breakdown from volunteer cards
+      for (const att of attendanceRecords || []) {
+        const card = att.volunteer_qr_cards as any;
+        if (!card) continue;
+        const vol = card.volunteer as any;
+        if (!vol) continue;
+        const cardId = att.volunteer_card_id;
+
+        if (!volCardMap.has(cardId)) {
+          volCardMap.set(cardId, {
+            cardId: card.id,
+            vol,
+            status: card.status,
+            totalHours: 0,
+            checkedInAt: att.check_in_time,
+            checkedOutAt: att.check_out_time,
+            attended: false,
+          });
+        }
+
+        const entry = volCardMap.get(cardId)!;
+        entry.totalHours += Number(att.hours_worked) || 0;
+        // Use the earliest check-in and latest check-out for display
+        if (att.check_in_time && (!entry.checkedInAt || att.check_in_time < entry.checkedInAt)) {
+          entry.checkedInAt = att.check_in_time;
+        }
+        if (att.check_out_time && (!entry.checkedOutAt || att.check_out_time > entry.checkedOutAt)) {
+          entry.checkedOutAt = att.check_out_time;
+        }
+        // If any attendance record exists with check_out_time, they attended
+        if (att.check_out_time || att.check_in_time) {
+          entry.attended = true;
+        }
+      }
+
+      // Also fetch volunteer QR cards assigned to this marketplace (for registered but not-yet-checked-in volunteers)
+      const { data: assignedCards } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender)')
+        .eq('marketplace_id', marketplaceId);
+
+      // Add any assigned volunteers who don't have attendance records yet
+      for (const card of assignedCards || []) {
+        const vol = card.volunteer as any;
+        if (!vol) continue;
+        if (!volCardMap.has(card.id)) {
+          volCardMap.set(card.id, {
+            cardId: card.id,
+            vol,
+            status: card.status,
+            totalHours: 0,
+            checkedInAt: null,
+            checkedOutAt: null,
+            attended: card.status === 'checked_in' || card.status === 'checked_out',
+          });
+        }
+      }
+
+      const totalVolunteers = volCardMap.size;
+      const totalHours = Array.from(volCardMap.values()).reduce((sum, v) => sum + v.totalHours, 0);
+      const totalAttended = Array.from(volCardMap.values()).filter(v => v.attended).length;
+
+      // Build category breakdown from per-marketplace volunteer data
       const volCategoryMap = new Map<string, {
         registered: number; attended: number; male: number; female: number; companies: Map<string, number>;
       }>();
@@ -430,9 +498,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         cardId: string; checkedInAt: string | null; checkedOutAt: string | null;
       }> = [];
 
-      for (const card of volunteerCards || []) {
-        const vol = card.volunteer as any;
-        if (!vol) continue;
+      for (const [, entry] of volCardMap) {
+        const vol = entry.vol;
 
         let categoryKey: string;
         if (vol.is_employee) {
@@ -447,14 +514,14 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
         volunteerList.push({
           name: `${vol.first_name || ''} ${vol.last_name || ''}`.trim() || 'Unknown',
-          status: card.status,
-          hoursWorked: Number(card.total_hours_worked) || 0,
+          status: entry.status,
+          hoursWorked: entry.totalHours,
           category: categoryKey,
           company,
           gender: vol.gender || null,
-          cardId: card.id,
-          checkedInAt: card.checked_in_at || null,
-          checkedOutAt: card.checked_out_at || null,
+          cardId: entry.cardId,
+          checkedInAt: entry.checkedInAt,
+          checkedOutAt: entry.checkedOutAt,
         });
 
         if (!volCategoryMap.has(categoryKey)) {
@@ -462,7 +529,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
         const cat = volCategoryMap.get(categoryKey)!;
         cat.registered++;
-        if (card.status === 'checked_in' || card.status === 'checked_out') cat.attended++;
+        if (entry.attended) cat.attended++;
         if (vol.gender?.toLowerCase() === 'male') cat.male++;
         if (vol.gender?.toLowerCase() === 'female') cat.female++;
         cat.companies.set(company, (cat.companies.get(company) || 0) + 1);

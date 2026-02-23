@@ -26,7 +26,7 @@ export const MarketplaceReports = ({
   });
   const { isSyncing, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
   const [editingVolunteer, setEditingVolunteer] = useState<{
-    cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number;
+    cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number; marketplaceId?: string;
   } | null>(null);
   const {
     data: marketplaces = [],
@@ -493,6 +493,7 @@ export const MarketplaceReports = ({
                                       checkedInAt: (vol as any).checkedInAt,
                                       checkedOutAt: (vol as any).checkedOutAt,
                                       hoursWorked: vol.hoursWorked,
+                                      marketplaceId: selectedMarketplaceId || undefined,
                                     })}>
                                       <Pencil className="w-3.5 h-3.5" />
                                     </Button>
@@ -522,6 +523,7 @@ export const MarketplaceReports = ({
                                     checkedInAt: (vol as any).checkedInAt,
                                     checkedOutAt: (vol as any).checkedOutAt,
                                     hoursWorked: vol.hoursWorked,
+                                    marketplaceId: selectedMarketplaceId || undefined,
                                   })}>
                                     <Pencil className="w-3 h-3" />
                                   </Button>
