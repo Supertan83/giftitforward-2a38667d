@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, QrCode, RotateCcw, Package, Loader2 } from 'lucide-react';
+import { ShoppingBag, QrCode, RotateCcw, Package, Loader2, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
@@ -20,6 +20,7 @@ interface MarketplaceZoneProps {
 export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps) => {
   const [showScanner, setShowScanner] = useState(false);
   const [mode, setMode] = useState<Mode>('distribute');
+  const [quantity, setQuantity] = useState(1);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'warning';
     title: string;
@@ -31,7 +32,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
   const { data: trueDistributionCount = 0, isLoading: loadingCount } = useMarketplaceDistributionCount(selectedMarketplaceId || undefined);
-  const { distributeItemSimple, returnItemSimple } = useCardOperations();
+  const { distributeItemSimple, returnItemSimple, distributeItemBatch, returnItemBatch } = useCardOperations();
   const { data: marketplaces = [] } = useMarketplaces();
   const queryClient = useQueryClient();
 
@@ -58,33 +59,46 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
     try {
       if (mode === 'distribute') {
-        const result = await distributeItemSimple.mutateAsync({
-          uniqueId: code,
-          marketplaceId: selectedMarketplaceId
-        });
+        // Use batch RPC if quantity > 1, otherwise use simple single-item RPC
+        const result = quantity > 1
+          ? await distributeItemBatch.mutateAsync({
+              uniqueId: code,
+              marketplaceId: selectedMarketplaceId,
+              quantity,
+            })
+          : await distributeItemSimple.mutateAsync({
+              uniqueId: code,
+              marketplaceId: selectedMarketplaceId,
+            });
 
-        // Invalidate the transaction-based count to refresh
         queryClient.invalidateQueries({ queryKey: ['marketplace_distribution_count', selectedMarketplaceId] });
 
+        const distributed = (result as any).quantity ?? 1;
         setFeedback({
           type: 'success',
-          title: 'Item Distributed!',
+          title: distributed > 1 ? `${distributed} Items Distributed!` : 'Item Distributed!',
           subtitle: `Credits remaining: ${creditLimit - result.creditBalance}/${creditLimit}`,
           credits: result.creditBalance,
           creditLimit,
         });
       } else {
-        const result = await returnItemSimple.mutateAsync({
-          uniqueId: code,
-          marketplaceId: selectedMarketplaceId
-        });
+        const result = quantity > 1
+          ? await returnItemBatch.mutateAsync({
+              uniqueId: code,
+              marketplaceId: selectedMarketplaceId,
+              quantity,
+            })
+          : await returnItemSimple.mutateAsync({
+              uniqueId: code,
+              marketplaceId: selectedMarketplaceId,
+            });
 
-        // Invalidate the transaction-based count to refresh
         queryClient.invalidateQueries({ queryKey: ['marketplace_distribution_count', selectedMarketplaceId] });
 
+        const returned = (result as any).quantity ?? 1;
         setFeedback({
           type: 'success',
-          title: 'Item Returned!',
+          title: returned > 1 ? `${returned} Items Returned!` : 'Item Returned!',
           subtitle: `Credits remaining: ${creditLimit - result.creditBalance}/${creditLimit}`,
           credits: result.creditBalance,
           creditLimit,
@@ -102,8 +116,9 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
       });
     } finally {
       setIsProcessing(false);
+      setQuantity(1); // Reset quantity after each scan
     }
-  }, [selectedMarketplaceId, mode, distributeItemSimple, returnItemSimple, queryClient]);
+  }, [selectedMarketplaceId, mode, quantity, distributeItemSimple, returnItemSimple, distributeItemBatch, returnItemBatch, queryClient, creditLimit]);
 
   const isLoading = loadingAllocations || loadingCount;
 
@@ -165,7 +180,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
           {/* Mode Toggle */}
           <div className="flex gap-2 mb-4 p-1 bg-muted rounded-lg">
             <button
-              onClick={() => setMode('distribute')}
+              onClick={() => { setMode('distribute'); setQuantity(1); }}
               className={cn(
                 'flex-1 py-2 px-3 md:px-4 rounded-md text-xs md:text-sm font-medium transition-all',
                 mode === 'distribute' 
@@ -177,7 +192,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               Distribute
             </button>
             <button
-              onClick={() => setMode('return')}
+              onClick={() => { setMode('return'); setQuantity(1); }}
               className={cn(
                 'flex-1 py-2 px-3 md:px-4 rounded-md text-xs md:text-sm font-medium transition-all',
                 mode === 'return' 
@@ -189,6 +204,50 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               Return
             </button>
           </div>
+
+          {/* Quantity Selector */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-card border border-border rounded-xl p-4 mb-4 shadow-card"
+          >
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3 text-center">
+              Quantity per scan
+            </p>
+            <div className="flex items-center justify-center gap-4">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-12 w-12 rounded-full shrink-0"
+                onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                disabled={quantity <= 1}
+              >
+                <Minus className="w-5 h-5" />
+              </Button>
+              <div className="min-w-[4rem] text-center">
+                <span className={cn(
+                  "text-4xl font-bold tabular-nums",
+                  quantity > 1 ? "text-primary" : "text-foreground"
+                )}>
+                  {quantity}
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-12 w-12 rounded-full shrink-0"
+                onClick={() => setQuantity(q => Math.min(creditLimit, q + 1))}
+                disabled={quantity >= creditLimit}
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            </div>
+            {quantity > 1 && (
+              <p className="text-xs text-primary text-center mt-2 font-medium">
+                {mode === 'distribute' ? 'Distributing' : 'Returning'} {quantity} items per scan
+              </p>
+            )}
+          </motion.div>
 
           {/* Scan Button */}
           <motion.div
@@ -211,8 +270,8 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               {isProcessing 
                 ? 'Processing...'
                 : mode === 'distribute'
-                  ? 'Scan to Distribute Item'
-                  : 'Scan to Return Item'
+                  ? quantity > 1 ? `Scan to Distribute ${quantity} Items` : 'Scan to Distribute Item'
+                  : quantity > 1 ? `Scan to Return ${quantity} Items` : 'Scan to Return Item'
               }
             </Button>
           </motion.div>
@@ -229,7 +288,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
         isOpen={showScanner}
         onClose={() => setShowScanner(false)}
         onScan={handleScan}
-        title={`${mode === 'distribute' ? 'Distribute' : 'Return'} Item`}
+        title={`${mode === 'distribute' ? 'Distribute' : 'Return'} ${quantity > 1 ? `${quantity} Items` : 'Item'}`}
       />
 
       {/* Feedback Overlay */}

@@ -605,6 +605,42 @@ export const useCardOperations = () => {
     }
   });
 
+  // Batch distribute - distribute N items in one atomic operation
+  const distributeItemBatch = useMutation({
+    mutationFn: async ({ uniqueId, marketplaceId, quantity }: { uniqueId: string; marketplaceId: string; quantity: number }) => {
+      const { data, error } = await supabase
+        .rpc('distribute_marketplace_items_batch', {
+          p_unique_id: uniqueId,
+          p_marketplace_id: marketplaceId,
+          p_quantity: quantity
+        });
+
+      if (error) throw new SafeError(error.message);
+      return data as { creditBalance: number; cardId: string; quantity: number };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
+    }
+  });
+
+  // Batch return - return N items in one atomic operation
+  const returnItemBatch = useMutation({
+    mutationFn: async ({ uniqueId, marketplaceId, quantity }: { uniqueId: string; marketplaceId: string; quantity: number }) => {
+      const { data, error } = await supabase
+        .rpc('return_marketplace_items_batch', {
+          p_unique_id: uniqueId,
+          p_marketplace_id: marketplaceId,
+          p_quantity: quantity
+        });
+
+      if (error) throw new SafeError(error.message);
+      return data as { creditBalance: number; cardId: string; quantity: number };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
+    }
+  });
+
   const addCards = useMutation({
     mutationFn: async (uniqueIds: string[]) => {
       const batchId = crypto.randomUUID();
@@ -667,6 +703,8 @@ export const useCardOperations = () => {
     returnItem,
     distributeItemSimple,
     returnItemSimple,
+    distributeItemBatch,
+    returnItemBatch,
     checkoutCard,
     unblockCard,
     bulkUnblockPreviousDays,
