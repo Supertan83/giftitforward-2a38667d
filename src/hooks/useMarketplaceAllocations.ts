@@ -20,18 +20,35 @@ const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; typ
   return Array.from(dependentsMap.values());
 };
 
-// Resolve family member name from card unique_id
-const resolveFamilyName = (uniqueId: string, vol: any): { name: string; isFamily: boolean } => {
-  const fMatch = uniqueId.match(/-F(\d+)/);
-  if (!fMatch) return { name: `${vol.first_name || ''} ${vol.last_name || ''}`.trim() || 'Unknown', isFamily: false };
+// Resolve family member name from card unique_id using positional matching
+const resolveFamilyName = (
+  uniqueId: string,
+  vol: any,
+  allCardsForVolunteer: Array<{ uniqueId: string; cardId: string }>
+): { name: string; isFamily: boolean } => {
+  const isFamilyCard = /-F\d+/.test(uniqueId);
+  if (!isFamilyCard) return { name: `${vol.first_name || ''} ${vol.last_name || ''}`.trim() || 'Unknown', isFamily: false };
 
-  const familyIndex = parseInt(fMatch[1], 10);
   const dependents = extractUniqueDependents(vol.events_json);
-
-  if (familyIndex > 0 && familyIndex <= dependents.length) {
-    return { name: `${dependents[familyIndex - 1].name} (Family)`, isFamily: true };
+  if (dependents.length === 0) {
+    return { name: `Family of ${vol.first_name} ${vol.last_name}`, isFamily: true };
   }
-  return { name: `Family Member ${familyIndex} (Family)`, isFamily: true };
+
+  // Sort all family cards for this volunteer by their -F suffix to get stable positional index
+  const familyCards = allCardsForVolunteer
+    .filter(c => /-F\d+/.test(c.uniqueId))
+    .sort((a, b) => {
+      const aIdx = parseInt(a.uniqueId.match(/-F(\d+)/)?.[1] || '0', 10);
+      const bIdx = parseInt(b.uniqueId.match(/-F(\d+)/)?.[1] || '0', 10);
+      return aIdx - bIdx;
+    });
+
+  const posIdx = familyCards.findIndex(c => c.uniqueId === uniqueId);
+  if (posIdx >= 0 && posIdx < dependents.length) {
+    return { name: `${dependents[posIdx].name} (Family)`, isFamily: true };
+  }
+
+  return { name: `Family of ${vol.first_name} ${vol.last_name}`, isFamily: true };
 };
 
 export interface MarketplaceAllocation {
@@ -529,6 +546,17 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         cardId: string; checkedInAt: string | null; checkedOutAt: string | null;
       }> = [];
 
+      // Build a map of all cards per volunteer_id for positional family name resolution
+      const cardsByVolunteerId = new Map<string, Array<{ uniqueId: string; cardId: string }>>();
+      for (const [cId, entry] of volCardMap) {
+        const volId = entry.vol?.id;
+        if (!volId) continue;
+        const card = (attendanceRecords || []).find(a => a.volunteer_card_id === cId)?.volunteer_qr_cards as any
+          || (assignedCards || []).find(c => c.id === cId);
+        if (!cardsByVolunteerId.has(volId)) cardsByVolunteerId.set(volId, []);
+        cardsByVolunteerId.get(volId)!.push({ uniqueId: card?.unique_id || '', cardId: cId });
+      }
+
       for (const [cardId, entry] of volCardMap) {
         const vol = entry.vol;
         const card = (attendanceRecords || []).find(a => a.volunteer_card_id === cardId)?.volunteer_qr_cards as any
@@ -545,7 +573,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
 
         const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
-        const { name: resolvedName } = resolveFamilyName(cardUniqueId, vol);
+        const siblingCards = cardsByVolunteerId.get(vol.id) || [];
+        const { name: resolvedName } = resolveFamilyName(cardUniqueId, vol, siblingCards);
 
         volunteerList.push({
           name: resolvedName,
