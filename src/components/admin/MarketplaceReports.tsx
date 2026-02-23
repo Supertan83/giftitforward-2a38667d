@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
@@ -8,6 +8,7 @@ import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarke
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
+import { VolunteerHoursEditDialog } from './VolunteerHoursEditDialog';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 interface MarketplaceReportsProps {
   onBack: () => void;
@@ -24,6 +25,9 @@ export const MarketplaceReports = ({
     volunteers: true
   });
   const { isSyncing, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
+  const [editingVolunteer, setEditingVolunteer] = useState<{
+    cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number;
+  } | null>(null);
   const {
     data: marketplaces = [],
     isLoading: loadingMarketplaces
@@ -449,11 +453,12 @@ export const MarketplaceReports = ({
                         <div className="hidden md:block overflow-x-auto">
                           <table className="w-full text-sm table-fixed">
                             <colgroup>
-                              <col className="w-[30%]" />
-                              <col className="w-[18%]" />
-                              <col className="w-[18%]" />
-                              <col className="w-[18%]" />
+                              <col className="w-[25%]" />
                               <col className="w-[16%]" />
+                              <col className="w-[16%]" />
+                              <col className="w-[16%]" />
+                              <col className="w-[14%]" />
+                              <col className="w-[13%]" />
                             </colgroup>
                             <thead>
                               <tr className="border-b border-border text-muted-foreground">
@@ -462,6 +467,7 @@ export const MarketplaceReports = ({
                                 <th className="text-left py-3 px-2 font-medium">Company</th>
                                 <th className="text-left py-3 px-2 font-medium">Status</th>
                                 <th className="text-right py-3 px-2 font-medium">Hours</th>
+                                <th className="text-center py-3 px-2 font-medium">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -480,6 +486,17 @@ export const MarketplaceReports = ({
                                     </span>
                                   </td>
                                   <td className="py-2.5 px-2 text-right font-medium">{vol.hoursWorked > 0 ? `${vol.hoursWorked.toFixed(1)}h` : '—'}</td>
+                                  <td className="py-2.5 px-2 text-center">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingVolunteer({
+                                      cardId: (vol as any).cardId,
+                                      name: vol.name,
+                                      checkedInAt: (vol as any).checkedInAt,
+                                      checkedOutAt: (vol as any).checkedOutAt,
+                                      hoursWorked: vol.hoursWorked,
+                                    })}>
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -491,13 +508,24 @@ export const MarketplaceReports = ({
                             <div key={idx} className="border border-border rounded-lg p-3">
                               <div className="flex justify-between items-start mb-1">
                                 <p className="font-medium text-sm text-foreground">{vol.name}</p>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  vol.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
-                                  vol.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
-                                  'bg-muted text-muted-foreground'
-                                }`}>
-                                  {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    vol.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
+                                    vol.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
+                                    'bg-muted text-muted-foreground'
+                                  }`}>
+                                    {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
+                                  </span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingVolunteer({
+                                    cardId: (vol as any).cardId,
+                                    name: vol.name,
+                                    checkedInAt: (vol as any).checkedInAt,
+                                    checkedOutAt: (vol as any).checkedOutAt,
+                                    hoursWorked: vol.hoursWorked,
+                                  })}>
+                                    <Pencil className="w-3 h-3" />
+                                  </Button>
+                                </div>
                               </div>
                               <p className="text-xs text-muted-foreground">{vol.category} · {vol.company}</p>
                               {vol.hoursWorked > 0 && <p className="text-xs text-muted-foreground mt-1">{vol.hoursWorked.toFixed(1)} hours</p>}
@@ -513,5 +541,10 @@ export const MarketplaceReports = ({
               </div>}
           </div>}
       </main>
+      <VolunteerHoursEditDialog
+        volunteer={editingVolunteer}
+        open={!!editingVolunteer}
+        onOpenChange={(open) => { if (!open) setEditingVolunteer(null); }}
+      />
     </div>;
 };
