@@ -1599,14 +1599,41 @@ export const useVolunteerCardOperations = () => {
                   const fMatch = familyCard.unique_id.match(/-F(\d+)/);
                   const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
 
-                  // Map to dependent name
-                  let familyFirstName = `Family Member ${familyIndex || 1}`;
+                  // Map to dependent name - try index-based first
+                  let familyFirstName = '';
                   let familyLastName = '';
                   if (dependents.length > 0 && familyIndex > 0 && familyIndex <= dependents.length) {
                     const dep = dependents[familyIndex - 1];
                     const nameParts = dep.name.trim().split(/\s+/);
-                    familyFirstName = nameParts[0] || familyFirstName;
+                    familyFirstName = nameParts[0] || '';
                     familyLastName = nameParts.slice(1).join(' ') || '';
+                  }
+
+                  // Positional fallback: sort all family cards by F-index, match position to dependents
+                  if (!familyFirstName && dependents.length > 0 && familyCards) {
+                    const sortedFamilyCards = familyCards
+                      .filter((c: any) => /-F\d+/.test(c.unique_id))
+                      .sort((a: any, b: any) => {
+                        const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                        const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                        return aIdx - bIdx;
+                      });
+                    const positionIndex = sortedFamilyCards.findIndex((c: any) => c.id === familyCard.id);
+                    if (positionIndex >= 0 && positionIndex < dependents.length) {
+                      const dep = dependents[positionIndex];
+                      const nameParts = dep.name.trim().split(/\s+/);
+                      familyFirstName = nameParts[0] || '';
+                      familyLastName = nameParts.slice(1).join(' ') || '';
+                    }
+                  }
+
+                  // Last resort fallback
+                  if (!familyFirstName) {
+                    const volName = volunteer.first_name === volunteer.last_name
+                      ? volunteer.first_name
+                      : `${volunteer.first_name} ${volunteer.last_name}`;
+                    familyFirstName = `Family of ${volName}`;
+                    familyLastName = '';
                   }
 
                   // Generate certificate PDF on client side
