@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil, Plus } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, ChevronRight, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -60,8 +60,12 @@ import { cn } from '@/lib/utils';
 type ExportFormat = 'excel' | 'csv';
 
 interface VolunteerQRCard {
+  id: string;
   unique_id: string;
   status: string;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+  survey_completed_at: string | null;
 }
 
 interface PendingVolunteer {
@@ -193,6 +197,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [familyCertsVolunteers, setFamilyCertsVolunteers] = useState<any[]>([]);
   const [loadingFamilyCertsVolunteers, setLoadingFamilyCertsVolunteers] = useState(false);
   const [sendingCertForVolunteer, setSendingCertForVolunteer] = useState<string | null>(null);
+  const [expandedVolunteers, setExpandedVolunteers] = useState<Set<string>>(new Set());
   
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
@@ -227,8 +232,12 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         .select(`
           *,
           volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (
+            id,
             unique_id,
-            status
+            status,
+            checked_in_at,
+            checked_out_at,
+            survey_completed_at
           )
         `);
 
@@ -1371,8 +1380,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     <TableBody>
                       <AnimatePresence>
                         {filteredVolunteers.map((volunteer) => (
+                          <React.Fragment key={volunteer.id}>
                           <motion.tr
-                            key={volunteer.id}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -1548,14 +1557,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                 <TableCell className="hidden lg:table-cell">
                                   {(() => {
                                     const deps = extractUniqueDependents(volunteer.events_json);
-                                    if (deps.length === 0) {
+                                    const familyCards = (volunteer.volunteer_qr_cards || []).filter(
+                                      (c) => /-F\d+/.test(c.unique_id)
+                                    );
+                                    if (deps.length === 0 && familyCards.length === 0) {
                                       return <span className="text-sm text-muted-foreground">—</span>;
                                     }
+                                    const count = Math.max(deps.length, familyCards.length);
+                                    const isExpanded = expandedVolunteers.has(volunteer.id);
                                     return (
-                                      <div className="flex items-center gap-1">
+                                      <button
+                                        className="flex items-center gap-1 text-sm font-medium hover:text-primary transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedVolunteers(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(volunteer.id)) {
+                                              next.delete(volunteer.id);
+                                            } else {
+                                              next.add(volunteer.id);
+                                            }
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                        ) : (
+                                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                        )}
                                         <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                        <span className="text-sm font-medium">{deps.length}</span>
-                                      </div>
+                                        <span>{count}</span>
+                                      </button>
                                     );
                                   })()}
                                 </TableCell>
@@ -1688,6 +1721,66 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               </>
                             )}
                           </motion.tr>
+                          {/* Family member sub-rows */}
+                          {expandedVolunteers.has(volunteer.id) && (() => {
+                            const familyCards = (volunteer.volunteer_qr_cards || []).filter(
+                              (c) => /-F\d+/.test(c.unique_id)
+                            );
+                            if (familyCards.length === 0) return null;
+                            const deps = extractUniqueDependents(volunteer.events_json);
+                            const sortedCards = [...familyCards].sort((a, b) => {
+                              const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                              const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                              return aIdx - bIdx;
+                            });
+                            return sortedCards.map((fc, posIdx) => {
+                              const fMatch = fc.unique_id.match(/-F(\d+)/);
+                              const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
+                              let memberName = '';
+                              if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
+                                memberName = deps[familyIndex - 1].name;
+                              }
+                              if (!memberName && deps.length > 0 && posIdx < deps.length) {
+                                memberName = deps[posIdx].name;
+                              }
+                              if (!memberName) {
+                                const volName = `${volunteer.first_name} ${volunteer.last_name}`;
+                                memberName = `Family of ${volName}`;
+                              }
+                              const isCertSent = !!fc.survey_completed_at;
+                              return (
+                                <tr key={fc.id} className="bg-muted/30 border-b border-muted/50">
+                                  <TableCell />
+                                  <TableCell colSpan={2} className="py-2 pl-8">
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-3 h-3 text-muted-foreground" />
+                                      <span className="text-sm">{memberName}</span>
+                                      <span className="text-xs font-mono text-muted-foreground">({fc.unique_id})</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell" />
+                                  <TableCell className="hidden lg:table-cell py-2">
+                                    {isCertSent ? (
+                                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs px-1.5 py-0">
+                                        <Check className="w-3 h-3 mr-0.5" />
+                                        Cert Sent
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="bg-muted text-muted-foreground text-xs px-1.5 py-0">
+                                        <Clock className="w-3 h-3 mr-0.5" />
+                                        Not Sent
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="hidden lg:table-cell" />
+                                  <TableCell className="hidden sm:table-cell" />
+                                  <TableCell className="hidden md:table-cell" />
+                                  <TableCell />
+                                </tr>
+                              );
+                            });
+                          })()}
+                          </React.Fragment>
                         ))}
                       </AnimatePresence>
                     </TableBody>
