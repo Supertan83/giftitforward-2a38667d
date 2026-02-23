@@ -1,47 +1,39 @@
 
 
-# Show Family Members Names and Certification Status in Volunteer List
+# Fix Family Sub-Row: Add Eye Icon and Fix Badge Position
 
-## What Changes
+## What's Wrong
 
-In the "Volunteers Added" section (approved tab), the current "Family" column only shows a number (e.g., "3"). This will be expanded so that clicking/expanding a volunteer row reveals the actual family member names and their certificate status underneath.
+Looking at the screenshot, two issues in the family member sub-rows under each volunteer:
 
-## How It Will Work
+1. **Missing eye icon**: There's no way to preview a family member's certificate from the sub-row. The user wants an eye icon (similar to the volunteer row's certificate preview icon) so they can view the family member's attendance certificate.
 
-1. **Expandable family row**: Each volunteer row with family members will have a small expand/collapse toggle (chevron icon) in the Family column. Clicking it reveals sub-rows below the volunteer showing each family member's name and certificate status.
+2. **"Not Sent" badge misaligned**: The certificate status badge ("Not Sent" / "Cert Sent") is not aligned under the correct column. It appears shifted because the sub-row table cells don't match the parent row's column structure (9 columns: Checkbox, Name, Email, Company, Family, Events, Submitted, Email Status, Actions).
 
-2. **Family member name resolution**: Uses the same positional fallback logic already implemented -- extracts dependents from `events_json`, matches them to QR cards by F-index, falls back to positional matching.
+## The Fix
 
-3. **Certificate status display**: Each family member row will show a badge indicating whether their attendance certificate has been sent (using the `certificate_sent_at` field from `volunteer_qr_cards`).
+### 1. Fix column alignment in family sub-rows
+
+Restructure the sub-row cells to align properly with the 9-column parent table:
+- Cell 1 (Checkbox): empty
+- Cell 2 (Name): family member name with user icon, indented
+- Cell 3 (Email): QR code ID in mono font
+- Cell 4 (Company, hidden md): empty
+- Cell 5 (Family, hidden lg): empty
+- Cell 6 (Events, hidden lg): empty
+- Cell 7 (Submitted, hidden sm): certificate status badge ("Cert Sent" or "Not Sent") -- moves badge to a visible, aligned column
+- Cell 8 (Email Status, hidden md): empty
+- Cell 9 (Actions): eye icon button to preview the family member's certificate
+
+### 2. Add eye icon for certificate preview
+
+In the Actions cell of each family sub-row, add an eye icon button that opens the `CertificatePreviewDialog` with the family member's resolved name (split into first/last) and their certificate status.
 
 ## Technical Details
 
-### 1. Update the data query in `PendingVolunteers.tsx`
+### File: `src/components/admin/PendingVolunteers.tsx`
 
-The current query fetches `volunteer_qr_cards` with only `unique_id` and `status`. Add `id`, `certificate_sent_at`, `survey_completed_at`, `checked_in_at`, and `checked_out_at` to enable displaying certificate info for family cards.
+**Lines 1751-1779** (the sub-row rendering): Replace the current cell layout with properly aligned cells matching the parent columns, and add an eye icon button in the last cell that sets `certificatePreviewVolunteer` to a temporary object with the family member's name.
 
-### 2. Update `VolunteerQRCard` interface
+Since `CertificatePreviewDialog` expects `firstName` and `lastName` props, the eye icon click handler will split the resolved `memberName` into first/last name parts and set a synthetic preview object.
 
-Add the new fields (`id`, `certificate_sent_at`, `survey_completed_at`) to the `VolunteerQRCard` interface.
-
-### 3. Add expandable family rows in the approved tab table
-
-- Add state `expandedVolunteers` (a `Set<string>`) to track which volunteer rows are expanded
-- In the "Family" column cell, make the count clickable (toggle expand)
-- After each volunteer `<motion.tr>`, render additional sub-rows for family members when expanded:
-  - Family member name (resolved via dependents + positional fallback)
-  - Certificate status badge (Sent / Not Sent)
-  - QR card ID shown as a small tag
-
-### 4. Column width adjustments
-
-Minor adjustment to accommodate the expanded content -- the family column gets slightly wider and sub-rows span the full table width.
-
-## Files to Change
-
-1. **`src/components/admin/PendingVolunteers.tsx`**
-   - Update `VolunteerQRCard` interface to include `id` and `certificate_sent_at`
-   - Update the Supabase query to fetch these extra fields
-   - Add `expandedVolunteers` state
-   - Add expand toggle to the Family column cell
-   - Render family member sub-rows with names and certificate badges when expanded
