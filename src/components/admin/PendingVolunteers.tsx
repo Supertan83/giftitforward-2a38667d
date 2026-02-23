@@ -3051,11 +3051,31 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                           </TableRow>
                           {/* Individual family member rows */}
                           {fCards.map((fc: any) => {
-                            const fMatch = fc.unique_id.match(/-F(\d)/);
+                            const fMatch = fc.unique_id.match(/-F(\d+)/);
                             const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
-                            let memberName = `Family Member ${familyIndex || 1}`;
+                            let memberName = '';
+                            // Try index-based lookup first
                             if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
                               memberName = deps[familyIndex - 1].name;
+                            }
+                            // Positional fallback: sort family cards by F-index, match position to dependents
+                            if (!memberName && deps.length > 0) {
+                              const sortedCards = [...fCards]
+                                .filter((c: any) => /-F\d+/.test(c.unique_id))
+                                .sort((a: any, b: any) => {
+                                  const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                                  const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                                  return aIdx - bIdx;
+                                });
+                              const posIdx = sortedCards.findIndex((c: any) => c.id === fc.id);
+                              if (posIdx >= 0 && posIdx < deps.length) {
+                                memberName = deps[posIdx].name;
+                              }
+                            }
+                            // Last resort
+                            if (!memberName) {
+                              const volName = vol.first_name === vol.last_name ? vol.first_name : `${vol.first_name} ${vol.last_name}`;
+                              memberName = `Family of ${volName}`;
                             }
 
                             // Determine status
