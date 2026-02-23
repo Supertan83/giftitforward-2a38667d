@@ -2030,6 +2030,14 @@ export type Database = {
         Args: { p_marketplace_id: string; p_unique_id: string }
         Returns: Json
       }
+      distribute_marketplace_items_batch: {
+        Args: {
+          p_marketplace_id: string
+          p_quantity: number
+          p_unique_id: string
+        }
+        Returns: Json
+      }
       get_marketplace_distribution_count: {
         Args: { p_marketplace_id: string }
         Returns: number
@@ -2052,6 +2060,14 @@ export type Database = {
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       return_marketplace_item: {
         Args: { p_marketplace_id: string; p_unique_id: string }
+        Returns: Json
+      }
+      return_marketplace_items_batch: {
+        Args: {
+          p_marketplace_id: string
+          p_quantity: number
+          p_unique_id: string
+        }
         Returns: Json
       }
     }
