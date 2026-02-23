@@ -88,7 +88,7 @@ export const SurplussSyncMonitor = ({
       const scheduleLog = (logs || []).find((l: any) => l.action === 'sync_schedule_updated');
       if (scheduleLog) {
         const payload = (scheduleLog as any).request_payload;
-        if (payload?.interval_minutes) {
+        if (payload?.interval_minutes !== undefined && payload?.interval_minutes !== null) {
           setSyncInterval(payload.interval_minutes);
         }
       }
