@@ -1847,13 +1847,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                             if (familyCards.length === 0) return null;
                             const deps = extractUniqueDependents(volunteer.events_json);
                             const sortedCards = [...familyCards].sort((a, b) => {
-                              const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
-                              const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                              const aIdx = parseInt(a.unique_id.match(/-F(\d)/)?.[1] || '0', 10);
+                              const bIdx = parseInt(b.unique_id.match(/-F(\d)/)?.[1] || '0', 10);
                               return aIdx - bIdx;
                             });
                             return sortedCards.map((fc, posIdx) => {
-                              const fMatch = fc.unique_id.match(/-F(\d+)/);
-                              const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
+                               const fMatch = fc.unique_id.match(/-F(\d)/);
+                               const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
                               let memberName = '';
                               if (deps.length > 0 && familyIndex > 0 && familyIndex <= deps.length) {
                                 memberName = deps[familyIndex - 1].name;
@@ -3296,7 +3296,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                           </TableRow>
                           {/* Individual family member rows */}
                           {fCards.map((fc: any) => {
-                            const fMatch = fc.unique_id.match(/-F(\d+)/);
+                            const fMatch = fc.unique_id.match(/-F(\d)/);
                             const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
                             let memberName = '';
                             // Try index-based lookup first
@@ -3308,8 +3308,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               const sortedCards = [...fCards]
                                 .filter((c: any) => /-F\d+/.test(c.unique_id))
                                 .sort((a: any, b: any) => {
-                                  const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
-                                  const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+                                  const aIdx = parseInt(a.unique_id.match(/-F(\d)/)?.[1] || '0', 10);
+                                  const bIdx = parseInt(b.unique_id.match(/-F(\d)/)?.[1] || '0', 10);
                                   return aIdx - bIdx;
                                 });
                               const posIdx = sortedCards.findIndex((c: any) => c.id === fc.id);
