@@ -1,81 +1,56 @@
 
 
-# Allow Admins to Manually Override Marketplace Status
+# Fix Family Member Name Resolution
 
 ## Problem
 
-When a marketplace event's scheduled time passes, both the client-side guard (in `useMarketplaces`) and the server-side cron (`auto-unblock-cards`) automatically set the status to "completed." Even if an admin edits the event back to "active" in the admin dashboard, the client immediately overrides it back to "completed" because the event time has passed. This prevents the team from doing late volunteer check-ins/check-outs for demographic tracking.
+Family member names are mismatched across the Send Family Certs dialog, the Family Members tab, and the expanded volunteer rows. Two bugs are causing this:
+
+### Bug 1: Greedy Regex Capturing Wrong Index
+
+QR card IDs are generated as `VOL-xxx-F{index}{2_random_chars}` where `index` is a single digit (1-9). For example:
+- `F14R` = index **1** + random "4R"
+- `F242` = index **2** + random "42"
+- `F3Z3` = index **3** + random "Z3"
+
+But the current regex `/-F(\d+)/` greedily captures all consecutive digits, so:
+- `F14R` is parsed as index **14** (wrong, should be 1)
+- `F242` is parsed as index **242** (wrong, should be 2)
+
+This causes the index-based name lookup to fail or return the wrong name.
+
+### Bug 2: Inconsistent Deduplication Logic
+
+The `extractUniqueDependents` function in `FamilyMembersTab.tsx` uses substring matching to merge similar names (e.g., "June Carla Daniel" and "June Carla P. Daniel" are treated as one person). This produces only 4 unique dependents when 6 QR cards were actually created using exact-match deduplication. This mismatch leaves 2 cards without resolvable names.
 
 ## Solution
 
-Add a `status_locked_by_admin` boolean column to `marketplace_events`. When an admin manually changes the status via the edit modal, this flag is set to `true`. Both the client-side guard and the server-side cron will **skip** events where this flag is `true`, respecting the admin's manual override.
+### 1. Fix regex in all name resolution code
+Change from `/-F(\d+)/` to `/-F(\d)/` (capture exactly one digit) in:
 
-If the admin later sets the status back to "completed" manually, the lock flag is cleared so automatic behavior resumes normally.
+- **PendingVolunteers.tsx** -- Send Family Certs dialog (line ~3299)
+- **PendingVolunteers.tsx** -- Expanded volunteer sub-rows (lines ~1850, 1855)
+- **PendingVolunteers.tsx** -- Sorting family cards (line ~1850)
+- **FamilyMembersTab.tsx** -- `resolveFamilyMemberName` function (lines ~70, 76, 82)
 
-## What Changes
+### 2. Align deduplication logic in FamilyMembersTab.tsx
+Replace the substring-based `extractUniqueDependents` in `FamilyMembersTab.tsx` with exact-match logic (matching the `PendingVolunteers.tsx` version that uses a Map with lowercased name keys). This ensures the dependent count matches the actual QR cards that were generated.
 
-### 1. Database Migration
-- Add `status_locked_by_admin` boolean column to `marketplace_events`, default `false`.
+### 3. Fix the detail view regex
+The volunteer details view (line ~2080) uses `/-F(\d)[A-Z0-9]+$/` which already captures a single digit -- this is correct and needs no change.
 
-### 2. Admin Edit Modal (`MarketplaceManagement.tsx`)
-- When saving an edit, if the admin changed the status field, set `status_locked_by_admin = true`.
-- If the admin sets it to "completed", clear the flag (`status_locked_by_admin = false`) so the auto-complete logic can resume for future use.
+## Files Changed
 
-### 3. Client-Side Status Guard (`useSupabaseData.ts` -- `useMarketplaces`)
-- In the `computedStatus` logic (lines 1228-1241), skip the auto-complete override if `item.status_locked_by_admin === true`.
-
-### 4. Server-Side Cron (`auto-unblock-cards/index.ts`)
-- In the marketplace auto-completion query, exclude events where `status_locked_by_admin = true`.
-
-### 5. Update Mutation (`useUpdateMarketplace`)
-- Add `status_locked_by_admin` to the update payload type.
+| File | Change |
+|------|--------|
+| `src/components/admin/PendingVolunteers.tsx` | Fix `/-F(\d+)/` to `/-F(\d)/` in ~4 locations (Send Family Certs dialog, expanded rows, sorting) |
+| `src/components/admin/FamilyMembersTab.tsx` | Fix regex + replace substring dedup with exact-match dedup |
 
 ## What Does NOT Change
-- Card unblocking logic (still resets cards from previous days)
+
+- QR card generation logic (already correct)
+- Certificate PDF generation
+- Email sending logic
 - Check-in/check-out flows
-- Volunteer attendance tracking
-- Report rendering
-- The automatic status transition still works for all events that are NOT manually overridden
-
-## Technical Details
-
-### Database
-```sql
-ALTER TABLE marketplace_events 
-ADD COLUMN status_locked_by_admin boolean NOT NULL DEFAULT false;
-```
-
-### Client Guard Update (useMarketplaces)
-```text
-// Before:
-if ((computedStatus === 'active' || computedStatus === 'upcoming') && item.event_date) {
-  // ... auto-complete logic
-}
-
-// After:
-if (!item.status_locked_by_admin && (computedStatus === 'active' || ...) && item.event_date) {
-  // ... auto-complete logic (skipped when admin locked)
-}
-```
-
-### Admin Edit Save Logic
-```text
-// When admin changes status:
-if (status changed from DB value) {
-  if (newStatus === 'completed') {
-    status_locked_by_admin = false  // release lock, auto-logic can resume
-  } else {
-    status_locked_by_admin = true   // lock it so auto-complete won't override
-  }
-}
-```
-
-### Auto-Unblock Cron Update
-```text
-// Add filter to skip locked events:
-.select("id, name, event_date, end_time, status_locked_by_admin")
-.in("status", ["active", "upcoming"])
-// Then in the loop:
-if (mp.status_locked_by_admin) continue;
-```
+- The volunteer detail view (already uses correct single-digit regex)
 
