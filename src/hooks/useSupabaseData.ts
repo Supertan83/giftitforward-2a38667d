@@ -917,7 +917,7 @@ export const useCreateUser = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ email, password, role }: { email: string; password: string; role: 'admin' | 'volunteer' | 'employee' }) => {
+    mutationFn: async ({ email, password, role, marketplaceId }: { email: string; password: string; role: 'admin' | 'volunteer' | 'employee'; marketplaceId?: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {
@@ -930,7 +930,7 @@ export const useCreateUser = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password, role, marketplaceId }),
       });
 
       const data = await response.json();

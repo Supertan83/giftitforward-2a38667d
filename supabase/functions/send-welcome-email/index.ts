@@ -9,6 +9,12 @@ const corsHeaders = {
 // Initialize Resend for fallback
 const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
+interface FamilyQRInfo {
+  name: string;
+  qrCardId: string;
+  type?: string;
+}
+
 interface EventInfo {
   name: string;
   date: string;
@@ -28,6 +34,7 @@ interface WelcomeEmailRequest {
   qrCodeId: string;
   marketplaceId?: string;
   events?: EventInfo[]; // Array of registered events
+  familyQRs?: FamilyQRInfo[]; // Optional family QR cards
 }
 
 interface MarketplaceEvent {
@@ -129,7 +136,8 @@ function buildEmailHtml(
   tempPassword: string,
   qrCodeId: string,
   marketplace?: MarketplaceEvent | null,
-  events?: EventInfo[]
+  events?: EventInfo[],
+  familyQRs?: FamilyQRInfo[]
 ): string {
   const qrCodeUrl = generateQRCodeUrl(qrCodeId);
   const loginUrl = 'https://gif.thesurpluss.com/auth';
@@ -273,6 +281,36 @@ function buildEmailHtml(
                   </ul>
                 </td>
               </tr>
+              
+              ${familyQRs && familyQRs.length > 0 ? `
+              <!-- Family Member QR Cards -->
+              <tr>
+                <td style="padding: 20px 30px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;">
+                    <tr>
+                      <td style="padding: 20px;">
+                        <h3 style="margin: 0 0 10px 0; color: #166534; font-family: Arial, sans-serif;">Family Member QR Cards (${familyQRs.length})</h3>
+                        <p style="color: #15803d; font-size: 13px; margin: 0 0 15px 0;">These QR codes are for your registered family members. Each person should present their own QR code at the marketplace.</p>
+                        <table width="100%" cellpadding="0" cellspacing="0">
+                          ${familyQRs.map((fam) => {
+                            const famQrUrl = generateQRCodeUrl(fam.qrCardId);
+                            return `
+                            <tr>
+                              <td style="padding: 10px; text-align: center;">
+                                <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Arial, sans-serif;">${fam.name}</p>
+                                <img src="${famQrUrl}" alt="QR Code for ${fam.name}" width="120" height="120" style="display: block; margin: 0 auto;" />
+                                <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280;">${fam.qrCardId}</p>
+                              </td>
+                            </tr>
+                            `;
+                          }).join('')}
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              ` : ''}
               
               <!-- Login Credentials Section -->
               <tr>
@@ -498,7 +536,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { volunteerId, email, firstName, lastName, tempPassword, qrCodeId, marketplaceId, events } = body;
+    const { volunteerId, email, firstName, lastName, tempPassword, qrCodeId, marketplaceId, events, familyQRs } = body;
 
     // Validate required fields (lastName is optional as some volunteers may not have one)
     if (!email || !firstName || !tempPassword || !qrCodeId) {
@@ -510,7 +548,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Sending welcome email to ${email} (Volunteer: ${firstName} ${lastName})`);
-    console.log(`Events provided: ${events?.length || 0}, MarketplaceId: ${marketplaceId || 'none'}`);
+    console.log(`Events provided: ${events?.length || 0}, MarketplaceId: ${marketplaceId || 'none'}, FamilyQRs: ${familyQRs?.length || 0}`);
 
     // Fetch marketplace details if marketplaceId is provided and no events array
     let marketplace: MarketplaceEvent | null = null;
@@ -528,7 +566,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build email content - pass events array if provided
+    // Build email content - pass events array and family QRs if provided
     const htmlContent = buildEmailHtml(
       firstName,
       lastName,
@@ -536,7 +574,8 @@ Deno.serve(async (req) => {
       tempPassword,
       qrCodeId,
       marketplace,
-      events
+      events,
+      familyQRs
     );
 
     // HubSpot BCC address for tracking
