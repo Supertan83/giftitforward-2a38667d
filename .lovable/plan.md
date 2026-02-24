@@ -1,39 +1,36 @@
 
-
-# Allow Resending Family Member Certificates
+# Fix: Daniella's family card hidden due to ScrollArea not scrolling
 
 ## Problem
 
-When a family member's certificate status shows "Sent", the Action column displays "—" with no option to resend. Admins need the ability to resend certificates (e.g., when the original was never actually delivered due to the false-positive bug).
+The Radix `ScrollArea` component with `max-h-[60vh]` is not enabling proper scrolling. The family card rows overflow the visible area, and Daniella (F14R) plus Eva Marsha D. Gonzales (F6A4) are rendered in the DOM but visually clipped with no scrollbar to reach them.
+
+The dialog has `max-h-[90vh] overflow-y-auto` on DialogContent, and the inner ScrollArea has `max-h-[60vh]`. The Radix ScrollArea component requires explicit height constraints to trigger its internal scrollbar, and `max-h` alone is not sufficient.
 
 ## Solution
 
-Change the Action column logic in the Send Family Certs dialog so that:
-- **Checked out + not sent** -- shows "Send" button (current behavior, unchanged)
-- **Checked out + already sent** -- shows "Resend" button (new)
-- **Not checked out** -- shows "—" (unchanged)
+Replace the Radix `ScrollArea` component with a plain `div` that uses standard CSS `overflow-y-auto` and `max-h-[60vh]`. This ensures native browser scrolling works reliably without Radix's custom scroll viewport quirks.
 
 ## File Changed
 
 | File | Change |
 |------|--------|
-| `src/components/admin/PendingVolunteers.tsx` | Update `canSend` condition (line ~3341) to allow action when `status === 'checked_out'` regardless of `survey_completed_at`. Change the button label to "Resend" when cert was already sent. |
+| `src/components/admin/PendingVolunteers.tsx` (line ~3268) | Replace `<ScrollArea className="max-h-[60vh]">` with `<div className="max-h-[60vh] overflow-y-auto">` and the closing `</ScrollArea>` with `</div>` |
 
 ## Technical Details
 
-**Current code (line 3341):**
-```typescript
-const canSend = fc.status === 'checked_out' && !fc.survey_completed_at;
+**Current code (line 3268):**
+```
+<ScrollArea className="max-h-[60vh]">
+  <Table>...</Table>
+</ScrollArea>
 ```
 
 **Updated code:**
-```typescript
-const canSend = fc.status === 'checked_out';
+```
+<div className="max-h-[60vh] overflow-y-auto">
+  <Table>...</Table>
+</div>
 ```
 
-The button label will change dynamically:
-- Shows "Send" when `survey_completed_at` is null
-- Shows "Resend" when `survey_completed_at` is already set
-
-No other files or logic need to change -- the send handler already updates `survey_completed_at` after sending, so resending simply overwrites the timestamp.
-
+This is a minimal one-line change on the opening and closing tags. The native `overflow-y-auto` combined with `max-h-[60vh]` will produce a scrollbar once the table content exceeds 60% of the viewport height, making all family cards (including Daniella) accessible.
