@@ -3265,7 +3265,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             )}
 
             {!loadingFamilyCertsVolunteers && familyCertsVolunteers.length > 0 && (
-              <ScrollArea className="max-h-[60vh]">
+              <div className="max-h-[60vh] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -3432,7 +3432,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     })}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             )}
           </div>
 
