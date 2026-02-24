@@ -4813,6 +4813,51 @@ serve(async (req) => {
 
       console.log(`Created family QR card ${familyQrCardId} for ${family_member.name} (volunteer ${volunteer_id})`);
 
+      // Persist the new dependent into events_json so all UI surfaces show the name
+      try {
+        const { data: volData } = await supabase
+          .from('pending_volunteers')
+          .select('events_json')
+          .eq('id', volunteer_id)
+          .maybeSingle();
+
+        const newDep = {
+          name: family_member.name.trim(),
+          type: family_member.type || 'adult',
+          gender: family_member.gender || null,
+        };
+        const newDepNameLower = newDep.name.toLowerCase();
+
+        let eventsJson: any[] = (volData?.events_json && Array.isArray(volData.events_json))
+          ? volData.events_json as any[]
+          : [];
+
+        if (eventsJson.length === 0) {
+          // Create a minimal event entry with the dependent
+          eventsJson = [{ dependents: [newDep] }];
+        } else {
+          // Append to the first event's dependents (deduplicate by name)
+          const deps: any[] = eventsJson[0].dependents || [];
+          const isDuplicate = deps.some((d: any) => {
+            const existing = (d.name || '').toLowerCase();
+            return existing === newDepNameLower || existing.includes(newDepNameLower) || newDepNameLower.includes(existing);
+          });
+          if (!isDuplicate) {
+            deps.push(newDep);
+            eventsJson[0] = { ...eventsJson[0], dependents: deps };
+          }
+        }
+
+        await supabase
+          .from('pending_volunteers')
+          .update({ events_json: eventsJson })
+          .eq('id', volunteer_id);
+
+        console.log(`Updated events_json for volunteer ${volunteer_id} with dependent ${newDep.name}`);
+      } catch (ejError) {
+        console.error('Non-fatal: failed to update events_json:', ejError);
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
