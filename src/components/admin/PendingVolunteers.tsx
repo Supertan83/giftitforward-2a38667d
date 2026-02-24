@@ -3280,7 +3280,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     {familyCertsVolunteers.map(({ volunteer: vol, familyCards: fCards }) => {
                       const deps = extractUniqueDependents(vol.events_json);
                       return (
-                        <>
+                        <React.Fragment key={vol.id}>
                           {/* Volunteer header row */}
                           <TableRow key={`vol-${vol.id}`} className="bg-muted/40">
                             <TableCell colSpan={5} className="py-2">
@@ -3427,7 +3427,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               </TableRow>
                             );
                           })}
-                        </>
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
