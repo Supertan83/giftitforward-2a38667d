@@ -1,56 +1,55 @@
 
 
-# Fix: Hardcoded "0/15" Credit Display in QR Code Generator
+# Fix: Manually Added Family Members Missing from "Volunteers Added" Tab
 
 ## Problem
 
-In the **Registered Cards** tab of the QR Code Generator, every card shows its credit balance as `{creditBalance}/15`. The `/15` denominator is hardcoded and does not reflect the actual marketplace credit limit. If a marketplace is configured with a 25-item limit, the display still shows `/15`, which is misleading for admins.
+When an admin adds a family member via the "Volunteer QR Cards" viewer (using the + button), the backend creates the QR card but does **not** update the volunteer's `events_json` with the new dependent's name and type. Since every display surface ("Volunteers Added" tab, "Family Members" tab, certificate dialogs, export reports) reads family member names from `events_json.dependents`, the manually added family member either:
+
+- Does not appear at all in "Volunteers Added", or
+- Shows as a generic "Family Member 1" / "Family of [Name]" label instead of the actual name entered by the admin.
+
+Family members arriving via webhook already have their names stored in `events_json.dependents`, so they display correctly. The gap is exclusively in the manual add path.
 
 ## Solution
 
-Replace the hardcoded `15` with the actual `beneficiary_credit_limit` from the card's assigned marketplace. Since cards may belong to different marketplaces (or none), the fix needs to resolve the limit per card.
+Update the `add_family_member` action in the backend to also persist the new dependent into the volunteer's `events_json` array. This ensures a single source of truth and makes the name immediately visible across all UI surfaces without any frontend changes.
 
 ## Technical Details
 
-### File: `src/components/admin/RegisteredCardsList.tsx`
+### File: `supabase/functions/webhook-receiver/index.ts` (line ~4797-4812)
 
-**Change 1 — Accept credit limit context**
+After creating the family QR card, add logic to update the volunteer's `events_json`:
 
-Add an optional prop to pass marketplace credit limits so the component can resolve the correct denominator per card:
+1. Fetch the volunteer's current `events_json` from `pending_volunteers`.
+2. If `events_json` exists and has at least one event entry, append the new dependent (`{ name, type, gender }`) to the first event's `dependents` array (deduplicating by normalized name).
+3. If `events_json` is empty/null, create a minimal structure with the dependent so name resolution still works.
+4. Update `pending_volunteers.events_json` with the modified array.
 
-```typescript
-interface RegisteredCardsListProps {
-  // ... existing props
-  defaultCreditLimit?: number; // from active/selected marketplace
-}
+```text
+Current flow:
+  1. Create QR card in volunteer_qr_cards  -->  DONE
+  2. Return success
+
+Updated flow:
+  1. Create QR card in volunteer_qr_cards  -->  DONE
+  2. Fetch volunteer's events_json
+  3. Append { name, type, gender } to dependents array (deduplicate)
+  4. Update pending_volunteers.events_json
+  5. Return success
 ```
 
-**Change 2 — Use dynamic limit in display (line 115)**
+### Why this is sufficient
 
-Replace:
-```
-{card.creditBalance}/15
-```
-With:
-```
-{card.creditBalance}/{defaultCreditLimit || 15}
-```
-
-### File: `src/components/admin/QRCodeGenerator.tsx`
-
-**Change — Pass the active marketplace credit limit**
-
-The QR Code Generator already has access to marketplace data. Pass the current marketplace's `beneficiary_credit_limit` down to `RegisteredCardsList`:
-
-- Fetch or use the currently selected/active marketplace's credit limit
-- Pass it as the `defaultCreditLimit` prop
+- All UI components (`PendingVolunteers.tsx`, `FamilyMembersTab.tsx`, `VolunteerQRCardsViewer.tsx`, export logic) already read from `events_json.dependents` and resolve names using index-based matching against family QR card IDs.
+- By persisting the dependent data at the source, no frontend changes are needed -- existing name resolution logic will pick up the new entry automatically.
+- The deduplication uses the same normalized-name matching already used elsewhere (lowercase comparison, substring check).
 
 ### Scope
 
 | File | Change |
 |------|--------|
-| `src/components/admin/RegisteredCardsList.tsx` | Accept `defaultCreditLimit` prop, use it instead of hardcoded `15` |
-| `src/components/admin/QRCodeGenerator.tsx` | Pass active marketplace credit limit to `RegisteredCardsList` |
+| `supabase/functions/webhook-receiver/index.ts` | After QR card creation in `add_family_member` handler (~line 4812), add 15-20 lines to fetch and update `events_json` with the new dependent |
 
-This is a minimal, non-breaking change — the prop defaults to `15` if no marketplace is selected, preserving current behavior.
+This is a backend-only fix with no migration and no frontend changes required.
 
