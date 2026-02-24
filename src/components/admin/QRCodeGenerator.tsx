@@ -61,7 +61,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { CSVImport } from '@/components/admin/CSVImport';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useQRCards, useCardOperations } from '@/hooks/useSupabaseData';
+import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { RegisteredCardsList } from '@/components/admin/RegisteredCardsList';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
@@ -106,7 +106,14 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
 
   const { data: qrCards = [] } = useQRCards();
   const { addCards, unregisterCard } = useCardOperations();
+  const { data: marketplaces = [] } = useMarketplaces();
   const existingCardIds = qrCards.map(c => c.uniqueId);
+
+  // Get credit limit from the active marketplace (fallback to 15)
+  const activeCreditLimit = useMemo(() => {
+    const active = marketplaces.find((m: any) => m.status === 'active');
+    return active?.beneficiary_credit_limit || 15;
+  }, [marketplaces]);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
   // Group registered cards by batch
@@ -268,7 +275,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
         </p>
         <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; width: 100%; text-align: center;">
           <p style="font-size: 9px; color: #6b7280; font-weight: 500; margin: 0;">GIF (GIFT IT FORWARD)</p>
-          <p style="font-size: 7px; color: #9ca3af; margin: 2px 0 0 0;">15 Item Credits</p>
+          <p style="font-size: 7px; color: #9ca3af; margin: 2px 0 0 0;">${activeCreditLimit} Item Credits</p>
         </div>
       </div>
     `).join('');
@@ -356,7 +363,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
 
         ctx.fillStyle = '#9ca3af';
         ctx.font = '11px sans-serif';
-        ctx.fillText('15 Item Credits', width / 2, 445);
+        ctx.fillText(`${activeCreditLimit} Item Credits`, width / 2, 445);
 
         ctx.strokeStyle = '#e5e7eb';
         ctx.lineWidth = 2;
@@ -942,6 +949,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                     expandedBatches={expandedBatches}
                     selectedCards={selectedCards}
                     isUnregistering={isUnregistering}
+                    defaultCreditLimit={activeCreditLimit}
                     toggleBatchExpand={toggleBatchExpand}
                     toggleBatchSelectAll={toggleBatchSelectAll}
                     toggleCardSelection={toggleCardSelection}
@@ -1048,7 +1056,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                         GIF (GIFT IT FORWARD)
                       </p>
                       <p className="text-[8px] text-muted-foreground">
-                        15 Item Credits
+                        {activeCreditLimit} Item Credits
                       </p>
                     </div>
                   </div>
@@ -1127,7 +1135,7 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
                       GIF (GIFT IT FORWARD)
                     </p>
                     <p className="text-[8px] text-muted-foreground">
-                      15 Item Credits
+                      {activeCreditLimit} Item Credits
                     </p>
                   </div>
                 </div>
