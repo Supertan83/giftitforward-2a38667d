@@ -62,6 +62,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
+  const [createMarketplaceId, setCreateMarketplaceId] = useState<string>('');
   const [editRole, setEditRole] = useState<'admin' | 'volunteer' | 'employee'>('volunteer');
   const [editEmail, setEditEmail] = useState('');
   const [editFirstName, setEditFirstName] = useState('');
@@ -163,7 +164,12 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
     }
 
     try {
-      await createUser.mutateAsync({ email, password, role });
+      await createUser.mutateAsync({ 
+        email, 
+        password, 
+        role, 
+        marketplaceId: role === 'volunteer' && createMarketplaceId && createMarketplaceId !== 'none' ? createMarketplaceId : undefined 
+      });
       toast({
         title: 'User Created',
         description: `${email} has been created as a ${role}`,
@@ -172,6 +178,7 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
       setEmail('');
       setPassword('');
       setRole('volunteer');
+      setCreateMarketplaceId('');
     } catch (error) {
       toast({
         title: 'Failed to Create User',
@@ -715,6 +722,35 @@ export const UserManagement = ({ onBack }: UserManagementProps) => {
                 <p className="text-sm text-destructive">{errors.role}</p>
               )}
             </div>
+
+            {/* Marketplace Selection - only for volunteers */}
+            {role === 'volunteer' && availableMarketplaces.length > 0 && (
+              <div className="space-y-2">
+                <Label>Assign to Marketplace (optional)</Label>
+                <Select value={createMarketplaceId} onValueChange={setCreateMarketplaceId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select marketplace..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        No marketplace
+                      </div>
+                    </SelectItem>
+                    {availableMarketplaces.map(mp => (
+                      <SelectItem key={mp.id} value={mp.id}>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          {mp.name}
+                          {mp.event_date && <span className="text-xs text-muted-foreground ml-1">({mp.event_date})</span>}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 justify-end">

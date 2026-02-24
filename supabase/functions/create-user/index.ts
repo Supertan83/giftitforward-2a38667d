@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, password, role, firstName, lastName, gender, companyName, isDhEmployee, eventName } = body;
+    const { email, password, role, firstName, lastName, gender, companyName, isDhEmployee, eventName, marketplaceId } = body;
 
     // Comprehensive input validation
     if (!email || typeof email !== 'string') {
@@ -178,6 +178,26 @@ Deno.serve(async (req) => {
     // If volunteer role, create pending_volunteers record first (needed for QR card FK)
     let volunteerQRCode: string | null = null;
     if (role === 'volunteer') {
+      // Build events_json from marketplace selection if provided
+      let eventsJson = null;
+      if (marketplaceId) {
+        // Look up marketplace details
+        const { data: mpData } = await supabaseAdmin
+          .from('marketplace_events')
+          .select('name, event_date, start_time, end_time, location')
+          .eq('id', marketplaceId)
+          .maybeSingle();
+        
+        if (mpData) {
+          eventsJson = [{
+            event: mpData.name.toLowerCase().replace(/\s+/g, '-'),
+            name: mpData.name,
+            eventDate: mpData.event_date || undefined,
+            eventLocation: mpData.location || undefined,
+          }];
+        }
+      }
+
       // Create pending_volunteers record first (volunteer_qr_cards has FK to this table)
       const { data: pvData, error: pvError } = await supabaseAdmin
         .from('pending_volunteers')
@@ -192,6 +212,7 @@ Deno.serve(async (req) => {
           external_company: companyName?.trim() || null,
           is_employee: isDhEmployee === true || String(isDhEmployee ?? '').toLowerCase() === 'yes',
           events_list: eventName?.trim() || null,
+          events_json: eventsJson,
           temp_password: password,
         })
         .select('id')
@@ -210,7 +231,8 @@ Deno.serve(async (req) => {
           .insert({
             unique_id: volunteerQRCode,
             volunteer_id: pvData.id,
-            status: 'inactive'
+            status: 'inactive',
+            marketplace_id: marketplaceId || null
           });
 
         if (qrError) {

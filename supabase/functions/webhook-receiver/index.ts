@@ -733,11 +733,12 @@ async function sendWelcomeEmailViaMicrosoftGraph(
   tempPassword: string,
   qrCardId: string,
   marketplaceId?: string | null,
-  events?: EmailEventInfo[]
+  events?: EmailEventInfo[],
+  familyQRs?: Array<{ name: string; qrCardId: string; type?: string }>
 ): Promise<{ success: boolean; error?: string; provider: string }> {
   try {
     console.log(`Calling send-welcome-email edge function for ${email}`);
-    console.log(`Passing ${events?.length || 0} events to email function`);
+    console.log(`Passing ${events?.length || 0} events and ${familyQRs?.length || 0} family QRs to email function`);
     
     const response = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
       method: 'POST',
@@ -754,6 +755,7 @@ async function sendWelcomeEmailViaMicrosoftGraph(
         qrCodeId: qrCardId,
         marketplaceId: marketplaceId || undefined,
         events: events || undefined,
+        familyQRs: familyQRs && familyQRs.length > 0 ? familyQRs : undefined,
       }),
     });
 
@@ -940,7 +942,8 @@ async function sendWelcomeEmailWithQR(
         tempPassword,
         qrCardId,
         marketplaceId,
-        registeredEvents.length > 0 ? registeredEvents : undefined
+        registeredEvents.length > 0 ? registeredEvents : undefined,
+        familyQRs.length > 0 ? familyQRs.map(f => ({ name: f.name, qrCardId: f.qrCardId, type: f.type })) : undefined
       );
       
       // Log the Microsoft Graph email attempt
@@ -4896,18 +4899,86 @@ serve(async (req) => {
       const allQrIds = qrCards?.map(c => c.unique_id) || [];
       const volunteerQrId = allQrIds[0] || 'N/A';
       
-      // Build family QR list (all except the first one which is the volunteer's own)
+      // Build family QR list - include ALL family QR cards regardless of dependents count
       const familyQRs: FamilyMemberQR[] = [];
       const dependents = extractUniqueDependents(volunteer.events_json);
       
-      for (let i = 1; i < allQrIds.length && i <= dependents.length; i++) {
-        const dep = dependents[i - 1];
+      // Family cards are all QR cards after the first (primary) one
+      for (let i = 1; i < allQrIds.length; i++) {
+        const dep = dependents[i - 1]; // may be undefined if more cards than dependents
         familyQRs.push({
-          name: dep.name,
-          type: dep.type,
-          gender: dep.gender,
+          name: dep?.name || `Family Member ${i}`,
+          type: dep?.type || 'adult',
+          gender: dep?.gender || null,
           qrCardId: allQrIds[i]
         });
+      }
+
+      // Resolve event context: events_json -> events_list -> marketplace assignments
+      let resolvedEventsJson = volunteer.events_json;
+      let resolvedMarketplaceId: string | null = null;
+      let resolvedMarketplace: MarketplaceInfo | null = null;
+
+      if (!resolvedEventsJson || !Array.isArray(resolvedEventsJson) || resolvedEventsJson.length === 0) {
+        console.log('events_json missing for resend, trying fallback resolution...');
+        
+        // Fallback 1: Try events_list to find marketplace details
+        if (volunteer.events_list) {
+          const slugs = volunteer.events_list.split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (slugs.length > 0) {
+            const marketplaceMap = await getMarketplacesBySlug(supabase, slugs);
+            if (marketplaceMap.size > 0) {
+              // Build synthetic events_json from resolved marketplaces
+              const syntheticEvents: RegisteredEvent[] = [];
+              for (const [slug, mp] of marketplaceMap.entries()) {
+                syntheticEvents.push({
+                  event: slug,
+                  eventDate: mp.event_date ? formatDate(mp.event_date) : undefined,
+                  eventTime: mp.start_time && mp.end_time 
+                    ? `${formatTime(mp.start_time)} - ${formatTime(mp.end_time)}` : undefined,
+                  eventLocation: mp.location || undefined,
+                });
+              }
+              resolvedEventsJson = syntheticEvents;
+              console.log(`Resolved ${syntheticEvents.length} events from events_list`);
+            }
+          }
+        }
+        
+        // Fallback 2: Use marketplace IDs from volunteer QR card assignments
+        if (!resolvedEventsJson || !Array.isArray(resolvedEventsJson) || resolvedEventsJson.length === 0) {
+          const { data: qrCardsWithMp } = await supabase
+            .from('volunteer_qr_cards')
+            .select('marketplace_id')
+            .eq('volunteer_id', pending_id)
+            .not('marketplace_id', 'is', null);
+          
+          const uniqueMpIds = [...new Set((qrCardsWithMp || []).map(c => c.marketplace_id).filter(Boolean))];
+          
+          if (uniqueMpIds.length > 0) {
+            resolvedMarketplaceId = uniqueMpIds[0];
+            const syntheticEvents: RegisteredEvent[] = [];
+            
+            for (const mpId of uniqueMpIds) {
+              const mpInfo = await getMarketplaceInfo(supabase, mpId);
+              if (mpInfo) {
+                if (!resolvedMarketplace) resolvedMarketplace = mpInfo;
+                syntheticEvents.push({
+                  event: mpInfo.name.toLowerCase().replace(/\s+/g, '-'),
+                  eventDate: mpInfo.event_date ? formatDate(mpInfo.event_date) : undefined,
+                  eventTime: mpInfo.start_time && mpInfo.end_time 
+                    ? `${formatTime(mpInfo.start_time)} - ${formatTime(mpInfo.end_time)}` : undefined,
+                  eventLocation: mpInfo.location || undefined,
+                });
+              }
+            }
+            
+            if (syntheticEvents.length > 0) {
+              resolvedEventsJson = syntheticEvents;
+              console.log(`Resolved ${syntheticEvents.length} events from QR card marketplace assignments`);
+            }
+          }
+        }
       }
 
       // Send welcome email with QR codes
@@ -4927,9 +4998,9 @@ serve(async (req) => {
         pending_id,
         familyQRs,
         undefined, // customization
-        undefined, // marketplace info
-        undefined, // marketplaceId
-        volunteer.events_json // Pass events data for times in email
+        resolvedMarketplace, // marketplace info (from fallback)
+        resolvedMarketplaceId, // marketplaceId (from fallback)
+        resolvedEventsJson // Pass resolved events data
       );
 
       // Update email tracking fields

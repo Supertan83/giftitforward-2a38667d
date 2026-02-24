@@ -197,7 +197,23 @@ serve(async (req: Request) => {
       .order('created_at', { ascending: true });
 
     const primaryQR = qrCards?.[0]?.unique_id || 'N/A';
+    // Include ALL family QR cards (not dependent on events_json dependent count)
     const familyQRs = qrCards?.slice(1) || [];
+    
+    // Try to get dependent names for labeling
+    const dependentNames: Array<{name: string; type: string}> = [];
+    if (volunteer.events_json && Array.isArray(volunteer.events_json)) {
+      for (const evt of volunteer.events_json) {
+        if (evt.dependents && Array.isArray(evt.dependents)) {
+          for (const dep of evt.dependents) {
+            const name = dep.name?.trim();
+            if (name && !dependentNames.find(d => d.name.toLowerCase() === name.toLowerCase())) {
+              dependentNames.push({ name: dep.name, type: dep.type || 'adult' });
+            }
+          }
+        }
+      }
+    }
 
     if (email_type === 'welcome') {
       const appUrl = 'https://gif.thesurpluss.com';
@@ -210,16 +226,91 @@ serve(async (req: Request) => {
       const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg?v=2`;
       const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png?v=2`;
 
-      // Build dynamic event blocks from events_json
-      const eventsHtml = await buildEventsHtml(supabase, volunteer.events_json);
+      // Build dynamic event blocks - with fallback resolution
+      let eventsSource = volunteer.events_json;
+      
+      // Fallback 1: If events_json is empty, try to resolve from events_list
+      if (!eventsSource || !Array.isArray(eventsSource) || eventsSource.length === 0) {
+        if (volunteer.events_list) {
+          const slugs = volunteer.events_list.split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (slugs.length > 0) {
+            const syntheticEvents: Array<{event: string; eventDate?: string; eventTime?: string; eventLocation?: string}> = [];
+            for (const slug of slugs) {
+              // Try to find marketplace by matching slug to name
+              const { data: mp } = await supabase
+                .from('marketplace_events')
+                .select('name, event_date, start_time, end_time, location')
+                .or(`name.ilike.%${slug.replace(/-/g, '%')}%`)
+                .limit(1)
+                .maybeSingle();
+              
+              if (mp) {
+                const startTime = formatTime(mp.start_time);
+                const endTime = formatTime(mp.end_time);
+                syntheticEvents.push({
+                  event: slug,
+                  eventDate: mp.event_date ? formatDate(mp.event_date) : undefined,
+                  eventTime: startTime && endTime ? `${startTime} - ${endTime}` : undefined,
+                  eventLocation: mp.location || undefined,
+                });
+              }
+            }
+            if (syntheticEvents.length > 0) {
+              eventsSource = syntheticEvents;
+              console.log(`Resolved ${syntheticEvents.length} events from events_list for resend`);
+            }
+          }
+        }
+      }
+      
+      // Fallback 2: If still empty, resolve from QR card marketplace assignments
+      if (!eventsSource || !Array.isArray(eventsSource) || eventsSource.length === 0) {
+        const { data: qrCardsWithMp } = await supabase
+          .from('volunteer_qr_cards')
+          .select('marketplace_id')
+          .eq('volunteer_id', pending_volunteer_id)
+          .not('marketplace_id', 'is', null);
+        
+        const uniqueMpIds = [...new Set((qrCardsWithMp || []).map(c => c.marketplace_id).filter(Boolean))];
+        
+        if (uniqueMpIds.length > 0) {
+          const syntheticEvents: Array<{event: string; name?: string; eventDate?: string; eventTime?: string; eventLocation?: string}> = [];
+          for (const mpId of uniqueMpIds) {
+            const { data: mp } = await supabase
+              .from('marketplace_events')
+              .select('name, event_date, start_time, end_time, location')
+              .eq('id', mpId)
+              .maybeSingle();
+            
+            if (mp) {
+              const startTime = formatTime(mp.start_time);
+              const endTime = formatTime(mp.end_time);
+              syntheticEvents.push({
+                event: mp.name.toLowerCase().replace(/\s+/g, '-'),
+                name: mp.name,
+                eventDate: mp.event_date ? formatDate(mp.event_date) : undefined,
+                eventTime: startTime && endTime ? `${startTime} - ${endTime}` : undefined,
+                eventLocation: mp.location || undefined,
+              });
+            }
+          }
+          if (syntheticEvents.length > 0) {
+            eventsSource = syntheticEvents;
+            console.log(`Resolved ${syntheticEvents.length} events from QR card assignments for resend`);
+          }
+        }
+      }
+      
+      const eventsHtml = await buildEventsHtml(supabase, eventsSource);
 
-      // Build family QR sections
+      // Build family QR sections - use dependent names when available
       const familyQRSections = familyQRs.map((fam, index) => {
         const famQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(fam.unique_id)}`;
+        const depName = dependentNames[index]?.name || `Family Member ${index + 1}`;
         return `
           <tr>
             <td style="padding: 10px; text-align: center;">
-              <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Arial, sans-serif;">Family Member ${index + 1}</p>
+              <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Arial, sans-serif;">${depName}</p>
               <img src="${famQrUrl}" alt="QR Code" width="120" height="120" style="display: block; margin: 0 auto;" />
               <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280;">${fam.unique_id}</p>
             </td>
