@@ -30,28 +30,20 @@ interface FamilyMembersTabProps {
 // Extract unique dependents from events_json
 const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string; gender?: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
-  const dependents: Array<{ name: string; type: string; gender?: string }> = [];
+  const seen = new Map<string, { name: string; type: string; gender?: string }>();
   for (const event of eventsJson) {
     if (event.dependents && Array.isArray(event.dependents)) {
       for (const dep of event.dependents) {
         const name = dep.name?.trim();
         if (!name) continue;
-        const nameLower = name.toLowerCase();
-        
-        const existingIdx = dependents.findIndex(d => {
-          const existing = d.name.toLowerCase();
-          return existing === nameLower || existing.includes(nameLower) || nameLower.includes(existing);
-        });
-        
-        if (existingIdx === -1) {
-          dependents.push({ name: dep.name, type: dep.type || 'adult', gender: dep.gender || undefined });
-        } else if (nameLower.length > dependents[existingIdx].name.length) {
-          dependents[existingIdx] = { name: dep.name, type: dep.type || dependents[existingIdx].type, gender: dep.gender || dependents[existingIdx].gender };
+        const key = name.toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, { name, type: dep.type || 'adult', gender: dep.gender || undefined });
         }
       }
     }
   }
-  return dependents;
+  return Array.from(seen.values());
 };
 
 // Resolve family member name from card unique_id and volunteer's events_json
@@ -68,7 +60,7 @@ const resolveFamilyMemberName = (
   }
 
   // Try index-based matching
-  const fMatch = cardUniqueId.match(/-F(\d+)/);
+  const fMatch = cardUniqueId.match(/-F(\d)/);
   const familyIndex = fMatch ? parseInt(fMatch[1], 10) : 0;
   if (familyIndex > 0 && familyIndex <= dependents.length) {
     return dependents[familyIndex - 1].name;
@@ -76,10 +68,10 @@ const resolveFamilyMemberName = (
 
   // Positional fallback
   const sortedCards = allFamilyCards
-    .filter(c => /-F\d+/.test(c.unique_id))
+    .filter(c => /-F\d/.test(c.unique_id))
     .sort((a, b) => {
-      const aIdx = parseInt(a.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
-      const bIdx = parseInt(b.unique_id.match(/-F(\d+)/)?.[1] || '0', 10);
+      const aIdx = parseInt(a.unique_id.match(/-F(\d)/)?.[1] || '0', 10);
+      const bIdx = parseInt(b.unique_id.match(/-F(\d)/)?.[1] || '0', 10);
       return aIdx - bIdx;
     });
   const posIdx = sortedCards.findIndex(c => c.unique_id === cardUniqueId);
