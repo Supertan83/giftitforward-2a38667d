@@ -3338,7 +3338,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                               statusClass = 'bg-blue-100 text-blue-800 border-blue-200';
                             }
 
-                            const canSend = fc.status === 'checked_out' && !fc.survey_completed_at;
+                            const canSend = fc.status === 'checked_out';
 
                             return (
                               <TableRow key={fc.id} className="text-sm">
@@ -3418,7 +3418,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                       ) : (
                                         <Send className="w-3 h-3" />
                                       )}
-                                      Send
+                                      {fc.survey_completed_at ? 'Resend' : 'Send'}
                                     </Button>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
