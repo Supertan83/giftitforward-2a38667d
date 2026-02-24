@@ -16,6 +16,7 @@ interface RegisteredCardsListProps {
   expandedBatches: Set<string>;
   selectedCards: Set<string>;
   isUnregistering: boolean;
+  defaultCreditLimit?: number;
   toggleBatchExpand: (batchId: string) => void;
   toggleBatchSelectAll: (batchCards: QRCard[]) => void;
   toggleCardSelection: (uniqueId: string) => void;
@@ -28,6 +29,7 @@ export const RegisteredCardsList = ({
   expandedBatches,
   selectedCards,
   isUnregistering,
+  defaultCreditLimit = 15,
   toggleBatchExpand,
   toggleBatchSelectAll,
   toggleCardSelection,
@@ -112,7 +114,7 @@ export const RegisteredCardsList = ({
                               {card.status}
                             </span>
                           </td>
-                          <td className="p-2">{card.creditBalance}/15</td>
+                          <td className="p-2">{card.creditBalance}/{defaultCreditLimit}</td>
                           <td className="p-2 text-right">
                             <div className="flex justify-end gap-1">
                               <Button
