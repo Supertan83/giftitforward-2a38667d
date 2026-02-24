@@ -3265,7 +3265,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             )}
 
             {!loadingFamilyCertsVolunteers && familyCertsVolunteers.length > 0 && (
-              <ScrollArea className="max-h-[450px]">
+              <ScrollArea className="max-h-[60vh]">
                 <Table>
                   <TableHeader>
                     <TableRow>
