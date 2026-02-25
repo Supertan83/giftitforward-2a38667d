@@ -88,11 +88,21 @@ Deno.serve(async (req) => {
 
       const clampedLimit = Math.min(limit, 5000);
 
-      const { data, error, count } = await adminClient
+      // Try created_at first, fall back to no ordering if column doesn't exist
+      let result = await adminClient
         .from(table)
         .select("*", { count: "exact" })
         .range(offset, offset + clampedLimit - 1)
         .order("created_at", { ascending: true });
+
+      if (result.error?.message?.includes("does not exist")) {
+        result = await adminClient
+          .from(table)
+          .select("*", { count: "exact" })
+          .range(offset, offset + clampedLimit - 1);
+      }
+
+      const { data, error, count } = result;
 
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
