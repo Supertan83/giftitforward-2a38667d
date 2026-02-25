@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, QrCode, RotateCcw, Package, Loader2, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
@@ -38,6 +39,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
   const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
+  const maxItemsPerScan = (selectedMarketplace as any)?.max_items_per_scan ?? 1;
 
   // Calculate totals - use transaction-based count as source of truth for scanned
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
@@ -205,66 +207,73 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
             </button>
           </div>
 
-          {/* Quantity Selector */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-xl p-4 mb-4 shadow-card"
-          >
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3 text-center">
-              {mode === 'distribute' ? 'Items to Distribute Per Scan' : 'Items to Return Per Scan'}
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-16 w-16 rounded-full shrink-0"
-                onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
-              >
-                <Minus className="w-7 h-7" />
-              </Button>
-              <div className="min-w-[4rem] text-center">
-                <span className={cn(
-                  "text-5xl font-bold tabular-nums",
-                  quantity > 1 ? "text-primary" : "text-foreground"
-                )}>
-                  {quantity}
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-16 w-16 rounded-full shrink-0"
-                onClick={() => setQuantity(q => Math.min(creditLimit, q + 1))}
-                disabled={quantity >= creditLimit}
-              >
-                <Plus className="w-7 h-7" />
-              </Button>
-            </div>
-            {/* Quick-select presets */}
-            <div className="flex items-center justify-center gap-2 mt-3">
-              {[1, 3, 5, 10].filter(v => v <= creditLimit).map(value => (
-                <button
-                  key={value}
-                  onClick={() => setQuantity(value)}
-                  className={cn(
-                    "min-h-[44px] min-w-[44px] px-4 rounded-full text-sm font-semibold transition-all",
-                    quantity === value
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            {quantity > 1 && (
-              <p className="text-xs text-primary text-center mt-2 font-medium">
-                {mode === 'distribute' ? 'Distributing' : 'Returning'} {quantity} items per scan
+          {/* Quantity Selector - only shown when max_items_per_scan > 1 */}
+          {maxItemsPerScan > 1 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-border rounded-xl p-4 mb-4 shadow-card"
+            >
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1 text-center">
+                {mode === 'distribute' ? 'Items to Distribute Per Scan' : 'Items to Return Per Scan'}
               </p>
-            )}
-          </motion.div>
+              <p className="text-xs text-center mb-3">
+                <Badge variant="outline" className="text-xs font-medium">
+                  Max {maxItemsPerScan} items per scan
+                </Badge>
+              </p>
+              <div className="flex items-center justify-center gap-4">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-16 w-16 rounded-full shrink-0"
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="w-7 h-7" />
+                </Button>
+                <div className="min-w-[4rem] text-center">
+                  <span className={cn(
+                    "text-5xl font-bold tabular-nums",
+                    quantity > 1 ? "text-primary" : "text-foreground"
+                  )}>
+                    {quantity}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-16 w-16 rounded-full shrink-0"
+                  onClick={() => setQuantity(q => Math.min(maxItemsPerScan, q + 1))}
+                  disabled={quantity >= maxItemsPerScan}
+                >
+                  <Plus className="w-7 h-7" />
+                </Button>
+              </div>
+              {/* Quick-select presets */}
+              <div className="flex items-center justify-center gap-2 mt-3">
+                {[1, 3, 5, 10].filter(v => v <= maxItemsPerScan).map(value => (
+                  <button
+                    key={value}
+                    onClick={() => setQuantity(value)}
+                    className={cn(
+                      "min-h-[44px] min-w-[44px] px-4 rounded-full text-sm font-semibold transition-all",
+                      quantity === value
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+              {quantity > 1 && (
+                <p className="text-xs text-primary text-center mt-2 font-medium">
+                  {mode === 'distribute' ? 'Distributing' : 'Returning'} {quantity} items per scan
+                </p>
+              )}
+            </motion.div>
+          )}
 
           {/* Scan Button */}
           <motion.div
