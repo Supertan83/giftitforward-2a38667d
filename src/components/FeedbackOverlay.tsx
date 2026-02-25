@@ -49,7 +49,8 @@ export const FeedbackOverlay = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onAnimationComplete={() => {
-        setTimeout(() => onComplete?.(), 1500);
+        const duration = type === 'error' ? 3500 : type === 'warning' ? 3000 : 1500;
+        setTimeout(() => onComplete?.(), duration);
       }}
       className={cn(
         'fixed inset-0 z-50 flex items-center justify-center',
