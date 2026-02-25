@@ -1,92 +1,90 @@
 
 
-## Bug: Unclear Error When Quantity Exceeds Remaining Credits
+## Scale, Load, and Operational Stress -- Analysis and Fixes
 
-### Problem
-When a volunteer selects quantity 3 but the beneficiary only has 2 credits remaining, the system shows **"Limit Reached! Maximum items already collected. 0/20"** -- which is confusing and incorrect. The "0/20" comes from hardcoded logic in the error handler that always displays `creditLimit - creditLimit = 0`.
+### Current State Assessment
 
-### Root Cause
-Two issues working together:
+After reviewing the scanning pipeline end-to-end (QRScanner -> Zone handler -> RPC -> Feedback), here are the findings:
 
-1. **Frontend error handler (MarketplaceZone.tsx, line 112-118)**: When the backend returns a "LIMIT" error, the UI sets `credits: creditLimit` and `creditLimit: creditLimit`. The FeedbackOverlay then calculates `creditLimit - credits = 0`, always showing "0/20 Credits Remaining" regardless of actual balance.
+---
 
-2. **Backend RPCs**: The batch RPC error message includes the actual numbers (`Would exceed maximum (18 + 3 > 20)`) but the frontend ignores them and shows a generic message.
+### 1. Rapid Scans -- MOSTLY SAFE, one risk
 
-### Fix (2 changes)
+**What's good:**
+- The `isProcessingRef` lock in QRScanner prevents double-fires from a single scan
+- The 2-second cooldown with auto-close prevents accidental re-scans
+- Backend RPCs are atomic single-transaction operations (~200ms latency)
+- The scanner stops the camera immediately after reading a code
 
-**1. Backend RPCs -- Improve error messages and return remaining credits**
+**Risk found -- Feedback Overlay blocks the next scan:**
+The `FeedbackOverlay` uses a fixed timeout (1.5s success, 3s warning, 3.5s error) during which the entire screen is covered. The volunteer CANNOT open the scanner again until the overlay dismisses. Under high throughput, this dead time adds up significantly.
 
-Update both `distribute_marketplace_item` (single) and `distribute_marketplace_items_batch` to return a clearer error that includes the remaining credits:
+**Fix:** Add a "tap to dismiss" capability to the FeedbackOverlay so volunteers can skip the animation and immediately start the next scan.
 
-- Single: Change `LIMIT REACHED (%/%). Maximum items already collected.` to include remaining info
-- Batch: Change error to clearly state: `LIMIT: Selected quantity (3) exceeds remaining credits (2). Maximum allowed: 20.`
+---
 
-**2. Frontend (MarketplaceZone.tsx) -- Parse actual values from error and show clear message**
+### 2. One Volunteer Managing Multiple Beneficiaries -- SAFE
 
-Update the error catch block to:
-- Parse remaining credits from the error message when available
-- Show the actual remaining credits in the feedback overlay (e.g., "18/20" not "0/20")
-- Display a clear subtitle: "Selected quantity (3) exceeds remaining credits (2)." instead of generic "Maximum items already collected."
+**What's good:**
+- Each scan is stateless from the volunteer's perspective -- scan, process, done
+- No session state ties a volunteer to a specific beneficiary
+- The atomic RPCs handle all validation server-side (card status, credit limits)
 
-### Technical Details
+**No fix needed** -- the architecture already supports this pattern well.
 
-**Backend SQL changes** (database migration):
+---
 
-For `distribute_marketplace_items_batch`:
-```sql
--- Replace line 53:
-RAISE EXCEPTION 'LIMIT: Selected quantity (%) exceeds remaining credits (%). Maximum: %.', 
-  p_quantity, v_limit - v_card.credit_balance, v_limit;
-```
+### 3. Known Failure Points Under Load -- TWO ISSUES
 
-For `distribute_marketplace_item` (single):
-```sql
--- Replace line 42-43:
-RAISE EXCEPTION 'LIMIT REACHED (%/%). Maximum items already collected.', 
-  v_card.credit_balance, v_limit;
-```
-(Single stays the same since it only adds 1 -- the limit check is correct.)
+**Issue A: Full QR card list fetched on every invalidation**
+`useQRCards()` fetches ALL cards (paginated in 1000-row batches) and subscribes to realtime changes on the entire `qr_cards` table. Every scan by ANY volunteer triggers `invalidateQueries(['qr_cards'])`, causing every connected device to re-fetch potentially thousands of cards. With 10+ tablets scanning simultaneously, this creates a cascade of heavy queries.
 
-**Frontend changes** (MarketplaceZone.tsx error handler):
+**Fix:** The Entrance Zone is the only zone that uses `useQRCards()` for stats. The Marketplace Zone does NOT need it -- it only uses RPCs. So the fix is:
+- Remove the realtime subscription from `useQRCards()` to prevent cascade re-fetches
+- Use a longer `staleTime` (e.g., 30s) so stats refresh less aggressively
+- The Marketplace Zone already correctly avoids this hook
 
-```typescript
-} catch (error) {
-  const message = error instanceof Error ? error.message : 'Operation failed';
-  const isLimit = message.includes('LIMIT');
-  
-  if (isLimit) {
-    // Try to parse remaining credits from batch error
-    const remainingMatch = message.match(/remaining credits \((\d+)\)/);
-    const balanceMatch = message.match(/\((\d+)\/(\d+)\)/);
-    const remaining = remainingMatch 
-      ? parseInt(remainingMatch[1]) 
-      : balanceMatch 
-        ? parseInt(balanceMatch[2]) - parseInt(balanceMatch[1])
-        : 0;
-    
-    setFeedback({
-      type: 'error',
-      title: 'Limit Reached!',
-      subtitle: quantity > 1 
-        ? `Selected quantity (${quantity}) exceeds remaining credits (${remaining}).`
-        : 'Maximum items already collected.',
-      credits: creditLimit - remaining,
-      creditLimit,
-    });
-  } else {
-    setFeedback({
-      type: 'warning',
-      title: 'Action Failed',
-      subtitle: message,
-    });
-  }
-}
-```
+**Issue B: No offline/retry handling for network drops**
+Field conditions may have intermittent connectivity. Currently, if a scan's RPC call fails due to network timeout, the volunteer sees "Action Failed" with a generic message and must re-scan. There's no automatic retry.
 
-### Files Changed
-- **Database migration**: Update `distribute_marketplace_items_batch` RPC error message
-- **src/components/zones/MarketplaceZone.tsx**: Parse error details and display actual remaining credits
+**Fix:** Add retry logic (1 retry with 2s delay) to the distribute/return mutations so transient network failures self-heal without volunteer intervention.
 
-### Result
-- Before: "Limit Reached! Maximum items already collected. 0/20"
-- After: "Limit Reached! Selected quantity (3) exceeds remaining credits (2). 2/20 Credits Remaining"
+---
+
+### 4. Safeguards for High-Throughput -- ONE ADDITION
+
+**Missing safeguard: No duplicate scan protection at the application level**
+If the same card is scanned twice rapidly (e.g., volunteer accidentally taps scanner twice before cooldown kicks in), the backend handles it correctly (atomic RPC increments balance). But the volunteer sees two success overlays for what they intended as one action.
+
+**Fix:** Add a "last scanned card + timestamp" check in the zone handlers. If the same card ID is scanned within 5 seconds, show a warning instead of processing again.
+
+---
+
+### Implementation Plan
+
+**File 1: `src/components/FeedbackOverlay.tsx`**
+- Add `onClick` handler to the overlay container that calls `onComplete()` immediately
+- Add a small "Tap to dismiss" hint text at the bottom
+
+**File 2: `src/components/zones/MarketplaceZone.tsx`**
+- Add `lastScanRef` (stores `{code, timestamp}`) to prevent duplicate scans within 5 seconds
+- Add retry logic: wrap RPC calls in a try-catch that retries once on network errors
+- Show "Already scanned" warning if same card scanned within 5s
+
+**File 3: `src/components/zones/EntranceZone.tsx`**
+- Same duplicate scan protection as MarketplaceZone
+- Same retry logic for the `activateCard` mutation
+
+**File 4: `src/hooks/useSupabaseData.ts`**
+- Add `staleTime: 30000` to `useQRCards` query to reduce re-fetch frequency
+- Add `retry: 1` to distribute/return mutations for transient failure recovery
+
+### Summary of Changes
+
+| Area | Risk Level | Fix |
+|---|---|---|
+| Feedback overlay blocks next scan | Medium | Tap to dismiss |
+| QR card list re-fetched on every scan | High under load | Add staleTime, reduce realtime cascade |
+| No network retry | Medium | Add 1 retry to mutations |
+| Duplicate rapid scans | Low | 5-second same-card guard |
+
