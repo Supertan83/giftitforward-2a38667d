@@ -1,53 +1,72 @@
 
+# Make Manual and Webhook Family Member Flows Consistent and Bulletproof
 
-# Restore Family Member Data for Ahlam and Yogesh
+## Problem Summary
 
-## Current State
+There are two ways family members get added:
 
-| Volunteer | Dependents in events_json | Cards | Missing |
-|-----------|--------------------------|-------|---------|
-| Ahlam AlHashemi | 0 | Primary only | 3 family members need cards + data |
-| Yogesh Arora | 1 (Romika Arora) | Primary + F1 + F2 | Muskan Arora name not in events_json |
+1. **Webhook (DH registration)** -- dependents come in the payload, get stored in `events_json`, and family QR cards are created automatically
+2. **Admin manual add** -- admin clicks "Add Family Member" in the QR Cards viewer, which creates a QR card and appends to `events_json`
 
-## Changes Required
+Both paths work, but they have subtle inconsistencies that cause issues (like the cleanup function deleting manually-added cards). Here are the specific gaps:
 
-### 1. Update events_json for both volunteers
+| Issue | Detail |
+|-------|--------|
+| Missing metadata on manual add | `events_json` update doesn't set `family-members-joining: 'Yes'`, `number-of-adults`, or `total-attendees` |
+| Gender not captured | Admin dialog only collects name and type (adult/child), not gender |
+| Cleanup function is too aggressive | It treats `events_json` as the sole source of truth -- if a card exists but the dependent somehow isn't in `events_json`, it gets deleted |
+| No `event_dependents` table sync | Manual adds don't create records in the `event_dependents` table |
+| Admin dialog lacks context | No gender field, no confirmation of what marketplace the family member will attend |
 
-**Ahlam** (id: `71579f66-931f-4dc3-8f90-47a1b4a30ed6`):
-Add 3 dependents to her most recent attended event entry so the system recognizes them:
-- Muna Yousuf Al Hashemi
-- Ghazlan Mohammad Al Suwaidi
-- Al Hanoof Mohammad Al Suwaidi
+## Changes
 
-**Yogesh** (id: `0e442ce8-2e89-45d7-883e-869e6d410b55`):
-Add Muskan Arora as a 2nd dependent alongside existing Romika Arora in his events_json.
+### 1. Fix `add_family_member` handler in `webhook-receiver/index.ts`
 
-### 2. Create 3 family QR cards for Ahlam
+Update the `events_json` persistence logic (lines 4817-4859) to:
+- Set `family-members-joining` to `'Yes'` on the event entry
+- Update `number-of-adults` / `number-of-children` and `total-attendees` counts
+- Include the `index` field matching the family card's F-index for reliable name resolution
+- Also insert into `event_dependents` table (if a `registration_events` record exists for the volunteer)
 
-Generate family cards F1, F2, F3 linked to her volunteer ID, since none exist.
+### 2. Add gender field to admin "Add Family Member" dialog
 
-### 3. No card creation needed for Yogesh
+**File: `src/components/admin/VolunteerQRCardsViewer.tsx`**
 
-His F2 card (`VOL-ML0T9E56-YL8R-F299`) already exists -- it just needs the name mapping via events_json update.
+- Add a `newFamilyMemberGender` state (`'Male' | 'Female' | null`)
+- Add a gender select dropdown in the dialog
+- Pass `gender` in the mutation payload so the webhook-receiver stores it in `events_json`
 
-## Implementation
+### 3. Make cleanup function respect manually-added cards
 
-Create an edge function `restore-family-members` that:
-1. Updates Ahlam's events_json to inject dependents into one of her event entries
-2. Creates 3 family QR cards (F1, F2, F3) for Ahlam
-3. Updates Yogesh's events_json to add Muskan Arora as a second dependent
-4. Returns a summary of all changes made
+**File: `supabase/functions/cleanup-duplicate-family-cards/index.ts`**
 
-## Technical Details
+The current logic: if `events_json` shows N dependents, delete all family cards beyond N.
 
-- **File**: `supabase/functions/restore-family-members/index.ts`
-- One-time-use edge function (consistent with the project's preference for maintenance via edge functions)
-- Uses service role key for direct DB writes
-- Updates events_json by appending dependents to the last event entry with `family-members-joining` set to `Yes`
+The fix: **never delete a family card whose name is found in `events_json`**. Only delete cards that are truly orphaned (no matching dependent name AND exceed the expected count). Since the manual add flow now correctly writes to `events_json`, this becomes a safety net rather than the primary mechanism.
 
-## After Running
+Specifically:
+- After extracting dependents from `events_json`, compare card count vs dependent count
+- Only flag cards as "excess" if card count exceeds dependent count
+- Among excess cards, only delete those that are `inactive` (not `checked_in` or `checked_out`) -- tighten from current logic which also deletes `checked_out`
 
-- Ahlam will have 3 family cards with proper name resolution for certificates
-- Yogesh's F2 card will correctly map to "Muskan Arora" for certificates
-- Both families' certificates can be generated from the admin panel
+### 4. Update `generate-missing-family-qrs` edge function
 
+**File: `supabase/functions/generate-missing-family-qrs/index.ts`**
+
+No changes needed -- this function already reads from `events_json` and creates missing cards. Since the manual add flow now properly updates `events_json`, this function will work correctly for both flows.
+
+## Technical Summary
+
+| File | Change |
+|------|--------|
+| `supabase/functions/webhook-receiver/index.ts` | Enhance `add_family_member` handler to write complete metadata to `events_json` (family-members-joining, counts, index) and optionally sync to `event_dependents` |
+| `src/components/admin/VolunteerQRCardsViewer.tsx` | Add gender select to Add Family Member dialog, pass gender to mutation |
+| `supabase/functions/cleanup-duplicate-family-cards/index.ts` | Tighten deletion logic: only delete `inactive` excess cards, never cards with matching dependent names |
+
+## Result
+
+After these changes:
+- Manual adds and webhook adds produce identical `events_json` structure
+- The cleanup function won't accidentally delete manually-added family cards
+- Certificates, exports, and all UI surfaces will show consistent family member data regardless of how they were added
+- Gender information is captured for both flows
