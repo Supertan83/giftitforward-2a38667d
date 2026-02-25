@@ -1,72 +1,47 @@
 
 
-# Station Scan Limit Configuration & UI Enforcement
+## Bug: Credit Display Mismatch After Check-In
 
-## Problem
-Currently, the quantity selector in the Marketplace Zone uses `beneficiary_credit_limit` (15-25) as the maximum. There is no separate "max items per scan" setting per station/marketplace. Volunteers must manually decide how many items to distribute per scan, adding mental load. When the limit is 1 item per scan, the entire quantity selector is unnecessary visual noise.
+### Problem
+When a beneficiary card is activated at the Entrance Zone, the "Last Activated" card shows `0/15` instead of `0/20` (the correct marketplace credit limit). The main scan prompt correctly shows "activate with 20 credits", proving the marketplace credit limit IS 20 -- but the card display below falls back to 15.
 
-## Solution
+### Root Cause
+After card activation, `invalidateQueries(['qr_cards'])` fires, causing a React re-render. During this transient state, `selectedMarketplace` can briefly become `undefined`, and the fallback `?? 15` kicks in for `creditLimit`. Since `CardStatusDisplay` reads `creditLimit` reactively (not a captured snapshot), it picks up the fallback value of 15.
 
-Add a new `max_items_per_scan` column to `marketplace_events` and make the UI automatically adapt based on this configuration.
+### Fix (2 files)
 
-### 1. Database Migration
+**1. `src/components/zones/EntranceZone.tsx`**
+- Store the credit limit alongside the last activated card in state, so the display uses the value captured at activation time rather than the live reactive value.
+- Add a `lastCreditLimit` state variable (e.g., `useState<number>(15)`)
+- When activation succeeds, save `creditLimit` into `lastCreditLimit`
+- Pass `lastCreditLimit` to `CardStatusDisplay` instead of the reactive `creditLimit`
 
-Add column to `marketplace_events`:
+**2. `src/components/CardStatusDisplay.tsx`**
+- No functional change needed -- it already accepts `creditLimit` as a prop. But we will remove the default value of `15` and make it required, so future callers are forced to pass the correct value explicitly.
 
-```sql
-ALTER TABLE marketplace_events
-ADD COLUMN max_items_per_scan integer NOT NULL DEFAULT 1;
-```
-
-Default is 1 (safest -- single item mode). Admins can increase it per marketplace event.
-
-### 2. Admin Configuration (MarketplaceManagement.tsx)
-
-Add a "Max Items Per Scan" field to both the create and edit marketplace forms, alongside the existing "Beneficiary Credit Limit" field. Range: 1 to beneficiary_credit_limit (capped).
-
-### 3. MarketplaceZone UI Adaptation
-
-The quantity selector will read `max_items_per_scan` from the selected marketplace and adapt:
-
-**When `max_items_per_scan = 1`:**
-- Hide the entire quantity selector (no +/- buttons, no presets)
-- Scan button simply says "Scan to Distribute Item"
-- Zero decision overhead for volunteers
-
-**When `max_items_per_scan > 1`:**
-- Show the quantity selector, but cap at `max_items_per_scan` (not `creditLimit`)
-- Display a clear label: **"Max X items per scan"** in a visible badge
-- Quick-select presets filtered to values <= max_items_per_scan
-- Plus button disabled at the station limit
-
-### 4. Files Changed
-
-| File | Change |
-|------|--------|
-| Database migration | Add `max_items_per_scan` column |
-| `src/components/zones/MarketplaceZone.tsx` | Read `max_items_per_scan`, conditionally hide/show quantity selector, cap quantity, show "Max X" badge |
-| `src/components/admin/MarketplaceManagement.tsx` | Add input field for `max_items_per_scan` in create + edit forms |
-| `src/types/index.ts` | Add `max_items_per_scan` to `MarketplaceEvent` type |
-
-### 5. UI Behavior Summary
+### Technical Details
 
 ```text
-max_items_per_scan = 1 (default)
-+----------------------------------+
-|  [Scan to Distribute Item]       |  <- No quantity selector shown
-+----------------------------------+
+Current flow (buggy):
+  activateCard succeeds
+    -> invalidateQueries(['qr_cards'])
+    -> React re-render
+    -> marketplaces data temporarily undefined
+    -> creditLimit = undefined ?? 15
+    -> CardStatusDisplay shows 0/15
 
-max_items_per_scan = 5
-+----------------------------------+
-|  Items to Distribute Per Scan    |
-|  Max 5 items                     |
-|  [-]  3  [+]                     |
-|  (1) (3) (5)                     |  <- presets capped at 5
-|  [Scan to Distribute 3 Items]    |
-+----------------------------------+
+Fixed flow:
+  activateCard succeeds
+    -> save creditLimit to lastCreditLimit state
+    -> invalidateQueries(['qr_cards'])
+    -> React re-render
+    -> CardStatusDisplay uses lastCreditLimit (20)
+    -> shows 0/20
 ```
 
-### 6. Backend RPC Safety
-
-The existing RPC functions (`distribute_marketplace_items_batch`) already enforce the beneficiary credit limit server-side. The station scan limit is a UI-level constraint to reduce volunteer error. The backend remains the final enforcer for credit limits.
+### Changes Summary
+- Add `lastCreditLimit` state in EntranceZone
+- Capture `creditLimit` on activation success into `lastCreditLimit`
+- Pass `lastCreditLimit` to `CardStatusDisplay`
+- Make `creditLimit` a required prop on `CardStatusDisplay` (remove default `= 15`)
 
