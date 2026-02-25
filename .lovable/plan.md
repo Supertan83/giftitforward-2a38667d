@@ -1,55 +1,69 @@
 
 
-# Fix: Manually Added Family Members Missing from "Volunteers Added" Tab
+# Fix: Ensure All Beneficiary QR Cards Work at Marketplaces + Remove All Hardcoded Credit Limits
 
-## Problem
+## Problem 1: QR Cards Not Working at Marketplaces
 
-When an admin adds a family member via the "Volunteer QR Cards" viewer (using the + button), the backend creates the QR card but does **not** update the volunteer's `events_json` with the new dependent's name and type. Since every display surface ("Volunteers Added" tab, "Family Members" tab, certificate dialogs, export reports) reads family member names from `events_json.dependents`, the manually added family member either:
+The activation logic in `useSupabaseData.ts` (line 215-222) blocks cards that are `checked_out` with the message "This card has already been used today." However, the `auto-unblock-cards` edge function and `bulkUnblockPreviousDays` only reset cards from **previous days**. If a card was checked out at a prior event and never unblocked, it remains in `checked_out` status, making it unusable at the next marketplace.
 
-- Does not appear at all in "Volunteers Added", or
-- Shows as a generic "Family Member 1" / "Family of [Name]" label instead of the actual name entered by the admin.
+Additionally, the RPC functions (`distribute_marketplace_item`, `return_marketplace_item`) throw "Card not found" if the card exists but the `ilike` query doesn't match due to encoding or whitespace differences in scanned QR data (leading/trailing whitespace).
 
-Family members arriving via webhook already have their names stored in `events_json.dependents`, so they display correctly. The gap is exclusively in the manual add path.
+### Fixes
 
-## Solution
+**File: `src/hooks/useSupabaseData.ts` (activateCard mutation, ~line 190-260)**
+- When a card is `checked_out`, instead of blocking it, automatically reset it (set to `inactive` first) and then activate it. This way, any printed/registered QR card will always work regardless of its prior state.
+- Add `.trim()` to the scanned `uniqueId` before querying, to handle whitespace in QR scans.
 
-Update the `add_family_member` action in the backend to also persist the new dependent into the volunteer's `events_json` array. This ensures a single source of truth and makes the name immediately visible across all UI surfaces without any frontend changes.
+**File: `src/hooks/useSupabaseData.ts` (findCardByUniqueId, ~line 171)**
+- Add `.trim()` to the uniqueId parameter.
 
-## Technical Details
+**Database RPCs: `distribute_marketplace_item`, `distribute_marketplace_items_batch`, `return_marketplace_item`, `return_marketplace_items_batch`**
+- Add `TRIM()` to the `p_unique_id` parameter before the `ilike` comparison, to handle any whitespace in scanned data.
 
-### File: `supabase/functions/webhook-receiver/index.ts` (line ~4797-4812)
+---
 
-After creating the family QR card, add logic to update the volunteer's `events_json`:
+## Problem 2: Hardcoded Credit Limit of 15
 
-1. Fetch the volunteer's current `events_json` from `pending_volunteers`.
-2. If `events_json` exists and has at least one event entry, append the new dependent (`{ name, type, gender }`) to the first event's `dependents` array (deduplicating by normalized name).
-3. If `events_json` is empty/null, create a minimal structure with the dependent so name resolution still works.
-4. Update `pending_volunteers.events_json` with the modified array.
+Multiple locations still use `15` as a hardcoded fallback or display value instead of reading from marketplace data. Every one of these must be changed.
 
-```text
-Current flow:
-  1. Create QR card in volunteer_qr_cards  -->  DONE
-  2. Return success
+### Locations and Fixes
 
-Updated flow:
-  1. Create QR card in volunteer_qr_cards  -->  DONE
-  2. Fetch volunteer's events_json
-  3. Append { name, type, gender } to dependents array (deduplicate)
-  4. Update pending_volunteers.events_json
-  5. Return success
-```
+| File | Line(s) | Current | Fix |
+|------|---------|---------|-----|
+| `src/components/CardStatusDisplay.tsx` | 19, 54 | `creditBalance / 15`, `{card.creditBalance}/15` | Accept `creditLimit` prop, use it instead of 15 |
+| `src/components/zones/StatsDashboardZone.tsx` | 66 | `15 - (c.creditBalance \|\| 0)` | Look up each card's marketplace credit limit from the marketplaces array |
+| `src/store/useAppStore.ts` | 70, 97, 130, 167, 176, 212 | Multiple hardcoded `15` references | Replace with configurable limit (the store is mainly for mock/demo mode, but should still be consistent) |
+| `src/hooks/useSupabaseData.ts` | 279 | `let creditLimitValue = 15` (fallback in old `distributeItem`) | Already fetches from DB -- just the fallback value; keep as-is since the DB RPCs are the actual path used |
+| Database RPCs | `v_limit := 15` fallback | When marketplace not found | This fallback is acceptable as a safety net since the marketplace should always exist |
 
-### Why this is sufficient
+### Detailed Changes
 
-- All UI components (`PendingVolunteers.tsx`, `FamilyMembersTab.tsx`, `VolunteerQRCardsViewer.tsx`, export logic) already read from `events_json.dependents` and resolve names using index-based matching against family QR card IDs.
-- By persisting the dependent data at the source, no frontend changes are needed -- existing name resolution logic will pick up the new entry automatically.
-- The deduplication uses the same normalized-name matching already used elsewhere (lowercase comparison, substring check).
+**File: `src/components/CardStatusDisplay.tsx`**
+- Add `creditLimit?: number` prop (default 15 for backward compatibility)
+- Line 19: `(card.creditBalance / (creditLimit || 15)) * 100`
+- Line 54: `{card.creditBalance}/{creditLimit || 15}`
 
-### Scope
+**File: `src/components/zones/EntranceZone.tsx`**
+- Pass `creditLimit` to `CardStatusDisplay` when rendering the last activated card
 
-| File | Change |
-|------|--------|
-| `supabase/functions/webhook-receiver/index.ts` | After QR card creation in `add_family_member` handler (~line 4812), add 15-20 lines to fetch and update `events_json` with the new dependent |
+**File: `src/components/zones/StatsDashboardZone.tsx`**
+- Line 66: Instead of hardcoded `15`, look up each card's marketplace credit limit:
+  - Build a map of marketplace ID to credit limit from the `marketplaces` array
+  - For each card, use `marketplaceLimitMap[card.marketplaceId] || 15`
 
-This is a backend-only fix with no migration and no frontend changes required.
+**File: `src/store/useAppStore.ts`**
+- This is the mock/demo data store. Update the hardcoded `15` values to use a configurable constant or read from marketplace context. At minimum, define `const DEFAULT_CREDIT_LIMIT = 15` at the top and use it consistently, making it clear this is a fallback value.
+
+---
+
+## Summary of All Changes
+
+| File | Type | Description |
+|------|------|-------------|
+| `src/hooks/useSupabaseData.ts` | Bug fix | Auto-reset `checked_out` cards on activation instead of blocking; add `.trim()` to scanned IDs |
+| `src/components/CardStatusDisplay.tsx` | Remove hardcode | Accept and use dynamic `creditLimit` prop |
+| `src/components/zones/EntranceZone.tsx` | Pass prop | Pass `creditLimit` to `CardStatusDisplay` |
+| `src/components/zones/StatsDashboardZone.tsx` | Remove hardcode | Use per-marketplace credit limits for stats calculations |
+| `src/store/useAppStore.ts` | Remove hardcode | Use `DEFAULT_CREDIT_LIMIT` constant instead of scattered `15` values |
+| Database migration | Bug fix | Add `TRIM()` to all 4 distribution/return RPCs for the `p_unique_id` parameter |
 
