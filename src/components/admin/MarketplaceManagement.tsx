@@ -84,6 +84,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     startTime: string;
     endTime: string;
     beneficiaryCreditLimit: number;
+    maxItemsPerScan: number;
   } | null>(null);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
@@ -93,6 +94,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [beneficiaryCreditLimit, setBeneficiaryCreditLimit] = useState<number>(15);
+  const [maxItemsPerScan, setMaxItemsPerScan] = useState<number>(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: marketplaces = [], isLoading } = useMarketplaces();
@@ -189,7 +191,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       outreachPartner: marketplace.outreach_partner || '',
       startTime: marketplace.start_time || '',
       endTime: marketplace.end_time || '',
-      beneficiaryCreditLimit: marketplace.beneficiary_credit_limit ?? 15,
+    beneficiaryCreditLimit: marketplace.beneficiary_credit_limit ?? 15,
+    maxItemsPerScan: (marketplace as any).max_items_per_scan ?? 1,
     });
     setShowEditModal(true);
   };
@@ -246,6 +249,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         start_time: editingMarketplace.startTime || null,
         end_time: editingMarketplace.endTime || null,
         beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit,
+        max_items_per_scan: editingMarketplace.maxItemsPerScan,
         ...(statusLockedByAdmin !== undefined && { status_locked_by_admin: statusLockedByAdmin }),
       });
       toast({
@@ -298,6 +302,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         start_time: startTime || null,
         end_time: endTime || null,
         beneficiary_credit_limit: beneficiaryCreditLimit,
+        max_items_per_scan: maxItemsPerScan,
       });
       toast({
         title: 'Marketplace Created',
@@ -312,6 +317,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       setStartTime('');
       setEndTime('');
       setBeneficiaryCreditLimit(15);
+      setMaxItemsPerScan(1);
     } catch (error) {
       toast({
         title: 'Failed to Create Marketplace',
@@ -724,6 +730,22 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="max_items_per_scan">Max Items Per Scan</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="max_items_per_scan"
+                  type="number"
+                  min={1}
+                  max={beneficiaryCreditLimit}
+                  value={maxItemsPerScan}
+                  onChange={(e) => setMaxItemsPerScan(Math.min(parseInt(e.target.value) || 1, beneficiaryCreditLimit))}
+                />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">items/scan</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Set to 1 to hide quantity selector for volunteers. Range: 1-{beneficiaryCreditLimit}</p>
+            </div>
+
+            <div className="space-y-2">
               <Label>Status</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger>
@@ -865,6 +887,22 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
                 </div>
                 <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-max_items_per_scan">Max Items Per Scan</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="edit-max_items_per_scan"
+                    type="number"
+                    min={1}
+                    max={editingMarketplace.beneficiaryCreditLimit}
+                    value={editingMarketplace.maxItemsPerScan}
+                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, maxItemsPerScan: Math.min(parseInt(e.target.value) || 1, editingMarketplace.beneficiaryCreditLimit) })}
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">items/scan</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Set to 1 to hide quantity selector for volunteers. Range: 1-{editingMarketplace.beneficiaryCreditLimit}</p>
               </div>
 
               <div className="space-y-2">

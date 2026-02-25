@@ -970,6 +970,7 @@ export type Database = {
           id: string
           location: string | null
           manual_beneficiary_count: number | null
+          max_items_per_scan: number
           name: string
           outreach_partner: string | null
           start_time: string | null
@@ -998,6 +999,7 @@ export type Database = {
           id?: string
           location?: string | null
           manual_beneficiary_count?: number | null
+          max_items_per_scan?: number
           name: string
           outreach_partner?: string | null
           start_time?: string | null
@@ -1026,6 +1028,7 @@ export type Database = {
           id?: string
           location?: string | null
           manual_beneficiary_count?: number | null
+          max_items_per_scan?: number
           name?: string
           outreach_partner?: string | null
           start_time?: string | null

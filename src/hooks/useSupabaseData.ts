@@ -1273,6 +1273,7 @@ export const useCreateMarketplace = () => {
       start_time?: string | null;
       end_time?: string | null;
       beneficiary_credit_limit?: number;
+      max_items_per_scan?: number;
     }) => {
       const { error } = await supabase
         .from('marketplace_events')
@@ -1320,6 +1321,7 @@ export const useUpdateMarketplace = () => {
       start_time?: string | null;
       end_time?: string | null;
       beneficiary_credit_limit?: number;
+      max_items_per_scan?: number;
       status_locked_by_admin?: boolean;
     }) => {
       const { id, ...updates } = marketplace;
