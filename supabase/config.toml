@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.fix-ahlam-family-event]
 verify_jwt = false
+
+[functions.backup-table]
+verify_jwt = false
