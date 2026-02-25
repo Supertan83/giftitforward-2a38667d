@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { QRCard, ItemType, User, Transaction, TransactionType } from '@/types';
 import { mockQRCards, mockItemTypes, mockUser, mockAdmin } from '@/data/mockData';
 
+const DEFAULT_CREDIT_LIMIT = 15;
+
 interface AppState {
   // Auth
   currentUser: User | null;
@@ -67,7 +69,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updatedCard: QRCard = {
       ...card,
       status: 'active',
-      creditBalance: 15,
+      creditBalance: DEFAULT_CREDIT_LIMIT,
       totalItemsCollected: 0,
       transactions: [transaction],
     };
@@ -94,7 +96,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     
     if (card.creditBalance <= 0) {
-      return { success: false, message: 'LIMIT REACHED (0/15). No more items allowed.' };
+      return { success: false, message: `LIMIT REACHED (0/${DEFAULT_CREDIT_LIMIT}). No more items allowed.` };
     }
     
     const item = itemTypes.find(i => i.id === itemId);
@@ -127,7 +129,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     updatedItems[itemIndex] = { ...item, distributed: item.distributed + 1 };
     
     set({ qrCards: updatedCards, itemTypes: updatedItems });
-    return { success: true, message: `${item.name} distributed. Remaining: ${updatedCard.creditBalance}/15`, card: updatedCard };
+    return { success: true, message: `${item.name} distributed. Remaining: ${updatedCard.creditBalance}/${DEFAULT_CREDIT_LIMIT}`, card: updatedCard };
   },
   
   returnItem: (uniqueId, itemId) => {
@@ -164,7 +166,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     const updatedCard: QRCard = {
       ...card,
-      creditBalance: Math.min(card.creditBalance + 1, 15),
+      creditBalance: Math.min(card.creditBalance + 1, DEFAULT_CREDIT_LIMIT),
       totalItemsCollected: card.totalItemsCollected - 1,
       transactions: [...card.transactions, transaction],
     };
@@ -173,7 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     updatedCards[cardIndex] = updatedCard;
     
     set({ qrCards: updatedCards });
-    return { success: true, message: `${item.name} returned. Credits restored: ${updatedCard.creditBalance}/15`, card: updatedCard };
+    return { success: true, message: `${item.name} returned. Credits restored: ${updatedCard.creditBalance}/${DEFAULT_CREDIT_LIMIT}`, card: updatedCard };
   },
   
   checkoutCard: (uniqueId) => {
@@ -209,7 +211,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ qrCards: updatedCards });
     return { 
       success: true, 
-      message: `Card reset. Collected ${finalCard.totalItemsCollected}/15 items.`, 
+      message: `Card reset. Collected ${finalCard.totalItemsCollected}/${DEFAULT_CREDIT_LIMIT} items.`, 
       card: finalCard 
     };
   },
