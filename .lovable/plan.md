@@ -1,68 +1,52 @@
 
 
-# Veritabanı Tam Yedekleme (Full Backup) Aracı
+# Marketplace Zone: Volunteer Usability Improvements
 
-## Ne Yapılacak
+## Problems Identified
 
-Admin paneline bir "Database Backup" bölümü eklenecek. Bu araç tüm tabloları tek tek veya toplu olarak JSON/CSV formatında indirmenizi sağlayacak.
+1. **+/- buttons too small** (48x48px) for rapid outdoor use under time pressure
+2. **Label "Quantity per scan"** is unclear to volunteers -- client requests "Items Distributed Per Scan"
+3. **Error/warning feedback disappears after 1.5 seconds** -- too fast to read and act on
+4. **No quick-select shortcuts** -- volunteers must tap +/- repeatedly to reach common quantities like 3, 5, 10
 
-## Tablolar ve Boyutları
+## Changes
 
-| Tablo | Kayıt | Not |
-|-------|-------|-----|
-| surpluss_api_audit_log | 343,737 | Cok buyuk -- parcali indirilecek |
-| transactions | 10,310 | |
-| qr_cards | 2,100 | |
-| email_send_logs | 1,269 | |
-| webhook_events | 724 | |
-| volunteer_qr_cards | 722 | |
-| email_campaign_recipients | 680 | |
-| pending_volunteers | 495 | |
-| user_roles | 485 | |
-| item_types | 337 | |
-| surpluss_allocation_sync | 317 | |
-| external_items | 313 | |
-| volunteer_attendance | 175 | |
-| volunteer_surveys | 132 | |
-| marketplace_item_allocations | 118 | |
-| + 25 kucuk tablo | <100 | |
+### 1. Larger +/- Buttons and Quick-Select Presets
 
-## Yaklasim
+**File:** `src/components/zones/MarketplaceZone.tsx`
 
-Buyuk tablolari (1000+ satir) parcali olarak cekmek icin bir **edge function** olusturulacak. Kucuk tablolar dogrudan istemci tarafindan cekilecek.
+- Increase +/- button size from `h-12 w-12` to `h-16 w-16` with larger icons (`w-7 h-7`)
+- Add preset quick-select buttons (1, 3, 5, 10) as large tappable chips below the +/- row, so volunteers can jump to common quantities in one tap instead of repeated pressing
+- Change label from "Quantity per scan" to dynamic: **"Items to Distribute Per Scan"** or **"Items to Return Per Scan"** depending on the active mode
+- Increase the quantity number font size from `text-4xl` to `text-5xl` for better outdoor visibility
 
-### 1. Edge Function: `backup-table`
+### 2. Longer Error/Warning Feedback Duration
 
-- Admin yetkisi kontrol eder
-- Tablo adi, offset ve limit parametreleri alir
-- Veriyi JSON olarak dondurur
-- 1000'er satirlik parcalar halinde calisir
+**File:** `src/components/FeedbackOverlay.tsx`
 
-### 2. Admin UI: `DatabaseBackup` Componenti
+- Change the auto-dismiss timeout based on feedback type:
+  - **Success**: keep at 1.5s (fast confirmation is fine)
+  - **Error**: increase to 3.5s (give volunteers time to read the limit message)
+  - **Warning**: increase to 3s (moderate pause for actionable warnings)
+- This requires no UI change -- just adjusting the `setTimeout` delay based on `type`
 
-- Admin dashboard'a yeni bir "Database Backup" bolumu eklenir
-- Tum tablolar listelenir (satir sayilariyla)
-- "Tumu Indir (ZIP)" butonu: Tum tablolari JSON olarak indirir, tek bir ZIP dosyasina paketler (jszip kutuphanesi zaten yuklu)
-- "Tek Tablo Indir" butonu: Secilen tabloyu CSV veya JSON olarak indirir
-- Buyuk tablolar icin ilerleme cubugu gosterilir
+### 3. Summary of UI Changes
 
-### 3. Dosyalar
+| Element | Before | After |
+|---------|--------|-------|
+| +/- button size | 48x48px | 64x64px |
+| +/- icon size | 20px | 28px |
+| Quantity label | "Quantity per scan" | "Items to Distribute Per Scan" / "Items to Return Per Scan" |
+| Quick presets | None | 1, 3, 5, 10 chips |
+| Quantity font | text-4xl | text-5xl |
+| Error dismiss | 1.5s | 3.5s |
+| Warning dismiss | 1.5s | 3s |
+| Success dismiss | 1.5s | 1.5s (unchanged) |
 
-| Dosya | Degisiklik |
-|-------|-----------|
-| `supabase/functions/backup-table/index.ts` | Yeni -- tablo verilerini parcali olarak donduren edge function |
-| `src/components/admin/DatabaseBackup.tsx` | Yeni -- backup UI componenti |
-| `src/components/admin/AdminDashboard.tsx` | Guncelleme -- Database Backup bolumu eklenir |
+### Technical Details
 
-### 4. Guvenlik
-
-- Edge function admin rolu kontrol eder
-- Sadece `public` sema tablolari izin verilir
-- Service role key ile veri cekilir (RLS bypass)
-
-### 5. Indirme Formati
-
-- ZIP dosyasi icinde her tablo ayri bir JSON dosyasi olarak yer alir
-- Dosya adi: `backup-YYYY-MM-DD/tablo_adi.json`
-- Buyuk tablolar (surpluss_api_audit_log gibi) 5000'er satirlik parcalarla cekilip birlestirilir
+- Quick-select presets will be filtered to only show values <= `creditLimit`
+- Active preset gets highlighted with primary color
+- Presets are rendered as a row of rounded pill buttons with `min-h-[44px]` for touch targets
+- FeedbackOverlay receives `type` prop already, so timeout logic is a simple conditional
 
