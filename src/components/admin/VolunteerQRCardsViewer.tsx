@@ -105,6 +105,7 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
   const [selectedVolunteerId, setSelectedVolunteerId] = useState<string | null>(null);
   const [newFamilyMemberName, setNewFamilyMemberName] = useState('');
   const [newFamilyMemberType, setNewFamilyMemberType] = useState<'adult' | 'children'>('adult');
+  const [newFamilyMemberGender, setNewFamilyMemberGender] = useState<string>('');
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [cardsToPrint, setCardsToPrint] = useState<VolunteerQRCard[]>([]);
@@ -131,7 +132,7 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
   });
 
   const addFamilyMemberMutation = useMutation({
-    mutationFn: async ({ volunteerId, name, type }: { volunteerId: string; name: string; type: string }) => {
+    mutationFn: async ({ volunteerId, name, type, gender }: { volunteerId: string; name: string; type: string; gender?: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
@@ -139,7 +140,7 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
         body: {
           action: 'add_family_member',
           volunteer_id: volunteerId,
-          family_member: { name, type }
+          family_member: { name, type, gender: gender || null }
         }
       });
 
@@ -153,6 +154,7 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
       setShowAddFamilyDialog(false);
       setNewFamilyMemberName('');
       setNewFamilyMemberType('adult');
+      setNewFamilyMemberGender('');
       toast({
         title: 'Family Member Added',
         description: `QR card ${data.qr_card_id} created for ${newFamilyMemberName}`,
@@ -235,7 +237,8 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
     addFamilyMemberMutation.mutate({
       volunteerId: selectedVolunteerId,
       name: newFamilyMemberName.trim(),
-      type: newFamilyMemberType
+      type: newFamilyMemberType,
+      gender: newFamilyMemberGender || undefined,
     });
   };
 
@@ -612,6 +615,19 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
                 <SelectContent>
                   <SelectItem value="adult">Adult</SelectItem>
                   <SelectItem value="children">Child</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="familyMemberGender">Gender (optional)</Label>
+              <Select value={newFamilyMemberGender} onValueChange={setNewFamilyMemberGender}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
                 </SelectContent>
               </Select>
             </div>
