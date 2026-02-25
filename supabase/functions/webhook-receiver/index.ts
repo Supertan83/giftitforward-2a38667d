@@ -4814,6 +4814,7 @@ serve(async (req) => {
       console.log(`Created family QR card ${familyQrCardId} for ${family_member.name} (volunteer ${volunteer_id})`);
 
       // Persist the new dependent into events_json so all UI surfaces show the name
+      // This mirrors the webhook flow exactly: sets family-members-joining, counts, and index
       try {
         const { data: volData } = await supabase
           .from('pending_volunteers')
@@ -4821,10 +4822,12 @@ serve(async (req) => {
           .eq('id', volunteer_id)
           .maybeSingle();
 
+        const familyIndex = familyCardCount + 1;
         const newDep = {
           name: family_member.name.trim(),
           type: family_member.type || 'adult',
           gender: family_member.gender || null,
+          index: familyIndex,
         };
         const newDepNameLower = newDep.name.toLowerCase();
 
@@ -4833,8 +4836,14 @@ serve(async (req) => {
           : [];
 
         if (eventsJson.length === 0) {
-          // Create a minimal event entry with the dependent
-          eventsJson = [{ dependents: [newDep] }];
+          // Create a minimal event entry with the dependent (mirrors webhook structure)
+          eventsJson = [{
+            'family-members-joining': 'Yes',
+            'number-of-adults': newDep.type === 'adult' ? 1 : 0,
+            'number-of-children': newDep.type === 'children' ? 1 : 0,
+            'total-attendees': 2,
+            dependents: [newDep],
+          }];
         } else {
           // Append to the first event's dependents (deduplicate by name)
           const deps: any[] = eventsJson[0].dependents || [];
@@ -4844,7 +4853,17 @@ serve(async (req) => {
           });
           if (!isDuplicate) {
             deps.push(newDep);
-            eventsJson[0] = { ...eventsJson[0], dependents: deps };
+            // Update metadata to match webhook structure
+            const adultCount = deps.filter((d: any) => d.type === 'adult').length;
+            const childCount = deps.filter((d: any) => d.type === 'children' || d.type === 'child').length;
+            eventsJson[0] = {
+              ...eventsJson[0],
+              'family-members-joining': 'Yes',
+              'number-of-adults': adultCount,
+              'number-of-children': childCount,
+              'total-attendees': 1 + adultCount + childCount,
+              dependents: deps,
+            };
           }
         }
 
@@ -4853,7 +4872,31 @@ serve(async (req) => {
           .update({ events_json: eventsJson })
           .eq('id', volunteer_id);
 
-        console.log(`Updated events_json for volunteer ${volunteer_id} with dependent ${newDep.name}`);
+        console.log(`Updated events_json for volunteer ${volunteer_id} with dependent ${newDep.name} (index ${familyIndex})`);
+
+        // Also sync to event_dependents table if registration_events exist
+        try {
+          const { data: regEvents } = await supabase
+            .from('registration_events')
+            .select('id')
+            .eq('registration_id', volunteer_id)
+            .limit(1);
+
+          if (regEvents && regEvents.length > 0) {
+            await supabase
+              .from('event_dependents')
+              .insert({
+                registration_event_id: regEvents[0].id,
+                name: newDep.name,
+                dependent_type: newDep.type,
+                gender: newDep.gender,
+                dependent_index: familyIndex,
+              });
+            console.log(`Synced dependent ${newDep.name} to event_dependents table`);
+          }
+        } catch (depSyncError) {
+          console.error('Non-fatal: failed to sync to event_dependents:', depSyncError);
+        }
       } catch (ejError) {
         console.error('Non-fatal: failed to update events_json:', ejError);
       }

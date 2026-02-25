@@ -78,14 +78,14 @@ serve(async (req) => {
 
       if (familyCards.length === 0) continue;
 
-      // If volunteer has 0 dependents, ALL family cards are erroneous
-      // Otherwise keep the earliest N cards (N = dependent count), delete the rest
-      const excess = dependents.length === 0 
-        ? familyCards 
-        : (familyCards.length <= dependents.length ? [] : familyCards.slice(dependents.length));
+      // Only flag as excess if card count exceeds dependent count
+      // Never delete a card whose name is found in events_json
+      if (familyCards.length <= dependents.length) continue;
+
+      const excess = familyCards.slice(dependents.length);
       
-      // Delete inactive or checked_out cards (skip checked_in -- actively in use)
-      const toDelete = excess.filter(c => c.status !== 'checked_in');
+      // Only delete truly orphaned inactive cards (not checked_in or checked_out)
+      const toDelete = excess.filter(c => c.status === 'inactive');
 
       if (toDelete.length === 0) continue;
 
