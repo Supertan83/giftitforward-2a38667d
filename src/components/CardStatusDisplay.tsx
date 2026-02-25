@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils';
 interface CardStatusDisplayProps {
   card: QRCard;
   compact?: boolean;
-  creditLimit?: number;
+  creditLimit: number;
 }
 
-export const CardStatusDisplay = ({ card, compact = false, creditLimit = 15 }: CardStatusDisplayProps) => {
+export const CardStatusDisplay = ({ card, compact = false, creditLimit }: CardStatusDisplayProps) => {
   const statusConfig = {
     ready: { label: 'Ready', color: 'bg-muted text-muted-foreground' },
     active: { label: 'Active', color: 'bg-success-soft text-success' },
