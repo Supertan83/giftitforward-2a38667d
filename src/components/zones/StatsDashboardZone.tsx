@@ -62,8 +62,13 @@ export const StatsDashboardZone = () => {
       ? Math.round((totalItemsDistributed / allProcessedCards.length) * 10) / 10
       : 0;
 
-    // Credits used (15 initial - remaining balance)
-    const totalCreditsUsed = allProcessedCards.reduce((sum, c) => sum + (15 - (c.creditBalance || 0)), 0);
+    // Credits used (marketplace limit - remaining balance)
+    const marketplaceLimitMap: Record<string, number> = {};
+    marketplaces.forEach(m => { marketplaceLimitMap[m.id] = m.beneficiary_credit_limit ?? 15; });
+    const totalCreditsUsed = allProcessedCards.reduce((sum, c) => {
+      const limit = (c.marketplaceId && marketplaceLimitMap[c.marketplaceId]) || 15;
+      return sum + (limit - (c.creditBalance || 0));
+    }, 0);
 
     // Gender breakdown
     const genderBreakdown = {
