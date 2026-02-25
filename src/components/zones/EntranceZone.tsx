@@ -22,6 +22,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
     creditLimit?: number;
   } | null>(null);
   const [lastActivatedCard, setLastActivatedCard] = useState<QRCard | null>(null);
+  const [lastCreditLimit, setLastCreditLimit] = useState<number>(15);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: qrCards = [], isLoading } = useQRCards();
@@ -85,6 +86,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
           transactions: []
         };
         setLastActivatedCard(card);
+        setLastCreditLimit(creditLimit);
         setFeedback({
           type: 'success',
           title: 'Card Activated!',
@@ -212,7 +214,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
             <h3 className="text-sm font-medium text-muted-foreground mb-2">
               Last Activated
             </h3>
-            <CardStatusDisplay card={lastActivatedCard} creditLimit={creditLimit} />
+            <CardStatusDisplay card={lastActivatedCard} creditLimit={lastCreditLimit} />
           </motion.div>
         )}
       </AnimatePresence>
