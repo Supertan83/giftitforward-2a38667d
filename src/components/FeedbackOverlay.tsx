@@ -48,12 +48,13 @@ export const FeedbackOverlay = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      onClick={() => onComplete?.()}
       onAnimationComplete={() => {
         const duration = type === 'error' ? 3500 : type === 'warning' ? 3000 : 1500;
         setTimeout(() => onComplete?.(), duration);
       }}
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center',
+        'fixed inset-0 z-50 flex flex-col items-center justify-center cursor-pointer',
         config.bg
       )}
     >
@@ -106,6 +107,14 @@ export const FeedbackOverlay = ({
           </motion.div>
         )}
       </motion.div>
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.6 }}
+        transition={{ delay: 0.5 }}
+        className="absolute bottom-8 text-sm"
+      >
+        Tap anywhere to dismiss
+      </motion.p>
     </motion.div>
   );
 };

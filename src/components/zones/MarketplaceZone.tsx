@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, QrCode, RotateCcw, Package, Loader2, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     creditLimit?: number;
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-
+  const lastScanRef = useRef<{ code: string; timestamp: number } | null>(null);
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(selectedMarketplaceId || undefined);
   const { data: trueDistributionCount = 0, isLoading: loadingCount } = useMarketplaceDistributionCount(selectedMarketplaceId || undefined);
   const { distributeItemSimple, returnItemSimple, distributeItemBatch, returnItemBatch } = useCardOperations();
@@ -48,6 +48,17 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
     
+    // Duplicate scan guard: ignore same card within 5 seconds
+    const now = Date.now();
+    if (lastScanRef.current && lastScanRef.current.code === code && now - lastScanRef.current.timestamp < 5000) {
+      setFeedback({
+        type: 'warning',
+        title: 'Already Scanned',
+        subtitle: 'This card was just processed. Please wait.',
+      });
+      return;
+    }
+
     if (!selectedMarketplaceId) {
       setFeedback({
         type: 'warning',
@@ -58,6 +69,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     }
 
     setIsProcessing(true);
+    lastScanRef.current = { code, timestamp: now };
 
     try {
       if (mode === 'distribute') {

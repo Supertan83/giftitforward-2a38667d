@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogIn, QrCode, Users, Scan, Loader2, MapPin, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
   const [lastActivatedCard, setLastActivatedCard] = useState<QRCard | null>(null);
   const [lastCreditLimit, setLastCreditLimit] = useState<number>(15);
   const [isProcessing, setIsProcessing] = useState(false);
+  const lastScanRef = useRef<{ code: string; timestamp: number } | null>(null);
 
   const { data: qrCards = [], isLoading } = useQRCards();
   const { activateCard } = useCardOperations();
@@ -67,8 +68,20 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
+
+    // Duplicate scan guard: ignore same card within 5 seconds
+    const now = Date.now();
+    if (lastScanRef.current && lastScanRef.current.code === code && now - lastScanRef.current.timestamp < 5000) {
+      setFeedback({
+        type: 'warning',
+        title: 'Already Scanned',
+        subtitle: 'This card was just processed. Please wait.',
+      });
+      return;
+    }
+
     setIsProcessing(true);
-    
+    lastScanRef.current = { code, timestamp: now };
     try {
       const result = await activateCard.mutateAsync({
         uniqueId: code,
