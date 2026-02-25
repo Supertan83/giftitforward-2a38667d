@@ -64,6 +64,7 @@ export const useQRCards = () => {
 
   const query = useQuery({
     queryKey: ['qr_cards'],
+    staleTime: 30000, // 30s - reduce re-fetch frequency under load
     queryFn: async (): Promise<QRCard[]> => {
       const allData: any[] = [];
       const pageSize = 1000;
@@ -581,6 +582,7 @@ export const useCardOperations = () => {
       if (error) throw new SafeError(error.message);
       return data as { creditBalance: number; cardId: string };
     },
+    retry: 1,
     onSuccess: () => {
       // Non-blocking background refresh of allocations
       queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
@@ -599,6 +601,7 @@ export const useCardOperations = () => {
       if (error) throw new SafeError(error.message);
       return data as { creditBalance: number; cardId: string };
     },
+    retry: 1,
     onSuccess: () => {
       // Non-blocking background refresh of allocations
       queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
@@ -618,6 +621,7 @@ export const useCardOperations = () => {
       if (error) throw new SafeError(error.message);
       return data as { creditBalance: number; cardId: string; quantity: number };
     },
+    retry: 1,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
     }
@@ -636,6 +640,7 @@ export const useCardOperations = () => {
       if (error) throw new SafeError(error.message);
       return data as { creditBalance: number; cardId: string; quantity: number };
     },
+    retry: 1,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace_allocations'] });
     }
