@@ -1,47 +1,92 @@
 
 
-## Bug: Credit Display Mismatch After Check-In
+## Bug: Unclear Error When Quantity Exceeds Remaining Credits
 
 ### Problem
-When a beneficiary card is activated at the Entrance Zone, the "Last Activated" card shows `0/15` instead of `0/20` (the correct marketplace credit limit). The main scan prompt correctly shows "activate with 20 credits", proving the marketplace credit limit IS 20 -- but the card display below falls back to 15.
+When a volunteer selects quantity 3 but the beneficiary only has 2 credits remaining, the system shows **"Limit Reached! Maximum items already collected. 0/20"** -- which is confusing and incorrect. The "0/20" comes from hardcoded logic in the error handler that always displays `creditLimit - creditLimit = 0`.
 
 ### Root Cause
-After card activation, `invalidateQueries(['qr_cards'])` fires, causing a React re-render. During this transient state, `selectedMarketplace` can briefly become `undefined`, and the fallback `?? 15` kicks in for `creditLimit`. Since `CardStatusDisplay` reads `creditLimit` reactively (not a captured snapshot), it picks up the fallback value of 15.
+Two issues working together:
 
-### Fix (2 files)
+1. **Frontend error handler (MarketplaceZone.tsx, line 112-118)**: When the backend returns a "LIMIT" error, the UI sets `credits: creditLimit` and `creditLimit: creditLimit`. The FeedbackOverlay then calculates `creditLimit - credits = 0`, always showing "0/20 Credits Remaining" regardless of actual balance.
 
-**1. `src/components/zones/EntranceZone.tsx`**
-- Store the credit limit alongside the last activated card in state, so the display uses the value captured at activation time rather than the live reactive value.
-- Add a `lastCreditLimit` state variable (e.g., `useState<number>(15)`)
-- When activation succeeds, save `creditLimit` into `lastCreditLimit`
-- Pass `lastCreditLimit` to `CardStatusDisplay` instead of the reactive `creditLimit`
+2. **Backend RPCs**: The batch RPC error message includes the actual numbers (`Would exceed maximum (18 + 3 > 20)`) but the frontend ignores them and shows a generic message.
 
-**2. `src/components/CardStatusDisplay.tsx`**
-- No functional change needed -- it already accepts `creditLimit` as a prop. But we will remove the default value of `15` and make it required, so future callers are forced to pass the correct value explicitly.
+### Fix (2 changes)
+
+**1. Backend RPCs -- Improve error messages and return remaining credits**
+
+Update both `distribute_marketplace_item` (single) and `distribute_marketplace_items_batch` to return a clearer error that includes the remaining credits:
+
+- Single: Change `LIMIT REACHED (%/%). Maximum items already collected.` to include remaining info
+- Batch: Change error to clearly state: `LIMIT: Selected quantity (3) exceeds remaining credits (2). Maximum allowed: 20.`
+
+**2. Frontend (MarketplaceZone.tsx) -- Parse actual values from error and show clear message**
+
+Update the error catch block to:
+- Parse remaining credits from the error message when available
+- Show the actual remaining credits in the feedback overlay (e.g., "18/20" not "0/20")
+- Display a clear subtitle: "Selected quantity (3) exceeds remaining credits (2)." instead of generic "Maximum items already collected."
 
 ### Technical Details
 
-```text
-Current flow (buggy):
-  activateCard succeeds
-    -> invalidateQueries(['qr_cards'])
-    -> React re-render
-    -> marketplaces data temporarily undefined
-    -> creditLimit = undefined ?? 15
-    -> CardStatusDisplay shows 0/15
+**Backend SQL changes** (database migration):
 
-Fixed flow:
-  activateCard succeeds
-    -> save creditLimit to lastCreditLimit state
-    -> invalidateQueries(['qr_cards'])
-    -> React re-render
-    -> CardStatusDisplay uses lastCreditLimit (20)
-    -> shows 0/20
+For `distribute_marketplace_items_batch`:
+```sql
+-- Replace line 53:
+RAISE EXCEPTION 'LIMIT: Selected quantity (%) exceeds remaining credits (%). Maximum: %.', 
+  p_quantity, v_limit - v_card.credit_balance, v_limit;
 ```
 
-### Changes Summary
-- Add `lastCreditLimit` state in EntranceZone
-- Capture `creditLimit` on activation success into `lastCreditLimit`
-- Pass `lastCreditLimit` to `CardStatusDisplay`
-- Make `creditLimit` a required prop on `CardStatusDisplay` (remove default `= 15`)
+For `distribute_marketplace_item` (single):
+```sql
+-- Replace line 42-43:
+RAISE EXCEPTION 'LIMIT REACHED (%/%). Maximum items already collected.', 
+  v_card.credit_balance, v_limit;
+```
+(Single stays the same since it only adds 1 -- the limit check is correct.)
 
+**Frontend changes** (MarketplaceZone.tsx error handler):
+
+```typescript
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Operation failed';
+  const isLimit = message.includes('LIMIT');
+  
+  if (isLimit) {
+    // Try to parse remaining credits from batch error
+    const remainingMatch = message.match(/remaining credits \((\d+)\)/);
+    const balanceMatch = message.match(/\((\d+)\/(\d+)\)/);
+    const remaining = remainingMatch 
+      ? parseInt(remainingMatch[1]) 
+      : balanceMatch 
+        ? parseInt(balanceMatch[2]) - parseInt(balanceMatch[1])
+        : 0;
+    
+    setFeedback({
+      type: 'error',
+      title: 'Limit Reached!',
+      subtitle: quantity > 1 
+        ? `Selected quantity (${quantity}) exceeds remaining credits (${remaining}).`
+        : 'Maximum items already collected.',
+      credits: creditLimit - remaining,
+      creditLimit,
+    });
+  } else {
+    setFeedback({
+      type: 'warning',
+      title: 'Action Failed',
+      subtitle: message,
+    });
+  }
+}
+```
+
+### Files Changed
+- **Database migration**: Update `distribute_marketplace_items_batch` RPC error message
+- **src/components/zones/MarketplaceZone.tsx**: Parse error details and display actual remaining credits
+
+### Result
+- Before: "Limit Reached! Maximum items already collected. 0/20"
+- After: "Limit Reached! Selected quantity (3) exceeds remaining credits (2). 2/20 Credits Remaining"
