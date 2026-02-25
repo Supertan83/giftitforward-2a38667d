@@ -1,90 +1,54 @@
 
 
-## Scale, Load, and Operational Stress -- Analysis and Fixes
+## Fix: Valid QR Cards Intermittently Return "Card Not Found"
 
-### Current State Assessment
+### Problem
+System-generated and registered QR cards intermittently fail lookup with "QR Card Not Found". Since these cards definitely exist in the database, the issue is invisible characters (newlines, carriage returns, control chars) appended by the camera-based QR scanner during decode. The backend RPCs already use SQL `TRIM()`, but direct Supabase client queries in `useSupabaseData.ts` do not sanitize the input.
 
-After reviewing the scanning pipeline end-to-end (QRScanner -> Zone handler -> RPC -> Feedback), here are the findings:
+### Root Cause
+- The `html5-qrcode` library occasionally appends `\n`, `\r`, or other control characters depending on scan angle/lighting
+- All 13 `.ilike('unique_id', uniqueId)` queries in `useSupabaseData.ts` pass the raw scanned value without sanitization
+- Manual entry in `QRScanner.tsx` only does `.trim()` (strips whitespace but not control characters)
+- This makes the bug intermittent: some scans decode cleanly, others don't
 
----
+### Fix (2 files, defense-in-depth)
 
-### 1. Rapid Scans -- MOSTLY SAFE, one risk
+**File 1: `src/components/QRScanner.tsx`** -- Sanitize at source
+- Add a `sanitizeQRCode` helper that strips whitespace AND control characters
+- Apply it to camera scan output (line 100: `onScan(decodedText)`)
+- Apply it to manual entry (line 185: `onScan(manualCode.trim())`)
 
-**What's good:**
-- The `isProcessingRef` lock in QRScanner prevents double-fires from a single scan
-- The 2-second cooldown with auto-close prevents accidental re-scans
-- Backend RPCs are atomic single-transaction operations (~200ms latency)
-- The scanner stops the camera immediately after reading a code
+**File 2: `src/hooks/useSupabaseData.ts`** -- Sanitize before every query
+- Add the same sanitization at the top of every mutation that receives a `uniqueId` or `cardUniqueId`
+- Covers all 13 `.ilike('unique_id', ...)` call sites as a safety net
 
-**Risk found -- Feedback Overlay blocks the next scan:**
-The `FeedbackOverlay` uses a fixed timeout (1.5s success, 3s warning, 3.5s error) during which the entire screen is covered. The volunteer CANNOT open the scanner again until the overlay dismisses. Under high throughput, this dead time adds up significantly.
+### Sanitization Logic
+```text
+const sanitize = (id: string) => id.trim().replace(/[\r\n\x00-\x1F\x7F]/g, '');
+```
+This strips: leading/trailing whitespace, carriage returns, newlines, null bytes, and all ASCII control characters (0x00-0x1F, 0x7F).
 
-**Fix:** Add a "tap to dismiss" capability to the FeedbackOverlay so volunteers can skip the animation and immediately start the next scan.
+### Defense-in-Depth Layers
+```text
+Layer 1: QRScanner.tsx        -- clean at scan source (camera + manual)
+Layer 2: useSupabaseData.ts   -- clean before every DB query (13 locations)
+Layer 3: SQL RPCs             -- TRIM() already in place (distribute/return RPCs)
+```
 
----
+### Affected Mutations (all in useSupabaseData.ts)
+1. `findCardByUniqueId` (line 176)
+2. `activateCard` (line 210)
+3. `distributeItem` (line 274)
+4. `returnItem` (line 362)
+5. `checkoutCard` (line 433)
+6. `unblockCard` (line 471)
+7. `deleteCard` lookup (line 680)
+8. `deleteCard` delete (line 694)
+9. `checkInVolunteer` (line 1469)
+10. `checkOutVolunteer` (line 1519)
+11. `assignVolunteerCard` (line 1606)
+12. `resetVolunteerCard` (line 1626)
 
-### 2. One Volunteer Managing Multiple Beneficiaries -- SAFE
-
-**What's good:**
-- Each scan is stateless from the volunteer's perspective -- scan, process, done
-- No session state ties a volunteer to a specific beneficiary
-- The atomic RPCs handle all validation server-side (card status, credit limits)
-
-**No fix needed** -- the architecture already supports this pattern well.
-
----
-
-### 3. Known Failure Points Under Load -- TWO ISSUES
-
-**Issue A: Full QR card list fetched on every invalidation**
-`useQRCards()` fetches ALL cards (paginated in 1000-row batches) and subscribes to realtime changes on the entire `qr_cards` table. Every scan by ANY volunteer triggers `invalidateQueries(['qr_cards'])`, causing every connected device to re-fetch potentially thousands of cards. With 10+ tablets scanning simultaneously, this creates a cascade of heavy queries.
-
-**Fix:** The Entrance Zone is the only zone that uses `useQRCards()` for stats. The Marketplace Zone does NOT need it -- it only uses RPCs. So the fix is:
-- Remove the realtime subscription from `useQRCards()` to prevent cascade re-fetches
-- Use a longer `staleTime` (e.g., 30s) so stats refresh less aggressively
-- The Marketplace Zone already correctly avoids this hook
-
-**Issue B: No offline/retry handling for network drops**
-Field conditions may have intermittent connectivity. Currently, if a scan's RPC call fails due to network timeout, the volunteer sees "Action Failed" with a generic message and must re-scan. There's no automatic retry.
-
-**Fix:** Add retry logic (1 retry with 2s delay) to the distribute/return mutations so transient network failures self-heal without volunteer intervention.
-
----
-
-### 4. Safeguards for High-Throughput -- ONE ADDITION
-
-**Missing safeguard: No duplicate scan protection at the application level**
-If the same card is scanned twice rapidly (e.g., volunteer accidentally taps scanner twice before cooldown kicks in), the backend handles it correctly (atomic RPC increments balance). But the volunteer sees two success overlays for what they intended as one action.
-
-**Fix:** Add a "last scanned card + timestamp" check in the zone handlers. If the same card ID is scanned within 5 seconds, show a warning instead of processing again.
-
----
-
-### Implementation Plan
-
-**File 1: `src/components/FeedbackOverlay.tsx`**
-- Add `onClick` handler to the overlay container that calls `onComplete()` immediately
-- Add a small "Tap to dismiss" hint text at the bottom
-
-**File 2: `src/components/zones/MarketplaceZone.tsx`**
-- Add `lastScanRef` (stores `{code, timestamp}`) to prevent duplicate scans within 5 seconds
-- Add retry logic: wrap RPC calls in a try-catch that retries once on network errors
-- Show "Already scanned" warning if same card scanned within 5s
-
-**File 3: `src/components/zones/EntranceZone.tsx`**
-- Same duplicate scan protection as MarketplaceZone
-- Same retry logic for the `activateCard` mutation
-
-**File 4: `src/hooks/useSupabaseData.ts`**
-- Add `staleTime: 30000` to `useQRCards` query to reduce re-fetch frequency
-- Add `retry: 1` to distribute/return mutations for transient failure recovery
-
-### Summary of Changes
-
-| Area | Risk Level | Fix |
-|---|---|---|
-| Feedback overlay blocks next scan | Medium | Tap to dismiss |
-| QR card list re-fetched on every scan | High under load | Add staleTime, reduce realtime cascade |
-| No network retry | Medium | Add 1 retry to mutations |
-| Duplicate rapid scans | Low | 5-second same-card guard |
+### No Database Changes Required
+The fix is purely frontend sanitization. No migrations or RPC changes needed.
 
