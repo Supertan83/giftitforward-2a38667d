@@ -62,8 +62,17 @@ export const StatsDashboardZone = () => {
       ? Math.round((totalItemsDistributed / allProcessedCards.length) * 10) / 10
       : 0;
 
-    // Credits used (15 initial - remaining balance)
-    const totalCreditsUsed = allProcessedCards.reduce((sum, c) => sum + (15 - (c.creditBalance || 0)), 0);
+    // Build marketplace credit limit lookup
+    const marketplaceLimitMap: Record<string, number> = {};
+    for (const m of marketplaces) {
+      marketplaceLimitMap[m.id] = m.beneficiary_credit_limit ?? 15;
+    }
+
+    // Credits used (marketplace limit - remaining balance)
+    const totalCreditsUsed = allProcessedCards.reduce((sum, c) => {
+      const limit = c.marketplaceId ? (marketplaceLimitMap[c.marketplaceId] ?? 15) : 15;
+      return sum + (limit - (c.creditBalance || 0));
+    }, 0);
 
     // Gender breakdown
     const genderBreakdown = {
@@ -86,7 +95,7 @@ export const StatsDashboardZone = () => {
       genderBreakdown,
       totalChildren,
     };
-  }, [qrCards, selectedMarketplaceId, allocations]);
+  }, [qrCards, selectedMarketplaceId, allocations, marketplaces]);
 
   // Calculate volunteer statistics
   const volunteerStats = useMemo(() => {
