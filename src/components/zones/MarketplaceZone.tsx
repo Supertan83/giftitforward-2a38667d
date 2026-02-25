@@ -109,13 +109,34 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Operation failed';
       const isLimit = message.includes('LIMIT');
-      setFeedback({
-        type: isLimit ? 'error' : 'warning',
-        title: isLimit ? 'Limit Reached!' : 'Action Failed',
-        subtitle: isLimit ? 'Maximum items already collected.' : message,
-        credits: isLimit ? creditLimit : undefined,
-        creditLimit: isLimit ? creditLimit : undefined,
-      });
+      
+      if (isLimit) {
+        // Parse remaining credits from batch error: "remaining credits (2)"
+        const remainingMatch = message.match(/remaining credits \((\d+)\)/);
+        // Parse from single error: "(18/20)"
+        const balanceMatch = message.match(/\((\d+)\/(\d+)\)/);
+        const remaining = remainingMatch 
+          ? parseInt(remainingMatch[1]) 
+          : balanceMatch 
+            ? parseInt(balanceMatch[2]) - parseInt(balanceMatch[1])
+            : 0;
+        
+        setFeedback({
+          type: 'error',
+          title: 'Limit Reached!',
+          subtitle: quantity > 1 
+            ? `Selected quantity (${quantity}) exceeds remaining credits (${remaining}).`
+            : 'Maximum items already collected.',
+          credits: creditLimit - remaining,
+          creditLimit,
+        });
+      } else {
+        setFeedback({
+          type: 'warning',
+          title: 'Action Failed',
+          subtitle: message,
+        });
+      }
     } finally {
       setIsProcessing(false);
       setQuantity(1); // Reset quantity after each scan
