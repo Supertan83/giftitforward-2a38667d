@@ -5,6 +5,10 @@ import { useEffect } from 'react';
 import { Json } from '@/integrations/supabase/types';
 import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
 
+/** Strip whitespace and ASCII control characters that QR scanners may append */
+const sanitizeQRCode = (code: string): string =>
+  code.trim().replace(/[\r\n\x00-\x1F\x7F]/g, '');
+
 // Extract unique dependents from volunteer's events_json for family card name mapping
 const extractFamilyDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
@@ -170,10 +174,11 @@ export const useCardOperations = () => {
   const queryClient = useQueryClient();
 
   const findCardByUniqueId = async (uniqueId: string): Promise<QRCard | null> => {
+    const cleanId = sanitizeQRCode(uniqueId);
     const { data, error } = await supabase
       .from('qr_cards')
       .select('*')
-      .ilike('unique_id', uniqueId)
+      .ilike('unique_id', cleanId)
       .maybeSingle();
 
     if (error || !data) return null;
@@ -203,11 +208,12 @@ export const useCardOperations = () => {
       };
       marketplaceId?: string;
     }) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       // Find card
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
         .select('*')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
@@ -267,11 +273,12 @@ export const useCardOperations = () => {
 
   const distributeItem = useMutation({
     mutationFn: async ({ uniqueId, itemId, itemName }: { uniqueId: string; itemId: string; itemName: string }) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       // Find card
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
         .select('*')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
@@ -356,10 +363,11 @@ export const useCardOperations = () => {
 
   const returnItem = useMutation({
     mutationFn: async ({ uniqueId, itemId, itemName }: { uniqueId: string; itemId: string; itemName: string }) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
         .select('*')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
@@ -427,10 +435,11 @@ export const useCardOperations = () => {
 
   const checkoutCard = useMutation({
     mutationFn: async (uniqueId: string) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
         .select('*')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
@@ -465,10 +474,11 @@ export const useCardOperations = () => {
   // Unblock card - reset to inactive and clear marketplace association
   const unblockCard = useMutation({
     mutationFn: async (uniqueId: string) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
         .select('*')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
@@ -673,11 +683,12 @@ export const useCardOperations = () => {
 
   const unregisterCard = useMutation({
     mutationFn: async (uniqueId: string) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       // First delete associated transactions
       const { data: card } = await supabase
         .from('qr_cards')
         .select('id')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (card) {
@@ -691,7 +702,7 @@ export const useCardOperations = () => {
       const { error } = await supabase
         .from('qr_cards')
         .delete()
-        .ilike('unique_id', uniqueId);
+        .ilike('unique_id', cleanId);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
@@ -1463,10 +1474,11 @@ export const useVolunteerCardOperations = () => {
       marketplaceId?: string;
       assignedZone?: 'entrance' | 'marketplace' | 'exit';
     }) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       const { data: card, error: findError } = await supabase
         .from('volunteer_qr_cards')
         .select('*')
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Volunteer card not found');
@@ -1503,6 +1515,7 @@ export const useVolunteerCardOperations = () => {
 
   const checkOutVolunteer = useMutation({
     mutationFn: async (uniqueId: string) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       const { data: card, error: findError } = await supabase
         .from('volunteer_qr_cards')
         .select(`
@@ -1516,7 +1529,7 @@ export const useVolunteerCardOperations = () => {
             events_json
           )
         `)
-        .ilike('unique_id', uniqueId)
+        .ilike('unique_id', cleanId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Volunteer card not found');
@@ -1600,10 +1613,11 @@ export const useVolunteerCardOperations = () => {
 
   const linkVolunteerToCard = useMutation({
     mutationFn: async ({ cardUniqueId, volunteerId }: { cardUniqueId: string; volunteerId: string }) => {
+      const cleanId = sanitizeQRCode(cardUniqueId);
       const { error } = await supabase
         .from('volunteer_qr_cards')
         .update({ volunteer_id: volunteerId })
-        .ilike('unique_id', cardUniqueId);
+        .ilike('unique_id', cleanId);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;
@@ -1615,6 +1629,7 @@ export const useVolunteerCardOperations = () => {
 
   const resetVolunteerCard = useMutation({
     mutationFn: async (uniqueId: string) => {
+      const cleanId = sanitizeQRCode(uniqueId);
       const { error } = await supabase
         .from('volunteer_qr_cards')
         .update({
@@ -1623,7 +1638,7 @@ export const useVolunteerCardOperations = () => {
           checked_out_at: null,
           marketplace_id: null
         })
-        .ilike('unique_id', uniqueId);
+        .ilike('unique_id', cleanId);
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
       return true;

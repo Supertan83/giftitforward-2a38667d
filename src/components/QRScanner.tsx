@@ -18,6 +18,10 @@ type ScannerStatus = 'idle' | 'requesting' | 'scanning' | 'error' | 'success' | 
 
 const COOLDOWN_DURATION = 2000; // 2 seconds cooldown
 
+/** Strip whitespace and ASCII control characters that QR scanners may append */
+const sanitizeQRCode = (code: string): string =>
+  code.trim().replace(/[\r\n\x00-\x1F\x7F]/g, '');
+
 export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScannerProps) => {
   const [manualCode, setManualCode] = useState('');
   const [status, setStatus] = useState<ScannerStatus>('idle');
@@ -97,7 +101,7 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
 
           // Submit and start cooldown - reduced delay for faster response
           setTimeout(() => {
-            onScan(decodedText);
+            onScan(sanitizeQRCode(decodedText));
             setStatus('cooldown');
             setCooldownProgress(0);
             
@@ -181,8 +185,9 @@ export const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: Q
   }, [useFrontCamera, stopScanner, startScanner]);
 
   const handleManualSubmit = useCallback(() => {
-    if (manualCode.trim()) {
-      onScan(manualCode.trim());
+    const cleaned = sanitizeQRCode(manualCode);
+    if (cleaned) {
+      onScan(cleaned);
       setManualCode('');
     }
   }, [manualCode, onScan]);
