@@ -212,21 +212,21 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
             className="bg-card border border-border rounded-xl p-4 mb-4 shadow-card"
           >
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3 text-center">
-              Quantity per scan
+              {mode === 'distribute' ? 'Items to Distribute Per Scan' : 'Items to Return Per Scan'}
             </p>
             <div className="flex items-center justify-center gap-4">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-12 w-12 rounded-full shrink-0"
+                className="h-16 w-16 rounded-full shrink-0"
                 onClick={() => setQuantity(q => Math.max(1, q - 1))}
                 disabled={quantity <= 1}
               >
-                <Minus className="w-5 h-5" />
+                <Minus className="w-7 h-7" />
               </Button>
               <div className="min-w-[4rem] text-center">
                 <span className={cn(
-                  "text-4xl font-bold tabular-nums",
+                  "text-5xl font-bold tabular-nums",
                   quantity > 1 ? "text-primary" : "text-foreground"
                 )}>
                   {quantity}
@@ -235,12 +235,29 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               <Button
                 variant="outline"
                 size="icon"
-                className="h-12 w-12 rounded-full shrink-0"
+                className="h-16 w-16 rounded-full shrink-0"
                 onClick={() => setQuantity(q => Math.min(creditLimit, q + 1))}
                 disabled={quantity >= creditLimit}
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-7 h-7" />
               </Button>
+            </div>
+            {/* Quick-select presets */}
+            <div className="flex items-center justify-center gap-2 mt-3">
+              {[1, 3, 5, 10].filter(v => v <= creditLimit).map(value => (
+                <button
+                  key={value}
+                  onClick={() => setQuantity(value)}
+                  className={cn(
+                    "min-h-[44px] min-w-[44px] px-4 rounded-full text-sm font-semibold transition-all",
+                    quantity === value
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {value}
+                </button>
+              ))}
             </div>
             {quantity > 1 && (
               <p className="text-xs text-primary text-center mt-2 font-medium">
