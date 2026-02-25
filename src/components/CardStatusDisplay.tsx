@@ -6,10 +6,9 @@ import { cn } from '@/lib/utils';
 interface CardStatusDisplayProps {
   card: QRCard;
   compact?: boolean;
-  creditLimit?: number;
 }
 
-export const CardStatusDisplay = ({ card, compact = false, creditLimit = 15 }: CardStatusDisplayProps) => {
+export const CardStatusDisplay = ({ card, compact = false }: CardStatusDisplayProps) => {
   const statusConfig = {
     ready: { label: 'Ready', color: 'bg-muted text-muted-foreground' },
     active: { label: 'Active', color: 'bg-success-soft text-success' },
@@ -17,8 +16,7 @@ export const CardStatusDisplay = ({ card, compact = false, creditLimit = 15 }: C
   };
 
   const status = statusConfig[card.status];
-  const effectiveLimit = creditLimit || 15;
-  const creditPercent = (card.creditBalance / effectiveLimit) * 100;
+  const creditPercent = (card.creditBalance / 15) * 100;
 
   if (compact) {
     return (
@@ -53,7 +51,7 @@ export const CardStatusDisplay = ({ card, compact = false, creditLimit = 15 }: C
       <div className="mb-4">
         <div className="flex justify-between text-sm mb-1">
           <span className="text-muted-foreground">Credits Remaining</span>
-          <span className="font-semibold">{card.creditBalance}/{effectiveLimit}</span>
+          <span className="font-semibold">{card.creditBalance}/15</span>
         </div>
         <div className="h-3 bg-muted rounded-full overflow-hidden">
           <motion.div

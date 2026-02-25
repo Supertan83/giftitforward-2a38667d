@@ -212,7 +212,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
             <h3 className="text-sm font-medium text-muted-foreground mb-2">
               Last Activated
             </h3>
-            <CardStatusDisplay card={lastActivatedCard} creditLimit={creditLimit} />
+            <CardStatusDisplay card={lastActivatedCard} />
           </motion.div>
         )}
       </AnimatePresence>

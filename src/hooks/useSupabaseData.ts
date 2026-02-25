@@ -169,11 +169,10 @@ export const useCardOperations = () => {
   const queryClient = useQueryClient();
 
   const findCardByUniqueId = async (uniqueId: string): Promise<QRCard | null> => {
-    const cleanId = uniqueId.trim();
     const { data, error } = await supabase
       .from('qr_cards')
       .select('*')
-      .ilike('unique_id', cleanId)
+      .ilike('unique_id', uniqueId)
       .maybeSingle();
 
     if (error || !data) return null;
@@ -203,12 +202,11 @@ export const useCardOperations = () => {
       };
       marketplaceId?: string;
     }) => {
-      // Find card with trimmed ID
-      const cleanId = uniqueId.trim();
+      // Find card
       const { data: card, error: findError } = await supabase
         .from('qr_cards')
         .select('*')
-        .ilike('unique_id', cleanId)
+        .ilike('unique_id', uniqueId)
         .maybeSingle();
 
       if (findError || !card) throw new SafeError('Card not found');
@@ -218,19 +216,9 @@ export const useCardOperations = () => {
         throw new SafeError('Card already activated. This beneficiary has already entered the marketplace.');
       }
 
-      // Auto-reset: If card was checked_out (from a previous event), reset it so it can be reactivated
+      // BLOCK: If card was already checked out today, prevent same-day reuse
       if (card.status === 'checked_out') {
-        await supabase
-          .from('qr_cards')
-          .update({ 
-            status: 'inactive' as DbCardStatus,
-            credit_balance: 0,
-            total_items_collected: 0,
-            collected_items: [],
-            marketplace_id: null,
-            activated_at: null
-          })
-          .eq('id', card.id);
+        throw new SafeError('This card has already been used today. It will be available again tomorrow.');
       }
 
       // Update card with beneficiary info - start with 0 items collected (credit_balance = 0)
