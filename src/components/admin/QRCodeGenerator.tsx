@@ -112,7 +112,15 @@ export const QRCodeGenerator = ({ onBack }: QRCodeGeneratorProps) => {
   // Get credit limit from the active marketplace (fallback to 15)
   const activeCreditLimit = useMemo(() => {
     const active = marketplaces.find((m: any) => m.status === 'active');
-    return active?.beneficiary_credit_limit || 15;
+    if (active?.beneficiary_credit_limit) return active.beneficiary_credit_limit;
+
+    const upcoming = marketplaces
+      .filter((m: any) => m.status === 'upcoming')
+      .sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+    if (upcoming.length > 0 && upcoming[0].beneficiary_credit_limit)
+      return upcoming[0].beneficiary_credit_limit;
+
+    return 15; // absolute last resort fallback
   }, [marketplaces]);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
