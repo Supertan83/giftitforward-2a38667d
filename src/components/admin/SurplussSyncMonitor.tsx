@@ -269,6 +269,64 @@ export const SurplussSyncMonitor = ({
       setIsFetchingMarketplaces(false);
     }
   };
+  // Sanitize donation to only fields needed by sync-surpluss-allocations
+  const sanitizeDonation = (d: any) => ({
+    id: d.id,
+    uuid: d.uuid || null,
+    title: d.title || '',
+    description: d.description || null,
+    active: d.active ?? true,
+    quantity: d.quantity ?? 0,
+    item_count: d.item_count ?? 0,
+    box_count: d.box_count ?? null,
+    condition_id: d.condition_id ?? null,
+    image_url: d.image_url || null,
+    price: d.price ?? null,
+    per: d.per || null,
+    frequency: d.frequency || null,
+    created_at: d.created_at || null,
+    updated_at: d.updated_at || null,
+    donation_tag: d.donation_tag || null,
+    donation_tag_subcategory: d.donation_tag_subcategory || null,
+    material_group_id: d.material_group_id ?? null,
+    third_level_subcategory_id: d.third_level_subcategory_id ?? null,
+    type: d.type || null,
+    sdg_goals: Array.isArray(d.sdg_goals) ? d.sdg_goals.map((s: any) => ({
+      id: s.id, name: s.name, code: s.code || null, description: s.description || null, image_url: s.image_url || null
+    })) : null,
+    company: d.company ? {
+      id: d.company.id, uuid: d.company.uuid || null, name: d.company.name || '',
+      main_business: d.company.main_business || null, sector: d.company.sector || null,
+      company_size: d.company.company_size || null, designation: d.company.designation || null,
+      image_url: d.company.image_url || null, about_info: d.company.about_info || null,
+      currency: d.company.currency || 'AED', company_license_number: d.company.company_license_number || null,
+      website_url: d.company.website_url || null, is_parent_company: d.company.is_parent_company || false,
+    } : null,
+    address: d.address ? {
+      id: d.address.id, address: d.address.address || null, city: d.address.city || null,
+      country: d.address.country || null, state: d.address.state || null, zip_code: d.address.zip_code || null,
+      location_latitude: d.address.location_latitude || null, location_longitude: d.address.location_longitude || null,
+      is_primary: d.address.is_primary || false,
+    } : null,
+    material_group: d.material_group ? {
+      id: d.material_group.id, name: d.material_group.name || '', code: d.material_group.code || null, uom: d.material_group.uom || null,
+    } : null,
+  });
+
+  const syncBatch = async (chunk: any[], environment: string): Promise<{ created: number; updated: number; failed: number; ok: boolean }> => {
+    try {
+      const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-surpluss-allocations', {
+        body: { allocations: chunk, environment }
+      });
+      if (syncError) return { created: 0, updated: 0, failed: chunk.length, ok: false };
+      if (!syncResult?.success) return { created: 0, updated: 0, failed: chunk.length, ok: false };
+      const s = syncResult.summary;
+      return { created: s?.allocations_created || 0, updated: s?.allocations_updated || 0, failed: s?.failed || 0, ok: true };
+    } catch {
+      return { created: 0, updated: 0, failed: chunk.length, ok: false };
+    }
+  };
+
   const handleSyncDonations = async () => {
     setIsSyncingDonations(true);
     try {
@@ -296,30 +354,66 @@ export const SurplussSyncMonitor = ({
         return;
       }
 
-      // Step 2: Sync to local DB in batches of 25 (avoids payload too large)
-      const CHUNK_SIZE = 25;
+      // Sanitize payloads to reduce size
+      const sanitized = allDonations.map(sanitizeDonation);
+
+      // Step 2: Sync to local DB in batches of 10 with retry + single-item fallback
+      const CHUNK_SIZE = 10;
       let totalCreated = 0;
       let totalUpdated = 0;
       let totalFailed = 0;
+      let failedBatches = 0;
+      let usedFallback = false;
+      const totalBatches = Math.ceil(sanitized.length / CHUNK_SIZE);
 
-      for (let i = 0; i < allDonations.length; i += CHUNK_SIZE) {
-        const chunk = allDonations.slice(i, i + CHUNK_SIZE);
-        const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-surpluss-allocations', {
-          body: { allocations: chunk, environment }
-        });
-        if (syncError) throw syncError;
-        const s = syncResult?.summary;
-        totalCreated += s?.allocations_created || 0;
-        totalUpdated += s?.allocations_updated || 0;
-        totalFailed += s?.failed || 0;
+      for (let i = 0; i < sanitized.length; i += CHUNK_SIZE) {
+        const batchIndex = Math.floor(i / CHUNK_SIZE) + 1;
+        const chunk = sanitized.slice(i, i + CHUNK_SIZE);
+
+        let result = await syncBatch(chunk, environment);
+
+        // Retry once if failed
+        if (!result.ok) {
+          console.warn(`Batch ${batchIndex}/${totalBatches} failed (${chunk.length} items, first ID: ${chunk[0]?.id}). Retrying...`);
+          result = await syncBatch(chunk, environment);
+        }
+
+        // If still failing, fall back to single-item processing
+        if (!result.ok) {
+          console.warn(`Batch ${batchIndex} retry failed. Falling back to single-item sync.`);
+          usedFallback = true;
+          failedBatches++;
+          let batchCreated = 0, batchUpdated = 0, batchFailed = 0;
+          for (const item of chunk) {
+            const single = await syncBatch([item], environment);
+            batchCreated += single.created;
+            batchUpdated += single.updated;
+            batchFailed += single.failed;
+          }
+          totalCreated += batchCreated;
+          totalUpdated += batchUpdated;
+          totalFailed += batchFailed;
+        } else {
+          totalCreated += result.created;
+          totalUpdated += result.updated;
+          totalFailed += result.failed;
+        }
+
+        // Progress toast every 5 batches
+        if (batchIndex % 5 === 0 && batchIndex < totalBatches) {
+          toast({ title: 'Sync in progress...', description: `Batch ${batchIndex}/${totalBatches} complete` });
+        }
       }
 
+      const hasFailures = totalFailed > 0 || failedBatches > 0;
       toast({
-        title: 'Donations Sync Complete',
-        description: `${totalCreated} created, ${totalUpdated} updated, ${totalFailed} failed (${allDonations.length} total from API, ${Math.ceil(allDonations.length / CHUNK_SIZE)} batches)`
+        title: hasFailures ? 'Donations Sync Partial' : 'Donations Sync Complete',
+        description: `${totalCreated} created, ${totalUpdated} updated, ${totalFailed} failed (${sanitized.length} total, ${totalBatches} batches${usedFallback ? ', used single-item fallback' : ''})`,
+        variant: hasFailures ? 'destructive' : 'default',
       });
       loadData();
     } catch (error) {
+      console.error('Donations sync error:', error);
       toast({
         title: 'Donations Sync Failed',
         description: error instanceof Error ? error.message : 'Failed to sync donations',
