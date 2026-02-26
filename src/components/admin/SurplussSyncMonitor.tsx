@@ -64,6 +64,7 @@ export const SurplussSyncMonitor = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [isFetchingMarketplaces, setIsFetchingMarketplaces] = useState(false);
+  const [isSyncingDonations, setIsSyncingDonations] = useState(false);
   const [syncingSingle, setSyncingSingle] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'production' | 'staging'>('production');
   const [showAllocations, setShowAllocations] = useState(false);
@@ -268,6 +269,56 @@ export const SurplussSyncMonitor = ({
       setIsFetchingMarketplaces(false);
     }
   };
+  const handleSyncDonations = async () => {
+    setIsSyncingDonations(true);
+    try {
+      // Step 1: Fetch all donations from Surpluss API (paginate)
+      let allDonations: any[] = [];
+      let page = 1;
+      const limit = 50;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase.functions.invoke('fetch-surpluss-allocations', {
+          body: { environment, page, limit }
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Failed to fetch donations');
+
+        const items = data.data || [];
+        allDonations = [...allDonations, ...items];
+        hasMore = items.length === limit && allDonations.length < (data.meta?.total || 0);
+        page++;
+      }
+
+      if (allDonations.length === 0) {
+        toast({ title: 'No Donations Found', description: 'The Surpluss API returned no donations to sync.' });
+        return;
+      }
+
+      // Step 2: Sync to local DB (updates total_stock with real quantities)
+      const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-surpluss-allocations', {
+        body: { allocations: allDonations, environment }
+      });
+      if (syncError) throw syncError;
+
+      const summary = syncResult?.summary;
+      toast({
+        title: 'Donations Sync Complete',
+        description: `${summary?.allocations_created || 0} created, ${summary?.allocations_updated || 0} updated, ${summary?.failed || 0} failed (${allDonations.length} total from API)`
+      });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Donations Sync Failed',
+        description: error instanceof Error ? error.message : 'Failed to sync donations',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSyncingDonations(false);
+    }
+  };
+
   const syncEventLogs = auditLogs.filter(l => l.action === 'sync_event_allocations');
   const recentSuccessCount = syncEventLogs.filter(l => l.success).length;
   const recentFailCount = syncEventLogs.filter(l => !l.success).length;
@@ -429,7 +480,11 @@ export const SurplussSyncMonitor = ({
           </Button>
           <Button variant="outline" onClick={handleFetchAllMarketplaces} disabled={isFetchingMarketplaces}>
             {isFetchingMarketplaces ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-            Fetch All Marketplaces from Surpluss
+           Fetch All Marketplaces from Surpluss
+          </Button>
+          <Button variant="outline" onClick={handleSyncDonations} disabled={isSyncingDonations}>
+            {isSyncingDonations ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Package className="w-4 h-4 mr-2" />}
+            Sync Donations (Fix Stock Totals)
           </Button>
         </div>
       </motion.div>
