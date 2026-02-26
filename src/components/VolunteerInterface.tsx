@@ -52,10 +52,17 @@ export const VolunteerInterface = () => {
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
-  // Kiosk accounts default to marketplace zone
+  // Auto-detect today's marketplace for kiosk accounts
+  const today = new Date().toISOString().split('T')[0];
+  const todaysEvents = isKioskAccount ? availableMarketplaces.filter(m => m.event_date === today) : [];
+  const kioskAutoDetected = todaysEvents.length === 1;
+
   useEffect(() => {
     if (isKioskAccount) {
       setActiveZone('marketplace');
+      if (todaysEvents.length > 0 && !selectedMarketplaceId) {
+        setSelectedMarketplaceId(todaysEvents[0].id);
+      }
       return;
     }
     if (checkInStatus?.isCheckedIn && checkInStatus.assignedZone) {
@@ -64,7 +71,7 @@ export const VolunteerInterface = () => {
     if (checkInStatus?.marketplaceId) {
       setSelectedMarketplaceId(checkInStatus.marketplaceId);
     }
-  }, [isKioskAccount, checkInStatus?.isCheckedIn, checkInStatus?.assignedZone, checkInStatus?.marketplaceId]);
+  }, [isKioskAccount, availableMarketplaces, selectedMarketplaceId, checkInStatus?.isCheckedIn, checkInStatus?.assignedZone, checkInStatus?.marketplaceId]);
 
   // Loading state (skip for kiosk accounts — they don't need check-in)
   if (!isKioskAccount && isLoadingStatus) {
@@ -223,24 +230,31 @@ export const VolunteerInterface = () => {
           )}
         </div>
         
-        {/* Kiosk: Marketplace selector */}
+        {/* Kiosk: Auto-detected event label or fallback dropdown */}
         {isKioskAccount && (
           <div className="px-4 pb-3 border-t border-border/50 pt-2">
-            <div className="flex items-center gap-3">
-              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-              <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select marketplace..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableMarketplaces.map(mp => (
-                    <SelectItem key={mp.id} value={mp.id}>
-                      {mp.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {kioskAutoDetected ? (
+              <div className="flex items-center gap-3">
+                <MapPin className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm font-medium">Today's Event: {todaysEvents[0].name}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select marketplace..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(todaysEvents.length > 0 ? todaysEvents : availableMarketplaces).map(mp => (
+                      <SelectItem key={mp.id} value={mp.id}>
+                        {mp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
 
