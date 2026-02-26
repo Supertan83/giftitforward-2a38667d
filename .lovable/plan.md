@@ -1,105 +1,77 @@
 
 
-## Fix: Resent Welcome Emails Missing Event Information
+## Fix: Inventory Total Stock Incorrectly Set to Allocation Amount (All Items)
 
-### Investigation Findings
+### Problem
 
-**Data is correct** -- Kifah's record (`13e642ff`) has all 3 events in `events_json` with complete `eventDate`, `eventTime`, and `eventLocation` for each:
-- Event 0: Inclusive Community (March 12)
-- Event 1: Stronger Together Single Mothers (March 14)
-- Event 2: She Thrives Women Workers (March 7)
+23 items currently have their `total_stock` set to exactly the sum of their marketplace allocations instead of the actual inventory total from Surpluss. This means the "remaining" balance shown in the app is wrong for all of them -- not just Kids Boys Perfume.
 
-**The resend code path** (`webhook-receiver` > `resend_email` action > `sendWelcomeEmailWithQR`) should correctly build `registeredEvents` from this data and render the event details HTML.
+**Example**: Kids Boys Perfume has `total_stock = 730` (the allocation), but the real total is 2,000. So remaining shows ~700 instead of 1,270.
 
-**However**, two issues were identified that could cause event information to be missing or degraded:
+### Root Cause
 
-### Issue 1: Silent Failure in Event Resolution (Primary Suspect)
+Three code paths set `total_stock` to the allocation amount instead of the actual total:
 
-The `getMarketplacesBySlug` function (line 885) is called BEFORE the form-data fallback at lines 894-906. If `getMarketplacesBySlug` throws an uncaught error for any of the 3 slugs, the entire `for` loop at line 889 would abort, leaving `registeredEvents` empty. The function has a try/catch but only around the DB query, not around individual slug processing.
+1. **`sync-surpluss-event-allocations`** (line 172): When creating a new item during event sync, sets `total_stock: allocatedAmount`
+2. **`webhook-receiver`** (line 2623): When creating items from webhook data, sets `total_stock: amount` (the allocation amount)
+3. **`sync-surpluss-allocations`** (lines 266-293): This one correctly uses `donation.quantity` from the Surpluss donations API -- this is the **only correct source** of total stock
 
-Additionally, the `.or()` filter at line 89 in `buildEventsHtml` (used by `resend-welcome-email`) uses unsafe slug interpolation: slugs containing special PostgREST characters could cause query failures.
+### Fix Strategy
 
-### Issue 2: Event Name Display with Triple Dashes
+The event-allocation sync and webhook should **never write total_stock** because they only know allocation amounts, not true totals. Only `sync-surpluss-allocations` (which queries the donations API directly) should set `total_stock`.
 
-Slugs like `marketplace---march-7` (triple dash) produce ugly fallback names when DB lookup fails.
+### Changes
 
-### Fix Plan
+**File 1: `supabase/functions/sync-surpluss-event-allocations/index.ts`**
 
-**File: `supabase/functions/webhook-receiver/index.ts`**
+- Line 172: Change `total_stock: allocatedAmount` to `total_stock: 0` for new items (safe default -- the donations sync will fill in the real number)
+- Add a log warning when creating items without a known total
 
-1. **Wrap individual event processing in try/catch** (lines 889-926): If one event fails to resolve from DB, continue to the next instead of aborting the entire loop. Always fall back to `events_json` form data.
+**File 2: `supabase/functions/webhook-receiver/index.ts`**
 
-2. **Add detailed logging** for resend operations: Log the number of events found in `events_json`, the number of `registeredEvents` built, and any errors during resolution. This will help diagnose if the issue recurs.
+- Line 2623: Change `total_stock: amount` to `total_stock: 0` for the same reason
 
-3. **Log events data in email send logs**: Currently the `request_payload` only logs `{to, subject, isFallback}`. Add `eventCount: registeredEvents.length` so we can see in the admin panel whether events were included.
+**File 3: Data correction -- trigger a donations sync**
 
-**File: `supabase/functions/resend-welcome-email/index.ts`**
+- After deploying the code fixes, invoke the `sync-surpluss-allocations` function which will pull the correct `quantity` values from the Surpluss donations API and update `total_stock` for all 23 affected items to their true totals
 
-4. **Same try/catch protection** in `buildEventsHtml` (lines 75-117): Wrap each event iteration in try/catch so one bad event doesn't prevent all events from rendering.
+### Technical Details
 
-5. **Better slug-to-name conversion**: Clean triple dashes and produce readable event names when DB lookup fails.
-
-### Technical Changes
-
-**webhook-receiver/index.ts -- Event loop protection (around line 889)**
 ```text
-for (const evt of eventsJson as RegisteredEvent[]) {
-  try {
-    const dbMarketplace = marketplaceDetails.get(evt.event);
-    // ... existing resolution logic ...
-    registeredEvents.push({ ... });
-  } catch (evtError) {
-    console.error(`Error resolving event "${evt.event}":`, evtError);
-    // Fall back to raw form data
-    registeredEvents.push({
-      name: evt.event?.split('-').filter(Boolean).map(...).join(' ') || 'Gift It Forward Marketplace',
-      date: evt.eventDate || '',
-      time: evt.eventTime || '',
-      location: evt.eventLocation || '',
-      rawStartTime: null,
-      rawEndTime: null,
-      rawDate: null
-    });
-  }
-}
+// sync-surpluss-event-allocations/index.ts, line 172
+// BEFORE (bug):
+total_stock: allocatedAmount,
+
+// AFTER (fix):
+total_stock: 0,  // Will be populated by sync-surpluss-allocations from donations API
 ```
 
-**webhook-receiver/index.ts -- Enhanced logging (around line 5077)**
 ```text
-console.log(`Resend: volunteer ${pending_id} has ${resolvedEventsJson?.length || 0} events in events_json`);
+// webhook-receiver/index.ts, line 2623
+// BEFORE (bug):
+total_stock: amount // Set initial stock to allocated amount
+
+// AFTER (fix):
+total_stock: 0  // Will be populated by donations sync
 ```
 
-**webhook-receiver/index.ts -- Log event count in email send log (line 1544)**
-```text
-{ to: email, subject: emailSubject, isFallback, eventCount: registeredEvents.length }
-```
+### Affected Items (23 total, examples)
 
-**resend-welcome-email/index.ts -- Same protection in buildEventsHtml (line 75)**
-```text
-for (const evt of eventsJson) {
-  try {
-    // ... existing logic ...
-    eventBlocks.push(buildEventBlock({ ... }));
-  } catch (blockError) {
-    console.error(`Error building event block for "${evt?.event}":`, blockError);
-    // Fall back to raw form data
-    eventBlocks.push(buildEventBlock({
-      name: evt?.event || 'Gift It Forward Marketplace',
-      date: evt?.eventDate || '',
-      time: evt?.eventTime || '',
-      location: evt?.eventLocation || '',
-    }));
-  }
-}
-```
-
-### Files to Modify
-- `supabase/functions/webhook-receiver/index.ts` -- Add try/catch in event loop, enhance logging, log event count
-- `supabase/functions/resend-welcome-email/index.ts` -- Add try/catch in `buildEventsHtml`
+| Item | Current total_stock (wrong) | 
+|------|---------------------------|
+| Kids Boys Perfume | 730 |
+| Makeup and Cosmetics | 1,200 |
+| Women clothing | 11,610 |
+| Women's Clothes | 2,426 |
+| Toys | 1,600 |
+| Stationery | 900 |
+| Women's shoes | 1,354 |
+| ...and 16 more |
 
 ### Verification
-After deploying, resend the welcome email for Kifah (pending_id `13e642ff-8e0e-434d-b341-40c8d9231c16`) and check:
-1. Edge function logs for the event count messages
-2. Email send logs for `eventCount` in the request payload
-3. The actual email received should show all 3 events with dates, times, and locations
+
+1. Deploy both edge function fixes
+2. Run `sync-surpluss-allocations` to pull correct totals from the Surpluss donations API
+3. Verify Kids Boys Perfume now shows `total_stock = 2000` (or whatever the true Surpluss total is)
+4. Check the Allocation Management UI shows correct remaining balances for all items
 
