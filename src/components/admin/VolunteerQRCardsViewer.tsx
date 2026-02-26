@@ -136,9 +136,8 @@ export const VolunteerQRCardsViewer = ({ onBack }: VolunteerQRCardsViewerProps) 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const response = await supabase.functions.invoke('webhook-receiver', {
+      const response = await supabase.functions.invoke('add-family-member', {
         body: {
-          action: 'add_family_member',
           volunteer_id: volunteerId,
           family_member: { name, type, gender: gender || null }
         }
