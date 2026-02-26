@@ -1,35 +1,36 @@
 
 
-## Fix: Update Kiosk Pattern to Match `.com` Emails
+## Update All Kiosk Accounts to Checked-In / Marketplace Zone
 
-### Problem
-The kiosk accounts were created as `acc##@gif.com` but the detection regex in the code is `/^acc\d{2}@gif$/` (no `.com`), so the bypass never activates.
+### Current State
+All 25 kiosk accounts (acc01@gif.com - acc25@gif.com) exist in the database with volunteer QR cards, but:
+- Card status: `inactive`
+- Assigned zone: `none`
+- Marketplace: `none`
 
-### Changes
+### What Will Change
 
-**1. `src/components/VolunteerInterface.tsx`** (line 33)
-Update the `KIOSK_PATTERN` constant:
+**Database update** -- Run a single SQL migration to update all 25 volunteer QR cards:
+- Set `status` to `checked_in`
+- Set `assigned_zone` to `marketplace`
+- Set `checked_in_at` to the current timestamp
+
+The marketplace will NOT be pre-assigned because kiosk accounts already have a manual marketplace selector in the UI -- the volunteer on the tablet picks which event they're at.
+
+### Technical Details
+
+**Migration SQL:**
+```text
+UPDATE volunteer_qr_cards
+SET status = 'checked_in',
+    assigned_zone = 'marketplace',
+    checked_in_at = now(),
+    updated_at = now()
+WHERE volunteer_id IN (
+  SELECT id FROM pending_volunteers
+  WHERE email ~ '^acc\d{2}@gif\.com$'
+);
 ```
-// Before
-const KIOSK_PATTERN = /^acc\d{2}@gif$/;
 
-// After
-const KIOSK_PATTERN = /^acc\d{2}@gif\.com$/;
-```
-
-**2. `supabase/functions/create-user/index.ts`** (line 8)
-Update the email validation pattern to match:
-```
-// Before
-const KIOSK_EMAIL_PATTERN = /^acc\d{2}@gif$/;
-
-// After
-const KIOSK_EMAIL_PATTERN = /^acc\d{2}@gif\.com$/;
-```
-
-**3. Create missing kiosk accounts**
-Call the `create-user` edge function to provision any of the 25 accounts (`acc01@gif.com` through `acc25@gif.com`) that don't already exist, with password `12345678` and role `volunteer`.
-
-### Summary
-Two one-line regex fixes so the kiosk bypass logic recognizes the `.com` email format, plus account provisioning for any missing accounts.
+This is a data-only change -- no code files are modified. The kiosk bypass logic in the app already handles the rest (skipping check-in gate, showing marketplace zone, hiding sign-out button).
 
