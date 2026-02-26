@@ -35,7 +35,7 @@ const zones = [
   { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
 ];
 
-const KIOSK_PATTERN = /^acc\d{2}@gif$/;
+const KIOSK_PATTERN = /^acc\d{2}@gif\.com$/;
 
 export const VolunteerInterface = () => {
   const [activeZone, setActiveZone] = useState<Zone>('entrance');
