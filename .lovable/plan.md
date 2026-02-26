@@ -1,80 +1,58 @@
 
 
-## Per-Station Scan Limit with Gear Icon
+## Time-Aware Marketplace Auto-Detection for Kiosk Accounts
 
-### What Changes
+### Problem
+On days with two marketplace events (e.g., morning 07:00-13:30 and evening 19:30-23:30), the current logic matches both by date and picks the first one. The kiosk should automatically select the correct event based on the current time.
 
-1. **Remove quick-select preset buttons** (1, 3, 5, 10) from the Marketplace Zone
-2. **Keep the +/- stepper** but cap it at the station limit instead of the beneficiary credit limit
-3. **Add a gear icon** in the Marketplace header that opens a small popover to set/adjust the station's max items per scan
-4. **Store the limit in localStorage** per marketplace, so each tablet remembers its setting across refreshes
-5. **UI behavior**:
-   - If station limit = 1: the +/- buttons are disabled (grayed out), quantity locked at 1
-   - If station limit > 1: show a "Max X items" badge, +/- enabled up to that cap
-   - Default station limit: 1 (safest default)
+### Solution
+Update the auto-detection filter in `src/components/VolunteerInterface.tsx` to also consider `start_time` and `end_time` when multiple events share the same date.
 
-### How It Works
+### Logic
 
-**File: `src/components/zones/MarketplaceZone.tsx`**
+1. Filter events by today's date (existing)
+2. If only one event matches today, auto-select it (no change)
+3. If multiple events match today:
+   - Get the current time (HH:MM in local timezone)
+   - Find the event whose time window contains "now" (i.e., `start_time <= now <= end_time`)
+   - Add a 1-hour buffer before `start_time` so the kiosk is ready for setup
+   - If a match is found, auto-select it and hide the dropdown
+   - If no match (e.g., between sessions), show the dropdown so staff can pick manually
+4. If an event has no `start_time`/`end_time`, treat it as an all-day event (always matches)
 
-Changes:
-- Add `stationLimit` state initialized from `localStorage` (key: `station_limit_{marketplaceId}`)
-- Default to 1 if no value is stored
-- Replace `creditLimit` with `stationLimit` as the cap for the quantity stepper
-- Remove the quick-select preset buttons section entirely
-- Add a gear icon button next to the mode toggle or header area
-- Gear icon opens a Popover with a simple number input or stepper (1-25 range) to set the station limit
-- On change, persist to localStorage and update state immediately
-- The backend credit-limit enforcement remains unchanged (server-side RPCs still block exceeding beneficiary limits)
-
-### UI Layout
+### File Changed
+`src/components/VolunteerInterface.tsx` -- update the `todaysEvents` filtering logic (around lines 56-58):
 
 ```text
-+------------------------------------------+
-|  Marketplace                             |
-|  Today's Event: [name]          [gear]   |
-+------------------------------------------+
-|  [Total Allocated]  [Total Scanned]      |
-+------------------------------------------+
-|         Total Items Scanned              |
-|              42                          |
-+------------------------------------------+
-|  [  Distribute  ] [  Return  ]           |
-+------------------------------------------+
-|  Items to Distribute Per Scan            |
-|  Station Limit: 3 items                  |
-|                                          |
-|    [ - ]      2      [ + ]               |
-|                                          |
-|  (if limit=1, buttons grayed out,        |
-|   quantity fixed at 1)                   |
-+------------------------------------------+
-|  [ Scan to Distribute 2 Items ]          |
-+------------------------------------------+
+// Current:
+const todaysEvents = isKioskAccount
+  ? availableMarketplaces.filter(m => m.event_date === today)
+  : [];
+const kioskAutoDetected = todaysEvents.length === 1;
+
+// New:
+const todaysEvents = isKioskAccount
+  ? availableMarketplaces.filter(m => m.event_date === today)
+  : [];
+
+// Time-aware narrowing when multiple events on same day
+const now = new Date();
+const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:00`;
+
+const timeMatchedEvents = todaysEvents.length > 1
+  ? todaysEvents.filter(m => {
+      if (!m.start_time || !m.end_time) return true; // no times = all-day
+      // 1-hour early buffer for setup
+      const [h, min] = m.start_time.split(':').map(Number);
+      const bufferTime = `${String(Math.max(0, h-1)).padStart(2,'0')}:${min}:00`;
+      return currentTime >= bufferTime && currentTime <= m.end_time;
+    })
+  : todaysEvents;
+
+const kioskAutoDetected = timeMatchedEvents.length === 1;
 ```
 
-### Gear Popover
+The `useEffect` and header UI will reference `timeMatchedEvents` instead of `todaysEvents` for auto-selection, while the dropdown fallback still shows all of today's events for manual override.
 
-```text
-+------------------------+
-| Station Limit          |
-|                        |
-|  [ - ]   3   [ + ]    |
-|                        |
-| Items per scan for     |
-| this station           |
-+------------------------+
-```
-
-### Technical Details
-
-- **Storage key**: `station_limit_{marketplaceId}` in localStorage
-- **Default**: 1 (safe, requires explicit setup per station)
-- **Range**: 1 to beneficiary credit limit (e.g., 1-25)
-- **Quantity stepper cap**: `Math.min(stationLimit, creditLimit)` -- station limit wins but never exceeds the event's credit limit
-- **Backend safety**: The `distribute_marketplace_items_batch` RPC already enforces the beneficiary's total credit limit server-side, so even if someone sets a high station limit, the server rejects over-limit distributions
-- **No database changes** -- this is purely a local UI configuration per physical tablet/station
-
-### Files Modified
-
-Only one file: `src/components/zones/MarketplaceZone.tsx`
+### No database changes needed
+The `start_time` and `end_time` columns already exist and are populated for the 2026 schedule.
