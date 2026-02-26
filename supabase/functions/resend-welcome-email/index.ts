@@ -73,47 +73,67 @@ async function buildEventsHtml(
   const eventBlocks: string[] = [];
 
   for (const evt of eventsJson) {
-    const slug = evt.event || evt.slug || evt.event_slug;
-    const eventName = evt.name || evt.event_name || slug || 'Gift It Forward marketplace';
+    try {
+      const slug = evt.event || evt.slug || evt.event_slug;
+      // Clean triple dashes from slug for readable fallback name
+      const cleanSlug = slug ? slug.replace(/---/g, '-') : '';
+      const eventName = evt.name || evt.event_name || (cleanSlug
+        ? cleanSlug.split('-').filter(Boolean).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'Gift It Forward marketplace');
 
-    // Try to look up marketplace details by matching the slug to marketplace name
-    let eventDate = '';
-    let timeRange = '';
-    let location = '';
+      // Try to look up marketplace details by matching the slug to marketplace name
+      let eventDate = '';
+      let timeRange = '';
+      let location = '';
 
-    if (slug) {
-      // Query marketplace_events to find matching event
-      const { data: marketplace } = await supabase
-        .from('marketplace_events')
-        .select('name, event_date, start_time, end_time, location')
-        .or(`name.ilike.%${slug.replace(/-/g, '%')}%`)
-        .limit(1)
-        .maybeSingle();
+      if (slug) {
+        try {
+          // Sanitize slug for PostgREST query (escape special chars)
+          const sanitizedSlug = slug.replace(/-/g, '%').replace(/[().,]/g, '');
+          const { data: marketplace } = await supabase
+            .from('marketplace_events')
+            .select('name, event_date, start_time, end_time, location')
+            .or(`name.ilike.%${sanitizedSlug}%`)
+            .limit(1)
+            .maybeSingle();
 
-      if (marketplace) {
-        eventDate = formatDate(marketplace.event_date);
-        const startTime = formatTime(marketplace.start_time);
-        const endTime = formatTime(marketplace.end_time);
-        timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
-        location = marketplace.location || '';
+          if (marketplace) {
+            eventDate = formatDate(marketplace.event_date);
+            const startTime = formatTime(marketplace.start_time);
+            const endTime = formatTime(marketplace.end_time);
+            timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
+            location = marketplace.location || '';
+          }
+        } catch (dbError) {
+          console.error(`DB lookup failed for slug "${slug}":`, dbError);
+        }
       }
+
+      // Fall back to data from events_json itself
+      if (!eventDate && evt.eventDate) eventDate = evt.eventDate;
+      if (!eventDate && evt.date) eventDate = formatDate(evt.date);
+      if (!eventDate && evt.event_date) eventDate = formatDate(evt.event_date);
+      if (!location && evt.eventLocation) location = evt.eventLocation;
+      if (!location && evt.location) location = evt.location;
+      if (!timeRange && evt.eventTime) timeRange = evt.eventTime;
+      if (!timeRange && evt.time) timeRange = evt.time;
+
+      eventBlocks.push(buildEventBlock({
+        name: eventName,
+        date: eventDate,
+        time: timeRange,
+        location: location,
+      }));
+    } catch (blockError) {
+      console.error(`Error building event block for "${evt?.event}":`, blockError);
+      // Fall back to raw form data
+      eventBlocks.push(buildEventBlock({
+        name: evt?.event ? evt.event.replace(/---/g, '-').split('-').filter(Boolean).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Gift It Forward Marketplace',
+        date: evt?.eventDate || '',
+        time: evt?.eventTime || '',
+        location: evt?.eventLocation || '',
+      }));
     }
-
-    // Fall back to data from events_json itself
-    if (!eventDate && evt.eventDate) eventDate = evt.eventDate;
-    if (!eventDate && evt.date) eventDate = formatDate(evt.date);
-    if (!eventDate && evt.event_date) eventDate = formatDate(evt.event_date);
-    if (!location && evt.eventLocation) location = evt.eventLocation;
-    if (!location && evt.location) location = evt.location;
-    if (!timeRange && evt.eventTime) timeRange = evt.eventTime;
-    if (!timeRange && evt.time) timeRange = evt.time;
-
-    eventBlocks.push(buildEventBlock({
-      name: eventName,
-      date: eventDate,
-      time: timeRange,
-      location: location,
-    }));
   }
 
   return eventBlocks.join('');
