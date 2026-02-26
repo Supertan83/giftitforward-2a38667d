@@ -296,16 +296,27 @@ export const SurplussSyncMonitor = ({
         return;
       }
 
-      // Step 2: Sync to local DB (updates total_stock with real quantities)
-      const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-surpluss-allocations', {
-        body: { allocations: allDonations, environment }
-      });
-      if (syncError) throw syncError;
+      // Step 2: Sync to local DB in batches of 25 (avoids payload too large)
+      const CHUNK_SIZE = 25;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalFailed = 0;
 
-      const summary = syncResult?.summary;
+      for (let i = 0; i < allDonations.length; i += CHUNK_SIZE) {
+        const chunk = allDonations.slice(i, i + CHUNK_SIZE);
+        const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-surpluss-allocations', {
+          body: { allocations: chunk, environment }
+        });
+        if (syncError) throw syncError;
+        const s = syncResult?.summary;
+        totalCreated += s?.allocations_created || 0;
+        totalUpdated += s?.allocations_updated || 0;
+        totalFailed += s?.failed || 0;
+      }
+
       toast({
         title: 'Donations Sync Complete',
-        description: `${summary?.allocations_created || 0} created, ${summary?.allocations_updated || 0} updated, ${summary?.failed || 0} failed (${allDonations.length} total from API)`
+        description: `${totalCreated} created, ${totalUpdated} updated, ${totalFailed} failed (${allDonations.length} total from API, ${Math.ceil(allDonations.length / CHUNK_SIZE)} batches)`
       });
       loadData();
     } catch (error) {
