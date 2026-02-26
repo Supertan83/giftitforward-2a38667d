@@ -240,8 +240,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
             </button>
           </div>
 
-          {/* Quantity Selector - only shown when max_items_per_scan > 1 */}
-          {maxItemsPerScan > 1 && (
+          {/* Quantity Selector - always shown, capped by credit limit */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -252,7 +251,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               </p>
               <p className="text-xs text-center mb-3">
                 <Badge variant="outline" className="text-xs font-medium">
-                  Max {maxItemsPerScan} items per scan
+                  Max {creditLimit} items per scan
                 </Badge>
               </p>
               <div className="flex items-center justify-center gap-4">
@@ -277,15 +276,15 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
                   variant="outline"
                   size="icon"
                   className="h-16 w-16 rounded-full shrink-0"
-                  onClick={() => setQuantity(q => Math.min(maxItemsPerScan, q + 1))}
-                  disabled={quantity >= maxItemsPerScan}
+                  onClick={() => setQuantity(q => Math.min(creditLimit, q + 1))}
+                  disabled={quantity >= creditLimit}
                 >
                   <Plus className="w-7 h-7" />
                 </Button>
               </div>
               {/* Quick-select presets */}
               <div className="flex items-center justify-center gap-2 mt-3">
-                {[1, 3, 5, 10].filter(v => v <= maxItemsPerScan).map(value => (
+                {[1, 3, 5, 10].filter(v => v <= creditLimit).map(value => (
                   <button
                     key={value}
                     onClick={() => setQuantity(value)}
@@ -306,7 +305,6 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
                 </p>
               )}
             </motion.div>
-          )}
 
           {/* Scan Button */}
           <motion.div
