@@ -1,40 +1,36 @@
 
 
-## Add "Sync Donations" Button to Sync Monitor
+## Fix: Sync Donations Request Too Large
 
 ### Problem
-The Sync Monitor page only has "Sync All Now" (which calls `sync-surpluss-event-allocations` for marketplace allocations). There is no way to trigger `sync-surpluss-allocations` (the donations sync that sets correct `total_stock` values) from this page.
-
-The donations sync currently only exists in the `SurplussSyncPanel` component, which is a different admin section.
+The "Sync Donations" button fetches all ~400+ donations from the Surpluss API, then sends them ALL in a single request to `sync-surpluss-allocations`. The JSON payload is enormous (each donation includes full company info, images, material groups, etc.), causing the request to fail with "Failed to fetch" (request body too large / timeout).
 
 ### Solution
-Add a "Sync Donations (Fix Stock Totals)" button to the Sync Monitor, right next to "Sync All Now" and "Fetch All Marketplaces from Surpluss".
-
-### How It Will Work
-1. The button will first call `fetch-surpluss-allocations` to pull all donations from the Surpluss API
-2. Then pass those donations to `sync-surpluss-allocations` which updates `total_stock` in `item_types` with the correct quantities from the Surpluss database
-3. A toast notification will show how many items were created/updated
-4. This is the same flow already used in `SurplussSyncPanel.tsx` -- just exposed in the Sync Monitor
+Split the sync into batches of 25 donations per request to `sync-surpluss-allocations`, instead of sending everything at once.
 
 ### Changes
 
 **File: `src/components/admin/SurplussSyncMonitor.tsx`**
 
-- Add a new `handleSyncDonations` function that:
-  1. Calls `fetch-surpluss-allocations` with the current environment, paginating through all results
-  2. Passes the fetched donations to `sync-surpluss-allocations`
-  3. Shows success/failure toast with counts (created, updated, failed)
-- Add a new button "Sync Donations" in the action bar (lines 425-434), next to the existing buttons
-- Add `isSyncingDonations` state for loading indicator
-- Use the `Package` icon (already imported) to visually distinguish it from the allocation sync
+Modify `handleSyncDonations` to:
+1. Keep the existing fetch-all-donations pagination logic (this works fine -- 50 per page from the API)
+2. After collecting all donations, split them into chunks of 25
+3. Call `sync-surpluss-allocations` once per chunk, sequentially
+4. Accumulate the summary totals (created, updated, failed) across all batches
+5. Show a single toast at the end with combined totals
 
-### UI Layout (after change)
+### Technical Detail
 
 ```text
-[Sync All Now]  [Fetch All Marketplaces]  [Sync Donations]
+// Instead of:
+await supabase.functions.invoke('sync-surpluss-allocations', {
+  body: { allocations: allDonations, environment }  // 400+ items = too large
+});
+
+// Batch into chunks of 25:
+for (const chunk of chunks) {
+  await supabase.functions.invoke('sync-surpluss-allocations', {
+    body: { allocations: chunk, environment }  // 25 items per call
+  });
+}
 ```
-
-The "Sync Donations" button will be styled as an outline button with a Package icon, making it easy to find and clearly different from the allocation sync.
-
-### After Deploying
-Click the new "Sync Donations" button in the Sync Monitor. It will pull the correct `quantity` values from the Surpluss donations API and fix `total_stock` for all 23 affected items.
