@@ -35,29 +35,39 @@ const zones = [
   { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
 ];
 
+const KIOSK_PATTERN = /^acc\d{2}@gif$/;
+
 export const VolunteerInterface = () => {
   const [activeZone, setActiveZone] = useState<Zone>('entrance');
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
   const { user, signOut } = useAuth();
   const { data: marketplaces = [], isLoading: isLoadingMarketplaces } = useMarketplaces();
+
+  const isKioskAccount = !!user?.email?.match(KIOSK_PATTERN);
+
+  // Only use check-in status for non-kiosk accounts
   const { data: checkInStatus, isLoading: isLoadingStatus } = useVolunteerCheckInStatus();
 
   // Filter to show only upcoming or active marketplaces
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
-  // Set active zone to assigned zone when check-in status loads
+  // Kiosk accounts default to marketplace zone
   useEffect(() => {
+    if (isKioskAccount) {
+      setActiveZone('marketplace');
+      return;
+    }
     if (checkInStatus?.isCheckedIn && checkInStatus.assignedZone) {
       setActiveZone(checkInStatus.assignedZone);
     }
     if (checkInStatus?.marketplaceId) {
       setSelectedMarketplaceId(checkInStatus.marketplaceId);
     }
-  }, [checkInStatus?.isCheckedIn, checkInStatus?.assignedZone, checkInStatus?.marketplaceId]);
+  }, [isKioskAccount, checkInStatus?.isCheckedIn, checkInStatus?.assignedZone, checkInStatus?.marketplaceId]);
 
-  // Loading state
-  if (isLoadingStatus) {
+  // Loading state (skip for kiosk accounts — they don't need check-in)
+  if (!isKioskAccount && isLoadingStatus) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -68,8 +78,8 @@ export const VolunteerInterface = () => {
     );
   }
 
-  // Not checked in - show blocking message
-  if (!checkInStatus?.isCheckedIn) {
+  // Not checked in - show blocking message (skip for kiosk accounts)
+  if (!isKioskAccount && !checkInStatus?.isCheckedIn) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
@@ -152,14 +162,17 @@ export const VolunteerInterface = () => {
     );
   }
 
-  // Get the assigned zone info
-  const assignedZone = checkInStatus.assignedZone;
+  // Get the assigned zone info (for non-kiosk accounts)
+  const assignedZone = isKioskAccount ? 'marketplace' : checkInStatus?.assignedZone;
   const assignedZoneInfo = zones.find(z => z.id === assignedZone);
 
   const renderZone = () => {
-    // Only render the assigned zone
-    const zoneToRender = assignedZone || activeZone;
+    if (isKioskAccount) {
+      // Kiosk accounts always show marketplace zone
+      return <MarketplaceZone selectedMarketplaceId={selectedMarketplaceId} />;
+    }
     
+    const zoneToRender = assignedZone || activeZone;
     switch (zoneToRender) {
       case 'entrance':
         return <EntranceZone selectedMarketplaceId={selectedMarketplaceId} />;
@@ -179,111 +192,149 @@ export const VolunteerInterface = () => {
             <BrandLogo size="sm" />
             <div>
               <h1 className="font-display font-bold text-sm">GIF (Gift it Forward)</h1>
-              <p className="text-xs text-muted-foreground">Volunteer Mode</p>
+              <p className="text-xs text-muted-foreground">
+                {isKioskAccount ? 'Tablet Kiosk' : 'Volunteer Mode'}
+              </p>
             </div>
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <User className="w-5 h-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>
-                <div>
-                  <p className="font-medium">Volunteer</p>
-                  <p className="text-xs text-muted-foreground">{user?.email}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Hide sign-out for kiosk accounts */}
+          {!isKioskAccount && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <User className="w-5 h-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>
+                  <div>
+                    <p className="font-medium">Volunteer</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         
-        {/* Assigned Zone & Marketplace Info */}
-        <div className="px-4 pb-3 border-t border-border/50 pt-2">
-          <div className="flex items-center justify-between gap-4">
-            {/* Assigned Zone Badge */}
-            {assignedZoneInfo && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Assigned:</span>
-                <div className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10",
-                  assignedZoneInfo.color
-                )}>
-                  <assignedZoneInfo.icon className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">{assignedZoneInfo.label}</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Marketplace Display */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <MapPin className="w-3.5 h-3.5" />
-              <span>{selectedMarketplace?.name || 'Marketplace assigned'}</span>
+        {/* Kiosk: Marketplace selector */}
+        {isKioskAccount && (
+          <div className="px-4 pb-3 border-t border-border/50 pt-2">
+            <div className="flex items-center gap-3">
+              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+              <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select marketplace..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMarketplaces.map(mp => (
+                    <SelectItem key={mp.id} value={mp.id}>
+                      {mp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Non-kiosk: Assigned Zone & Marketplace Info */}
+        {!isKioskAccount && (
+          <div className="px-4 pb-3 border-t border-border/50 pt-2">
+            <div className="flex items-center justify-between gap-4">
+              {assignedZoneInfo && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Assigned:</span>
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10",
+                    assignedZoneInfo.color
+                  )}>
+                    <assignedZoneInfo.icon className="w-3.5 h-3.5" />
+                    <span className="text-xs font-medium">{assignedZoneInfo.label}</span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{selectedMarketplace?.name || 'Marketplace assigned'}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        {renderZone()}
+        {isKioskAccount && !selectedMarketplaceId ? (
+          <div className="flex items-center justify-center h-full p-6">
+            <Card className="max-w-sm w-full">
+              <CardContent className="pt-6 text-center">
+                <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Please select a marketplace above to start scanning.</p>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          renderZone()
+        )}
       </main>
 
-      {/* Bottom Navigation - Only show assigned zone as active, hide others or show as disabled */}
-      <nav className="bg-card border-t border-border sticky bottom-0 z-10 safe-area-inset-bottom">
-        <div className="flex">
-          {zones.map((zone) => {
-            const Icon = zone.icon;
-            const isAssigned = zone.id === assignedZone;
-            const isActive = zone.id === (assignedZone || activeZone);
-            
-            // Only the assigned zone is clickable
-            if (!isAssigned) {
+      {/* Bottom Navigation - hide for kiosk (locked to marketplace) */}
+      {!isKioskAccount && (
+        <nav className="bg-card border-t border-border sticky bottom-0 z-10 safe-area-inset-bottom">
+          <div className="flex">
+            {zones.map((zone) => {
+              const Icon = zone.icon;
+              const isAssigned = zone.id === assignedZone;
+              const isActive = zone.id === (assignedZone || activeZone);
+              
+              if (!isAssigned) {
+                return (
+                  <div
+                    key={zone.id}
+                    className="flex-1 py-3 flex flex-col items-center gap-1 text-muted-foreground/40 cursor-not-allowed"
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-xs font-medium">{zone.label}</span>
+                  </div>
+                );
+              }
+              
               return (
-                <div
+                <button
                   key={zone.id}
-                  className="flex-1 py-3 flex flex-col items-center gap-1 text-muted-foreground/40 cursor-not-allowed"
+                  onClick={() => setActiveZone(zone.id)}
+                  className={cn(
+                    'flex-1 py-3 flex flex-col items-center gap-1 transition-all relative',
+                    isActive ? zone.color : 'text-muted-foreground'
+                  )}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-xs font-medium">{zone.label}</span>
-                </div>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeTab"
+                      className="absolute top-0 left-2 right-2 h-0.5 bg-current rounded-full"
+                    />
+                  )}
+                  <Icon className={cn('w-5 h-5', isActive && 'scale-110')} />
+                  <span className={cn(
+                    'text-xs font-medium',
+                    isActive && 'font-semibold'
+                  )}>
+                    {zone.label}
+                  </span>
+                </button>
               );
-            }
-            
-            return (
-              <button
-                key={zone.id}
-                onClick={() => setActiveZone(zone.id)}
-                className={cn(
-                  'flex-1 py-3 flex flex-col items-center gap-1 transition-all relative',
-                  isActive ? zone.color : 'text-muted-foreground'
-                )}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute top-0 left-2 right-2 h-0.5 bg-current rounded-full"
-                  />
-                )}
-                <Icon className={cn('w-5 h-5', isActive && 'scale-110')} />
-                <span className={cn(
-                  'text-xs font-medium',
-                  isActive && 'font-semibold'
-                )}>
-                  {zone.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 };
