@@ -1,25 +1,77 @@
 
 
-## Fix: Show +/- Quantity Buttons in Marketplace Zone
+## Tablet Kiosk Accounts — "bypass 1"
 
-### Problem
-The quantity selector (+/- buttons) is wrapped in a condition:
+### What This Does
+Creates 25 shared tablet accounts (acc01@gif through acc25@gif) that skip the volunteer check-in gate and land directly on the **Marketplace scanning zone**. No sign-out button is shown, and the session persists until explicitly logged out.
+
+---
+
+### Step 1: Create the 25 Accounts in the Database
+
+Use the **create-user** edge function (already exists) to provision 25 accounts:
+- Emails: `acc01@gif` to `acc25@gif`
+- Password: `12345678` for all
+- Role: `volunteer` (auto-assigned by existing trigger)
+
+These will be created via the existing admin user-creation flow or a small script calling the edge function.
+
+---
+
+### Step 2: Add Kiosk Bypass Logic to VolunteerInterface
+
+**File: `src/components/VolunteerInterface.tsx`**
+
+- Detect if the logged-in user's email matches the kiosk pattern (`/^acc\d{2}@gif$/`)
+- If kiosk account:
+  - **Skip the check-in gate entirely** -- do not query `useVolunteerCheckInStatus` or ignore its result
+  - **Default to the Marketplace zone** with a marketplace selector (same dropdown that exists for active/upcoming marketplaces)
+  - **Hide the Sign Out button** from the user dropdown menu
+  - **Show all three zone tabs as accessible** (or lock to marketplace only -- marketplace-only is simpler)
+
+The key change in the component:
+
+```text
+const isKioskAccount = user?.email?.match(/^acc\d{2}@gif$/);
+
+if (isKioskAccount) {
+  // Skip check-in requirement
+  // Show marketplace selector + MarketplaceZone directly
+  // Hide sign-out button
+}
 ```
-if (maxItemsPerScan > 1) { show buttons }
-```
-All marketplaces in the database have `max_items_per_scan = 1`, so the buttons are always hidden.
 
-### Solution (Two Parts)
+---
 
-**1. Change the UI condition** so the +/- buttons always show, capped by the beneficiary credit limit instead of `max_items_per_scan`.
+### Step 3: Marketplace Selection for Kiosk Accounts
 
-- File: `src/components/zones/MarketplaceZone.tsx`
-- Remove the `{maxItemsPerScan > 1 && (...)}` wrapper so the quantity selector always renders
-- Cap the maximum quantity at `creditLimit` (e.g., 15 or 20) instead of `maxItemsPerScan`
-- Keep the quick-select presets (1, 3, 5, 10) filtered by the credit limit
-- The "Max N items per scan" badge updates to reflect the credit limit
+Since kiosk accounts have no check-in (and therefore no pre-assigned marketplace), show a **marketplace selector dropdown** at the top of the interface. This dropdown lists active/upcoming marketplaces, same as the existing `availableMarketplaces` list. Once selected, the MarketplaceZone renders with that marketplace ID.
 
-**2. No database changes needed** -- the `max_items_per_scan` column can stay as-is for future use if you ever want a station-level cap. The UI will just always show the selector now.
+---
 
-### Result
-Volunteers will see the large +/- buttons and quick presets (1, 3, 5, 10) on every marketplace, matching what was built yesterday. Scanning deducts the selected quantity from the beneficiary's credits.
+### Step 4: Persistent Session (Already Handled)
+
+The Supabase client is already configured with `persistSession: true` and `autoRefreshToken: true` in `src/integrations/supabase/client.ts`. Combined with hiding the Sign Out button, the tablet stays logged in across browser restarts and shifts. No additional code needed here.
+
+---
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/components/VolunteerInterface.tsx` | Add kiosk detection, bypass check-in, hide sign-out, show marketplace selector, default to marketplace zone |
+
+### Account Provisioning
+
+The 25 accounts will be created using the existing `create-user` edge function, called in sequence. Each account gets the `volunteer` role automatically.
+
+---
+
+### Summary
+
+- 25 kiosk accounts: `acc01@gif` -- `acc25@gif`, password `12345678`
+- No check-in required -- straight to marketplace scanning
+- No sign-out button visible
+- Marketplace selector shown so the volunteer picks which event they are at
+- Session persists automatically (already configured)
+
