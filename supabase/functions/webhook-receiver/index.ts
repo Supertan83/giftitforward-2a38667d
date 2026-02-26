@@ -887,42 +887,57 @@ async function sendWelcomeEmailWithQR(
       // Build registered events list with times from DB or form data
       // IMPORTANT: Prioritize form data for date/time/location as it's the source of truth
       for (const evt of eventsJson as RegisteredEvent[]) {
-        const dbMarketplace = marketplaceDetails.get(evt.event);
-        
-        // PRIORITIZE FORM DATA for date - it's submitted by the user and always correct
-        // Only use DB date if form data is missing
-        const eventDateFormatted = evt.eventDate || 
-          (dbMarketplace?.event_date ? formatDate(dbMarketplace.event_date) : '');
-        
-        // For time: prefer form eventTime, fall back to DB times
-        const startTimeFormatted = formatTime(dbMarketplace?.start_time);
-        const endTimeFormatted = formatTime(dbMarketplace?.end_time);
-        const dbTimeRange = startTimeFormatted && endTimeFormatted 
-          ? `${startTimeFormatted} - ${endTimeFormatted}` 
-          : (startTimeFormatted || endTimeFormatted || '');
-        const timeRange = evt.eventTime || dbTimeRange;
-        
-        // For location: prefer form eventLocation, fall back to DB location
-        const eventLocation = evt.eventLocation || dbMarketplace?.location || '';
-        
-        // Get name from DB or generate from slug
-        const eventName = dbMarketplace?.name || evt.event
-          .split('-')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ')
-          .replace(/\s+\d+$/, ''); // Remove trailing numbers like "February 22"
-        
-        console.log(`Event "${evt.event}": Using date="${eventDateFormatted}" (form: ${evt.eventDate}, db: ${dbMarketplace?.event_date})`);
-        
-        registeredEvents.push({
-          name: eventName,
-          date: eventDateFormatted,
-          time: timeRange,
-          location: eventLocation,
-          rawStartTime: dbMarketplace?.start_time || null,
-          rawEndTime: dbMarketplace?.end_time || null,
-          rawDate: dbMarketplace?.event_date || null
-        });
+        try {
+          const dbMarketplace = marketplaceDetails.get(evt.event);
+          
+          // PRIORITIZE FORM DATA for date - it's submitted by the user and always correct
+          // Only use DB date if form data is missing
+          const eventDateFormatted = evt.eventDate || 
+            (dbMarketplace?.event_date ? formatDate(dbMarketplace.event_date) : '');
+          
+          // For time: prefer form eventTime, fall back to DB times
+          const startTimeFormatted = formatTime(dbMarketplace?.start_time);
+          const endTimeFormatted = formatTime(dbMarketplace?.end_time);
+          const dbTimeRange = startTimeFormatted && endTimeFormatted 
+            ? `${startTimeFormatted} - ${endTimeFormatted}` 
+            : (startTimeFormatted || endTimeFormatted || '');
+          const timeRange = evt.eventTime || dbTimeRange;
+          
+          // For location: prefer form eventLocation, fall back to DB location
+          const eventLocation = evt.eventLocation || dbMarketplace?.location || '';
+          
+          // Get name from DB or generate from slug (clean triple dashes)
+          const eventName = dbMarketplace?.name || (evt.event || 'Gift It Forward Marketplace')
+            .replace(/---/g, '-')
+            .split('-')
+            .filter(Boolean)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          
+          console.log(`Event "${evt.event}": Using date="${eventDateFormatted}" (form: ${evt.eventDate}, db: ${dbMarketplace?.event_date})`);
+          
+          registeredEvents.push({
+            name: eventName,
+            date: eventDateFormatted,
+            time: timeRange,
+            location: eventLocation,
+            rawStartTime: dbMarketplace?.start_time || null,
+            rawEndTime: dbMarketplace?.end_time || null,
+            rawDate: dbMarketplace?.event_date || null
+          });
+        } catch (evtError) {
+          console.error(`Error resolving event "${evt.event}":`, evtError);
+          // Fall back to raw form data so this event still appears in the email
+          registeredEvents.push({
+            name: (evt.event || 'Gift It Forward Marketplace').replace(/---/g, '-').split('-').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+            date: evt.eventDate || '',
+            time: evt.eventTime || '',
+            location: evt.eventLocation || '',
+            rawStartTime: null,
+            rawEndTime: null,
+            rawDate: null
+          });
+        }
       }
       
       console.log(`Built ${registeredEvents.length} events with times:`, registeredEvents);
@@ -1541,8 +1556,8 @@ async function sendWelcomeEmailWithQR(
       isFallback ? 'resend_fallback' : 'resend',
       true,
       null,
-      { to: email, subject: emailSubject, isFallback },
-      { status: 'sent' }
+      { to: email, subject: emailSubject, isFallback, eventCount: registeredEvents.length },
+        { status: 'sent' }
     );
     
     return { success: true, provider: isFallback ? 'resend_fallback' : 'resend' };
@@ -5068,6 +5083,9 @@ serve(async (req) => {
           }
         }
       }
+
+      // Log resend event context for debugging
+      console.log(`Resend: volunteer ${pending_id} has ${resolvedEventsJson && Array.isArray(resolvedEventsJson) ? resolvedEventsJson.length : 0} events in resolved events_json`);
 
       // Send welcome email with QR codes
       const appUrl = 'https://gif.thesurpluss.com';
