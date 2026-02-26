@@ -52,16 +52,31 @@ export const VolunteerInterface = () => {
   const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
-  // Auto-detect today's marketplace for kiosk accounts
+  // Auto-detect today's marketplace for kiosk accounts (time-aware)
   const today = new Date().toISOString().split('T')[0];
   const todaysEvents = isKioskAccount ? availableMarketplaces.filter(m => m.event_date === today) : [];
-  const kioskAutoDetected = todaysEvents.length === 1;
+
+  // Time-aware narrowing when multiple events on same day
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:00`;
+
+  const timeMatchedEvents = todaysEvents.length > 1
+    ? todaysEvents.filter(m => {
+        if (!m.start_time || !m.end_time) return true; // no times = all-day
+        // 1-hour early buffer for setup
+        const [h, min] = m.start_time.split(':').map(Number);
+        const bufferTime = `${String(Math.max(0, h - 1)).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`;
+        return currentTime >= bufferTime && currentTime <= m.end_time;
+      })
+    : todaysEvents;
+
+  const kioskAutoDetected = timeMatchedEvents.length === 1;
 
   useEffect(() => {
     if (isKioskAccount) {
       setActiveZone('marketplace');
-      if (todaysEvents.length > 0 && !selectedMarketplaceId) {
-        setSelectedMarketplaceId(todaysEvents[0].id);
+      if (timeMatchedEvents.length > 0 && !selectedMarketplaceId) {
+        setSelectedMarketplaceId(timeMatchedEvents[0].id);
       }
       return;
     }
@@ -236,7 +251,7 @@ export const VolunteerInterface = () => {
             {kioskAutoDetected ? (
               <div className="flex items-center gap-3">
                 <MapPin className="w-4 h-4 text-primary shrink-0" />
-                <span className="text-sm font-medium">Today's Event: {todaysEvents[0].name}</span>
+                <span className="text-sm font-medium">Today's Event: {timeMatchedEvents[0].name}</span>
               </div>
             ) : (
               <div className="flex items-center gap-3">
