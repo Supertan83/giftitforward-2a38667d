@@ -12,16 +12,16 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  SelectValue } from
+'@/components/ui/select';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  DialogFooter } from
+'@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,8 +30,8 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  AlertDialogTitle } from
+'@/components/ui/alert-dialog';
 import { useMarketplaces, useCreateMarketplace, useDeleteMarketplace, useUpdateMarketplace } from '@/hooks/useSupabaseData';
 import { useOutreachPartners } from '@/hooks/useOutreachPartners';
 import { OutreachPartnerManager } from '@/components/admin/OutreachPartnerManager';
@@ -50,7 +50,7 @@ const createMarketplaceSchema = z.object({
   outreach_partner: z.string().max(200).optional(),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
-  beneficiary_credit_limit: z.number().min(15).max(25).optional(),
+  beneficiary_credit_limit: z.number().min(15).max(25).optional()
 });
 
 // Helper to format time for display
@@ -75,11 +75,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [editingMarketplace, setEditingMarketplace] = useState<{
-    id: string; 
-    name: string; 
-    location: string; 
-    eventDate: string; 
-    status: 'upcoming' | 'active' | 'completed'; 
+    id: string;
+    name: string;
+    location: string;
+    eventDate: string;
+    status: 'upcoming' | 'active' | 'completed';
     outreachPartner: string;
     startTime: string;
     endTime: string;
@@ -107,7 +107,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
   // Filter marketplaces based on status filter
   const filteredMarketplaces = useMemo(() => {
     if (statusFilter === 'all') return marketplaces;
-    return marketplaces.filter(m => m.status === statusFilter);
+    return marketplaces.filter((m) => m.status === statusFilter);
   }, [marketplaces, statusFilter]);
 
   // Toggle selection for a single marketplace
@@ -126,19 +126,19 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     if (selectedIds.size === filteredMarketplaces.length && filteredMarketplaces.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredMarketplaces.map(m => m.id)));
+      setSelectedIds(new Set(filteredMarketplaces.map((m) => m.id)));
     }
   };
 
   // Get selected marketplaces for display in confirmation dialog
   const selectedMarketplaces = useMemo(() => {
-    return marketplaces.filter(m => selectedIds.has(m.id));
+    return marketplaces.filter((m) => selectedIds.has(m.id));
   }, [marketplaces, selectedIds]);
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    
+
     setIsDeletingBulk(true);
     let successCount = 0;
     let errorCount = 0;
@@ -160,23 +160,23 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     if (errorCount === 0) {
       toast({
         title: 'Events Deleted',
-        description: `Successfully deleted ${successCount} event${successCount > 1 ? 's' : ''}`,
+        description: `Successfully deleted ${successCount} event${successCount > 1 ? 's' : ''}`
       });
     } else {
       toast({
         title: 'Partial Deletion',
         description: `Deleted ${successCount} events, ${errorCount} failed`,
-        variant: 'destructive',
+        variant: 'destructive'
       });
     }
   };
 
-  const handleEdit = (marketplace: { 
-    id: string; 
-    name: string; 
-    location: string | null; 
-    event_date: string | null; 
-    status: string; 
+  const handleEdit = (marketplace: {
+    id: string;
+    name: string;
+    location: string | null;
+    event_date: string | null;
+    status: string;
     outreach_partner: string | null;
     start_time?: string | null;
     end_time?: string | null;
@@ -191,27 +191,27 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       outreachPartner: marketplace.outreach_partner || '',
       startTime: marketplace.start_time || '',
       endTime: marketplace.end_time || '',
-    beneficiaryCreditLimit: marketplace.beneficiary_credit_limit ?? 15,
-    maxItemsPerScan: (marketplace as any).max_items_per_scan ?? 1,
+      beneficiaryCreditLimit: marketplace.beneficiary_credit_limit ?? 15,
+      maxItemsPerScan: (marketplace as any).max_items_per_scan ?? 1
     });
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async () => {
     if (!editingMarketplace) return;
-    
+
     setErrors({});
-    const result = createMarketplaceSchema.safeParse({ 
-      name: editingMarketplace.name, 
-      location: editingMarketplace.location || undefined, 
-      event_date: editingMarketplace.eventDate || undefined, 
+    const result = createMarketplaceSchema.safeParse({
+      name: editingMarketplace.name,
+      location: editingMarketplace.location || undefined,
+      event_date: editingMarketplace.eventDate || undefined,
       status: editingMarketplace.status,
       outreach_partner: editingMarketplace.outreachPartner || undefined,
       start_time: editingMarketplace.startTime || undefined,
       end_time: editingMarketplace.endTime || undefined,
-      beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit,
+      beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit
     });
-    
+
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -224,7 +224,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
     }
 
     // Determine the original status from the fetched marketplace data
-    const originalMarketplace = marketplaces.find(m => m.id === editingMarketplace.id);
+    const originalMarketplace = marketplaces.find((m) => m.id === editingMarketplace.id);
     const originalStatus = originalMarketplace?.status;
     const statusChanged = originalStatus !== editingMarketplace.status;
 
@@ -250,11 +250,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         end_time: editingMarketplace.endTime || null,
         beneficiary_credit_limit: editingMarketplace.beneficiaryCreditLimit,
         max_items_per_scan: editingMarketplace.maxItemsPerScan,
-        ...(statusLockedByAdmin !== undefined && { status_locked_by_admin: statusLockedByAdmin }),
+        ...(statusLockedByAdmin !== undefined && { status_locked_by_admin: statusLockedByAdmin })
       });
       toast({
         title: 'Marketplace Updated',
-        description: `${editingMarketplace.name} has been updated`,
+        description: `${editingMarketplace.name} has been updated`
       });
       setShowEditModal(false);
       setEditingMarketplace(null);
@@ -262,25 +262,25 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       toast({
         title: 'Failed to Update Marketplace',
         description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     }
   };
 
   const handleCreate = async () => {
     setErrors({});
-    
-    const result = createMarketplaceSchema.safeParse({ 
-      name, 
-      location: location || undefined, 
-      event_date: eventDate || undefined, 
+
+    const result = createMarketplaceSchema.safeParse({
+      name,
+      location: location || undefined,
+      event_date: eventDate || undefined,
       status,
       outreach_partner: outreachPartner || undefined,
       start_time: startTime || undefined,
       end_time: endTime || undefined,
-      beneficiary_credit_limit: beneficiaryCreditLimit,
+      beneficiary_credit_limit: beneficiaryCreditLimit
     });
-    
+
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -302,11 +302,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         start_time: startTime || null,
         end_time: endTime || null,
         beneficiary_credit_limit: beneficiaryCreditLimit,
-        max_items_per_scan: maxItemsPerScan,
+        max_items_per_scan: maxItemsPerScan
       });
       toast({
         title: 'Marketplace Created',
-        description: `${name} has been added`,
+        description: `${name} has been added`
       });
       setShowCreateModal(false);
       setName('');
@@ -322,32 +322,32 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       toast({
         title: 'Failed to Create Marketplace',
         description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
-    
+
     try {
       await deleteMarketplace.mutateAsync(id);
       toast({
         title: 'Marketplace Deleted',
-        description: `${name} has been removed`,
+        description: `${name} has been removed`
       });
     } catch (error) {
       toast({
         title: 'Failed to Delete',
         description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     }
   };
 
-  const upcomingCount = marketplaces.filter(m => m.status === 'upcoming').length;
-  const activeCount = marketplaces.filter(m => m.status === 'active').length;
-  const completedCount = marketplaces.filter(m => m.status === 'completed').length;
+  const upcomingCount = marketplaces.filter((m) => m.status === 'upcoming').length;
+  const activeCount = marketplaces.filter((m) => m.status === 'active').length;
+  const completedCount = marketplaces.filter((m) => m.status === 'completed').length;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -376,21 +376,21 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
               <h1 className="font-display font-bold text-base md:text-lg truncate">Marketplace Events</h1>
               <p className="text-xs md:text-sm text-muted-foreground">Manage distribution events</p>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setShowPartnerManager(true)}
-              className="hidden md:flex"
-            >
+              className="hidden md:flex">
+
               <Settings className="w-4 h-4 mr-2" />
               Manage Partners
             </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
+            <Button
+              variant="outline"
+              size="icon"
               onClick={() => setShowPartnerManager(true)}
-              className="md:hidden"
-            >
+              className="md:hidden">
+
               <Settings className="w-4 h-4" />
             </Button>
           </div>
@@ -447,7 +447,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
               </div>
               
               {/* Status Filter Tabs */}
-              <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v as StatusFilter); setSelectedIds(new Set()); }}>
+              <Tabs value={statusFilter} onValueChange={(v) => {setStatusFilter(v as StatusFilter);setSelectedIds(new Set());}}>
                 <TabsList className="flex-wrap h-auto gap-1">
                   <TabsTrigger value="all" className="text-xs sm:text-sm">All ({marketplaces.length})</TabsTrigger>
                   <TabsTrigger value="upcoming" className="text-xs sm:text-sm">Upcoming ({upcomingCount})</TabsTrigger>
@@ -458,117 +458,117 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             </div>
 
             {/* Bulk Actions Bar */}
-            {filteredMarketplaces.length > 0 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+            {filteredMarketplaces.length > 0 &&
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                 <div className="flex items-center gap-3">
                   <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={toggleSelectAll}
-                    aria-label="Select all"
-                  />
+                  checked={isAllSelected}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all" />
+
                   <span className="text-sm text-muted-foreground">
                     {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
                   </span>
                 </div>
                 
-                {selectedIds.size > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setShowBulkDeleteDialog(true)}
-                    disabled={isDeletingBulk}
-                  >
+                {selectedIds.size > 0 &&
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowBulkDeleteDialog(true)}
+                disabled={isDeletingBulk}>
+
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete Selected ({selectedIds.size})
                   </Button>
-                )}
+              }
               </div>
-            )}
+            }
           </div>
 
-          {isLoading ? (
-            <div className="p-8 text-center">
+          {isLoading ?
+          <div className="p-8 text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-            </div>
-          ) : filteredMarketplaces.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
+            </div> :
+          filteredMarketplaces.length === 0 ?
+          <div className="p-8 text-center text-muted-foreground">
               <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>No marketplace events {statusFilter !== 'all' ? `with status "${statusFilter}"` : 'yet'}</p>
               {statusFilter === 'all' && <p className="text-sm">Create your first event to get started</p>}
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {filteredMarketplaces.map((marketplace, index) => (
-                <motion.div
-                  key={marketplace.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.02 }}
-                  className={`p-4 flex items-center justify-between gap-3 ${selectedIds.has(marketplace.id) ? 'bg-primary/5' : ''}`}
-                >
+            </div> :
+
+          <div className="divide-y divide-border">
+              {filteredMarketplaces.map((marketplace, index) =>
+            <motion.div
+              key={marketplace.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.02 }}
+              className={`p-4 flex items-center justify-between gap-3 ${selectedIds.has(marketplace.id) ? 'bg-primary/5' : ''}`}>
+
                   <div className="flex items-center gap-3 min-w-0">
                     <Checkbox
-                      checked={selectedIds.has(marketplace.id)}
-                      onCheckedChange={() => toggleSelection(marketplace.id)}
-                      aria-label={`Select ${marketplace.name}`}
-                    />
+                  checked={selectedIds.has(marketplace.id)}
+                  onCheckedChange={() => toggleSelection(marketplace.id)}
+                  aria-label={`Select ${marketplace.name}`} />
+
                     <div className="w-10 h-10 rounded-full bg-primary-soft flex items-center justify-center shrink-0">
                       <Store className="w-5 h-5 text-primary" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium truncate">{marketplace.name}</p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {marketplace.outreach_partner && (
-                          <span className="flex items-center gap-1">
+                        {marketplace.outreach_partner &&
+                    <span className="flex items-center gap-1">
                             <Users className="w-3 h-3" />
                             {marketplace.outreach_partner}
                           </span>
-                        )}
-                        {marketplace.location && (
-                          <span className="flex items-center gap-1">
+                    }
+                        {marketplace.location &&
+                    <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
                             {marketplace.location}
                           </span>
-                        )}
-                        {marketplace.event_date && (
-                          <span className="flex items-center gap-1">
+                    }
+                        {marketplace.event_date &&
+                    <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {new Date(marketplace.event_date).toLocaleDateString()}
                           </span>
-                        )}
-                        {(marketplace.start_time || marketplace.end_time) && (
-                          <span className="flex items-center gap-1">
+                    }
+                        {(marketplace.start_time || marketplace.end_time) &&
+                    <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {formatTime(marketplace.start_time)}{marketplace.start_time && marketplace.end_time && ' - '}{formatTime(marketplace.end_time)}
                           </span>
-                        )}
+                    }
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(marketplace.status)}
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEdit(marketplace)}
-                    >
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-primary"
+                  onClick={() => handleEdit(marketplace)}>
+
                       <Pencil className="w-4 h-4" />
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(marketplace.id, marketplace.name)}
-                      disabled={deleteMarketplace.isPending}
-                    >
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => handleDelete(marketplace.id, marketplace.name)}
+                  disabled={deleteMarketplace.isPending}>
+
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </motion.div>
-              ))}
+            )}
             </div>
-          )}
+          }
         </div>
       </main>
 
@@ -580,16 +580,16 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             <AlertDialogDescription className="space-y-3">
               <p>This action cannot be undone. The following events will be permanently deleted:</p>
               <div className="max-h-48 overflow-y-auto bg-muted rounded-lg p-3 space-y-1">
-                {selectedMarketplaces.map(m => (
-                  <div key={m.id} className="text-sm flex items-center gap-2">
+                {selectedMarketplaces.map((m) =>
+                <div key={m.id} className="text-sm flex items-center gap-2">
                     <span className="font-medium">{m.name}</span>
-                    {m.event_date && (
-                      <span className="text-muted-foreground">
+                    {m.event_date &&
+                  <span className="text-muted-foreground">
                         ({new Date(m.event_date).toLocaleDateString()})
                       </span>
-                    )}
+                  }
                   </div>
-                ))}
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -598,19 +598,19 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             <AlertDialogAction
               onClick={handleBulkDelete}
               disabled={isDeletingBulk}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeletingBulk ? (
-                <>
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+
+              {isDeletingBulk ?
+              <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Deleting...
-                </>
-              ) : (
-                <>
+                </> :
+
+              <>
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete {selectedIds.size} Event{selectedIds.size > 1 ? 's' : ''}
                 </>
-              )}
+              }
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -633,11 +633,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 id="name"
                 placeholder="e.g., Community Center Distribution"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              {errors.name && (
-                <p className="text-sm text-destructive">{errors.name}</p>
-              )}
+                onChange={(e) => setName(e.target.value)} />
+
+              {errors.name &&
+              <p className="text-sm text-destructive">{errors.name}</p>
+              }
             </div>
 
             <div className="space-y-2">
@@ -649,8 +649,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   placeholder="e.g., 123 Main Street"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  className="pl-10"
-                />
+                  className="pl-10" />
+
               </div>
             </div>
 
@@ -660,8 +660,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 id="event_date"
                 type="date"
                 value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-              />
+                onChange={(e) => setEventDate(e.target.value)} />
+
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -674,8 +674,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="pl-10"
-                  />
+                    className="pl-10" />
+
                 </div>
               </div>
               <div className="space-y-2">
@@ -687,8 +687,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="pl-10"
-                  />
+                    className="pl-10" />
+
                 </div>
               </div>
             </div>
@@ -700,11 +700,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   <SelectValue placeholder="Select partner..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {outreachPartners.map(partner => (
-                    <SelectItem key={partner.id} value={partner.name}>
+                  {outreachPartners.map((partner) =>
+                  <SelectItem key={partner.id} value={partner.name}>
                       {partner.name}
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -721,8 +721,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                     max={25}
                     value={beneficiaryCreditLimit}
                     onChange={(e) => setBeneficiaryCreditLimit(parseInt(e.target.value) || 15)}
-                    className="pl-10"
-                  />
+                    className="pl-10" />
+
                 </div>
                 <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
               </div>
@@ -738,8 +738,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   min={1}
                   max={beneficiaryCreditLimit}
                   value={maxItemsPerScan}
-                  onChange={(e) => setMaxItemsPerScan(Math.min(parseInt(e.target.value) || 1, beneficiaryCreditLimit))}
-                />
+                  onChange={(e) => setMaxItemsPerScan(Math.min(parseInt(e.target.value) || 1, beneficiaryCreditLimit))} />
+
                 <span className="text-sm text-muted-foreground whitespace-nowrap">items/scan</span>
               </div>
               <p className="text-xs text-muted-foreground">Set to 1 to hide quantity selector for volunteers. Range: 1-{beneficiaryCreditLimit}</p>
@@ -773,7 +773,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       </Dialog>
 
       {/* Edit Marketplace Modal */}
-      <Dialog open={showEditModal} onOpenChange={(open) => { setShowEditModal(open); if (!open) setEditingMarketplace(null); }}>
+      <Dialog open={showEditModal} onOpenChange={(open) => {setShowEditModal(open);if (!open) setEditingMarketplace(null);}}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Edit Marketplace Event</DialogTitle>
@@ -782,19 +782,19 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
             </DialogDescription>
           </DialogHeader>
 
-          {editingMarketplace && (
-            <div className="space-y-4 py-4">
+          {editingMarketplace &&
+          <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Event Name *</Label>
                 <Input
-                  id="edit-name"
-                  placeholder="e.g., Community Center Distribution"
-                  value={editingMarketplace.name}
-                  onChange={(e) => setEditingMarketplace({ ...editingMarketplace, name: e.target.value })}
-                />
-                {errors.name && (
-                  <p className="text-sm text-destructive">{errors.name}</p>
-                )}
+                id="edit-name"
+                placeholder="e.g., Community Center Distribution"
+                value={editingMarketplace.name}
+                onChange={(e) => setEditingMarketplace({ ...editingMarketplace, name: e.target.value })} />
+
+                {errors.name &&
+              <p className="text-sm text-destructive">{errors.name}</p>
+              }
               </div>
 
               <div className="space-y-2">
@@ -802,23 +802,23 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    id="edit-location"
-                    placeholder="e.g., 123 Main Street"
-                    value={editingMarketplace.location}
-                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, location: e.target.value })}
-                    className="pl-10"
-                  />
+                  id="edit-location"
+                  placeholder="e.g., 123 Main Street"
+                  value={editingMarketplace.location}
+                  onChange={(e) => setEditingMarketplace({ ...editingMarketplace, location: e.target.value })}
+                  className="pl-10" />
+
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="edit-event_date">Event Date</Label>
                 <Input
-                  id="edit-event_date"
-                  type="date"
-                  value={editingMarketplace.eventDate}
-                  onChange={(e) => setEditingMarketplace({ ...editingMarketplace, eventDate: e.target.value })}
-                />
+                id="edit-event_date"
+                type="date"
+                value={editingMarketplace.eventDate}
+                onChange={(e) => setEditingMarketplace({ ...editingMarketplace, eventDate: e.target.value })} />
+
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -827,12 +827,12 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="edit-start_time"
-                      type="time"
-                      value={editingMarketplace.startTime}
-                      onChange={(e) => setEditingMarketplace({ ...editingMarketplace, startTime: e.target.value })}
-                      className="pl-10"
-                    />
+                    id="edit-start_time"
+                    type="time"
+                    value={editingMarketplace.startTime}
+                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, startTime: e.target.value })}
+                    className="pl-10" />
+
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -840,31 +840,31 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="edit-end_time"
-                      type="time"
-                      value={editingMarketplace.endTime}
-                      onChange={(e) => setEditingMarketplace({ ...editingMarketplace, endTime: e.target.value })}
-                      className="pl-10"
-                    />
+                    id="edit-end_time"
+                    type="time"
+                    value={editingMarketplace.endTime}
+                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, endTime: e.target.value })}
+                    className="pl-10" />
+
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="edit-outreach_partner">Outreach Partner</Label>
-                <Select 
-                  value={editingMarketplace.outreachPartner} 
-                  onValueChange={(v) => setEditingMarketplace({ ...editingMarketplace, outreachPartner: v })}
-                >
+                <Select
+                value={editingMarketplace.outreachPartner}
+                onValueChange={(v) => setEditingMarketplace({ ...editingMarketplace, outreachPartner: v })}>
+
                   <SelectTrigger>
                     <SelectValue placeholder="Select partner..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {outreachPartners.map(partner => (
-                      <SelectItem key={partner.id} value={partner.name}>
+                    {outreachPartners.map((partner) =>
+                  <SelectItem key={partner.id} value={partner.name}>
                         {partner.name}
                       </SelectItem>
-                    ))}
+                  )}
                   </SelectContent>
                 </Select>
               </div>
@@ -875,42 +875,42 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   <div className="relative flex-1">
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="edit-beneficiary_credit_limit"
-                      type="number"
-                      min={15}
-                      max={25}
-                      value={editingMarketplace.beneficiaryCreditLimit}
-                      onChange={(e) => setEditingMarketplace({ ...editingMarketplace, beneficiaryCreditLimit: parseInt(e.target.value) || 15 })}
-                      className="pl-10"
-                    />
+                    id="edit-beneficiary_credit_limit"
+                    type="number"
+                    min={15}
+                    max={25}
+                    value={editingMarketplace.beneficiaryCreditLimit}
+                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, beneficiaryCreditLimit: parseInt(e.target.value) || 15 })}
+                    className="pl-10" />
+
                   </div>
                   <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
                 </div>
                 <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-max_items_per_scan">Max Items Per Scan</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="edit-max_items_per_scan"
-                    type="number"
-                    min={1}
-                    max={editingMarketplace.beneficiaryCreditLimit}
-                    value={editingMarketplace.maxItemsPerScan}
-                    onChange={(e) => setEditingMarketplace({ ...editingMarketplace, maxItemsPerScan: Math.min(parseInt(e.target.value) || 1, editingMarketplace.beneficiaryCreditLimit) })}
-                  />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">items/scan</span>
-                </div>
-                <p className="text-xs text-muted-foreground">Set to 1 to hide quantity selector for volunteers. Range: 1-{editingMarketplace.beneficiaryCreditLimit}</p>
-              </div>
+              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select 
-                  value={editingMarketplace.status} 
-                  onValueChange={(v) => setEditingMarketplace({ ...editingMarketplace, status: v as 'upcoming' | 'active' | 'completed' })}
-                >
+                <Select
+                value={editingMarketplace.status}
+                onValueChange={(v) => setEditingMarketplace({ ...editingMarketplace, status: v as 'upcoming' | 'active' | 'completed' })}>
+
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -922,10 +922,10 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 </Select>
               </div>
             </div>
-          )}
+          }
 
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => { setShowEditModal(false); setEditingMarketplace(null); }}>
+            <Button variant="outline" onClick={() => {setShowEditModal(false);setEditingMarketplace(null);}}>
               Cancel
             </Button>
             <Button onClick={handleSaveEdit} disabled={updateMarketplace.isPending}>
@@ -937,10 +937,10 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
       </Dialog>
 
       {/* Outreach Partner Manager Modal */}
-      <OutreachPartnerManager 
-        isOpen={showPartnerManager} 
-        onClose={() => setShowPartnerManager(false)} 
-      />
-    </div>
-  );
+      <OutreachPartnerManager
+        isOpen={showPartnerManager}
+        onClose={() => setShowPartnerManager(false)} />
+
+    </div>);
+
 };
