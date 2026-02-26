@@ -169,7 +169,7 @@ async function syncMaterial(
       name: materialTitle, 
       external_material_id: materialId, 
       icon: 'Package', 
-      total_stock: allocatedAmount, 
+      total_stock: 0, // Safe default — real total will be set by sync-surpluss-allocations from donations API 
       surpluss_url: `https://platform.thesurpluss.com/material/${materialId}` 
     };
     if (category) insertData.category = category;
