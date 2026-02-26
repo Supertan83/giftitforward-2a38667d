@@ -1,36 +1,43 @@
 
 
-## Update All Kiosk Accounts to Checked-In / Marketplace Zone
+## Auto-Detect Today's Marketplace for Kiosk Accounts
 
-### Current State
-All 25 kiosk accounts (acc01@gif.com - acc25@gif.com) exist in the database with volunteer QR cards, but:
-- Card status: `inactive`
-- Assigned zone: `none`
-- Marketplace: `none`
+### What Changes
 
-### What Will Change
+When a kiosk account logs in, instead of showing a dropdown and waiting for manual selection, the app will automatically find today's marketplace event and select it. If no event matches today, the dropdown remains as a fallback.
 
-**Database update** -- Run a single SQL migration to update all 25 volunteer QR cards:
-- Set `status` to `checked_in`
-- Set `assigned_zone` to `marketplace`
-- Set `checked_in_at` to the current timestamp
+### How It Works
 
-The marketplace will NOT be pre-assigned because kiosk accounts already have a manual marketplace selector in the UI -- the volunteer on the tablet picks which event they're at.
+In `src/components/VolunteerInterface.tsx`, the existing `useEffect` for kiosk accounts will be extended:
+
+1. Filter `availableMarketplaces` to find one whose `event_date` matches today's date (YYYY-MM-DD)
+2. If exactly one match is found, auto-select it (no dropdown needed)
+3. If multiple matches exist (e.g., split morning/afternoon sessions), auto-select the first one but keep the dropdown visible so the volunteer can switch
+4. If no match, show the dropdown as-is (current behavior)
 
 ### Technical Details
 
-**Migration SQL:**
+**File: `src/components/VolunteerInterface.tsx`**
+
+Update the kiosk `useEffect` block (around line 56):
+
 ```text
-UPDATE volunteer_qr_cards
-SET status = 'checked_in',
-    assigned_zone = 'marketplace',
-    checked_in_at = now(),
-    updated_at = now()
-WHERE volunteer_id IN (
-  SELECT id FROM pending_volunteers
-  WHERE email ~ '^acc\d{2}@gif\.com$'
-);
+useEffect(() => {
+  if (isKioskAccount) {
+    setActiveZone('marketplace');
+
+    // Auto-detect today's marketplace
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const todaysEvents = availableMarketplaces.filter(m => m.event_date === today);
+    if (todaysEvents.length > 0 && !selectedMarketplaceId) {
+      setSelectedMarketplaceId(todaysEvents[0].id);
+    }
+    return;
+  }
+  // ... rest unchanged
+}, [isKioskAccount, availableMarketplaces, selectedMarketplaceId, ...]);
 ```
 
-This is a data-only change -- no code files are modified. The kiosk bypass logic in the app already handles the rest (skipping check-in gate, showing marketplace zone, hiding sign-out button).
+Update the kiosk header section to hide the marketplace selector when exactly one event matches today, and show it otherwise (with a label like "Today's Event: [name]" when auto-detected).
 
+This is a code-only change to one file -- no database changes needed.
