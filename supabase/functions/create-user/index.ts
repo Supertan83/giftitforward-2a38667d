@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 // Input validation helpers
-const KIOSK_EMAIL_PATTERN = /^acc\d{2}@gif$/;
+const KIOSK_EMAIL_PATTERN = /^acc\d{2}@gif\.com$/;
 
 const isValidEmail = (email: string): boolean => {
   // Allow kiosk account emails (acc01@gif through acc25@gif)
