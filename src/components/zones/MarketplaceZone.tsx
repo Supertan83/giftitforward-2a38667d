@@ -1,8 +1,9 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, QrCode, RotateCcw, Package, Loader2, Minus, Plus } from 'lucide-react';
+import { ShoppingBag, QrCode, RotateCcw, Package, Loader2, Minus, Plus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
@@ -39,7 +40,33 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
 
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
   const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
-  const maxItemsPerScan = (selectedMarketplace as any)?.max_items_per_scan ?? 1;
+
+  // Station limit from localStorage (per marketplace)
+  const storageKey = `station_limit_${selectedMarketplaceId}`;
+  const [stationLimit, setStationLimitState] = useState(() => {
+    if (!selectedMarketplaceId) return 1;
+    const stored = localStorage.getItem(storageKey);
+    return stored ? Math.min(parseInt(stored, 10) || 1, 25) : 1;
+  });
+
+  // Re-read localStorage when marketplace changes
+  useEffect(() => {
+    if (!selectedMarketplaceId) return;
+    const key = `station_limit_${selectedMarketplaceId}`;
+    const stored = localStorage.getItem(key);
+    setStationLimitState(stored ? Math.min(parseInt(stored, 10) || 1, 25) : 1);
+    setQuantity(1);
+  }, [selectedMarketplaceId]);
+
+  const effectiveLimit = Math.min(stationLimit, creditLimit);
+
+  const setStationLimit = (value: number) => {
+    const clamped = Math.max(1, Math.min(value, creditLimit, 25));
+    setStationLimitState(clamped);
+    localStorage.setItem(`station_limit_${selectedMarketplaceId}`, String(clamped));
+    // Reset quantity if it exceeds new limit
+    setQuantity(q => Math.min(q, clamped));
+  };
 
   // Calculate totals - use transaction-based count as source of truth for scanned
   const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedQuantity, 0);
@@ -172,10 +199,53 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
         <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">
           Marketplace
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5 md:mt-1">
-          Distribute items to beneficiaries
-        </p>
-      </motion.div>
+         <p className="text-sm text-muted-foreground mt-0.5 md:mt-1">
+           Distribute items to beneficiaries
+         </p>
+       </motion.div>
+
+       {/* Gear icon for station limit */}
+       {selectedMarketplaceId && (
+         <div className="flex justify-end mb-2">
+           <Popover>
+             <PopoverTrigger asChild>
+               <Button variant="ghost" size="icon" className="h-9 w-9">
+                 <Settings className="w-4 h-4 text-muted-foreground" />
+               </Button>
+             </PopoverTrigger>
+             <PopoverContent className="w-64" align="end">
+               <p className="text-sm font-semibold mb-1">Station Limit</p>
+               <div className="flex items-center justify-center gap-3 my-3">
+                 <Button
+                   variant="outline"
+                   size="icon"
+                   className="h-10 w-10 rounded-full"
+                   onClick={() => setStationLimit(stationLimit - 1)}
+                   disabled={stationLimit <= 1}
+                 >
+                   <Minus className="w-4 h-4" />
+                 </Button>
+                 <span className="text-2xl font-bold tabular-nums min-w-[2rem] text-center">
+                   {stationLimit}
+                 </span>
+                 <Button
+                   variant="outline"
+                   size="icon"
+                   className="h-10 w-10 rounded-full"
+                   onClick={() => setStationLimit(stationLimit + 1)}
+                   disabled={stationLimit >= Math.min(creditLimit, 25)}
+                 >
+                   <Plus className="w-4 h-4" />
+                 </Button>
+               </div>
+               <p className="text-xs text-muted-foreground text-center">
+                 Max items per scan for this station
+               </p>
+             </PopoverContent>
+           </Popover>
+         </div>
+        )}
+
 
       {selectedMarketplaceId ? (
         <>
@@ -240,7 +310,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
             </button>
           </div>
 
-          {/* Quantity Selector - always shown, capped by credit limit */}
+          {/* Quantity Selector - capped by station limit */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -251,7 +321,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
               </p>
               <p className="text-xs text-center mb-3">
                 <Badge variant="outline" className="text-xs font-medium">
-                  Max {creditLimit} items per scan
+                  Station Limit: {effectiveLimit} {effectiveLimit === 1 ? 'item' : 'items'}
                 </Badge>
               </p>
               <div className="flex items-center justify-center gap-4">
@@ -260,7 +330,7 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
                   size="icon"
                   className="h-16 w-16 rounded-full shrink-0"
                   onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  disabled={quantity <= 1}
+                  disabled={quantity <= 1 || effectiveLimit <= 1}
                 >
                   <Minus className="w-7 h-7" />
                 </Button>
@@ -276,28 +346,11 @@ export const MarketplaceZone = ({ selectedMarketplaceId }: MarketplaceZoneProps)
                   variant="outline"
                   size="icon"
                   className="h-16 w-16 rounded-full shrink-0"
-                  onClick={() => setQuantity(q => Math.min(creditLimit, q + 1))}
-                  disabled={quantity >= creditLimit}
+                  onClick={() => setQuantity(q => Math.min(effectiveLimit, q + 1))}
+                  disabled={quantity >= effectiveLimit || effectiveLimit <= 1}
                 >
                   <Plus className="w-7 h-7" />
                 </Button>
-              </div>
-              {/* Quick-select presets */}
-              <div className="flex items-center justify-center gap-2 mt-3">
-                {[1, 3, 5, 10].filter(v => v <= creditLimit).map(value => (
-                  <button
-                    key={value}
-                    onClick={() => setQuantity(value)}
-                    className={cn(
-                      "min-h-[44px] min-w-[44px] px-4 rounded-full text-sm font-semibold transition-all",
-                      quantity === value
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {value}
-                  </button>
-                ))}
               </div>
               {quantity > 1 && (
                 <p className="text-xs text-primary text-center mt-2 font-medium">
