@@ -2620,7 +2620,7 @@ serve(async (req) => {
                   name: materialTitle,
                   external_material_id: materialId,
                   icon: 'Package',
-                  total_stock: amount // Set initial stock to allocated amount
+                  total_stock: 0 // Safe default — real total will be set by donations sync
                 })
                 .select('id, name')
                 .single();
