@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.backup-table]
 verify_jwt = false
+
+[functions.create-test-volunteers]
+verify_jwt = false
