@@ -1,66 +1,32 @@
 
 
-## Add Check-In and Check-Out Kiosk Accounts
+## Create 20 Test Volunteer Accounts for Dry Run
 
-### Overview
+### Approach
+Create a temporary edge function `create-test-volunteers` that uses the service role key to batch-create 20 test volunteer accounts (test01@gif.com through test20@gif.com) with password `12345678`, each linked to today's marketplace event.
 
-Create 6 new kiosk-style accounts that work identically to the existing tablet kiosk accounts (acc01-acc25) but are locked to specific zones:
-- **Check-in kiosks**: in01@gif.com, in02@gif.com, in03@gif.com -- locked to the **entrance** zone
-- **Check-out kiosks**: out01@gif.com, out02@gif.com, out03@gif.com -- locked to the **exit** zone
+### What the Edge Function Does
+1. Creates 20 auth users (test01@gif.com - test20@gif.com) with password `12345678`
+2. Assigns `volunteer` role to each
+3. Creates `pending_volunteers` records (status: `approved`, source: `manual`)
+4. Creates `volunteer_qr_cards` records (status: `inactive`) linked to today's marketplace (`d21fba59-2bf2-4a47-bd10-f88278d4c95e`)
+5. Skips any that already exist
+6. No emails sent -- these are just test accounts
 
-These accounts will share all kiosk behaviors: no sign-out button, no bottom nav, auto-detect today's marketplace by date and time, skip the check-in gate.
+### File Created
+`supabase/functions/create-test-volunteers/index.ts`
 
-### Changes
+- Uses service role key (no auth required, one-time use)
+- Loops through test01-test20, creates each account
+- Returns summary of created/skipped accounts
 
-**1. Update kiosk detection logic** (`src/components/VolunteerInterface.tsx`)
-
-Expand the single `KIOSK_PATTERN` regex into three patterns to detect the account type and its locked zone:
-
-```text
-const KIOSK_MARKETPLACE_PATTERN = /^acc\d{2}@gif\.com$/;
-const KIOSK_CHECKIN_PATTERN = /^in\d{2}@gif\.com$/;
-const KIOSK_CHECKOUT_PATTERN = /^out\d{2}@gif\.com$/;
-```
-
-Derive a single `isKioskAccount` boolean (true if any pattern matches) and a `kioskZone` value:
-- `acc*` accounts: zone = `'marketplace'`
-- `in*` accounts: zone = `'entrance'`
-- `out*` accounts: zone = `'exit'`
-
-Replace all existing `isKioskAccount` references to use the new boolean. Replace the hardcoded `setActiveZone('marketplace')` in the useEffect with `setActiveZone(kioskZone)`.
-
-The `renderZone()` function will use `kioskZone` instead of always rendering `MarketplaceZone` for kiosk accounts -- it will render `EntranceZone`, `MarketplaceZone`, or `ExitZone` based on the account type.
-
-**2. Create the 6 auth accounts in the database**
-
-Use the existing `create-user` edge function (or direct admin API) to create 6 accounts with password `12345678`:
-- in01@gif.com, in02@gif.com, in03@gif.com
-- out01@gif.com, out02@gif.com, out03@gif.com
-
-Each will automatically receive the `volunteer` role via the existing `handle_new_user_role` trigger.
-
-**3. Pre-assign check-in status in the database**
-
-Just like the existing acc01-acc25 accounts have pre-assigned `checked_in` status, the new accounts need `pending_volunteers` records and `volunteer_qr_cards` with:
-- `status = 'checked_in'`
-- `assigned_zone = 'entrance'` (for in* accounts) or `assigned_zone = 'exit'` (for out* accounts)
-
-This ensures they bypass the check-in gate if the non-kiosk code path is ever reached.
+### After Deployment
+- Call the function once to create all 20 accounts
+- Volunteers can log in with `testXX@gif.com` / `12345678`
+- They'll appear as regular volunteers assigned to today's dry run marketplace
+- Can optionally delete the function after use
 
 ### Technical Details
-
-**File: `src/components/VolunteerInterface.tsx`**
-
-Key changes:
-- Replace `KIOSK_PATTERN` with 3 regex constants
-- Add `kioskZone` derived variable: `'entrance' | 'marketplace' | 'exit' | null`
-- `isKioskAccount` = any of the 3 patterns match
-- In `useEffect`: use `setActiveZone(kioskZone)` instead of hardcoded `'marketplace'`
-- In `renderZone()`: use `kioskZone` to pick the correct zone component instead of always `MarketplaceZone`
-- Header subtitle: show "Check-in Kiosk", "Marketplace Kiosk", or "Check-out Kiosk" based on `kioskZone`
-- All other kiosk behaviors (hide sign-out, hide bottom nav, auto-detect marketplace, gear icon) remain the same
-
-**Database**: Create 6 auth users + pending_volunteers + volunteer_qr_cards records via edge function calls after implementation.
-
-### No new dependencies or database schema changes required.
-
+- Marketplace ID: `d21fba59-2bf2-4a47-bd10-f88278d4c95e` (Dry Run Friday Marketplace - 27/02)
+- QR codes generated with `VOL-` prefix pattern
+- Each account gets a `pending_volunteers` record so the volunteer flow works end-to-end
