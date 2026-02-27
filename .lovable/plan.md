@@ -1,65 +1,56 @@
 
 
-## Fix Surpluss Allocation Sync to Use Correct API Endpoint
+## Fix Swapped External IDs and Re-Sync Allocations
 
-### Problem
-The sync functions use the wrong API endpoints, pulling ALL global donations (~497k pieces) instead of event-specific allocations. This caused 720 incorrect allocation records (248k+ pieces per marketplace instead of the correct amounts).
+### Current State (Verified via API)
 
-### Root Cause
-| Function | Current (wrong) endpoint | Correct endpoint |
+Only **one** Surpluss event currently has allocation data:
+
+| Surpluss event_id | Items on Surpluss API | Currently mapped to (GIF) |
 |---|---|---|
-| `sync-surpluss-event-allocations` | `GET /marketplace-events/:id/allocations` (returns empty) | `GET /donation-allocations?event_id=:id` |
-| `allocate-donations-to-marketplace` | `GET /donations` (returns ALL global donations) | `GET /donation-allocations?event_id=:id` |
+| **4** | **38,940 pieces** (30 materials) | March 7 First Half (wrong) |
+| 5 | 0 pieces | Feb 28 Second Half |
+| 11 | 0 pieces | Feb 28 First Half |
+| 12 | 0 pieces | March 7 Second Half |
 
-### Fix Plan (4 steps)
+The 38,940 pieces sitting under March 7 likely belong to Feb 28 (since the Feb 28 event is tomorrow and the Surpluss platform shows items under "She Thrives Women Workers Marketplace February 28").
 
-#### Step 1: Clear 720 incorrect allocation records
-Delete all `marketplace_item_allocations` for both Feb 28 marketplaces (zero distributions, safe to delete):
-- First Half (`ff0d8005...`, ext_id 11): 360 records, 248,854 pieces
-- Second Half (`1e38fa11...`, ext_id 5): 360 records, 248,706 pieces
+### Fix Plan (3 steps via edge function)
 
-#### Step 2: Fix `sync-surpluss-event-allocations/index.ts`
-In `syncSingleMarketplace()` (line 218), change the URL from:
+#### Step 1: Swap external_ids between Feb 28 First Half and March 7 First Half
 ```text
-/api/common/marketplace-events/{ext_id}/allocations
+Feb 28 First Half (ff0d8005): external_id 11 -> 4
+March 7 First Half (1938adf3): external_id 4 -> 11
 ```
-to:
-```text
-/api/common/donation-allocations?event_id={ext_id}&limit=100
-```
-Add pagination support since this endpoint paginates (loop pages until all fetched).
+This assigns event_id=4 (the one with 38,940 pieces) to Feb 28 where it belongs.
 
-The response format from the correct endpoint:
-```text
-{
-  "data": [{
-    "id": 1,
-    "marketplace_event_id": 11,
-    "allocated_materials": [
-      { "material_id": 789, "material_title": "Winter Jackets", "donation_tag_name": "Clothing", "amount": 500 }
-    ],
-    "total_amount": 800
-  }],
-  "meta": { "total": 150, "page": 1, "limit": 50 }
-}
-```
-The existing `allocated_materials` parsing logic already handles this format, so only the URL construction and pagination need to change.
+#### Step 2: Delete the 30 incorrect allocation records from March 7 First Half
+These 30 records (38,940 pieces, 0 distributed) were synced to the wrong marketplace. They have zero distributions so deletion is safe.
 
-#### Step 3: Fix `allocate-donations-to-marketplace/index.ts`
-Rewrite to use `GET /donation-allocations?event_id=11` and `event_id=5` instead of the global `/donations` endpoint. This ensures only items actually allocated to those specific events on Surpluss are synced to GIF.
+#### Step 3: Re-sync Feb 28 First Half
+Trigger `sync-surpluss-event-allocations` for the Feb 28 First Half marketplace. With the corrected external_id=4, it will pull the correct 38,940 pieces.
 
-#### Step 4: Add new actions to `surpluss-allocations-api/index.ts`
-- `get_donation_allocations` -- calls `GET /api/common/donation-allocations` with optional `event_id`, `page`, `limit`, `from_date`, `to_date`
-- `update_distribution` -- calls `PUT /api/common/donation-allocations/distribution` to report distribution data back to Surpluss
+#### Step 4: Validate totals
+Query both marketplaces to confirm:
+- Feb 28 First Half: ~30 records, ~38,940 allocated pieces
+- March 7 First Half: 0 records (until Surpluss adds allocations for event_id=11)
 
-#### Step 5: Deploy and re-sync
-Deploy all three updated functions, then trigger a sync for both Feb 28 marketplaces. The correct event-specific allocations will be pulled from Surpluss.
+### Implementation
+A single edge function `fix-swapped-external-ids` will:
+1. Verify both marketplaces exist and have the expected current external_ids (safety check)
+2. Swap the external_ids in a single transaction
+3. Delete `marketplace_item_allocations` for March 7 First Half (the wrongly-synced records)
+4. Log the operation to `surpluss_api_audit_log`
+5. Return a summary of changes
 
-### Files Changed
-1. `supabase/functions/sync-surpluss-event-allocations/index.ts` -- Fix URL + add pagination
-2. `supabase/functions/allocate-donations-to-marketplace/index.ts` -- Use donation-allocations endpoint per event
-3. `supabase/functions/surpluss-allocations-api/index.ts` -- Add `get_donation_allocations` and `update_distribution` actions
+After deploying, we call the function, then trigger a sync for Feb 28 to pull the correct data.
 
-### Expected Result
-Both Feb 28 marketplaces will show only the items actually allocated to them on the Surpluss platform, with correct quantities matching what the admin expects.
+### Safety Measures
+- Pre-flight check: abort if external_ids don't match expected values (11 and 4)
+- Pre-flight check: abort if March 7 has any non-zero `distributed_quantity` (meaning items were already given out)
+- All changes logged to audit table for reversibility
+- The edge function is a one-time operation and can be deleted after use
+
+### Files
+1. `supabase/functions/fix-swapped-external-ids/index.ts` -- one-time fix function (create, run, delete)
 
