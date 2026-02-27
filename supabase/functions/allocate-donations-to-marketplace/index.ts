@@ -2,12 +2,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const FIRST_HALF_ID = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb'
-const SECOND_HALF_ID = '1e38fa11-da12-42d0-8e74-3ce9dd41f964'
-const DONATIONS_URL = 'https://api.thesurpluss.com/api/common/donations'
+const BASE_URL = 'https://api.thesurpluss.com'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
@@ -26,124 +24,90 @@ Deno.serve(async (req) => {
       headers['x-api-key'] = apiKey
     }
 
-    // Fetch all pages of donations
-    const allDonations: any[] = []
-    let page = 0
-    let hasMore = true
-    while (hasMore) {
-      const url = `${DONATIONS_URL}?page=${page}&size=50`
-      console.log(`Fetching page ${page}: ${url}`)
-      const res = await fetch(url, { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`API ${res.status}: ${text.substring(0, 200)}`)
-      }
-      const data = await res.json()
-      const items = data.items || data.data || []
-      allDonations.push(...items)
-      const total = data.total ?? items.length
-      hasMore = allDonations.length < total && items.length > 0
-      page++
+    // Get all marketplaces that have an external_id (linked to Surpluss)
+    const { data: marketplaces, error: mpErr } = await supabase
+      .from('marketplace_events')
+      .select('id, name, external_id')
+      .not('external_id', 'is', null)
+
+    if (mpErr || !marketplaces?.length) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: mpErr?.message || 'No linked marketplaces found',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    console.log(`Total donations fetched: ${allDonations.length}`)
+    const allResults: any[] = []
 
-    const results: any[] = []
+    for (const marketplace of marketplaces) {
+      console.log(`Processing marketplace: ${marketplace.name} (ext_id: ${marketplace.external_id})`)
 
-    for (const donation of allDonations) {
-      const materialId = donation.id
-      const title = donation.title || `Material ${materialId}`
-      const itemCount = donation.item_count || 0
+      // Fetch donation-allocations for this specific event with pagination
+      const allocations: any[] = []
+      let page = 1
+      let hasMore = true
 
-      if (itemCount <= 0) {
-        results.push({ title, materialId, status: 'skipped (0 items)' })
-        continue
+      while (hasMore && page <= 20) {
+        const url = `${BASE_URL}/api/common/donation-allocations?event_id=${marketplace.external_id}&limit=100&page=${page}`
+        console.log(`Fetching page ${page}: ${url}`)
+        const res = await fetch(url, { headers })
+        if (!res.ok) {
+          const text = await res.text()
+          console.error(`API error: ${res.status} ${text.substring(0, 200)}`)
+          break
+        }
+        const data = await res.json()
+        const items = Array.isArray(data) ? data : (data.data || [])
+        if (!Array.isArray(items) || items.length === 0) {
+          hasMore = false
+        } else {
+          allocations.push(...items)
+          const meta = data.meta || {}
+          const total = meta.total ?? 0
+          hasMore = total > 0 ? allocations.length < total : items.length === 100
+          page++
+        }
       }
 
-      // Extract category from tags if available
-      const tags = donation.tags || donation.material_group || {}
-      const category = tags.name || tags.category || null
-      const subcategory = tags.subcategory || null
+      console.log(`Event ${marketplace.external_id}: ${allocations.length} allocation records`)
 
-      // Find or create item_type
-      let { data: itemType } = await supabase
-        .from('item_types')
-        .select('id')
-        .eq('external_material_id', materialId)
-        .maybeSingle()
+      for (const alloc of allocations) {
+        const materials = alloc.allocated_materials || []
 
-      if (itemType) {
-        // Update total_stock
-        await supabase
-          .from('item_types')
-          .update({ total_stock: itemCount, updated_at: new Date().toISOString() })
-          .eq('id', itemType.id)
-      } else {
-        const { data: newItem, error } = await supabase
-          .from('item_types')
-          .insert({
-            name: title,
-            external_material_id: materialId,
-            icon: 'Package',
-            total_stock: itemCount,
-            category,
-            subcategory,
-            surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
-          })
-          .select('id')
-          .single()
+        if (materials.length > 0) {
+          for (const mat of materials) {
+            const materialId = mat.material_id || mat.donation_metadata_id
+            const title = mat.material_title || mat.title || `Material ${materialId}`
+            const amount = mat.amount || 0
+            const category = mat.donation_tag_name || null
+            const subcategory = mat.donation_tag_subcategory_name || null
 
-        if (error) {
-          results.push({ title, materialId, status: `error creating item: ${error.message}` })
-          continue
+            if (!materialId || amount <= 0) continue
+
+            const result = await upsertAllocation(supabase, marketplace, materialId, title, amount, category, subcategory)
+            allResults.push(result)
+          }
+        } else {
+          // Fallback: legacy format
+          const materialId = alloc.donation_metadata?.id || alloc.material_id || alloc.donation_metadata_id
+          const title = alloc.donation_metadata?.title || alloc.title || `Material ${materialId}`
+          const amount = alloc.amount || alloc.total_amount || 0
+
+          if (!materialId || amount <= 0) continue
+
+          const result = await upsertAllocation(supabase, marketplace, materialId, title, amount, null, null)
+          allResults.push(result)
         }
-        itemType = newItem
-      }
-
-      // Split evenly
-      const firstHalfQty = Math.ceil(itemCount / 2)
-      const secondHalfQty = Math.floor(itemCount / 2)
-
-      // Allocate to both marketplaces
-      for (const [mktId, qty] of [[FIRST_HALF_ID, firstHalfQty], [SECOND_HALF_ID, secondHalfQty]] as [string, number][]) {
-        const { data: existing } = await supabase
-          .from('marketplace_item_allocations')
-          .select('id')
-          .eq('marketplace_id', mktId)
-          .eq('item_type_id', itemType!.id)
-          .maybeSingle()
-
-        if (existing) {
-          results.push({ title, materialId, marketplace: mktId === FIRST_HALF_ID ? 'first_half' : 'second_half', qty, status: 'skipped (exists)' })
-          continue
-        }
-
-        const { error: allocErr } = await supabase
-          .from('marketplace_item_allocations')
-          .insert({
-            marketplace_id: mktId,
-            item_type_id: itemType!.id,
-            allocated_quantity: qty,
-            distributed_quantity: 0,
-          })
-
-        results.push({
-          title,
-          materialId,
-          marketplace: mktId === FIRST_HALF_ID ? 'first_half' : 'second_half',
-          qty,
-          status: allocErr ? `error: ${allocErr.message}` : 'allocated',
-        })
       }
     }
 
-    const allocated = results.filter(r => r.status === 'allocated').length
-    const skipped = results.filter(r => r.status?.startsWith('skipped')).length
-    const errors = results.filter(r => r.status?.startsWith('error')).length
+    const allocated = allResults.filter(r => r.status === 'allocated' || r.status === 'updated').length
+    const skipped = allResults.filter(r => r.status?.startsWith('skipped')).length
+    const errors = allResults.filter(r => r.status?.startsWith('error')).length
 
     return new Response(JSON.stringify({
-      summary: { total_donations: allDonations.length, allocations_created: allocated, skipped, errors },
-      results,
+      summary: { marketplaces_processed: marketplaces.length, allocations_synced: allocated, skipped, errors },
+      results: allResults,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     console.error('Error:', err)
@@ -153,3 +117,76 @@ Deno.serve(async (req) => {
     })
   }
 })
+
+async function upsertAllocation(
+  supabase: any,
+  marketplace: { id: string; name: string; external_id: number },
+  materialId: number,
+  title: string,
+  amount: number,
+  category: string | null,
+  subcategory: string | null,
+) {
+  // Find or create item_type
+  let { data: itemType } = await supabase
+    .from('item_types')
+    .select('id')
+    .eq('external_material_id', materialId)
+    .maybeSingle()
+
+  if (!itemType) {
+    const insertData: any = {
+      name: title,
+      external_material_id: materialId,
+      icon: 'Package',
+      total_stock: 0, // Safe default — real total set by donations sync
+      surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
+    }
+    if (category) insertData.category = category
+    if (subcategory) insertData.subcategory = subcategory
+
+    const { data: newItem, error } = await supabase
+      .from('item_types')
+      .insert(insertData)
+      .select('id')
+      .single()
+
+    if (error) {
+      return { title, materialId, marketplace: marketplace.name, status: `error: ${error.message}` }
+    }
+    itemType = newItem
+  }
+
+  // Upsert marketplace_item_allocations
+  const { data: existing } = await supabase
+    .from('marketplace_item_allocations')
+    .select('id, allocated_quantity')
+    .eq('marketplace_id', marketplace.id)
+    .eq('item_type_id', itemType!.id)
+    .maybeSingle()
+
+  if (existing) {
+    await supabase
+      .from('marketplace_item_allocations')
+      .update({ allocated_quantity: amount, updated_at: new Date().toISOString() })
+      .eq('id', existing.id)
+    return { title, materialId, marketplace: marketplace.name, qty: amount, status: 'updated' }
+  }
+
+  const { error: allocErr } = await supabase
+    .from('marketplace_item_allocations')
+    .insert({
+      marketplace_id: marketplace.id,
+      item_type_id: itemType!.id,
+      allocated_quantity: amount,
+      distributed_quantity: 0,
+    })
+
+  return {
+    title,
+    materialId,
+    marketplace: marketplace.name,
+    qty: amount,
+    status: allocErr ? `error: ${allocErr.message}` : 'allocated',
+  }
+}

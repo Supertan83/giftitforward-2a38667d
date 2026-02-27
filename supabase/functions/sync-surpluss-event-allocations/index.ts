@@ -215,24 +215,52 @@ async function syncSingleMarketplace(
   apiHeaders: Record<string, string>,
   baseUrl: string
 ) {
-  const apiUrl = `${baseUrl}/api/common/marketplace-events/${marketplace.external_id}/allocations`;
-  console.log(`[sync] Fetching: ${apiUrl}`);
-  
-  const apiResponse = await fetch(apiUrl, { headers: apiHeaders });
-  const apiText = await apiResponse.text();
+  // Use the correct donation-allocations endpoint with event_id filter + pagination
+  let surplussAllocations: any[] = [];
+  let page = 1;
+  const limit = 100;
+  let hasMore = true;
 
-  if (!apiResponse.ok) {
-    return { marketplace_name: marketplace.name, success: false, error: `API ${apiResponse.status}`, synced: 0, created: 0, updated: 0 };
+  console.log(`[sync] Fetching donation-allocations for event_id=${marketplace.external_id}`);
+
+  while (hasMore && page <= 20) {
+    const apiUrl = `${baseUrl}/api/common/donation-allocations?event_id=${marketplace.external_id}&limit=${limit}&page=${page}`;
+    console.log(`[sync] Page ${page}: ${apiUrl}`);
+
+    const apiResponse = await fetch(apiUrl, { headers: apiHeaders });
+    if (!apiResponse.ok) {
+      const errText = await apiResponse.text();
+      console.error(`[sync] API error: ${apiResponse.status} ${errText.substring(0, 300)}`);
+      if (surplussAllocations.length === 0) {
+        return { marketplace_name: marketplace.name, success: false, error: `API ${apiResponse.status}`, synced: 0, created: 0, updated: 0 };
+      }
+      break; // Use what we have so far
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(await apiResponse.text());
+    } catch {
+      if (surplussAllocations.length === 0) {
+        return { marketplace_name: marketplace.name, success: false, error: 'Parse error', synced: 0, created: 0, updated: 0 };
+      }
+      break;
+    }
+
+    const items = Array.isArray(parsed) ? parsed : (parsed.data || parsed.allocations || []);
+    if (!Array.isArray(items) || items.length === 0) {
+      hasMore = false;
+    } else {
+      surplussAllocations.push(...items);
+      // Check meta for total count
+      const meta = parsed.meta || {};
+      const total = meta.total ?? 0;
+      hasMore = total > 0 ? surplussAllocations.length < total : items.length === limit;
+      page++;
+    }
   }
 
-  let surplussAllocations: any[];
-  try {
-    const parsed = JSON.parse(apiText);
-    surplussAllocations = Array.isArray(parsed) ? parsed : (parsed.data || parsed.allocations || []);
-  } catch {
-    return { marketplace_name: marketplace.name, success: false, error: 'Parse error', synced: 0, created: 0, updated: 0 };
-  }
-  if (!Array.isArray(surplussAllocations)) surplussAllocations = [];
+  console.log(`[sync] Total allocations fetched for event ${marketplace.external_id}: ${surplussAllocations.length}`);
 
   let synced = 0, created = 0, updated = 0;
   const errors: string[] = [];
