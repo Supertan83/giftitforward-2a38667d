@@ -1,32 +1,42 @@
 
 
-## Create 20 Test Volunteer Accounts for Dry Run
+## Auto-Allocate Surpluss Donations to Feb 28 She Thrives Marketplaces
 
-### Approach
-Create a temporary edge function `create-test-volunteers` that uses the service role key to batch-create 20 test volunteer accounts (test01@gif.com through test20@gif.com) with password `12345678`, each linked to today's marketplace event.
+### Overview
+Create a one-time edge function that fetches all approved donations from the Surpluss API, ensures each has a matching `item_types` record, and creates `marketplace_item_allocations` entries for both Feb 28 She Thrives events, splitting quantities evenly between the two halves.
+
+### Target Marketplaces
+- **First Half**: `ff0d8005-7c85-4a8d-9e0c-147475e7b0eb` (ext_id 11)
+- **Second Half**: `1e38fa11-da12-42d0-8e74-3ce9dd41f964` (ext_id 5)
 
 ### What the Edge Function Does
-1. Creates 20 auth users (test01@gif.com - test20@gif.com) with password `12345678`
-2. Assigns `volunteer` role to each
-3. Creates `pending_volunteers` records (status: `approved`, source: `manual`)
-4. Creates `volunteer_qr_cards` records (status: `inactive`) linked to today's marketplace (`d21fba59-2bf2-4a47-bd10-f88278d4c95e`)
-5. Skips any that already exist
-6. No emails sent -- these are just test accounts
 
-### File Created
-`supabase/functions/create-test-volunteers/index.ts`
+**File**: `supabase/functions/allocate-donations-to-marketplace/index.ts`
 
-- Uses service role key (no auth required, one-time use)
-- Loops through test01-test20, creates each account
-- Returns summary of created/skipped accounts
+1. Calls the Surpluss donations API (production, all pages) to fetch every approved donation
+2. For each donation:
+   - Checks if an `item_types` record exists by `external_material_id`
+   - If not, creates one with the donation title, category/subcategory from donation tags, and `total_stock` = `item_count`
+   - If it exists, updates `total_stock` to the latest `item_count` value
+3. Splits each item's `item_count` evenly across both marketplaces (first half gets ceiling, second half gets floor)
+4. Inserts `marketplace_item_allocations` rows (skipping if one already exists for that marketplace + item combo)
+5. Returns a summary of all allocations created
 
-### After Deployment
-- Call the function once to create all 20 accounts
-- Volunteers can log in with `testXX@gif.com` / `12345678`
-- They'll appear as regular volunteers assigned to today's dry run marketplace
-- Can optionally delete the function after use
+### Example Split
+- Body Wash (318 pcs): First Half gets 159, Second Half gets 159
+- Toys (1381 pcs): First Half gets 691, Second Half gets 690
+
+### Items to be Allocated (from Surpluss API)
+Recent approved donations include: Body Wash, Toys, Baby Accessories, Baby Clothes, Blankets, Pillow/Cushion Covers, Body Care, Hair Care, Skin Care, Home Decor, Storage Containers, Towels, and more across multiple pages.
 
 ### Technical Details
-- Marketplace ID: `d21fba59-2bf2-4a47-bd10-f88278d4c95e` (Dry Run Friday Marketplace - 27/02)
-- QR codes generated with `VOL-` prefix pattern
-- Each account gets a `pending_volunteers` record so the volunteer flow works end-to-end
+- Edge function uses service role key, `verify_jwt = false`
+- Fetches all pages from Surpluss API (page 1..N, 50 per page)
+- Uses `item_count` (piece count) as the allocation quantity, not `quantity` (kg weight)
+- Respects the `total_stock` source-of-truth rule: updates stock from the donations API which is the approved source
+- Config entry added to `supabase/config.toml`
+- Function can be deleted after single use
+
+### After Execution
+- Both Feb 28 marketplaces will show all available items with their allocated quantities in the Allocation Management tab
+- Distribution tracking will work normally during the event
