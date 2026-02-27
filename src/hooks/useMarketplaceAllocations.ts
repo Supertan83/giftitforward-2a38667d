@@ -671,7 +671,7 @@ export const useAllMarketplaceReports = () => {
       const { data: marketplaces, error } = await supabase
         .from('marketplace_events')
         .select('*')
-        .order('event_date', { ascending: false });
+        .order('event_date', { ascending: true });
 
       if (error) throw new SafeError(mapDatabaseError(error), error);
 
