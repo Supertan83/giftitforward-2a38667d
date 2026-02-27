@@ -6,10 +6,10 @@ const corsHeaders = {
 };
 
 // Input validation helpers
-const KIOSK_EMAIL_PATTERN = /^acc\d{2}@gif\.com$/;
+const KIOSK_EMAIL_PATTERN = /^(acc\d{2}|in\d{2}|out\d{2})@gif\.com$/;
 
 const isValidEmail = (email: string): boolean => {
-  // Allow kiosk account emails (acc01@gif through acc25@gif)
+  // Allow kiosk account emails (acc*, in*, out*)
   if (KIOSK_EMAIL_PATTERN.test(email)) return true;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email) && email.length <= 255;
