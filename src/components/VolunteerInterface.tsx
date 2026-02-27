@@ -35,7 +35,9 @@ const zones = [
   { id: 'exit' as Zone, label: 'Exit', icon: LogOut, color: 'text-danger' },
 ];
 
-const KIOSK_PATTERN = /^acc\d{2}@gif\.com$/;
+const KIOSK_MARKETPLACE_PATTERN = /^acc\d{2}@gif\.com$/;
+const KIOSK_CHECKIN_PATTERN = /^in\d{2}@gif\.com$/;
+const KIOSK_CHECKOUT_PATTERN = /^out\d{2}@gif\.com$/;
 
 export const VolunteerInterface = () => {
   const [activeZone, setActiveZone] = useState<Zone>('entrance');
@@ -43,7 +45,9 @@ export const VolunteerInterface = () => {
   const { user, signOut } = useAuth();
   const { data: marketplaces = [], isLoading: isLoadingMarketplaces } = useMarketplaces();
 
-  const isKioskAccount = !!user?.email?.match(KIOSK_PATTERN);
+  const userEmail = user?.email || '';
+  const isKioskAccount = KIOSK_MARKETPLACE_PATTERN.test(userEmail) || KIOSK_CHECKIN_PATTERN.test(userEmail) || KIOSK_CHECKOUT_PATTERN.test(userEmail);
+  const kioskZone: Zone | null = KIOSK_CHECKIN_PATTERN.test(userEmail) ? 'entrance' : KIOSK_CHECKOUT_PATTERN.test(userEmail) ? 'exit' : KIOSK_MARKETPLACE_PATTERN.test(userEmail) ? 'marketplace' : null;
 
   // Only use check-in status for non-kiosk accounts
   const { data: checkInStatus, isLoading: isLoadingStatus } = useVolunteerCheckInStatus();
@@ -73,8 +77,8 @@ export const VolunteerInterface = () => {
   const kioskAutoDetected = timeMatchedEvents.length === 1;
 
   useEffect(() => {
-    if (isKioskAccount) {
-      setActiveZone('marketplace');
+    if (isKioskAccount && kioskZone) {
+      setActiveZone(kioskZone);
       if (timeMatchedEvents.length > 0 && !selectedMarketplaceId) {
         setSelectedMarketplaceId(timeMatchedEvents[0].id);
       }
@@ -86,7 +90,7 @@ export const VolunteerInterface = () => {
     if (checkInStatus?.marketplaceId) {
       setSelectedMarketplaceId(checkInStatus.marketplaceId);
     }
-  }, [isKioskAccount, availableMarketplaces, selectedMarketplaceId, checkInStatus?.isCheckedIn, checkInStatus?.assignedZone, checkInStatus?.marketplaceId]);
+  }, [isKioskAccount, kioskZone, availableMarketplaces, selectedMarketplaceId, checkInStatus?.isCheckedIn, checkInStatus?.assignedZone, checkInStatus?.marketplaceId]);
 
   // Loading state (skip for kiosk accounts — they don't need check-in)
   if (!isKioskAccount && isLoadingStatus) {
@@ -189,9 +193,15 @@ export const VolunteerInterface = () => {
   const assignedZoneInfo = zones.find(z => z.id === assignedZone);
 
   const renderZone = () => {
-    if (isKioskAccount) {
-      // Kiosk accounts always show marketplace zone
-      return <MarketplaceZone selectedMarketplaceId={selectedMarketplaceId} />;
+    if (isKioskAccount && kioskZone) {
+      switch (kioskZone) {
+        case 'entrance':
+          return <EntranceZone selectedMarketplaceId={selectedMarketplaceId} />;
+        case 'marketplace':
+          return <MarketplaceZone selectedMarketplaceId={selectedMarketplaceId} />;
+        case 'exit':
+          return <ExitZone selectedMarketplaceId={selectedMarketplaceId} />;
+      }
     }
     
     const zoneToRender = assignedZone || activeZone;
@@ -215,7 +225,11 @@ export const VolunteerInterface = () => {
             <div>
               <h1 className="font-display font-bold text-sm">GIF (Gift it Forward)</h1>
               <p className="text-xs text-muted-foreground">
-                {isKioskAccount ? 'Tablet Kiosk' : 'Volunteer Mode'}
+                {isKioskAccount
+                  ? kioskZone === 'entrance' ? 'Check-in Kiosk'
+                    : kioskZone === 'exit' ? 'Check-out Kiosk'
+                    : 'Marketplace Kiosk'
+                  : 'Volunteer Mode'}
               </p>
             </div>
           </div>
