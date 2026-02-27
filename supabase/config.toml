@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.allocate-donations-to-marketplace]
 verify_jwt = false
+
+[functions.cleanup-bad-allocations]
+verify_jwt = false

@@ -12,7 +12,7 @@ const BASE_URLS: Record<string, string> = {
 };
 
 interface RequestPayload {
-  action: 'allocate' | 'batch_allocate' | 'update_allocation' | 'batch_update' | 'return_remaining' | 'delete_allocation' | 'get_event_allocations' | 'list_marketplace_events' | 'get_donation_metadata';
+  action: 'allocate' | 'batch_allocate' | 'update_allocation' | 'batch_update' | 'return_remaining' | 'delete_allocation' | 'get_event_allocations' | 'list_marketplace_events' | 'get_donation_metadata' | 'get_donation_allocations' | 'update_distribution';
   environment: 'staging' | 'production';
   // For allocate
   material_id?: number;
@@ -28,8 +28,12 @@ interface RequestPayload {
   page?: number;
   limit?: number;
   status?: string;
-  // For get_donation_metadata
+  // For get_donation_metadata / get_donation_allocations
   search?: string;
+  from_date?: string;
+  to_date?: string;
+  // For update_distribution
+  distribution_data?: Record<string, unknown>;
 }
 
 serve(async (req) => {
@@ -93,6 +97,28 @@ serve(async (req) => {
         if (payload.search) params.set('search', payload.search);
         url = `${apiBase}/donation-metadata?${params.toString()}`;
         method = 'GET';
+        break;
+      }
+
+      case 'get_donation_allocations': {
+        const params = new URLSearchParams();
+        if (payload.event_id) params.set('event_id', payload.event_id.toString());
+        if (payload.page) params.set('page', payload.page.toString());
+        if (payload.limit) params.set('limit', payload.limit.toString());
+        if (payload.from_date) params.set('from_date', payload.from_date);
+        if (payload.to_date) params.set('to_date', payload.to_date);
+        url = `${apiBase}/donation-allocations?${params.toString()}`;
+        method = 'GET';
+        break;
+      }
+
+      case 'update_distribution': {
+        if (!payload.distribution_data) {
+          return errorResponse('distribution_data is required');
+        }
+        url = `${apiBase}/donation-allocations/distribution`;
+        method = 'PUT';
+        body = JSON.stringify(payload.distribution_data);
         break;
       }
 
@@ -186,7 +212,7 @@ serve(async (req) => {
     }
 
     // Log write operations to DB for audit trail
-    if (['allocate', 'batch_allocate', 'update_allocation', 'batch_update', 'return_remaining', 'delete_allocation'].includes(action)) {
+    if (['allocate', 'batch_allocate', 'update_allocation', 'batch_update', 'return_remaining', 'delete_allocation', 'update_distribution'].includes(action)) {
       try {
         const supabase = createClient(
           Deno.env.get('SUPABASE_URL')!,
