@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.create-test-volunteers]
 verify_jwt = false
+
+[functions.allocate-donations-to-marketplace]
+verify_jwt = false
