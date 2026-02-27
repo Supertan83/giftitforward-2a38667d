@@ -1,42 +1,65 @@
 
 
-## Auto-Allocate Surpluss Donations to Feb 28 She Thrives Marketplaces
+## Fix Surpluss Allocation Sync to Use Correct API Endpoint
 
-### Overview
-Create a one-time edge function that fetches all approved donations from the Surpluss API, ensures each has a matching `item_types` record, and creates `marketplace_item_allocations` entries for both Feb 28 She Thrives events, splitting quantities evenly between the two halves.
+### Problem
+The sync functions use the wrong API endpoints, pulling ALL global donations (~497k pieces) instead of event-specific allocations. This caused 720 incorrect allocation records (248k+ pieces per marketplace instead of the correct amounts).
 
-### Target Marketplaces
-- **First Half**: `ff0d8005-7c85-4a8d-9e0c-147475e7b0eb` (ext_id 11)
-- **Second Half**: `1e38fa11-da12-42d0-8e74-3ce9dd41f964` (ext_id 5)
+### Root Cause
+| Function | Current (wrong) endpoint | Correct endpoint |
+|---|---|---|
+| `sync-surpluss-event-allocations` | `GET /marketplace-events/:id/allocations` (returns empty) | `GET /donation-allocations?event_id=:id` |
+| `allocate-donations-to-marketplace` | `GET /donations` (returns ALL global donations) | `GET /donation-allocations?event_id=:id` |
 
-### What the Edge Function Does
+### Fix Plan (4 steps)
 
-**File**: `supabase/functions/allocate-donations-to-marketplace/index.ts`
+#### Step 1: Clear 720 incorrect allocation records
+Delete all `marketplace_item_allocations` for both Feb 28 marketplaces (zero distributions, safe to delete):
+- First Half (`ff0d8005...`, ext_id 11): 360 records, 248,854 pieces
+- Second Half (`1e38fa11...`, ext_id 5): 360 records, 248,706 pieces
 
-1. Calls the Surpluss donations API (production, all pages) to fetch every approved donation
-2. For each donation:
-   - Checks if an `item_types` record exists by `external_material_id`
-   - If not, creates one with the donation title, category/subcategory from donation tags, and `total_stock` = `item_count`
-   - If it exists, updates `total_stock` to the latest `item_count` value
-3. Splits each item's `item_count` evenly across both marketplaces (first half gets ceiling, second half gets floor)
-4. Inserts `marketplace_item_allocations` rows (skipping if one already exists for that marketplace + item combo)
-5. Returns a summary of all allocations created
+#### Step 2: Fix `sync-surpluss-event-allocations/index.ts`
+In `syncSingleMarketplace()` (line 218), change the URL from:
+```text
+/api/common/marketplace-events/{ext_id}/allocations
+```
+to:
+```text
+/api/common/donation-allocations?event_id={ext_id}&limit=100
+```
+Add pagination support since this endpoint paginates (loop pages until all fetched).
 
-### Example Split
-- Body Wash (318 pcs): First Half gets 159, Second Half gets 159
-- Toys (1381 pcs): First Half gets 691, Second Half gets 690
+The response format from the correct endpoint:
+```text
+{
+  "data": [{
+    "id": 1,
+    "marketplace_event_id": 11,
+    "allocated_materials": [
+      { "material_id": 789, "material_title": "Winter Jackets", "donation_tag_name": "Clothing", "amount": 500 }
+    ],
+    "total_amount": 800
+  }],
+  "meta": { "total": 150, "page": 1, "limit": 50 }
+}
+```
+The existing `allocated_materials` parsing logic already handles this format, so only the URL construction and pagination need to change.
 
-### Items to be Allocated (from Surpluss API)
-Recent approved donations include: Body Wash, Toys, Baby Accessories, Baby Clothes, Blankets, Pillow/Cushion Covers, Body Care, Hair Care, Skin Care, Home Decor, Storage Containers, Towels, and more across multiple pages.
+#### Step 3: Fix `allocate-donations-to-marketplace/index.ts`
+Rewrite to use `GET /donation-allocations?event_id=11` and `event_id=5` instead of the global `/donations` endpoint. This ensures only items actually allocated to those specific events on Surpluss are synced to GIF.
 
-### Technical Details
-- Edge function uses service role key, `verify_jwt = false`
-- Fetches all pages from Surpluss API (page 1..N, 50 per page)
-- Uses `item_count` (piece count) as the allocation quantity, not `quantity` (kg weight)
-- Respects the `total_stock` source-of-truth rule: updates stock from the donations API which is the approved source
-- Config entry added to `supabase/config.toml`
-- Function can be deleted after single use
+#### Step 4: Add new actions to `surpluss-allocations-api/index.ts`
+- `get_donation_allocations` -- calls `GET /api/common/donation-allocations` with optional `event_id`, `page`, `limit`, `from_date`, `to_date`
+- `update_distribution` -- calls `PUT /api/common/donation-allocations/distribution` to report distribution data back to Surpluss
 
-### After Execution
-- Both Feb 28 marketplaces will show all available items with their allocated quantities in the Allocation Management tab
-- Distribution tracking will work normally during the event
+#### Step 5: Deploy and re-sync
+Deploy all three updated functions, then trigger a sync for both Feb 28 marketplaces. The correct event-specific allocations will be pulled from Surpluss.
+
+### Files Changed
+1. `supabase/functions/sync-surpluss-event-allocations/index.ts` -- Fix URL + add pagination
+2. `supabase/functions/allocate-donations-to-marketplace/index.ts` -- Use donation-allocations endpoint per event
+3. `supabase/functions/surpluss-allocations-api/index.ts` -- Add `get_donation_allocations` and `update_distribution` actions
+
+### Expected Result
+Both Feb 28 marketplaces will show only the items actually allocated to them on the Surpluss platform, with correct quantities matching what the admin expects.
+
