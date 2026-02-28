@@ -1,66 +1,97 @@
 
-## Diagnosis (why you still see old cache)
+# Fix: Beneficiary Checkout Latency (5-10s down to ~200ms)
 
-I traced the cache/version logic and found a concrete bug causing stale builds to persist:
+## Root Cause Analysis
 
-1. In `src/main.tsx`, the version is currently set as:
-   - `const CURRENT_VERSION = "__BUILD_TIMESTAMP__";`
-2. In `vite.config.ts`, `__BUILD_TIMESTAMP__` is provided via Vite `define`, which only replaces identifiers, not quoted strings.
-3. Because it is quoted, the app stores the literal `"__BUILD_TIMESTAMP__"` in local storage as the cache version.
-4. On future deploys, the comparison is still against the same literal string, so migration does **not** trigger again.
-5. That explains why users can remain on old cached assets even after fixes are deployed.
+The checkout flow in ExitZone currently makes **4 sequential network calls**, and then triggers a **full table reload of 2100+ cards**:
 
-The console snapshot (`[vite] server connection lost. Polling for restart...`) is also consistent with stale service-worker control in preview sessions.
+1. `findCardByUniqueId(code)` -- SELECT from qr_cards (just to get `totalItemsCollected`)
+2. `checkoutCard.mutateAsync(code)` which internally does:
+   - SELECT from qr_cards (duplicate lookup)
+   - UPDATE qr_cards
+   - INSERT into transactions
+3. `invalidateQueries(['qr_cards'])` -- re-fetches ALL 2100 cards (paginated 1000 at a time = 3 round-trips)
 
-## Implementation plan
+Total: ~7 sequential network round-trips. At ~500-800ms each in field conditions, that's 5-10 seconds.
 
-### 1) Fix the version token so it actually changes per build
-**File:** `src/main.tsx`
+## Solution: Single-Transaction RPC (same pattern as distribution)
 
-- Change:
-  - from: `const CURRENT_VERSION = "__BUILD_TIMESTAMP__";`
-  - to: `const CURRENT_VERSION = __BUILD_TIMESTAMP__;`
-- This makes the build timestamp truly dynamic and allows version mismatch detection to work as intended.
+The distribution and return flows already use atomic RPC functions (`distribute_marketplace_item`, `return_marketplace_item`) that complete in ~200ms. Checkout should follow the same pattern.
 
-### 2) Add legacy-token recovery for already-affected users
-**File:** `src/main.tsx`
+### Step 1: Create a database RPC function `checkout_beneficiary_card`
+- Single atomic function that does: find card, validate, update status to `checked_out`, reset balances, insert CheckOut transaction
+- Returns `totalCollected` so the UI can display the summary
+- Includes `auth.uid()` and marketplace_id tracking
 
-- During migration, treat stored `"__BUILD_TIMESTAMP__"` as a stale/legacy value and force cleanup.
-- This ensures users who already saved the broken literal version get unstuck on next load after deployment.
+### Step 2: Update `checkoutCard` mutation in `useSupabaseData.ts`
+- Replace the 3 sequential queries with a single `supabase.rpc('checkout_beneficiary_card', { p_unique_id: cleanId })`
+- Use the returned `totalCollected` directly instead of pre-fetching
 
-### 3) Make the post-cleanup reload cache-busting
-**File:** `src/main.tsx`
+### Step 3: Remove redundant `findCardByUniqueId` call in ExitZone
+- The RPC returns `totalCollected`, so ExitZone no longer needs to call `findCardByUniqueId` before checkout
+- Removes one extra network round-trip
 
-- After unregistering workers and deleting caches, reload using a versioned URL (query param with current version), then optionally clean the param after boot.
-- This reduces the chance of one more stale `index.html` response during the transition.
+### Step 4: Use optimistic cache update instead of full refetch
+- After checkout, update the single card in the local query cache instead of invalidating the entire `qr_cards` query (which re-fetches 2100+ rows)
+- Still invalidate in background for consistency, but the UI updates instantly
 
-### 4) Prevent preview environment from being trapped by PWA caching
-**File:** `src/main.tsx`
+## Expected Result
+- **Before**: 4+ sequential queries + full table reload = 5-10 seconds
+- **After**: 1 RPC call + optimistic cache update = ~200ms
 
-- Gate service-worker registration for preview hosts (e.g. preview subdomains / lovableproject domain), while keeping registration for published production host.
-- Keep existing aggressive update behavior for real production users.
+This matches the existing pattern used for distribution scans, which volunteers already confirmed is fast.
 
-### 5) Keep existing update strategy intact
-**File:** `src/main.tsx` (no behavior loss)
+## Technical Details
 
-- Retain:
-  - `onNeedRefresh -> updateSW(true)`
-  - periodic `registration.update()`
-  - offline-ready logging
-- Only harden version detection + migration path.
+### New RPC function
+```sql
+CREATE OR REPLACE FUNCTION public.checkout_beneficiary_card(p_unique_id text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_card record;
+  v_clean_id text;
+  v_collected integer;
+BEGIN
+  IF NOT public.is_staff(auth.uid()) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
 
-## Validation checklist
+  v_clean_id := TRIM(p_unique_id);
 
-1. Open preview after deployment:
-   - First load should trigger one-time cache reset for affected users.
-2. Confirm localStorage key `app-cache-version` is now a real timestamp string, not `"__BUILD_TIMESTAMP__"`.
-3. Confirm latest UI/data logic appears immediately (including recently fixed marketplace status displays).
-4. Reload again:
-   - No repeated forced cleanup loop.
-5. Verify published app still registers PWA and updates correctly.
+  SELECT * INTO v_card
+  FROM public.qr_cards
+  WHERE lower(unique_id) = lower(v_clean_id);
 
-## Expected outcome
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Card not found';
+  END IF;
 
-- Users currently stuck on old cached bundles are automatically recovered.
-- Future deploys invalidate correctly by build version.
-- Preview/testing becomes much less likely to appear “stuck on old cache.”
+  v_collected := v_card.total_items_collected;
+
+  UPDATE public.qr_cards
+  SET status = 'checked_out',
+      credit_balance = 0,
+      total_items_collected = 0,
+      collected_items = '[]'::jsonb
+  WHERE id = v_card.id;
+
+  INSERT INTO public.transactions (card_id, type, credit_change, scanned_by, marketplace_id)
+  VALUES (v_card.id, 'CheckOut', 0, auth.uid(), v_card.marketplace_id);
+
+  RETURN json_build_object(
+    'totalCollected', v_collected,
+    'cardId', v_card.id,
+    'uniqueId', v_card.unique_id
+  );
+END;
+$$;
+```
+
+### Files changed
+1. **Database migration** -- new `checkout_beneficiary_card` RPC
+2. **`src/hooks/useSupabaseData.ts`** -- replace `checkoutCard` mutation body with single RPC call + optimistic update
+3. **`src/components/zones/ExitZone.tsx`** -- use returned `totalCollected` from mutation instead of pre-fetching with `findCardByUniqueId`
