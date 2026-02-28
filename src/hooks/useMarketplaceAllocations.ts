@@ -3,6 +3,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
 import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
 
+// Paginated fetch helper to overcome the 1000-row default limit
+async function fetchAllPaginatedRows(table: string, filterCol: string, filterVal: string) {
+  const PAGE_SIZE = 1000;
+  let allRows: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data } = await supabase
+      .from(table as any)
+      .select('*')
+      .eq(filterCol, filterVal)
+      .range(from, from + PAGE_SIZE - 1);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return allRows;
+}
+
 // Extract unique dependents from events_json (same logic as FamilyMembersTab)
 const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
@@ -377,16 +396,9 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       if (mpError) throw new SafeError(mapDatabaseError(mpError), mpError);
 
-      // Fetch beneficiaries (archived + active) for this marketplace
-      const { data: archivedCards } = await supabase
-        .from('archived_card_data')
-        .select('*')
-        .eq('marketplace_id', marketplaceId);
-
-      const { data: activeCards } = await supabase
-        .from('qr_cards')
-        .select('*')
-        .eq('marketplace_id', marketplaceId);
+      // Fetch beneficiaries (archived + active) for this marketplace using paginated fetch
+      const archivedCards = await fetchAllPaginatedRows('archived_card_data', 'marketplace_id', marketplaceId);
+      const activeCards = await fetchAllPaginatedRows('qr_cards', 'marketplace_id', marketplaceId);
 
       const allBeneficiaries = [
         ...(archivedCards || []),
