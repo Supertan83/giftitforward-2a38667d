@@ -1,63 +1,31 @@
 
-Goal: make your published app always move to the newest build quickly after each publish, and stop “months-old cached version” behavior.
 
-What I found in your codebase
-1. You already use the PWA plugin in `vite.config.ts`.
-2. Your app entry (`src/main.tsx`) does not explicitly manage service worker updates.
-3. The generated published `registerSW.js` currently only does basic registration:
-   - `navigator.serviceWorker.register('/sw.js')`
-   - no periodic update checks
-   - no forced refresh when a new worker is waiting
-This is the main reason users can remain stuck on an older cached app shell.
+# Auto-Transition Marketplace Status: Upcoming to Active
 
-Implementation plan
+## Problem
+The marketplace "She Thrives Women Workers Marketplace February 28" has `event_date: 2026-02-28` and `start_time: 07:30:00`, but the status remains "upcoming" because:
+- The database stores `status = 'upcoming'` and no code ever updates it to `'active'` when the event starts
+- The existing client-side guard in `useSupabaseData.ts` (line 1244) only handles the transition to "completed" (when `now > endTime`), never the transition to "active" (when `now >= startTime`)
 
-1) Strengthen PWA cache/update strategy in `vite.config.ts`
-- Keep PWA enabled, but make update behavior explicit and aggressive:
-  - `injectRegister: false` (we will handle registration in app code)
-  - `registerType: "autoUpdate"`
-  - `workbox.skipWaiting = true`
-  - `workbox.clientsClaim = true`
-  - `workbox.cleanupOutdatedCaches = true`
-- Add a publish-level cache namespace/version so each publish rotates cache identity (cache-bust by release):
-  - e.g. `workbox.cacheId` based on build timestamp/version string.
-- Keep runtime caching only for safe static externals (fonts), and avoid overly sticky app-shell behavior.
+## Solution
+Add a second client-side status computation: if the marketplace is "upcoming", the event date is today (or past), and the current time is at or past the start time, auto-promote the status to "active".
 
-2) Add explicit service-worker lifecycle control in `src/main.tsx`
-- Import and use `registerSW` from `virtual:pwa-register`.
-- Register with `immediate: true`.
-- On registration:
-  - trigger `registration.update()` immediately,
-  - then run periodic update checks (e.g. every 60s).
-- On `onNeedRefresh`:
-  - activate new worker and reload automatically (`updateSW(true)` + reload) so users switch immediately.
-- Add `onRegisterError` logging for easier diagnosis.
+## File Changed
+**`src/hooks/useSupabaseData.ts`** (lines ~1241-1258)
 
-3) Add one-time stale-cache migration guard (for existing stuck users)
-- On first load of the new release, run a controlled “legacy cache cleanup” marker flow:
-  - unregister old service workers,
-  - clear old Workbox caches,
-  - set a local marker so this runs only once,
-  - reload app.
-This specifically addresses your “very old, maybe 2 months” stuck clients.
+Update the status computation logic to add an "upcoming -> active" transition:
 
-4) Validation checklist after implementation
-- Publish once, open app in a fresh tab → verify latest UI loads.
-- Publish a second small change → verify app updates within ~1 minute without manual hard refresh.
-- Verify `sw.js`/cache namespace changes between publishes.
-- Verify no regression in login/session behavior after cache migration.
-- Confirm update behavior both on desktop browser and mobile browser/PWA install.
+```text
+For each marketplace:
+1. If status is "upcoming" AND not locked by admin AND event_date exists:
+   - Build a startDateTime from event_date + start_time (default 00:00 if no start_time)
+   - Build an endDateTime from event_date + end_time (default 23:59 if no end_time)
+   - If now >= endDateTime -> set status to "completed"
+   - Else if now >= startDateTime -> set status to "active"
+2. If status is "active" AND not locked by admin:
+   - Same end-time check as before -> "completed"
+```
 
-Important note about editor preview vs published app
-- This plan fixes app-level stale service-worker caching (especially on published URL).
-- The editor’s “live preview starts after chat action” behavior is platform-side build triggering and is separate from your app code.
-- So after this fix, published app freshness improves significantly; editor preview trigger timing may still behave as before.
+This is purely a display/client-side computation -- the DB value remains unchanged, preserving the admin override (`status_locked_by_admin`) behavior.
 
-Files to update
-- `vite.config.ts`
-- `src/main.tsx`
-
-Expected outcome
-- After each publish, users are moved to the newest build much faster.
-- Old service-worker cache lock-in is broken.
-- “Very old cached version” incidents are eliminated or reduced to a short update window.
+No database migration needed. Single file edit.
