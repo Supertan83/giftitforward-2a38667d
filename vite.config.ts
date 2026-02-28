@@ -6,6 +6,9 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __BUILD_TIMESTAMP__: JSON.stringify(Date.now().toString()),
+  },
   server: {
     host: "::",
     port: 8080,
@@ -15,6 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: false,
       includeAssets: ["favicon.ico", "robots.txt"],
       manifest: {
         name: "Charity Marketplace Distribution",
@@ -45,8 +49,12 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        cacheId: `app-${Date.now()}`,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -55,7 +63,7 @@ export default defineConfig(({ mode }) => ({
               cacheName: "google-fonts-cache",
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
               cacheableResponse: {
                 statuses: [0, 200],
@@ -69,7 +77,7 @@ export default defineConfig(({ mode }) => ({
               cacheName: "gstatic-fonts-cache",
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
               cacheableResponse: {
                 statuses: [0, 200],
