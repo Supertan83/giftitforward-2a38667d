@@ -1243,16 +1243,29 @@ export const useMarketplaces = () => {
         // Client-side guard: if marketplace is "active" but event has ended, show as "completed"
         if (!(item as any).status_locked_by_admin && (computedStatus === 'active' || computedStatus === 'upcoming') && item.event_date) {
           const [year, month, day] = item.event_date.split('-').map(Number);
-          const eventDate = new Date(year, month - 1, day);
+
+          // Build end datetime
+          const endDateTime = new Date(year, month - 1, day);
           if (item.end_time) {
-            const [hours, minutes] = item.end_time.split(':').map(Number);
-            eventDate.setHours(hours, minutes, 0, 0);
+            const [eh, em] = item.end_time.split(':').map(Number);
+            endDateTime.setHours(eh, em, 0, 0);
           } else {
-            // No end_time: assume end of day
-            eventDate.setHours(23, 59, 59, 999);
+            endDateTime.setHours(23, 59, 59, 999);
           }
-          if (now > eventDate) {
+
+          // Build start datetime
+          const startDateTime = new Date(year, month - 1, day);
+          if (item.start_time) {
+            const [sh, sm] = item.start_time.split(':').map(Number);
+            startDateTime.setHours(sh, sm, 0, 0);
+          } else {
+            startDateTime.setHours(0, 0, 0, 0);
+          }
+
+          if (now > endDateTime) {
             computedStatus = 'completed';
+          } else if (computedStatus === 'upcoming' && now >= startDateTime) {
+            computedStatus = 'active';
           }
         }
         return { ...item, status: computedStatus };
