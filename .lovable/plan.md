@@ -1,77 +1,63 @@
 
+Goal: make your published app always move to the newest build quickly after each publish, and stop “months-old cached version” behavior.
 
-# Enhanced Scan Item Logs -- Volunteer Names, Bulk Grouping, Marketplace Sections
+What I found in your codebase
+1. You already use the PWA plugin in `vite.config.ts`.
+2. Your app entry (`src/main.tsx`) does not explicitly manage service worker updates.
+3. The generated published `registerSW.js` currently only does basic registration:
+   - `navigator.serviceWorker.register('/sw.js')`
+   - no periodic update checks
+   - no forced refresh when a new worker is waiting
+This is the main reason users can remain stuck on an older cached app shell.
 
-## Overview
-Three improvements to the Beneficiary QR Control Center's scan logs:
-1. **Show volunteer name** for each scan
-2. **Collapse bulk scans** into a single row (e.g., "Distribution x3" instead of 3 rows)
-3. **Group logs by marketplace** since QR cards are reusable across events
+Implementation plan
 
-## What Changes
+1) Strengthen PWA cache/update strategy in `vite.config.ts`
+- Keep PWA enabled, but make update behavior explicit and aggressive:
+  - `injectRegister: false` (we will handle registration in app code)
+  - `registerType: "autoUpdate"`
+  - `workbox.skipWaiting = true`
+  - `workbox.clientsClaim = true`
+  - `workbox.cleanupOutdatedCaches = true`
+- Add a publish-level cache namespace/version so each publish rotates cache identity (cache-bust by release):
+  - e.g. `workbox.cacheId` based on build timestamp/version string.
+- Keep runtime caching only for safe static externals (fonts), and avoid overly sticky app-shell behavior.
 
-### Current Problem
-- The `transactions` table has no `scanned_by` or `marketplace_id` columns, so we cannot tell which volunteer scanned or which marketplace event a transaction belongs to
-- Bulk scans (e.g., 3 items at once) create 3 identical rows with the same timestamp instead of one row showing "x3"
-- All transactions are shown in one flat list, even though the card may have been used across multiple marketplace events
+2) Add explicit service-worker lifecycle control in `src/main.tsx`
+- Import and use `registerSW` from `virtual:pwa-register`.
+- Register with `immediate: true`.
+- On registration:
+  - trigger `registration.update()` immediately,
+  - then run periodic update checks (e.g. every 60s).
+- On `onNeedRefresh`:
+  - activate new worker and reload automatically (`updateSW(true)` + reload) so users switch immediately.
+- Add `onRegisterError` logging for easier diagnosis.
 
-### Solution
+3) Add one-time stale-cache migration guard (for existing stuck users)
+- On first load of the new release, run a controlled “legacy cache cleanup” marker flow:
+  - unregister old service workers,
+  - clear old Workbox caches,
+  - set a local marker so this runs only once,
+  - reload app.
+This specifically addresses your “very old, maybe 2 months” stuck clients.
 
-**Database changes:**
-- Add `scanned_by` column (UUID) to `transactions` -- stores the auth user ID of the volunteer who performed the scan
-- Add `marketplace_id` column (UUID) to `transactions` -- stores which marketplace the transaction occurred at
-- Update all 5 distribution/return RPCs to record `auth.uid()` as `scanned_by` and `p_marketplace_id` as `marketplace_id`
-- Update the `admin_adjust_card_balance` RPC to also record `auth.uid()` and the card's current marketplace
+4) Validation checklist after implementation
+- Publish once, open app in a fresh tab → verify latest UI loads.
+- Publish a second small change → verify app updates within ~1 minute without manual hard refresh.
+- Verify `sw.js`/cache namespace changes between publishes.
+- Verify no regression in login/session behavior after cache migration.
+- Confirm update behavior both on desktop browser and mobile browser/PWA install.
 
-**Frontend changes in BeneficiaryQRControlCenter.tsx:**
-- Fetch transactions with their `scanned_by` and `marketplace_id`
-- Look up volunteer names by joining: `scanned_by` (auth user ID) -> `pending_volunteers.created_user_id` to get first/last name
-- **Bulk grouping**: Group consecutive transactions with the same timestamp + type into a single row showing "Distribution x3 (+3)" instead of three "+1" rows
-- **Marketplace sections**: Group transactions by marketplace_id, showing each marketplace as a collapsible section header (e.g., "Morning Marketplace -- Feb 28") with its transactions underneath
+Important note about editor preview vs published app
+- This plan fixes app-level stale service-worker caching (especially on published URL).
+- The editor’s “live preview starts after chat action” behavior is platform-side build triggering and is separate from your app code.
+- So after this fix, published app freshness improves significantly; editor preview trigger timing may still behave as before.
 
-### Visual Layout After Changes
+Files to update
+- `vite.config.ts`
+- `src/main.tsx`
 
-```text
-+------------------------------------------+
-| All Scan Item Logs (23 total)            |
-+------------------------------------------+
-| Morning Marketplace (Feb 28)       23 tx |
-|   #  | Type            | Volunteer | Time     | Change |
-|   23 | Distribution x6 | Ahmed A.  | 05:39:01 | +6     |
-|   17 | Distribution x4 | Warda N.  | 05:21:46 | +4     |
-|   ...                                    |
-|    1 | CheckIn         | --        | 03:37:12 | 0      |
-+------------------------------------------+
-| Evening Marketplace (Feb 27)        5 tx |
-|   ...previous event's transactions...    |
-+------------------------------------------+
-```
-
-## Technical Details
-
-### 1. Migration: Add columns to transactions table
-```sql
-ALTER TABLE transactions ADD COLUMN scanned_by uuid;
-ALTER TABLE transactions ADD COLUMN marketplace_id uuid;
-```
-No foreign keys to auth.users (per guidelines). Nullable since historical data won't have these.
-
-### 2. Update 5 existing RPCs
-- `distribute_marketplace_item` -- add `scanned_by = auth.uid(), marketplace_id = p_marketplace_id` to INSERT
-- `distribute_marketplace_items_batch` -- same
-- `return_marketplace_item` -- same
-- `return_marketplace_items_batch` -- same
-- `admin_adjust_card_balance` -- add `scanned_by = auth.uid(), marketplace_id = v_card.marketplace_id`
-
-### 3. Frontend: Enhanced transaction fetching
-- Query transactions including the new `scanned_by` and `marketplace_id` columns
-- Fetch all distinct marketplace names for the transactions' marketplace_ids
-- Fetch volunteer names: query `pending_volunteers` where `created_user_id` matches any `scanned_by` UUID, building a lookup map of user_id to name
-- **Bulk grouping logic**: Group rows by `(timestamp, type, scanned_by)` -- rows sharing all three values get merged into one row with `quantity` count and summed `credit_change`
-- **Marketplace grouping**: Sort grouped transactions by marketplace_id, then timestamp desc. Render each marketplace as a separate accordion section
-
-### Files Changed
-1. **Migration**: Add `scanned_by` and `marketplace_id` columns to `transactions`
-2. **Migration**: Update all 5 RPCs to populate the new columns
-3. **Edit**: `src/components/admin/BeneficiaryQRControlCenter.tsx` -- enhanced log display with grouping and volunteer names
-
+Expected outcome
+- After each publish, users are moved to the newest build much faster.
+- Old service-worker cache lock-in is broken.
+- “Very old cached version” incidents are eliminated or reduced to a short update window.
