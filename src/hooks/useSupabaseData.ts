@@ -436,37 +436,27 @@ export const useCardOperations = () => {
   const checkoutCard = useMutation({
     mutationFn: async (uniqueId: string) => {
       const cleanId = sanitizeQRCode(uniqueId);
-      const { data: card, error: findError } = await supabase
-        .from('qr_cards')
-        .select('*')
-        .ilike('unique_id', cleanId)
-        .maybeSingle();
-
-      if (findError || !card) throw new SafeError('Card not found');
-
-      const totalCollected = card.total_items_collected;
-
-      const { error: updateError } = await supabase
-        .from('qr_cards')
-        .update({
-          status: 'checked_out' as DbCardStatus,
-          credit_balance: 0,
-          total_items_collected: 0,
-          collected_items: []
-        })
-        .eq('id', card.id);
-
-      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
-
-      await supabase.from('transactions').insert({
-        card_id: card.id,
-        type: 'CheckOut' as DbTransactionType,
-        credit_change: 0
+      const { data, error } = await supabase.rpc('checkout_beneficiary_card', {
+        p_unique_id: cleanId
       });
 
-      return { totalCollected };
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+
+      const result = data as { totalCollected: number; cardId: string; uniqueId: string };
+      return { totalCollected: result.totalCollected, cardId: result.cardId, uniqueId: result.uniqueId };
     },
-    onSuccess: () => {
+    onSuccess: (_data, uniqueId) => {
+      // Optimistic cache update: mark this single card as checked_out locally
+      const cleanId = sanitizeQRCode(uniqueId).toLowerCase();
+      queryClient.setQueryData<QRCard[]>(['qr_cards'], (old) => {
+        if (!old) return old;
+        return old.map(card =>
+          card.uniqueId.toLowerCase() === cleanId
+            ? { ...card, status: 'checked_out' as CardStatus, creditBalance: 0, totalItemsCollected: 0 }
+            : card
+        );
+      });
+      // Background refetch for consistency
       queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
     }
   });
