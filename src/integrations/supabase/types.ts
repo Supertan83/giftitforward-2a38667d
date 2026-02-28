@@ -1662,6 +1662,8 @@ export type Database = {
           credit_change: number
           id: string
           item_type: string | null
+          marketplace_id: string | null
+          scanned_by: string | null
           timestamp: string
           type: Database["public"]["Enums"]["transaction_type"]
         }
@@ -1670,6 +1672,8 @@ export type Database = {
           credit_change?: number
           id?: string
           item_type?: string | null
+          marketplace_id?: string | null
+          scanned_by?: string | null
           timestamp?: string
           type: Database["public"]["Enums"]["transaction_type"]
         }
@@ -1678,6 +1682,8 @@ export type Database = {
           credit_change?: number
           id?: string
           item_type?: string | null
+          marketplace_id?: string | null
+          scanned_by?: string | null
           timestamp?: string
           type?: Database["public"]["Enums"]["transaction_type"]
         }
