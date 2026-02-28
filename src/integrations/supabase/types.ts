@@ -2038,6 +2038,10 @@ export type Database = {
         Args: { p_card_id: string; p_new_items_collected: number }
         Returns: Json
       }
+      checkout_beneficiary_card: {
+        Args: { p_unique_id: string }
+        Returns: Json
+      }
       decrement_marketplace_allocation_distributed: {
         Args: { _allocation_id: string }
         Returns: number

@@ -25,7 +25,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: qrCards = [], isLoading } = useQRCards();
-  const { checkoutCard, findCardByUniqueId } = useCardOperations();
+  const { checkoutCard } = useCardOperations();
   const { data: marketplaces = [] } = useMarketplaces();
 
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
@@ -43,11 +43,8 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
     setIsProcessing(true);
 
     try {
-      // Get card info before checkout
-      const card = await findCardByUniqueId(code);
-      const itemsCollected = card?.totalItemsCollected || 0;
-      
-      await checkoutCard.mutateAsync(code);
+      const result = await checkoutCard.mutateAsync(code);
+      const itemsCollected = result.totalCollected;
       
       setLastCheckout({
         uniqueId: code,
@@ -67,7 +64,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [checkoutCard, findCardByUniqueId, creditLimit]);
+  }, [checkoutCard, creditLimit]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
