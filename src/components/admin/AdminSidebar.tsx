@@ -1,6 +1,6 @@
 import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
-  QrCode, Store, PieChart, RefreshCw, Unlock,
+  QrCode, Store, PieChart, RefreshCw, Unlock, ScanLine,
   Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText,
   ChevronRight, Archive, Megaphone, LinkIcon, Trash2, ClipboardList
 } from 'lucide-react';
@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -42,6 +42,7 @@ const volunteerItems = [
 ];
 
 const beneficiaryItems = [
+  { view: 'beneficiary-qr-control' as AdminView, label: 'QR Control Center', icon: ScanLine, color: 'text-primary' },
   { view: 'qr-generator' as AdminView, label: 'Generate QR Cards', icon: QrCode, color: 'text-primary' },
   { view: 'marketplaces' as AdminView, label: 'Marketplaces', icon: Store, color: 'text-amber-500' },
   { view: 'marketplace-reports' as AdminView, label: 'Marketplace Reports', icon: PieChart, color: 'text-indigo-500' },

@@ -2028,6 +2028,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_adjust_card_balance: {
+        Args: { p_card_id: string; p_new_items_collected: number }
+        Returns: Json
+      }
       decrement_marketplace_allocation_distributed: {
         Args: { _allocation_id: string }
         Returns: number
@@ -2080,7 +2084,12 @@ export type Database = {
     Enums: {
       app_role: "admin" | "volunteer" | "employee"
       card_status: "inactive" | "active" | "checked_out"
-      transaction_type: "CheckIn" | "Distribution" | "Return" | "CheckOut"
+      transaction_type:
+        | "CheckIn"
+        | "Distribution"
+        | "Return"
+        | "CheckOut"
+        | "Adjustment"
       volunteer_zone: "entrance" | "marketplace" | "exit"
     }
     CompositeTypes: {
@@ -2211,7 +2220,13 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "volunteer", "employee"],
       card_status: ["inactive", "active", "checked_out"],
-      transaction_type: ["CheckIn", "Distribution", "Return", "CheckOut"],
+      transaction_type: [
+        "CheckIn",
+        "Distribution",
+        "Return",
+        "CheckOut",
+        "Adjustment",
+      ],
       volunteer_zone: ["entrance", "marketplace", "exit"],
     },
   },
