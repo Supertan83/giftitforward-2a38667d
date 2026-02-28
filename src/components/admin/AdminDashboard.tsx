@@ -49,9 +49,10 @@ import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { SurveyReviewsViewer } from '@/components/admin/SurveyReviewsViewer';
 import { DatabaseBackup } from '@/components/admin/DatabaseBackup';
 import { BeneficiaryQRControlCenter } from '@/components/admin/BeneficiaryQRControlCenter';
+import { ActiveBeneficiaryCards } from '@/components/admin/ActiveBeneficiaryCards';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -254,6 +255,7 @@ export const AdminDashboard = () => {
       case 'survey-reviews': return <SurveyReviewsViewer onBack={goBack} />;
       case 'database-backup': return <DatabaseBackup onBack={goBack} />;
       case 'beneficiary-qr-control': return <BeneficiaryQRControlCenter onBack={goBack} />;
+      case 'active-beneficiary-cards': return <ActiveBeneficiaryCards onBack={goBack} />;
       default: return renderDashboardHome();
     }
   };
