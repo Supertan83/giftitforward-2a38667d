@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { ScanLine, Search, ArrowLeft, CreditCard, MapPin, Hash, AlertTriangle, Save } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { ScanLine, Search, ArrowLeft, CreditCard, MapPin, Hash, AlertTriangle, Save, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,25 @@ interface TransactionLog {
   credit_change: number;
   timestamp: string;
   item_type: string | null;
+  scanned_by: string | null;
+  marketplace_id: string | null;
+}
+
+interface GroupedTx {
+  type: string;
+  timestamp: string;
+  scanned_by: string | null;
+  marketplace_id: string | null;
+  credit_change: number;
+  quantity: number;
+}
+
+interface MarketplaceSection {
+  marketplace_id: string | null;
+  marketplace_name: string;
+  event_date: string | null;
+  transactions: GroupedTx[];
+  totalTx: number;
 }
 
 interface Props {
@@ -50,6 +69,8 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
   const [card, setCard] = useState<CardData | null>(null);
   const [marketplace, setMarketplace] = useState<MarketplaceData | null>(null);
   const [transactions, setTransactions] = useState<TransactionLog[]>([]);
+  const [volunteerNames, setVolunteerNames] = useState<Record<string, string>>({});
+  const [marketplaceNames, setMarketplaceNames] = useState<Record<string, { name: string; event_date: string | null }>>({});
   const [adjustValue, setAdjustValue] = useState('');
   const { toast } = useToast();
 
@@ -58,11 +79,12 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
     setCard(null);
     setMarketplace(null);
     setTransactions([]);
+    setVolunteerNames({});
+    setMarketplaceNames({});
 
     try {
       const cleanId = uniqueId.trim();
-      
-      // Find card
+
       const { data: cardData, error: cardError } = await supabase
         .from('qr_cards')
         .select('*')
@@ -79,8 +101,8 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
       setCard(cardData as CardData);
       setAdjustValue(String(cardData.total_items_collected));
 
-      // Fetch marketplace and transactions in parallel
-      const [mpResult, txResult] = await Promise.all([
+      // Fetch marketplace, transactions in parallel
+      const [mpResult, allTx] = await Promise.all([
         cardData.marketplace_id
           ? supabase.from('marketplace_events').select('id, name, beneficiary_credit_limit, location').eq('id', cardData.marketplace_id).maybeSingle()
           : Promise.resolve({ data: null, error: null }),
@@ -88,7 +110,38 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
       ]);
 
       if (mpResult.data) setMarketplace(mpResult.data as MarketplaceData);
-      setTransactions(txResult);
+      setTransactions(allTx);
+
+      // Fetch volunteer names and marketplace names for all transactions
+      const scannedByIds = [...new Set(allTx.filter(t => t.scanned_by).map(t => t.scanned_by!))];
+      const mpIds = [...new Set(allTx.filter(t => t.marketplace_id).map(t => t.marketplace_id!))];
+
+      const [volResult, mpNamesResult] = await Promise.all([
+        scannedByIds.length > 0
+          ? supabase.from('pending_volunteers').select('created_user_id, first_name, last_name').in('created_user_id', scannedByIds)
+          : Promise.resolve({ data: [], error: null }),
+        mpIds.length > 0
+          ? supabase.from('marketplace_events').select('id, name, event_date').in('id', mpIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (volResult.data) {
+        const nameMap: Record<string, string> = {};
+        for (const v of volResult.data) {
+          if (v.created_user_id) {
+            nameMap[v.created_user_id] = `${v.first_name} ${v.last_name?.charAt(0) || ''}.`;
+          }
+        }
+        setVolunteerNames(nameMap);
+      }
+
+      if (mpNamesResult.data) {
+        const mpMap: Record<string, { name: string; event_date: string | null }> = {};
+        for (const m of mpNamesResult.data) {
+          mpMap[m.id] = { name: m.name, event_date: m.event_date };
+        }
+        setMarketplaceNames(mpMap);
+      }
     } catch (err: any) {
       toast({ title: 'Lookup Failed', description: err.message || 'Error looking up card', variant: 'destructive' });
     } finally {
@@ -104,7 +157,7 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
     while (hasMore) {
       const { data, error } = await supabase
         .from('transactions')
-        .select('id, type, credit_change, timestamp, item_type')
+        .select('id, type, credit_change, timestamp, item_type, scanned_by, marketplace_id')
         .eq('card_id', cardId)
         .order('timestamp', { ascending: false })
         .range(from, from + pageSize - 1);
@@ -115,6 +168,66 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
     }
     return allTx;
   };
+
+  // Group transactions by marketplace, then collapse bulk scans
+  const marketplaceSections = useMemo((): MarketplaceSection[] => {
+    // Group by marketplace_id
+    const byMp = new Map<string | null, TransactionLog[]>();
+    for (const tx of transactions) {
+      const key = tx.marketplace_id;
+      if (!byMp.has(key)) byMp.set(key, []);
+      byMp.get(key)!.push(tx);
+    }
+
+    const sections: MarketplaceSection[] = [];
+    for (const [mpId, txList] of byMp) {
+      // Sort by timestamp desc
+      txList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      // Collapse bulk scans: group consecutive rows with same timestamp + type + scanned_by
+      const grouped: GroupedTx[] = [];
+      for (const tx of txList) {
+        const last = grouped[grouped.length - 1];
+        if (
+          last &&
+          last.timestamp === tx.timestamp &&
+          last.type === tx.type &&
+          last.scanned_by === tx.scanned_by
+        ) {
+          last.quantity += 1;
+          last.credit_change += tx.credit_change;
+        } else {
+          grouped.push({
+            type: tx.type,
+            timestamp: tx.timestamp,
+            scanned_by: tx.scanned_by,
+            marketplace_id: tx.marketplace_id,
+            credit_change: tx.credit_change,
+            quantity: 1,
+          });
+        }
+      }
+
+      const mpInfo = mpId ? marketplaceNames[mpId] : null;
+      sections.push({
+        marketplace_id: mpId,
+        marketplace_name: mpInfo?.name || 'Unknown Marketplace',
+        event_date: mpInfo?.event_date || null,
+        transactions: grouped,
+        totalTx: txList.length,
+      });
+    }
+
+    // Sort sections: most recent event first
+    sections.sort((a, b) => {
+      if (a.event_date && b.event_date) return b.event_date.localeCompare(a.event_date);
+      if (a.event_date) return -1;
+      if (b.event_date) return 1;
+      return 0;
+    });
+
+    return sections;
+  }, [transactions, marketplaceNames]);
 
   const handleSearch = () => {
     if (searchId.trim()) lookupCard(searchId);
@@ -148,7 +261,6 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
         description: `Items: ${result.previous_items} → ${result.new_items} (${result.delta >= 0 ? '+' : ''}${result.delta})`,
       });
 
-      // Refresh card data
       await lookupCard(card.unique_id);
     } catch (err: any) {
       toast({ title: 'Adjustment Failed', description: err.message || 'Failed to adjust balance', variant: 'destructive' });
@@ -300,7 +412,7 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
             </CardContent>
           </Card>
 
-          {/* Scan Item Logs */}
+          {/* Scan Item Logs - Grouped by Marketplace */}
           <Card>
             <Accordion type="single" collapsible defaultValue="logs">
               <AccordionItem value="logs" className="border-0">
@@ -313,38 +425,18 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
-                  <CardContent className="pt-3">
-                    {transactions.length === 0 ? (
+                  <CardContent className="pt-3 space-y-4">
+                    {marketplaceSections.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">No transactions found</p>
                     ) : (
-                      <div className="max-h-[400px] overflow-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-12">#</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Time</TableHead>
-                              <TableHead className="text-right">Change</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {transactions.map((tx, idx) => (
-                              <TableRow key={tx.id}>
-                                <TableCell className="text-muted-foreground text-xs">{transactions.length - idx}</TableCell>
-                                <TableCell>
-                                  <span className={`font-medium text-xs ${txTypeColor(tx.type)}`}>{tx.type}</span>
-                                </TableCell>
-                                <TableCell className="text-xs font-mono">
-                                  {format(new Date(tx.timestamp), 'MMM d, HH:mm:ss')}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-xs">
-                                  {tx.credit_change > 0 ? `+${tx.credit_change}` : tx.credit_change === 0 ? '0' : tx.credit_change}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                      marketplaceSections.map((section) => (
+                        <MarketplaceSectionView
+                          key={section.marketplace_id || 'unknown'}
+                          section={section}
+                          volunteerNames={volunteerNames}
+                          txTypeColor={txTypeColor}
+                        />
+                      ))
                     )}
                   </CardContent>
                 </AccordionContent>
@@ -363,3 +455,79 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
     </div>
   );
 };
+
+// Sub-component for each marketplace section
+function MarketplaceSectionView({
+  section,
+  volunteerNames,
+  txTypeColor,
+}: {
+  section: MarketplaceSection;
+  volunteerNames: Record<string, string>;
+  txTypeColor: (type: string) => string;
+}) {
+  return (
+    <Accordion type="single" collapsible defaultValue="section">
+      <AccordionItem value="section" className="border rounded-lg">
+        <AccordionTrigger className="px-3 py-2 hover:no-underline">
+          <div className="flex items-center justify-between w-full pr-2">
+            <span className="font-medium text-sm flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 text-primary" />
+              {section.marketplace_name}
+              {section.event_date && (
+                <span className="text-muted-foreground font-normal">
+                  ({format(new Date(section.event_date), 'MMM d')})
+                </span>
+              )}
+            </span>
+            <Badge variant="secondary" className="text-xs ml-2">{section.totalTx} tx</Badge>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="max-h-[400px] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Volunteer</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead className="text-right">Change</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {section.transactions.map((tx, idx) => {
+                  // Calculate running index (count from end)
+                  const rowNum = section.totalTx - section.transactions.slice(0, idx).reduce((sum, t) => sum + t.quantity, 0);
+                  const volName = tx.scanned_by ? volunteerNames[tx.scanned_by] || '—' : '—';
+                  const typeLabel = tx.quantity > 1 ? `${tx.type} x${tx.quantity}` : tx.type;
+
+                  return (
+                    <TableRow key={`${tx.timestamp}-${tx.type}-${idx}`}>
+                      <TableCell className="text-muted-foreground text-xs">{rowNum}</TableCell>
+                      <TableCell>
+                        <span className={`font-medium text-xs ${txTypeColor(tx.type)}`}>{typeLabel}</span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <span className="flex items-center gap-1">
+                          <User className="h-3 w-3 text-muted-foreground" />
+                          {volName}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">
+                        {format(new Date(tx.timestamp), 'MMM d, HH:mm:ss')}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {tx.credit_change > 0 ? `+${tx.credit_change}` : tx.credit_change === 0 ? '0' : tx.credit_change}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
