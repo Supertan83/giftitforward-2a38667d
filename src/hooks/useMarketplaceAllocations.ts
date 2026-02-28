@@ -629,30 +629,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           name: marketplace.name,
           location: marketplace.location,
           eventDate: marketplace.event_date,
-          status: (() => {
-            let s = marketplace.status as string;
-            if (!(marketplace as any).status_locked_by_admin && (s === 'active' || s === 'upcoming') && marketplace.event_date) {
-              const [y, m, d] = marketplace.event_date.split('-').map(Number);
-              const now = new Date();
-              const endDt = new Date(y, m - 1, d);
-              if (marketplace.end_time) {
-                const [eh, em] = marketplace.end_time.split(':').map(Number);
-                endDt.setHours(eh, em, 0, 0);
-              } else {
-                endDt.setHours(23, 59, 59, 999);
-              }
-              const startDt = new Date(y, m - 1, d);
-              if (marketplace.start_time) {
-                const [sh, sm] = marketplace.start_time.split(':').map(Number);
-                startDt.setHours(sh, sm, 0, 0);
-              } else {
-                startDt.setHours(0, 0, 0, 0);
-              }
-              if (now > endDt) s = 'completed';
-              else if (s === 'upcoming' && now >= startDt) s = 'active';
-            }
-            return s;
-          })(),
+          status: computeDisplayStatus(marketplace as any),
           outreachPartner: marketplace.outreach_partner,
           manualBeneficiaryCount: (marketplace as any).manual_beneficiary_count ?? null,
         },
@@ -684,6 +661,24 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
     enabled: !!marketplaceId,
   });
 };
+
+// Shared helper to compute real-time marketplace status
+function computeDisplayStatus(mp: { status: string; event_date?: string | null; start_time?: string | null; end_time?: string | null; status_locked_by_admin?: boolean }): string {
+  let s = mp.status;
+  if (!mp.status_locked_by_admin && (s === 'active' || s === 'upcoming') && mp.event_date) {
+    const [y, m, d] = mp.event_date.split('-').map(Number);
+    const now = new Date();
+    const endDt = new Date(y, m - 1, d);
+    if (mp.end_time) { const [eh, em] = mp.end_time.split(':').map(Number); endDt.setHours(eh, em, 0, 0); }
+    else { endDt.setHours(23, 59, 59, 999); }
+    const startDt = new Date(y, m - 1, d);
+    if (mp.start_time) { const [sh, sm] = mp.start_time.split(':').map(Number); startDt.setHours(sh, sm, 0, 0); }
+    else { startDt.setHours(0, 0, 0, 0); }
+    if (now > endDt) s = 'completed';
+    else if (s === 'upcoming' && now >= startDt) s = 'active';
+  }
+  return s;
+}
 
 // Fetch summary reports for all marketplaces
 export const useAllMarketplaceReports = () => {
@@ -744,7 +739,7 @@ export const useAllMarketplaceReports = () => {
             name: mp.name,
             location: mp.location,
             eventDate: mp.event_date,
-            status: mp.status,
+            status: computeDisplayStatus(mp),
             beneficiaryCount: (archivedCount || 0) + (activeCount || 0),
             totalAllocated,
             totalDistributed,
