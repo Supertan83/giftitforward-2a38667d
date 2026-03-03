@@ -1,60 +1,30 @@
 
 
-# Add Resend Survey & Certificate Buttons Per Volunteer in Admin
+# Consolidate Resend Actions into a Mail Popover Menu
 
-## Context
-The admin "Volunteers Added" section already shows each approved volunteer with action buttons (View Details, View Certificates, Credentials, Resend Welcome Email, Delete). The request is to add two more action buttons per volunteer row: **Resend Survey** and **Resend Certificate**.
+## What
+Replace the separate Mail (welcome) and Send (survey) icon buttons with a single Mail icon button that opens a popover/dropdown menu containing all email-related actions:
+- **Resend Welcome Email**
+- **Resend Survey**
+- **Resend Certificate** (opens the existing certificate preview dialog)
 
-## Data Available
-Each volunteer row already has:
-- `volunteer.volunteer_qr_cards` — array of QR cards with `id`, `unique_id`, `status`, `checked_in_at`, `checked_out_at`, `survey_completed_at`
-- `volunteer.first_name`, `volunteer.last_name`, `volunteer.email`
-- From QR cards, we can derive the primary card's `id` (volunteerCardId) and the marketplace_id (from a separate lookup or from the card)
-
-## Problem
-- `send-survey` needs: `volunteerCardId`, `volunteerName`, `volunteerEmail`, optionally `volunteerId` and `marketplaceId`
-- `send-certificate` needs: `firstName`, `lastName`, `email`, `certificateBase64`, `certificateType`, `marketplaceId` — the certificate PDF must be generated client-side first
-- The volunteer QR card data is already joined in the query, but `marketplace_id` is not currently selected
+This declutters the action buttons row and groups related functionality logically.
 
 ## Changes
 
-### 1. Update the volunteer QR cards select to include `marketplace_id`
-**File:** `src/components/admin/PendingVolunteers.tsx`
+### File: `src/components/admin/PendingVolunteers.tsx`
 
-Add `marketplace_id` to the `volunteer_qr_cards` select clause in the approved volunteers query (around line 952) and the family cards query (around line 1006). Also update the `VolunteerQRCard` interface to include `marketplace_id`.
+1. **Import `DropdownMenu`** components (already available in `@/components/ui/dropdown-menu`)
 
-### 2. Add "Resend Survey" button per volunteer row
-**File:** `src/components/admin/PendingVolunteers.tsx`
+2. **Replace the 3 action buttons** (Resend Survey at lines 1836-1856, Resend Welcome Email at lines 1857-1874, and the Award/Certificates button at lines 1798-1813) with:
+   - Keep the **Award** button as-is (viewing certificates is distinct from emailing)
+   - Replace the **Mail** and **Send** buttons with a single `DropdownMenu` triggered by a Mail icon button
+   - The dropdown contains 3 items:
+     - "Resend Welcome Email" — triggers existing `resendEmailMutation.mutate(volunteer.id)`
+     - "Resend Survey" — triggers existing `resendSurveyMutation.mutate(volunteer)` (disabled if no QR card)
+     - "Resend Certificate" — opens the existing certificate preview dialog (`setCertificatePreviewVolunteer` + `setShowCertificatePreview`)
 
-Add a new mutation `resendSurveyMutation` that:
-- Finds the primary (non-family) QR card from `volunteer.volunteer_qr_cards`
-- Calls `supabase.functions.invoke('send-survey', { body: { volunteerCardId, volunteerName, volunteerEmail, marketplaceId } })`
-- Shows toast on success/failure
+3. **Result:** Action buttons simplify from `[Eye] [Award] [Send] [Key] [Mail] [Trash]` to `[Eye] [Award] [Mail ▾] [Key] [Trash]`
 
-Add a button with a `Send` icon in the action buttons area (between the existing Resend Email and Delete buttons), with tooltip "Resend Survey". Only enabled when the volunteer has at least one QR card.
-
-### 3. Add "Resend Certificate" button per volunteer row
-**File:** `src/components/admin/PendingVolunteers.tsx`
-
-The certificate flow is more complex because it requires generating a PDF first. However, the existing "View Certificates" button already opens `CertificatePreviewDialog` which has send functionality built in. 
-
-Instead of duplicating the certificate generation logic, add a quick-action button that opens the certificate preview dialog pre-set to the attendance certificate type, allowing the admin to send from there (this flow already exists).
-
-**Simpler approach:** Add a dedicated "Send Survey" icon button. For certificates, the existing Award button already handles this — just ensure it's clearly labeled.
-
-### 4. Summary of UI changes
-In the actions `<TableCell>` for each approved volunteer row (around lines 1746-1838), add one new button after the Award (certificates) button:
-
-```text
-[Eye] [Award] [Send Survey] [KeyRound] [Mail] [Trash]
-```
-
-The Send Survey button will:
-- Find primary QR card from `volunteer.volunteer_qr_cards`
-- Call `send-survey` edge function
-- Show loading state and toast feedback
-- Be disabled if no QR card exists
-
-## Files changed
-1. `src/components/admin/PendingVolunteers.tsx` — add `marketplace_id` to QR card queries, add survey resend mutation, add Send Survey button per volunteer row
+The dropdown menu items will show loading spinners inline when their respective mutations are pending. No new mutations or backend changes needed — all functions already exist.
 
