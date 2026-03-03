@@ -2042,6 +2042,7 @@ export type Database = {
         Args: { p_unique_id: string }
         Returns: Json
       }
+      checkout_volunteer_card: { Args: { p_unique_id: string }; Returns: Json }
       decrement_marketplace_allocation_distributed: {
         Args: { _allocation_id: string }
         Returns: number

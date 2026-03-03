@@ -1519,93 +1519,43 @@ export const useVolunteerCardOperations = () => {
   const checkOutVolunteer = useMutation({
     mutationFn: async (uniqueId: string) => {
       const cleanId = sanitizeQRCode(uniqueId);
-      const { data: card, error: findError } = await supabase
-        .from('volunteer_qr_cards')
-        .select(`
-          *,
-          volunteer_attendance(*),
-          pending_volunteers (
-            id,
-            first_name,
-            last_name,
-            email,
-            events_json
-          )
-        `)
-        .ilike('unique_id', cleanId)
-        .maybeSingle();
+      
+      // Single atomic RPC call replaces 4 sequential DB operations
+      const { data, error } = await supabase.rpc('checkout_volunteer_card', {
+        p_unique_id: cleanId
+      });
 
-      if (findError || !card) throw new SafeError('Volunteer card not found');
-      if (card.status !== 'checked_in') throw new SafeError('Volunteer not checked in');
+      if (error) throw new SafeError(mapDatabaseError(error), error);
 
-      const now = new Date();
-      const checkedInAt = new Date(card.checked_in_at);
-      const hoursWorked = (now.getTime() - checkedInAt.getTime()) / (1000 * 60 * 60);
+      const result = data as {
+        cardId: string;
+        hoursWorked: number;
+        marketplaceId: string | null;
+        volunteerId: string | null;
+        volunteerName: string;
+        volunteerEmail: string | null;
+      };
 
-      // Prevent accidental immediate checkouts (less than 1 minute)
-      if (hoursWorked < (1 / 60)) {
-        throw new SafeError('Cannot check out within 1 minute of check-in. Please wait.');
-      }
-
-      const { error: updateError } = await supabase
-        .from('volunteer_qr_cards')
-        .update({
-          status: 'checked_out',
-          checked_out_at: now.toISOString(),
-          total_hours_worked: (card.total_hours_worked || 0) + hoursWorked
-        })
-        .eq('id', card.id);
-
-      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
-
-      // Update attendance record
-      const { data: attendance } = await supabase
-        .from('volunteer_attendance')
-        .select('*')
-        .eq('volunteer_card_id', card.id)
-        .is('check_out_time', null)
-        .order('check_in_time', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (attendance) {
-        await supabase
-          .from('volunteer_attendance')
-          .update({
-            check_out_time: now.toISOString(),
-            hours_worked: hoursWorked
-          })
-          .eq('id', attendance.id);
-      }
-
-      // Send survey email if volunteer has email
-      const volunteer = card.pending_volunteers;
-      if (volunteer?.email) {
-        const volunteerName = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.trim();
-        
-        try {
-          await supabase.functions.invoke('send-survey', {
-            body: {
-              volunteerCardId: card.id,
-              volunteerId: volunteer.id,
-              volunteerName: volunteerName || 'Volunteer',
-              volunteerEmail: volunteer.email,
-              marketplaceId: card.marketplace_id,
-            },
-          });
-          console.log('Survey email sent to:', volunteer.email);
-        } catch (surveyError) {
-          // Log but don't fail checkout if survey fails
+      // Fire-and-forget survey email — don't block checkout
+      if (result.volunteerEmail) {
+        supabase.functions.invoke('send-survey', {
+          body: {
+            volunteerCardId: result.cardId,
+            volunteerId: result.volunteerId,
+            volunteerName: result.volunteerName || 'Volunteer',
+            volunteerEmail: result.volunteerEmail,
+            marketplaceId: result.marketplaceId,
+          },
+        }).then(() => {
+          console.log('Survey email sent to:', result.volunteerEmail);
+        }).catch((surveyError) => {
           console.error('Failed to send survey email:', surveyError);
-        }
+        });
       }
-
-      // Family members must be checked out individually via QR scan
-      // Certificates can be sent manually via the "Send Family Certs" dialog
 
       return { 
-        hoursWorked: hoursWorked.toFixed(2), 
-        surveySent: !!volunteer?.email,
+        hoursWorked: String(result.hoursWorked), 
+        surveySent: !!result.volunteerEmail,
         familyCertificatesSent: 0 
       };
     },
