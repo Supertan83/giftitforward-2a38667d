@@ -67,6 +67,7 @@ interface VolunteerQRCard {
   checked_in_at: string | null;
   checked_out_at: string | null;
   survey_completed_at: string | null;
+  marketplace_id: string | null;
 }
 
 interface PendingVolunteer {
@@ -238,7 +239,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             status,
             checked_in_at,
             checked_out_at,
-            survey_completed_at
+            survey_completed_at,
+            marketplace_id
           )
         `);
 
@@ -430,6 +432,40 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         description: error.message,
         variant: 'destructive',
       });
+    }
+  });
+
+  const [resendingSurveyId, setResendingSurveyId] = useState<string | null>(null);
+
+  const resendSurveyMutation = useMutation({
+    mutationFn: async (volunteer: PendingVolunteer) => {
+      const primaryCard = (volunteer.volunteer_qr_cards || []).find(
+        (c) => !/-F\d+/.test(c.unique_id)
+      );
+      if (!primaryCard) throw new Error('No QR card found for this volunteer');
+
+      const { data, error } = await supabase.functions.invoke('send-survey', {
+        body: {
+          volunteerCardId: primaryCard.id,
+          volunteerId: volunteer.id,
+          volunteerName: `${volunteer.first_name} ${volunteer.last_name}`,
+          volunteerEmail: volunteer.email,
+          marketplaceId: primaryCard.marketplace_id || undefined,
+        }
+      });
+
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || 'Failed to send survey');
+      return data;
+    },
+    onSuccess: () => {
+      setResendingSurveyId(null);
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      toast({ title: 'Survey Sent', description: 'Survey email has been sent successfully.' });
+    },
+    onError: (error: Error) => {
+      setResendingSurveyId(null);
+      toast({ title: 'Failed to Send Survey', description: error.message, variant: 'destructive' });
     }
   });
 
@@ -949,7 +985,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       // Query volunteers within date range
       let query = supabase
         .from('pending_volunteers')
-        .select(`*, volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (id, unique_id, status, checked_in_at, checked_out_at, survey_completed_at)`)
+        .select(`*, volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (id, unique_id, status, checked_in_at, checked_out_at, survey_completed_at, marketplace_id)`)
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
 
@@ -1803,6 +1839,27 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                             variant="ghost"
                                             size="icon"
                                             className="h-7 w-7"
+                                            onClick={() => {
+                                              setResendingSurveyId(volunteer.id);
+                                              resendSurveyMutation.mutate(volunteer);
+                                            }}
+                                            disabled={resendingSurveyId === volunteer.id || !(volunteer.volunteer_qr_cards?.length)}
+                                          >
+                                            {resendingSurveyId === volunteer.id ? (
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                              <Send className="w-3.5 h-3.5" />
+                                            )}
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Resend Survey</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
                                             onClick={() => resendEmailMutation.mutate(volunteer.id)}
                                             disabled={resendEmailMutation.isPending || deleteMutation.isPending}
                                           >
@@ -1813,7 +1870,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                             )}
                                           </Button>
                                         </TooltipTrigger>
-                                        <TooltipContent>Resend Email</TooltipContent>
+                                        <TooltipContent>Resend Welcome Email</TooltipContent>
                                       </Tooltip>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
