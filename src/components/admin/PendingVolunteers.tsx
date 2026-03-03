@@ -48,6 +48,12 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CertificatePreviewDialog } from '@/components/certificates/CertificatePreviewDialog';
@@ -1795,50 +1801,34 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                         </TooltipTrigger>
                                         <TooltipContent>View Details</TooltipContent>
                                       </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7"
-                                            onClick={() => {
-                                              setCertificatePreviewVolunteer(volunteer);
-                                              setShowCertificatePreview(true);
-                                            }}
-                                          >
-                                            <Award className="w-3.5 h-3.5" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>View Certificates</TooltipContent>
-                                      </Tooltip>
-                                      {volunteer.temp_password && (
+                                      <DropdownMenu>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7"
-                                              onClick={() => {
-                                                setApprovedCredentials({
-                                                  email: volunteer.email,
-                                                  password: volunteer.temp_password!,
-                                                  emailSent: volunteer.email_sent ?? false
-                                                });
-                                                setShowCredentialsDialog(true);
-                                              }}
-                                            >
-                                              <KeyRound className="w-3.5 h-3.5" />
-                                            </Button>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                              >
+                                                <Mail className="w-3.5 h-3.5" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
                                           </TooltipTrigger>
-                                          <TooltipContent>View Credentials</TooltipContent>
+                                          <TooltipContent>Email Actions</TooltipContent>
                                         </Tooltip>
-                                      )}
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7"
+                                        <DropdownMenuContent align="end" className="w-48">
+                                          <DropdownMenuItem
+                                            onClick={() => resendEmailMutation.mutate(volunteer.id)}
+                                            disabled={resendEmailMutation.isPending}
+                                          >
+                                            {resendEmailMutation.isPending ? (
+                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            ) : (
+                                              <Mail className="w-4 h-4 mr-2" />
+                                            )}
+                                            Resend Welcome Email
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
                                             onClick={() => {
                                               setResendingSurveyId(volunteer.id);
                                               resendSurveyMutation.mutate(volunteer);
@@ -1846,32 +1836,23 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                             disabled={resendingSurveyId === volunteer.id || !(volunteer.volunteer_qr_cards?.length)}
                                           >
                                             {resendingSurveyId === volunteer.id ? (
-                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                             ) : (
-                                              <Send className="w-3.5 h-3.5" />
+                                              <Send className="w-4 h-4 mr-2" />
                                             )}
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Resend Survey</TooltipContent>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7"
-                                            onClick={() => resendEmailMutation.mutate(volunteer.id)}
-                                            disabled={resendEmailMutation.isPending || deleteMutation.isPending}
+                                            Resend Survey
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              setCertificatePreviewVolunteer(volunteer);
+                                              setShowCertificatePreview(true);
+                                            }}
                                           >
-                                            {resendEmailMutation.isPending ? (
-                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            ) : (
-                                              <Mail className="w-3.5 h-3.5" />
-                                            )}
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Resend Welcome Email</TooltipContent>
-                                      </Tooltip>
+                                            <Award className="w-4 h-4 mr-2" />
+                                            Resend Certificate
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
                                           <Button
