@@ -1,30 +1,36 @@
 
 
-# Consolidate Resend Actions into a Mail Popover Menu
+# Fix: Volunteer Certificate Email Missing Marketplace Details
 
-## What
-Replace the separate Mail (welcome) and Send (survey) icon buttons with a single Mail icon button that opens a popover/dropdown menu containing all email-related actions:
-- **Resend Welcome Email**
-- **Resend Survey**
-- **Resend Certificate** (opens the existing certificate preview dialog)
+## Problem
+Family member attendance certificate emails include marketplace name, date, time, and hours worked. Volunteer attendance certificate emails do not — they skip straight to "Your Certificate of Attendance is attached." This is because `marketplaceId` and `hoursWorked` are not passed when calling `send-certificate` from the survey pages.
 
-This declutters the action buttons row and groups related functionality logically.
+## Root Cause
+Two gaps in the data flow:
+
+1. **`submit-survey` edge function** (GET action): Returns only `id, volunteer_name, volunteer_email, volunteer_card_id, completed_at, certificate_sent_at` — missing `marketplace_id`.
+2. **`VolunteerSurveyPage.tsx` and `ExternalSurveyPage.tsx`**: The `sendCertificateEmail` functions don't pass `marketplaceId` or `hoursWorked` to `send-certificate`.
 
 ## Changes
 
-### File: `src/components/admin/PendingVolunteers.tsx`
+### 1. `supabase/functions/submit-survey/index.ts`
+- Add `marketplace_id` to the select clause on line 38
+- Also join `volunteer_qr_cards` to get `total_hours_worked` via a second query using `volunteer_card_id`, OR simply add `marketplace_id` to the returned survey data and let the client look up hours from the QR card
 
-1. **Import `DropdownMenu`** components (already available in `@/components/ui/dropdown-menu`)
+Simplest approach: just add `marketplace_id` to the select. For hours, do a quick lookup on `volunteer_qr_cards` using `volunteer_card_id` and return `hours_worked` alongside the survey data.
 
-2. **Replace the 3 action buttons** (Resend Survey at lines 1836-1856, Resend Welcome Email at lines 1857-1874, and the Award/Certificates button at lines 1798-1813) with:
-   - Keep the **Award** button as-is (viewing certificates is distinct from emailing)
-   - Replace the **Mail** and **Send** buttons with a single `DropdownMenu` triggered by a Mail icon button
-   - The dropdown contains 3 items:
-     - "Resend Welcome Email" — triggers existing `resendEmailMutation.mutate(volunteer.id)`
-     - "Resend Survey" — triggers existing `resendSurveyMutation.mutate(volunteer)` (disabled if no QR card)
-     - "Resend Certificate" — opens the existing certificate preview dialog (`setCertificatePreviewVolunteer` + `setShowCertificatePreview`)
+### 2. `src/pages/VolunteerSurveyPage.tsx`
+- Update `SurveyData` interface to include `marketplace_id` and `hours_worked`
+- Pass `marketplaceId` and `hoursWorked` to `send-certificate` invocation (lines 187-194)
 
-3. **Result:** Action buttons simplify from `[Eye] [Award] [Send] [Key] [Mail] [Trash]` to `[Eye] [Award] [Mail ▾] [Key] [Trash]`
+### 3. `src/pages/ExternalSurveyPage.tsx`
+- Same pattern: fetch marketplace_id from the survey/card data and pass it to `send-certificate`
+- Need to check how this page gets its data (it uses a different flow)
 
-The dropdown menu items will show loading spinners inline when their respective mutations are pending. No new mutations or backend changes needed — all functions already exist.
+### 4. No changes to `send-certificate` edge function
+It already supports `marketplaceId` and `hoursWorked` parameters and renders the participation details block when they're present.
+
+## Summary
+- 1 edge function edit (add `marketplace_id` + hours lookup to survey GET response)
+- 2 frontend edits (pass the new fields through to `send-certificate`)
 
