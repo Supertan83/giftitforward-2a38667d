@@ -19,6 +19,8 @@ interface SurveyData {
   volunteer_name: string;
   volunteer_email: string;
   volunteer_card_id: string | null;
+  marketplace_id: string | null;
+  hours_worked: number | null;
   completed_at: string | null;
   certificate_sent_at: string | null;
 }
@@ -191,6 +193,8 @@ export default function VolunteerSurveyPage() {
           email: surveyData.volunteer_email.trim(),
           certificateBase64: base64Data,
           certificateType: 'attendance',
+          marketplaceId: surveyData.marketplace_id || undefined,
+          hoursWorked: surveyData.hours_worked || undefined,
         },
       });
       if (error) throw error;

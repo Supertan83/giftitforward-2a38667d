@@ -35,7 +35,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       const { data, error } = await supabase
         .from("volunteer_surveys")
-        .select("id, volunteer_name, volunteer_email, volunteer_card_id, completed_at, certificate_sent_at")
+        .select("id, volunteer_name, volunteer_email, volunteer_card_id, marketplace_id, completed_at, certificate_sent_at")
         .eq("survey_token", surveyToken)
         .maybeSingle();
 
@@ -54,8 +54,21 @@ const handler = async (req: Request): Promise<Response> => {
         );
       }
 
+      // Look up hours worked from volunteer_qr_cards if volunteer_card_id exists
+      let hoursWorked: number | null = null;
+      if (data.volunteer_card_id) {
+        const { data: cardData } = await supabase
+          .from("volunteer_qr_cards")
+          .select("total_hours_worked")
+          .eq("id", data.volunteer_card_id)
+          .maybeSingle();
+        if (cardData) {
+          hoursWorked = cardData.total_hours_worked;
+        }
+      }
+
       return new Response(
-        JSON.stringify({ success: true, survey: data }),
+        JSON.stringify({ success: true, survey: { ...data, hours_worked: hoursWorked } }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
