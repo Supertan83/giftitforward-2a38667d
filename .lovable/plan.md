@@ -1,36 +1,48 @@
 
 
-# Fix: Volunteer Certificate Email Missing Marketplace Details
+# Fix: Volunteer Check-Out Latency
 
 ## Problem
-Family member attendance certificate emails include marketplace name, date, time, and hours worked. Volunteer attendance certificate emails do not — they skip straight to "Your Certificate of Attendance is attached." This is because `marketplaceId` and `hoursWorked` are not passed when calling `send-certificate` from the survey pages.
+The volunteer checkout flow performs **5 sequential database operations** plus a **synchronous edge function call** (`send-survey`) that blocks the UI. The `send-survey` function itself does 4+ more DB queries and an external API call (HubSpot/Resend). Total: ~8 network round-trips, all awaited serially.
 
-## Root Cause
-Two gaps in the data flow:
+```text
+Current flow (sequential, blocking):
+1. Find card + joins          ~200ms
+2. Update card status         ~200ms
+3. Query attendance record    ~200ms
+4. Update attendance record   ~200ms
+5. Invoke send-survey         ~2-5s (cold boot + DB + external API)
+───────────────────────────────
+Total:                        ~3-6 seconds
+```
 
-1. **`submit-survey` edge function** (GET action): Returns only `id, volunteer_name, volunteer_email, volunteer_card_id, completed_at, certificate_sent_at` — missing `marketplace_id`.
-2. **`VolunteerSurveyPage.tsx` and `ExternalSurveyPage.tsx`**: The `sendCertificateEmail` functions don't pass `marketplaceId` or `hoursWorked` to `send-certificate`.
+## Solution
 
-## Changes
+Two changes to bring checkout to ~200ms:
 
-### 1. `supabase/functions/submit-survey/index.ts`
-- Add `marketplace_id` to the select clause on line 38
-- Also join `volunteer_qr_cards` to get `total_hours_worked` via a second query using `volunteer_card_id`, OR simply add `marketplace_id` to the returned survey data and let the client look up hours from the QR card
+### 1. Create an atomic RPC function for volunteer checkout
+Same pattern used for beneficiary operations (`checkout_beneficiary_card`). Consolidates steps 1-4 into a single database round-trip.
 
-Simplest approach: just add `marketplace_id` to the select. For hours, do a quick lookup on `volunteer_qr_cards` using `volunteer_card_id` and return `hours_worked` alongside the survey data.
+**New DB function: `checkout_volunteer_card(p_unique_id text)`**
+- Finds the card by unique_id
+- Validates status is `checked_in` and minimum 1-minute duration
+- Updates card to `checked_out`, sets `checked_out_at`, calculates `total_hours_worked`
+- Updates the matching `volunteer_attendance` record
+- Returns volunteer info (card_id, volunteer email/name, marketplace_id, hours_worked) needed for survey
 
-### 2. `src/pages/VolunteerSurveyPage.tsx`
-- Update `SurveyData` interface to include `marketplace_id` and `hours_worked`
-- Pass `marketplaceId` and `hoursWorked` to `send-certificate` invocation (lines 187-194)
+### 2. Fire-and-forget the survey email
+The `send-survey` edge function call does not need to block checkout. Change `await supabase.functions.invoke('send-survey', ...)` to a fire-and-forget call (no `await`). The UI shows success immediately; the survey sends in the background.
 
-### 3. `src/pages/ExternalSurveyPage.tsx`
-- Same pattern: fetch marketplace_id from the survey/card data and pass it to `send-certificate`
-- Need to check how this page gets its data (it uses a different flow)
+```text
+New flow:
+1. RPC checkout_volunteer_card   ~200ms (single round-trip)
+2. Fire send-survey (no await)   ~0ms from user perspective
+───────────────────────────────
+Total:                           ~200ms
+```
 
-### 4. No changes to `send-certificate` edge function
-It already supports `marketplaceId` and `hoursWorked` parameters and renders the participation details block when they're present.
+## Files Changed
 
-## Summary
-- 1 edge function edit (add `marketplace_id` + hours lookup to survey GET response)
-- 2 frontend edits (pass the new fields through to `send-certificate`)
+1. **Database migration** — New `checkout_volunteer_card` RPC function
+2. **`src/hooks/useSupabaseData.ts`** (~lines 1519-1615) — Replace multi-step mutation with single RPC call + fire-and-forget survey invoke
 
