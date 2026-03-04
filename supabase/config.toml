@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.audit-material-reconciliation]
 verify_jwt = false
+
+[functions.fix-allocation-data]
+verify_jwt = false
