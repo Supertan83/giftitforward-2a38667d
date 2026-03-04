@@ -1,26 +1,38 @@
 
 
-# Replace `sync-surpluss-volunteer-beneficiary` with uploaded code
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## What changed in the uploaded `tester.ts`
+## Problems Identified
 
-Compared to the current edge function, the uploaded file has these differences:
+From the edge function logs, two critical issues are causing incorrect data:
 
-1. **Enhanced demographics logging** — extensive `console.log` statements with emoji markers throughout the demographics matching and update section (steps 7+), including raw response structure inspection, normalized name debugging, and match type reporting.
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-2. **Improved "already exists" audit log fix** — instead of blindly updating the most recent failed log, it now fetches by `id` first and updates by `id` (more precise).
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-3. **Empty demographics guard** — skips the API call entirely if the demographics payload has no keys, logging a warning.
-
-4. **Richer error messages** — extracts `message` from JSON error responses for clearer audit logging.
-
-5. **No-match debugging** — when no Surpluss event ID is found, logs detailed diagnostic info and adds the error to `allErrors`.
-
-6. **Local server footer** — lines 505-507 add `{ port: 8000 }` and a console log for local testing. These must be **removed** for the deployed edge function (Deno serve in Supabase doesn't use port config).
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
 ## Plan
 
-1. **Replace** `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts` with the full content of `tester.ts`, but **strip lines 505-507** (the `{ port: 8000 }` option and the startup console.log) since Supabase edge functions don't support custom port binding — the `serve()` call should close with just `});`.
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
 
-One file changed, no database or config changes needed.
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
+
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
+
+## Files Changed
+
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 
