@@ -1,0 +1,1 @@
+UPDATE marketplace_events SET status = 'completed', status_locked_by_admin = false WHERE event_date < '2026-03-04' AND status != 'completed';
