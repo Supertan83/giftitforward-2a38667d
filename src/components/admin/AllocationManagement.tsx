@@ -62,6 +62,7 @@ import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useM
 import { useToast } from '@/hooks/use-toast';
 import { useLogTraceabilityEvent } from '@/hooks/useTraceabilityLogs';
 import { supabase } from '@/integrations/supabase/client';
+import { MaterialBreakdownLookup } from './MaterialBreakdownLookup';
 
 interface AllocationManagementProps {
   onBack: () => void;
@@ -455,6 +456,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       </header>
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
+        {/* Cross-Marketplace Material Lookup */}
+        <MaterialBreakdownLookup />
+
         {/* Marketplace Selector */}
         <div className="mb-6">
           <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
