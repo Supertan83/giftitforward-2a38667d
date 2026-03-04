@@ -1,48 +1,52 @@
 
 
-# Fix: Volunteer Check-Out Latency
+# Inventory Reconciliation: Surpluss vs GIF Data Mismatch
 
-## Problem
-The volunteer checkout flow performs **5 sequential database operations** plus a **synchronous edge function call** (`send-survey`) that blocks the UI. The `send-survey` function itself does 4+ more DB queries and an external API call (HubSpot/Resend). Total: ~8 network round-trips, all awaited serially.
+## Problem Summary
 
-```text
-Current flow (sequential, blocking):
-1. Find card + joins          ~200ms
-2. Update card status         ~200ms
-3. Query attendance record    ~200ms
-4. Update attendance record   ~200ms
-5. Invoke send-survey         ~2-5s (cold boot + DB + external API)
-───────────────────────────────
-Total:                        ~3-6 seconds
-```
+Three reported materials have discrepancies between the Surpluss platform's "Remaining" quantity and what GIF's database shows:
 
-## Solution
+| Material | Surpluss Total | Surpluss Remaining | GIF total_stock | GIF Allocated | GIF Distributed |
+|----------|---------------|-------------------|-----------------|---------------|-----------------|
+| 907 King Duvet | 208 | 121 | 429 | 0 | 0 |
+| 935 Men's Clothes | 4,088 | 1,168 | 1,168 | 0 | 0 |
+| 918 Boys' Perfume | 2,000 | 770 | 370 | 730 | 730 |
 
-Two changes to bring checkout to ~200ms:
+**Root causes identified:**
+1. GIF's `total_stock` is populated from `donation.quantity` in the Surpluss API, which returns the **remaining unallocated quantity on Surpluss**, not the total donated or the amount allocated to GIF.
+2. Surpluss's "Remaining" includes deductions from allocations to **all organizations** (not just GIF), so GIF cannot reconcile by looking at its own data alone.
+3. No tool exists in GIF to do a per-material cross-marketplace breakdown for quick reconciliation.
 
-### 1. Create an atomic RPC function for volunteer checkout
-Same pattern used for beneficiary operations (`checkout_beneficiary_card`). Consolidates steps 1-4 into a single database round-trip.
+## Plan
 
-**New DB function: `checkout_volunteer_card(p_unique_id text)`**
-- Finds the card by unique_id
-- Validates status is `checked_in` and minimum 1-minute duration
-- Updates card to `checked_out`, sets `checked_out_at`, calculates `total_hours_worked`
-- Updates the matching `volunteer_attendance` record
-- Returns volunteer info (card_id, volunteer email/name, marketplace_id, hours_worked) needed for survey
+### 1. Create a Material Reconciliation Diagnostic Edge Function
+**New function: `audit-material-reconciliation`**
+- Accepts a list of material IDs (or "all") and environment
+- Calls the Surpluss donations API for each material to get the platform's `total` and `remaining`
+- Queries the GIF database for `total_stock`, and sums all `marketplace_item_allocations` (allocated + distributed) per material
+- Returns a side-by-side report:
+  - Surpluss Total vs GIF total_stock
+  - Surpluss Remaining vs (Surpluss Total - GIF allocated)
+  - Per-marketplace allocation breakdown
+  - Flags discrepancies
 
-### 2. Fire-and-forget the survey email
-The `send-survey` edge function call does not need to block checkout. Change `await supabase.functions.invoke('send-survey', ...)` to a fire-and-forget call (no `await`). The UI shows success immediately; the survey sends in the background.
+### 2. Add Per-Material Cross-Marketplace Breakdown View
+**Update: `src/components/admin/AllocationManagement.tsx`**
+- Add a new "Material Lookup" search box (by Material ID or name)
+- When a material is selected, show a breakdown table across ALL marketplaces:
+  - Marketplace name | Allocated | Distributed | Remaining
+  - Global totals row at bottom
+  - Over-allocation warning if sum > total_stock
+- This addresses the client's request: "Would be helpful to have a view showing per-Material ID allocation breakdown across marketplaces"
 
-```text
-New flow:
-1. RPC checkout_volunteer_card   ~200ms (single round-trip)
-2. Fire send-survey (no await)   ~0ms from user perspective
-───────────────────────────────
-Total:                           ~200ms
-```
+### 3. Fix the `sync-surpluss-allocations` total_stock mapping
+**Update: `supabase/functions/sync-surpluss-allocations/index.ts`**
+- Currently writes `donation.quantity` as `total_stock` (line ~183: `quantity: donation.quantity ?? 0`)
+- Change to use the correct field that represents the amount allocated to GIF specifically
+- If that field isn't available from the donations endpoint, use the sum of `donation-allocations` amounts for GIF's events as the `total_stock`
 
 ## Files Changed
-
-1. **Database migration** — New `checkout_volunteer_card` RPC function
-2. **`src/hooks/useSupabaseData.ts`** (~lines 1519-1615) — Replace multi-step mutation with single RPC call + fire-and-forget survey invoke
+1. **New**: `supabase/functions/audit-material-reconciliation/index.ts` — diagnostic edge function
+2. **Edit**: `src/components/admin/AllocationManagement.tsx` — add material lookup cross-marketplace view
+3. **Edit**: `supabase/functions/sync-surpluss-allocations/index.ts` — fix total_stock source field
 
