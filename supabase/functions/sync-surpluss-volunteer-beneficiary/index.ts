@@ -210,12 +210,20 @@ serve(async (req) => {
         } else if (responseBody.includes('already exists')) {
           totalSkipped++;
           allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss' });
-          await supabase.from('surpluss_api_audit_log')
-            .update({ success: true })
+          // Find and update the most recent failed log entry for this volunteer
+          const { data: recentLogs } = await supabase
+            .from('surpluss_api_audit_log')
+            .select('id')
             .eq('action', 'sync_volunteer')
             .eq('success', false)
             .order('created_at', { ascending: false })
             .limit(1);
+          if (recentLogs && recentLogs.length > 0) {
+            await supabase
+              .from('surpluss_api_audit_log')
+              .update({ success: true })
+              .eq('id', recentLogs[0].id);
+          }
         } else {
           totalFailed++;
           const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
@@ -304,43 +312,100 @@ serve(async (req) => {
 
       try {
         const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
+        console.log(`\n🔍 Looking up Surpluss events from: ${lookupUrl}`);
         const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
         const lookupBody = await lookupResp.text();
 
         if (lookupResp.ok) {
           let parsed: any;
           try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
+          
+          console.log(`📦 Raw response structure:`, {
+            isArray: Array.isArray(parsed),
+            keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : 'N/A',
+            sample: parsed && typeof parsed === 'object' ? JSON.stringify(parsed).substring(0, 200) : parsed
+          });
+          
           const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
           if (Array.isArray(items)) {
+            console.log(`✅ Found ${items.length} Surpluss events`);
             for (const item of items) {
               const name = normalize(item.title || item.name || '');
-              if (name) surplussEventsMap.set(name, item.id);
+              const eventId = item.id;
+              if (name && eventId) {
+                surplussEventsMap.set(name, eventId);
+                console.log(`   Mapped: "${item.title || item.name}" (normalized: "${name}") -> ID: ${eventId}`);
+              } else {
+                console.log(`   ⚠️  Skipped item (missing name or id):`, { name: item.title || item.name, id: item.id });
+              }
             }
+            console.log(`📋 Surpluss Events Map size: ${surplussEventsMap.size}`);
+            console.log(`📋 First 5 entries:`, Array.from(surplussEventsMap.entries()).slice(0, 5));
+          } else {
+            console.log(`⚠️  No events array found in response`);
+            console.log(`   Response type:`, typeof parsed);
+            console.log(`   Response keys:`, parsed && typeof parsed === 'object' ? Object.keys(parsed) : 'N/A');
           }
+        } else {
+          console.log(`❌ Failed to fetch Surpluss events: ${lookupResp.status}`);
+          console.log(`   Response body:`, lookupBody.substring(0, 500));
         }
       } catch (err) {
+        console.log(`❌ Surpluss events lookup error:`, err);
         allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
 
       for (const mpId of marketplaceIdsToProcess) {
+        console.log(`\n=== Processing Beneficiary/Marketplace ID: ${mpId} ===`);
         const { data: marketplace } = await supabase
           .from('marketplace_events')
           .select('*')
           .eq('id', mpId)
           .single();
 
-        if (!marketplace) continue;
+        if (!marketplace) {
+          console.log(`❌ Marketplace not found for ID: ${mpId}`);
+          continue;
+        }
+
+        console.log(`✅ Marketplace found:`, {
+          id: marketplace.id,
+          name: marketplace.name,
+          demographics_total_families: marketplace.demographics_total_families,
+          demographics_total_adults: marketplace.demographics_total_adults,
+          demographics_total_children: marketplace.demographics_total_children,
+          demographics_male_adults: marketplace.demographics_male_adults,
+          demographics_female_adults: marketplace.demographics_female_adults,
+          demographics_male_children: marketplace.demographics_male_children,
+          demographics_female_children: marketplace.demographics_female_children,
+        });
 
         let surplussEventId: number | null = null;
         const targetName = normalize(marketplace.name);
-        for (const [eventName, eventId] of surplussEventsMap) {
-          if (eventName === targetName || eventName.includes(targetName) || targetName.includes(eventName)) {
-            surplussEventId = eventId;
-            break;
+        console.log(`🔍 Looking for match for normalized name: "${targetName}"`);
+        console.log(`📋 Available Surpluss events (normalized names):`, Array.from(surplussEventsMap.keys()).slice(0, 10));
+        
+        // Try exact match first
+        if (surplussEventsMap.has(targetName)) {
+          surplussEventId = surplussEventsMap.get(targetName)!;
+          console.log(`✅ Exact match found!`);
+        } else {
+          // Try partial matches
+          for (const [eventName, eventId] of surplussEventsMap) {
+            if (eventName === targetName) {
+              surplussEventId = eventId;
+              console.log(`✅ Exact match: "${eventName}"`);
+              break;
+            } else if (eventName.includes(targetName) || targetName.includes(eventName)) {
+              surplussEventId = eventId;
+              console.log(`⚠️  Partial match: "${eventName}" contains or is contained in "${targetName}"`);
+              break;
+            }
           }
         }
 
         if (surplussEventId) {
+          console.log(`🔗 Matched Surpluss Event ID: ${surplussEventId} for marketplace "${marketplace.name}"`);
           const demographicsPayload: Record<string, any> = {};
           if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
           if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
@@ -350,8 +415,19 @@ serve(async (req) => {
           if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
           if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
 
+          console.log(`📊 Demographics Payload to send:`, demographicsPayload);
+          
+          // Check if payload is empty
+          if (Object.keys(demographicsPayload).length === 0) {
+            console.log(`⚠️  Demographics payload is empty - no data to update. Skipping API call.`);
+            allErrors.push(`No demographics data to update for "${marketplace.name}"`);
+            continue;
+          }
+
           try {
-            const response = await fetch(`${baseUrl}/api/common/marketplace-events/${surplussEventId}`, {
+            const updateUrl = `${baseUrl}/api/common/marketplace-events/${surplussEventId}`;
+            console.log(`🚀 Sending PUT request to: ${updateUrl}`);
+            const response = await fetch(updateUrl, {
               method: 'PUT',
               headers: apiHeaders,
               body: JSON.stringify(demographicsPayload),
@@ -359,6 +435,10 @@ serve(async (req) => {
             const responseBody = await response.text();
             let responseJson: any;
             try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody.substring(0, 500) }; }
+
+            console.log(`📥 Response Status: ${response.status} ${response.ok ? '✅' : '❌'}`);
+            console.log(`📥 Response Body:`, responseJson);
+            console.log(`📥 Response Headers:`, Object.fromEntries(response.headers.entries()));
 
             await supabase.from('surpluss_api_audit_log').insert({
               action: 'sync_beneficiary_demographics',
@@ -369,11 +449,32 @@ serve(async (req) => {
               success: response.ok,
             });
             if (!response.ok) {
-              allErrors.push(`Demographics update failed for "${marketplace.name}": ${response.status}`);
+              const errorMsg = typeof responseJson === 'object' && responseJson?.message 
+                ? responseJson.message 
+                : typeof responseJson === 'string' 
+                  ? responseJson 
+                  : `Status ${response.status}`;
+              console.log(`❌ Demographics update failed for "${marketplace.name}": ${response.status} - ${errorMsg}`);
+              allErrors.push(`Demographics update failed for "${marketplace.name}": ${response.status} - ${errorMsg}`);
+            } else {
+              console.log(`✅ Demographics successfully updated for "${marketplace.name}"`);
+              console.log(`   Updated event ID: ${surplussEventId}`);
+              console.log(`   Payload sent:`, demographicsPayload);
             }
           } catch (err) {
+            console.log(`❌ Demographics error for "${marketplace.name}":`, err);
             allErrors.push(`Demographics error for "${marketplace.name}": ${err instanceof Error ? err.message : 'Unknown'}`);
           }
+        } else {
+          console.log(`⚠️  No matching Surpluss Event ID found for marketplace "${marketplace.name}"`);
+          console.log(`   Normalized marketplace name: "${targetName}"`);
+          console.log(`   Total Surpluss events in map: ${surplussEventsMap.size}`);
+          console.log(`   Sample Surpluss event names:`, Array.from(surplussEventsMap.keys()).slice(0, 5));
+          allErrors.push(`No matching Surpluss Event ID found for marketplace "${marketplace.name}" (normalized: "${targetName}")`);
+          
+          // Alternative: Try using marketplace ID directly if API supports it
+          console.log(`💡 Tip: Check if marketplace name in Supabase matches exactly with Surpluss event name`);
+          console.log(`   Or verify the API endpoint structure for marketplace-events`);
         }
       }
     }
