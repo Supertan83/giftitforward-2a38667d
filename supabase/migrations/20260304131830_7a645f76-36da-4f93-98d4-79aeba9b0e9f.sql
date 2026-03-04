@@ -1,0 +1,1 @@
+ALTER TABLE public.item_types ADD COLUMN IF NOT EXISTS stock_locked boolean NOT NULL DEFAULT false;

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Search, Package, AlertTriangle, Loader2 } from 'lucide-react';
+import { Search, Package, AlertTriangle, Loader2, Wrench } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import {
 import { useItemTypes, useMarketplaces } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface MarketplaceBreakdown {
   marketplace_id: string;
@@ -23,11 +25,40 @@ interface MarketplaceBreakdown {
   remaining: number;
 }
 
+interface FixReport {
+  dry_run: boolean;
+  summary: {
+    total_items_scanned: number;
+    total_allocations_scanned: number;
+    stock_changes_needed: number;
+    distribution_corruptions_found: number;
+    stock_updates_applied?: number;
+    distribution_fixes_applied?: number;
+  };
+  stock_changes: Array<{
+    material_id: number;
+    name: string;
+    old_total_stock: number;
+    new_total_stock: number;
+    delta: number;
+  }>;
+  stock_changes_total: number;
+  corruption_fixes: Array<{
+    material_id: number;
+    name: string;
+    old_distributed: number;
+    allocated: number;
+    capped_to: number;
+  }>;
+  message: string;
+}
+
 export const MaterialBreakdownLookup = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const { data: itemTypes = [] } = useItemTypes();
+  const [fixReport, setFixReport] = useState<FixReport | null>(null);
+  const [fixLoading, setFixLoading] = useState(false);
 
-  // Find matching items
   const matchingItems = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
@@ -40,7 +71,6 @@ export const MaterialBreakdownLookup = () => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItem = itemTypes.find(i => i.id === selectedItemId);
 
-  // Fetch cross-marketplace allocations for selected item
   const { data: breakdownData, isLoading: loadingBreakdown } = useQuery({
     queryKey: ['material-breakdown', selectedItemId],
     queryFn: async () => {
@@ -74,19 +104,124 @@ export const MaterialBreakdownLookup = () => {
   const totalRemaining = totalAllocated - totalDistributed;
   const isOverAllocated = selectedItem && totalAllocated > selectedItem.totalStock && selectedItem.totalStock > 0;
 
+  const runFix = async (dryRun: boolean) => {
+    setFixLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fix-allocation-data', {
+        body: { dry_run: dryRun },
+      });
+      if (error) throw error;
+      setFixReport(data);
+      toast.success(dryRun ? 'Dry run complete — review changes below' : 'Fixes applied successfully!');
+    } catch (err: any) {
+      toast.error(`Fix failed: ${err.message}`);
+    } finally {
+      setFixLoading(false);
+    }
+  };
+
   return (
     <div className="bg-card rounded-xl border border-border shadow-card mb-6">
       <div className="p-4 md:p-6 border-b border-border">
-        <h2 className="font-display font-bold text-lg flex items-center gap-2">
-          <Search className="w-5 h-5" />
-          Material Lookup — Cross-Marketplace View
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Search by Material ID or name to see allocation breakdown across all marketplaces
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-display font-bold text-lg flex items-center gap-2">
+              <Search className="w-5 h-5" />
+              Material Lookup — Cross-Marketplace View
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Search by Material ID or name to see allocation breakdown across all marketplaces
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => runFix(true)}
+            disabled={fixLoading}
+            className="flex items-center gap-2"
+          >
+            {fixLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+            Run Allocation Audit
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 md:p-6 space-y-4">
+        {/* Fix Report */}
+        {fixReport && (
+          <div className="border border-border rounded-lg p-4 bg-muted/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Wrench className="w-4 h-4" />
+                {fixReport.dry_run ? 'Dry Run Report' : 'Fix Applied Report'}
+              </h3>
+              <div className="flex gap-2">
+                {fixReport.dry_run && fixReport.summary.stock_changes_needed > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => runFix(false)}
+                    disabled={fixLoading}
+                  >
+                    {fixLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                    Apply {fixReport.summary.stock_changes_needed} Fixes
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setFixReport(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Items Scanned</p>
+                <p className="font-bold">{fixReport.summary.total_items_scanned}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Stock Corrections</p>
+                <p className="font-bold text-amber-600">{fixReport.summary.stock_changes_needed}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Corrupted Distributions</p>
+                <p className="font-bold text-destructive">{fixReport.summary.distribution_corruptions_found}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Allocations Scanned</p>
+                <p className="font-bold">{fixReport.summary.total_allocations_scanned}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">{fixReport.message}</p>
+
+            {fixReport.corruption_fixes.length > 0 && (
+              <div className="text-sm">
+                <p className="font-medium text-destructive mb-1">Distribution Corruptions:</p>
+                {fixReport.corruption_fixes.map((fix, i) => (
+                  <p key={i} className="text-xs">
+                    #{fix.material_id} {fix.name}: distributed {fix.old_distributed.toLocaleString()} → capped to {fix.capped_to.toLocaleString()}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {fixReport.stock_changes.length > 0 && (
+              <details className="text-sm">
+                <summary className="cursor-pointer font-medium text-amber-600">
+                  Stock Changes ({fixReport.stock_changes_total} total, showing first 50)
+                </summary>
+                <div className="mt-2 max-h-48 overflow-y-auto text-xs space-y-0.5">
+                  {fixReport.stock_changes.map((ch, i) => (
+                    <p key={i}>
+                      #{ch.material_id} {ch.name}: {ch.old_total_stock.toLocaleString()} → {ch.new_total_stock.toLocaleString()} ({ch.delta > 0 ? '+' : ''}{ch.delta.toLocaleString()})
+                    </p>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
+
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -136,7 +271,6 @@ export const MaterialBreakdownLookup = () => {
         {/* Breakdown Table */}
         {selectedItemId && selectedItem && (
           <div className="space-y-4">
-            {/* Item Summary */}
             <div className="flex items-center gap-3 p-4 bg-muted/30 rounded-lg border border-border">
               <Package className="w-8 h-8 text-primary" />
               <div className="flex-1">

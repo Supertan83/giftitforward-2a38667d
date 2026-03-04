@@ -913,6 +913,7 @@ export type Database = {
           icon: string
           id: string
           name: string
+          stock_locked: boolean
           subcategory: string | null
           surpluss_url: string | null
           total_stock: number
@@ -927,6 +928,7 @@ export type Database = {
           icon?: string
           id?: string
           name: string
+          stock_locked?: boolean
           subcategory?: string | null
           surpluss_url?: string | null
           total_stock?: number
@@ -941,6 +943,7 @@ export type Database = {
           icon?: string
           id?: string
           name?: string
+          stock_locked?: boolean
           subcategory?: string | null
           surpluss_url?: string | null
           total_stock?: number

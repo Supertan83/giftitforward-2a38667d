@@ -275,19 +275,25 @@ serve(async (req) => {
 
         const { data: existingItemType } = await supabase
           .from('item_types')
-          .select('id, total_stock')
+          .select('id, total_stock, stock_locked')
           .eq('external_material_id', materialId)
           .maybeSingle();
 
         if (existingItemType) {
-          await supabase.from('item_types').update({
+          const updateData: Record<string, unknown> = {
             name: donation.title || 'Untitled',
             category: categoryName,
             subcategory: subcategoryName,
-            total_stock: totalQty,
             surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
             updated_at: new Date().toISOString(),
-          }).eq('id', existingItemType.id);
+          };
+          // Only update total_stock if the item is NOT locked
+          if (!existingItemType.stock_locked) {
+            updateData.total_stock = totalQty;
+          } else {
+            console.log(`Skipping total_stock update for locked item ${materialId}: ${donation.title}`);
+          }
+          await supabase.from('item_types').update(updateData).eq('id', existingItemType.id);
           console.log(`Updated item_type for donation ${materialId}: ${donation.title}`);
         } else {
           await supabase.from('item_types').insert({
