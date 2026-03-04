@@ -263,6 +263,14 @@ serve(async (req) => {
         const categoryName = (typeof rawTag === 'object' && rawTag !== null ? rawTag.name : rawTag) || donation.material_group?.name || 'Uncategorized';
         const rawSubTag = donation.donation_tag_subcategory;
         const subcategoryName = (typeof rawSubTag === 'object' && rawSubTag !== null ? rawSubTag.name : rawSubTag) || null;
+        // NOTE: donation.quantity from the Surpluss donations API represents the
+        // "remaining unallocated quantity" on the Surpluss platform — NOT the total
+        // donated or the amount allocated to GIF. We still store it here because
+        // there is no better field available from this endpoint. The actual GIF
+        // allocation quantities come from the donation-allocations endpoint and are
+        // synced via sync-surpluss-event-allocations. The total_stock value should
+        // be treated as an approximate upper-bound reference, not an exact figure.
+        // See: .lovable/plan.md — Inventory Reconciliation notes.
         const totalQty = donation.quantity ?? donation.item_count ?? 0;
 
         const { data: existingItemType } = await supabase

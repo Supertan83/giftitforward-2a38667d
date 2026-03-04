@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.cleanup-bad-allocations]
 verify_jwt = false
+
+[functions.audit-material-reconciliation]
+verify_jwt = false
