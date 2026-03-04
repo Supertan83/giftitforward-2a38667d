@@ -6,15 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-/** Normalize a slug like "event-7---cda" to fuzzy-matchable form */
+/** Normalize a string to lowercase alphanumeric for matching */
 const normalizeSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Build a map of normalized slug fragments -> marketplace name */
+/** Build a map of normalized marketplace name -> display name for event slug resolution */
 function buildEventSlugMap(marketplaces: { name: string }[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const mp of marketplaces) {
-    const norm = normalizeSlug(mp.name);
-    map.set(norm, mp.name);
+    map.set(normalizeSlug(mp.name), mp.name);
   }
   return map;
 }
@@ -29,7 +28,6 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
     const normSlug = normalizeSlug(slug);
     let matched = false;
     for (const [normName, displayName] of slugMap) {
-      // Check if either contains the other (fuzzy match)
       if (normName.includes(normSlug) || normSlug.includes(normName)) {
         resolvedNames.push(displayName);
         matched = true;
@@ -37,7 +35,6 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
       }
     }
     if (!matched) {
-      // Fallback: use the slug itself, cleaned up
       const fallback = slug.replace(/---/g, ' - ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
       resolvedNames.push(fallback);
     }
@@ -46,18 +43,46 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
   return resolvedNames.length > 0 ? resolvedNames.join(';') : undefined;
 }
 
-/** Build the enriched volunteer payload for the Surpluss API */
-function buildVolunteerPayload(
+/** Check if a volunteer is registered for a specific marketplace */
+function isVolunteerRegisteredForMarketplace(
   vol: any,
-  slugMap: Map<string, string>
-): Record<string, any> {
+  marketplaceName: string
+): boolean {
+  const normTarget = normalizeSlug(marketplaceName);
+
+  // Check events_list (comma-separated slugs)
+  if (vol.events_list) {
+    const slugs = vol.events_list.split(',').map((s: string) => s.trim()).filter(Boolean);
+    for (const slug of slugs) {
+      const normSlug = normalizeSlug(slug);
+      if (normSlug.includes(normTarget) || normTarget.includes(normSlug)) {
+        return true;
+      }
+    }
+  }
+
+  // Check events_json (array of objects with event_slug or event-slug)
+  if (vol.events_json && Array.isArray(vol.events_json)) {
+    for (const evt of vol.events_json) {
+      const eventSlug = evt.event_slug || evt['event-slug'] || evt.slug || '';
+      const normSlug = normalizeSlug(eventSlug);
+      if (normSlug && (normSlug.includes(normTarget) || normTarget.includes(normSlug))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/** Build the enriched volunteer payload for the Surpluss API */
+function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<string, any> {
   const name = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
   const payload: Record<string, any> = { name };
 
   if (vol.email) payload.email = vol.email;
   if (vol.phone_number) payload.phone = vol.phone_number;
 
-  // Gender mapping
   if (vol.gender) {
     const g = vol.gender.toLowerCase();
     if (g === 'male' || g === 'female') {
@@ -65,16 +90,13 @@ function buildVolunteerPayload(
     }
   }
 
-  // Employment mapping
   if (vol.is_employee != null) {
     payload.employed = vol.is_employee ? 'YES' : 'NO';
   }
 
-  // Company name
   const company = vol.external_company || vol.employee_vertical;
   if (company) payload.company_name = company;
 
-  // Events registered
   const events = resolveEventSlugs(vol.events_list, slugMap);
   if (events) payload.events_registered = events;
 
@@ -121,14 +143,37 @@ serve(async (req) => {
     let totalBulkUpdated = 0;
     const allVolunteerDetails: { name: string; status: 'sent' | 'skipped' | 'failed' | 'bulk_updated'; reason?: string }[] = [];
 
-    // 1. Fetch marketplace events for slug resolution
-    const { data: marketplaceEvents } = await supabase
+    // 1. Determine which marketplace IDs to process
+    let marketplaceIdsToProcess: string[] = [];
+    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
+      marketplaceIdsToProcess = marketplace_ids;
+    } else if (marketplace_id) {
+      marketplaceIdsToProcess = [marketplace_id];
+    }
+
+    // 2. Fetch marketplace details for filtering and demographics
+    const marketplacesToSync: any[] = [];
+    for (const mpId of marketplaceIdsToProcess) {
+      const { data: mp } = await supabase
+        .from('marketplace_events')
+        .select('*')
+        .eq('id', mpId)
+        .single();
+      if (mp) {
+        marketplacesToSync.push(mp);
+      } else {
+        console.log(`❌ Marketplace not found for ID: ${mpId}`);
+        allErrors.push(`Marketplace not found: ${mpId}`);
+      }
+    }
+
+    // 3. Build slug map for event name resolution
+    const { data: allMarketplaces } = await supabase
       .from('marketplace_events')
       .select('name');
-    const slugMap = buildEventSlugMap(marketplaceEvents || []);
-    console.log(`Built slug map with ${slugMap.size} marketplace events`);
+    const slugMap = buildEventSlugMap(allMarketplaces || []);
 
-    // 2. Fetch all previously synced emails for deduplication
+    // 4. Fetch all previously synced emails for deduplication
     const { data: previousSyncs } = await supabase
       .from('surpluss_api_audit_log')
       .select('request_payload')
@@ -146,19 +191,30 @@ serve(async (req) => {
     }
     console.log(`Found ${alreadySyncedEmails.size} previously synced emails`);
 
-    // 3. Fetch ALL volunteers (now including events_list and employee_vertical)
+    // 5. Fetch ALL volunteers with events data
     const { data: allVolunteers, error: volError } = await supabase
       .from('pending_volunteers')
-      .select('id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical');
+      .select('id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, events_json, employee_vertical');
 
     if (volError) {
       throw new Error(`Failed to fetch volunteers: ${volError.message}`);
     }
 
-    const volunteers = allVolunteers || [];
-    console.log(`Fetched ${volunteers.length} volunteers from pending_volunteers`);
+    // 6. Filter volunteers to only those registered for the selected marketplace(s)
+    const marketplaceNames = marketplacesToSync.map(mp => mp.name);
+    let volunteers = allVolunteers || [];
 
-    // 4. Separate new vs already-synced volunteers
+    if (marketplaceNames.length > 0) {
+      const filteredVolunteers = volunteers.filter(vol => {
+        return marketplaceNames.some(mpName => isVolunteerRegisteredForMarketplace(vol, mpName));
+      });
+      console.log(`📋 Filtered ${volunteers.length} total volunteers → ${filteredVolunteers.length} registered for selected marketplace(s): ${marketplaceNames.join(', ')}`);
+      volunteers = filteredVolunteers;
+    } else {
+      console.log(`⚠️ No marketplace filter applied — syncing all ${volunteers.length} volunteers`);
+    }
+
+    // 7. Separate new vs already-synced volunteers
     const newVolunteers: any[] = [];
     const previouslySyncedVolunteers: any[] = [];
 
@@ -176,7 +232,9 @@ serve(async (req) => {
       }
     }
 
-    // 5. Create new volunteers with enriched payload
+    console.log(`📊 New volunteers to create: ${newVolunteers.length}, Previously synced to update: ${previouslySyncedVolunteers.length}`);
+
+    // 8. Create new volunteers
     for (const vol of newVolunteers) {
       const volunteerName = `${vol.first_name || ''} ${vol.last_name || ''}`.trim();
       const volunteerPayload = buildVolunteerPayload(vol, slugMap);
@@ -210,7 +268,7 @@ serve(async (req) => {
         } else if (responseBody.includes('already exists')) {
           totalSkipped++;
           allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss' });
-          // Find and update the most recent failed log entry for this volunteer
+          // Mark the audit log as success since the volunteer exists
           const { data: recentLogs } = await supabase
             .from('surpluss_api_audit_log')
             .select('id')
@@ -235,13 +293,12 @@ serve(async (req) => {
       }
     }
 
-    // 6. Bulk-update previously synced volunteers with enriched data
+    // 9. Bulk-update previously synced volunteers
     if (previouslySyncedVolunteers.length > 0) {
       const bulkPayload = previouslySyncedVolunteers
         .filter(vol => vol.email)
         .map(vol => {
           const enriched = buildVolunteerPayload(vol, slugMap);
-          // bulk-update uses email as identifier, keep only updatable fields
           return {
             email: vol.email,
             ...(enriched.gender && { gender: enriched.gender }),
@@ -298,184 +355,71 @@ serve(async (req) => {
       }
     }
 
-    // 7. Demographics update (optional, only if marketplace IDs provided)
-    let marketplaceIdsToProcess: string[] = [];
-    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
-      marketplaceIdsToProcess = marketplace_ids;
-    } else if (marketplace_id) {
-      marketplaceIdsToProcess = [marketplace_id];
-    }
+    // 10. Demographics update — use external_id directly instead of fuzzy name matching
+    for (const marketplace of marketplacesToSync) {
+      console.log(`\n=== Demographics for "${marketplace.name}" (external_id: ${marketplace.external_id}) ===`);
 
-    if (marketplaceIdsToProcess.length > 0) {
-      const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const surplussEventsMap = new Map<string, number>();
-
-      try {
-        const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
-        console.log(`\n🔍 Looking up Surpluss events from: ${lookupUrl}`);
-        const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
-        const lookupBody = await lookupResp.text();
-
-        if (lookupResp.ok) {
-          let parsed: any;
-          try { parsed = JSON.parse(lookupBody); } catch { parsed = null; }
-          
-          console.log(`📦 Raw response structure:`, {
-            isArray: Array.isArray(parsed),
-            keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : 'N/A',
-            sample: parsed && typeof parsed === 'object' ? JSON.stringify(parsed).substring(0, 200) : parsed
-          });
-          
-          const items = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.data || parsed?.results || parsed?.events || []);
-          if (Array.isArray(items)) {
-            console.log(`✅ Found ${items.length} Surpluss events`);
-            for (const item of items) {
-              const name = normalize(item.title || item.name || '');
-              const eventId = item.id;
-              if (name && eventId) {
-                surplussEventsMap.set(name, eventId);
-                console.log(`   Mapped: "${item.title || item.name}" (normalized: "${name}") -> ID: ${eventId}`);
-              } else {
-                console.log(`   ⚠️  Skipped item (missing name or id):`, { name: item.title || item.name, id: item.id });
-              }
-            }
-            console.log(`📋 Surpluss Events Map size: ${surplussEventsMap.size}`);
-            console.log(`📋 First 5 entries:`, Array.from(surplussEventsMap.entries()).slice(0, 5));
-          } else {
-            console.log(`⚠️  No events array found in response`);
-            console.log(`   Response type:`, typeof parsed);
-            console.log(`   Response keys:`, parsed && typeof parsed === 'object' ? Object.keys(parsed) : 'N/A');
-          }
-        } else {
-          console.log(`❌ Failed to fetch Surpluss events: ${lookupResp.status}`);
-          console.log(`   Response body:`, lookupBody.substring(0, 500));
-        }
-      } catch (err) {
-        console.log(`❌ Surpluss events lookup error:`, err);
-        allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
+      if (!marketplace.external_id) {
+        console.log(`⚠️ No external_id set for "${marketplace.name}" — skipping demographics`);
+        allErrors.push(`No external_id for "${marketplace.name}" — cannot sync demographics`);
+        continue;
       }
 
-      for (const mpId of marketplaceIdsToProcess) {
-        console.log(`\n=== Processing Beneficiary/Marketplace ID: ${mpId} ===`);
-        const { data: marketplace } = await supabase
-          .from('marketplace_events')
-          .select('*')
-          .eq('id', mpId)
-          .single();
+      const demographicsPayload: Record<string, any> = {};
+      if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
+      if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
+      if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
+      if (marketplace.demographics_male_adults != null) demographicsPayload.male_adults = marketplace.demographics_male_adults;
+      if (marketplace.demographics_female_adults != null) demographicsPayload.female_adults = marketplace.demographics_female_adults;
+      if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
+      if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
 
-        if (!marketplace) {
-          console.log(`❌ Marketplace not found for ID: ${mpId}`);
-          continue;
-        }
+      console.log(`📊 Demographics payload:`, demographicsPayload);
 
-        console.log(`✅ Marketplace found:`, {
-          id: marketplace.id,
-          name: marketplace.name,
-          demographics_total_families: marketplace.demographics_total_families,
-          demographics_total_adults: marketplace.demographics_total_adults,
-          demographics_total_children: marketplace.demographics_total_children,
-          demographics_male_adults: marketplace.demographics_male_adults,
-          demographics_female_adults: marketplace.demographics_female_adults,
-          demographics_male_children: marketplace.demographics_male_children,
-          demographics_female_children: marketplace.demographics_female_children,
+      if (Object.keys(demographicsPayload).length === 0) {
+        console.log(`⚠️ Empty demographics payload — skipping`);
+        allErrors.push(`No demographics data for "${marketplace.name}"`);
+        continue;
+      }
+
+      try {
+        const updateUrl = `${baseUrl}/api/common/marketplace-events/${marketplace.external_id}`;
+        console.log(`🚀 PUT ${updateUrl}`);
+
+        const response = await fetch(updateUrl, {
+          method: 'PUT',
+          headers: apiHeaders,
+          body: JSON.stringify(demographicsPayload),
         });
 
-        let surplussEventId: number | null = null;
-        const targetName = normalize(marketplace.name);
-        console.log(`🔍 Looking for match for normalized name: "${targetName}"`);
-        console.log(`📋 Available Surpluss events (normalized names):`, Array.from(surplussEventsMap.keys()).slice(0, 10));
-        
-        // Try exact match first
-        if (surplussEventsMap.has(targetName)) {
-          surplussEventId = surplussEventsMap.get(targetName)!;
-          console.log(`✅ Exact match found!`);
-        } else {
-          // Try partial matches
-          for (const [eventName, eventId] of surplussEventsMap) {
-            if (eventName === targetName) {
-              surplussEventId = eventId;
-              console.log(`✅ Exact match: "${eventName}"`);
-              break;
-            } else if (eventName.includes(targetName) || targetName.includes(eventName)) {
-              surplussEventId = eventId;
-              console.log(`⚠️  Partial match: "${eventName}" contains or is contained in "${targetName}"`);
-              break;
-            }
-          }
+        const responseBody = await response.text();
+        let responseJson: any;
+        try { responseJson = JSON.parse(responseBody); } catch {
+          responseJson = { raw: responseBody.substring(0, 500) };
         }
 
-        if (surplussEventId) {
-          console.log(`🔗 Matched Surpluss Event ID: ${surplussEventId} for marketplace "${marketplace.name}"`);
-          const demographicsPayload: Record<string, any> = {};
-          if (marketplace.demographics_total_families != null) demographicsPayload.total_families = marketplace.demographics_total_families;
-          if (marketplace.demographics_total_adults != null) demographicsPayload.total_adults = marketplace.demographics_total_adults;
-          if (marketplace.demographics_total_children != null) demographicsPayload.total_children = marketplace.demographics_total_children;
-          if (marketplace.demographics_male_adults != null) demographicsPayload.male_adults = marketplace.demographics_male_adults;
-          if (marketplace.demographics_female_adults != null) demographicsPayload.female_adults = marketplace.demographics_female_adults;
-          if (marketplace.demographics_male_children != null) demographicsPayload.male_children = marketplace.demographics_male_children;
-          if (marketplace.demographics_female_children != null) demographicsPayload.female_children = marketplace.demographics_female_children;
+        console.log(`📥 Response: ${response.status} ${response.ok ? '✅' : '❌'}`, responseJson);
 
-          console.log(`📊 Demographics Payload to send:`, demographicsPayload);
-          
-          // Check if payload is empty
-          if (Object.keys(demographicsPayload).length === 0) {
-            console.log(`⚠️  Demographics payload is empty - no data to update. Skipping API call.`);
-            allErrors.push(`No demographics data to update for "${marketplace.name}"`);
-            continue;
-          }
+        await supabase.from('surpluss_api_audit_log').insert({
+          action: 'sync_beneficiary_demographics',
+          environment,
+          request_payload: { marketplace_name: marketplace.name, external_id: marketplace.external_id, ...demographicsPayload },
+          response_status: response.status,
+          response_body: responseJson,
+          success: response.ok,
+        });
 
-          try {
-            const updateUrl = `${baseUrl}/api/common/marketplace-events/${surplussEventId}`;
-            console.log(`🚀 Sending PUT request to: ${updateUrl}`);
-            const response = await fetch(updateUrl, {
-              method: 'PUT',
-              headers: apiHeaders,
-              body: JSON.stringify(demographicsPayload),
-            });
-            const responseBody = await response.text();
-            let responseJson: any;
-            try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody.substring(0, 500) }; }
-
-            console.log(`📥 Response Status: ${response.status} ${response.ok ? '✅' : '❌'}`);
-            console.log(`📥 Response Body:`, responseJson);
-            console.log(`📥 Response Headers:`, Object.fromEntries(response.headers.entries()));
-
-            await supabase.from('surpluss_api_audit_log').insert({
-              action: 'sync_beneficiary_demographics',
-              environment,
-              request_payload: demographicsPayload,
-              response_status: response.status,
-              response_body: responseJson,
-              success: response.ok,
-            });
-            if (!response.ok) {
-              const errorMsg = typeof responseJson === 'object' && responseJson?.message 
-                ? responseJson.message 
-                : typeof responseJson === 'string' 
-                  ? responseJson 
-                  : `Status ${response.status}`;
-              console.log(`❌ Demographics update failed for "${marketplace.name}": ${response.status} - ${errorMsg}`);
-              allErrors.push(`Demographics update failed for "${marketplace.name}": ${response.status} - ${errorMsg}`);
-            } else {
-              console.log(`✅ Demographics successfully updated for "${marketplace.name}"`);
-              console.log(`   Updated event ID: ${surplussEventId}`);
-              console.log(`   Payload sent:`, demographicsPayload);
-            }
-          } catch (err) {
-            console.log(`❌ Demographics error for "${marketplace.name}":`, err);
-            allErrors.push(`Demographics error for "${marketplace.name}": ${err instanceof Error ? err.message : 'Unknown'}`);
-          }
+        if (!response.ok) {
+          const errorMsg = typeof responseJson === 'object' && responseJson?.message
+            ? responseJson.message
+            : `Status ${response.status}`;
+          allErrors.push(`Demographics failed for "${marketplace.name}": ${errorMsg}`);
         } else {
-          console.log(`⚠️  No matching Surpluss Event ID found for marketplace "${marketplace.name}"`);
-          console.log(`   Normalized marketplace name: "${targetName}"`);
-          console.log(`   Total Surpluss events in map: ${surplussEventsMap.size}`);
-          console.log(`   Sample Surpluss event names:`, Array.from(surplussEventsMap.keys()).slice(0, 5));
-          allErrors.push(`No matching Surpluss Event ID found for marketplace "${marketplace.name}" (normalized: "${targetName}")`);
-          
-          // Alternative: Try using marketplace ID directly if API supports it
-          console.log(`💡 Tip: Check if marketplace name in Supabase matches exactly with Surpluss event name`);
-          console.log(`   Or verify the API endpoint structure for marketplace-events`);
+          console.log(`✅ Demographics updated for "${marketplace.name}" (external_id: ${marketplace.external_id})`);
         }
+      } catch (err) {
+        console.log(`❌ Demographics error for "${marketplace.name}":`, err);
+        allErrors.push(`Demographics error for "${marketplace.name}": ${err instanceof Error ? err.message : 'Unknown'}`);
       }
     }
 
