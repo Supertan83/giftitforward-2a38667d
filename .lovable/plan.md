@@ -1,52 +1,55 @@
 
 
-# Inventory Reconciliation: Surpluss vs GIF Data Mismatch
+# Fix All Allocation Discrepancies — Full Audit & Correction Plan
 
-## Problem Summary
+## Current State (Live Data)
 
-Three reported materials have discrepancies between the Surpluss platform's "Remaining" quantity and what GIF's database shows:
+| Metric | Value |
+|--------|-------|
+| Total items with external IDs | 427 |
+| Items with over-allocation flags | **135 (31.6%)** |
+| Grand total `total_stock` | 100,015 |
+| Grand total `allocated_quantity` | **205,608** (2x stock) |
+| Grand total `distributed_quantity` | 40,762 |
+| Items with corrupted distributed > allocated | 1 (Cosmetics #872: 22,144 distributed vs 300 allocated) |
 
-| Material | Surpluss Total | Surpluss Remaining | GIF total_stock | GIF Allocated | GIF Distributed |
-|----------|---------------|-------------------|-----------------|---------------|-----------------|
-| 907 King Duvet | 208 | 121 | 429 | 0 | 0 |
-| 935 Men's Clothes | 4,088 | 1,168 | 1,168 | 0 | 0 |
-| 918 Boys' Perfume | 2,000 | 770 | 370 | 730 | 730 |
+**Worst offenders:** Baby diapers #610 (over by 13,593), Women's Undergarments #866 (over by 6,295), Storage containers #782 (over by 5,755).
 
-**Root causes identified:**
-1. GIF's `total_stock` is populated from `donation.quantity` in the Surpluss API, which returns the **remaining unallocated quantity on Surpluss**, not the total donated or the amount allocated to GIF.
-2. Surpluss's "Remaining" includes deductions from allocations to **all organizations** (not just GIF), so GIF cannot reconcile by looking at its own data alone.
-3. No tool exists in GIF to do a per-material cross-marketplace breakdown for quick reconciliation.
+The Feb 21 marketplace alone has 127,088 units allocated with 0 distributed — these are planning targets from Surpluss that far exceed physical stock.
+
+## Root Causes
+
+1. **`total_stock`** is set from `donation.quantity` (Surpluss "remaining unallocated") — not the total allocated to GIF
+2. **`allocated_quantity`** comes from the Surpluss `donation-allocations` endpoint which returns cumulative planning targets per event, not capped to physical stock
+3. **No validation** prevents allocations exceeding stock
+4. **One corrupted record**: Cosmetics #872 has 22,144 distributed (should be ~300 max)
 
 ## Plan
 
-### 1. Create a Material Reconciliation Diagnostic Edge Function
-**New function: `audit-material-reconciliation`**
-- Accepts a list of material IDs (or "all") and environment
-- Calls the Surpluss donations API for each material to get the platform's `total` and `remaining`
-- Queries the GIF database for `total_stock`, and sums all `marketplace_item_allocations` (allocated + distributed) per material
-- Returns a side-by-side report:
-  - Surpluss Total vs GIF total_stock
-  - Surpluss Remaining vs (Surpluss Total - GIF allocated)
-  - Per-marketplace allocation breakdown
-  - Flags discrepancies
+### 1. Create `fix-allocation-data` Edge Function
+A maintenance function that:
+- Recalculates `total_stock` for each item using the **sum of all marketplace allocations** as the true "allocated to GIF" quantity (since Surpluss allocation targets represent what was assigned to GIF events)
+- Fixes the Cosmetics #872 corruption (cap `distributed_quantity` to `allocated_quantity`)
+- Logs every change to `allocation_traceability_logs`
+- Returns a before/after report
+- Accepts optional `dry_run` flag to preview changes without applying them
 
-### 2. Add Per-Material Cross-Marketplace Breakdown View
-**Update: `src/components/admin/AllocationManagement.tsx`**
-- Add a new "Material Lookup" search box (by Material ID or name)
-- When a material is selected, show a breakdown table across ALL marketplaces:
-  - Marketplace name | Allocated | Distributed | Remaining
-  - Global totals row at bottom
-  - Over-allocation warning if sum > total_stock
-- This addresses the client's request: "Would be helpful to have a view showing per-Material ID allocation breakdown across marketplaces"
+### 2. Add `stock_locked` Column to `item_types`
+Database migration adding a boolean `stock_locked` column (default `false`). When `true`, the `sync-surpluss-allocations` function will skip overwriting `total_stock` for that item.
 
-### 3. Fix the `sync-surpluss-allocations` total_stock mapping
-**Update: `supabase/functions/sync-surpluss-allocations/index.ts`**
-- Currently writes `donation.quantity` as `total_stock` (line ~183: `quantity: donation.quantity ?? 0`)
-- Change to use the correct field that represents the amount allocated to GIF specifically
-- If that field isn't available from the donations endpoint, use the sum of `donation-allocations` amounts for GIF's events as the `total_stock`
+### 3. Update `sync-surpluss-allocations` to Respect Lock
+After fix is applied, items corrected by the fix function get `stock_locked = true`. Future syncs will skip updating their `total_stock`, preserving the corrected values.
+
+### 4. Add Admin UI: "Fix Allocations" Button
+In the existing Material Lookup panel, add a "Run Allocation Fix" button that:
+- First runs in `dry_run` mode showing a summary of proposed changes
+- On confirmation, runs the actual fix
+- Shows before/after results
 
 ## Files Changed
-1. **New**: `supabase/functions/audit-material-reconciliation/index.ts` — diagnostic edge function
-2. **Edit**: `src/components/admin/AllocationManagement.tsx` — add material lookup cross-marketplace view
-3. **Edit**: `supabase/functions/sync-surpluss-allocations/index.ts` — fix total_stock source field
+1. **New**: `supabase/functions/fix-allocation-data/index.ts`
+2. **Migration**: Add `stock_locked` boolean to `item_types`
+3. **Edit**: `supabase/functions/sync-surpluss-allocations/index.ts` — skip locked items
+4. **Edit**: `src/components/admin/MaterialBreakdownLookup.tsx` — add fix button + dry-run preview
+5. **Edit**: `supabase/config.toml` — register new function
 
