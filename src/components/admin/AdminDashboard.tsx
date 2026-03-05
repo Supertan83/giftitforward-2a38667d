@@ -100,20 +100,42 @@ export const AdminDashboard = () => {
     const activeCards = qrCards.filter(c => c.status === 'active');
     const checkedOutCards = qrCards.filter(c => c.status === 'checked_out');
 
-    const activatedToday = qrCards.filter(c => {
-      if (!c.activatedAt) return false;
-      const d = new Date(c.activatedAt);
+    const isToday = (dateStr: string | null) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
       d.setHours(0, 0, 0, 0);
       return d.getTime() === today.getTime();
-    }).length;
+    };
+
+    const activatedToday = qrCards.filter(c => isToday(c.activatedAt)).length;
+
+    // Per-marketplace breakdown
+    const mpMap = new Map<string, { name: string; activated: number; inQueue: number; checkedOut: number; totalServed: number }>();
+    for (const card of qrCards) {
+      const mpId = card.marketplaceId || '__unassigned__';
+      if (!mpMap.has(mpId)) {
+        const mp = marketplaces.find(m => m.id === mpId);
+        mpMap.set(mpId, { name: mp?.name || 'Unassigned', activated: 0, inQueue: 0, checkedOut: 0, totalServed: 0 });
+      }
+      const entry = mpMap.get(mpId)!;
+      if (isToday(card.activatedAt)) entry.activated++;
+      if (card.status === 'active') { entry.inQueue++; entry.totalServed++; }
+      if (card.status === 'checked_out') { entry.checkedOut++; entry.totalServed++; }
+    }
+
+    const byMarketplace = Array.from(mpMap.entries())
+      .map(([id, stats]) => ({ id, ...stats }))
+      .filter(m => m.totalServed > 0 || m.activated > 0)
+      .sort((a, b) => b.totalServed - a.totalServed);
 
     return {
       activatedToday,
       inQueue: activeCards.length,
       checkedOut: checkedOutCards.length,
       totalServed: activeCards.length + checkedOutCards.length,
+      byMarketplace,
     };
-  }, [qrCards]);
+  }, [qrCards, marketplaces]);
 
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
@@ -325,6 +347,36 @@ export const AdminDashboard = () => {
             <p className="text-2xl font-display font-bold text-foreground">{queueStats.totalServed}</p>
           </div>
         </div>
+        {/* Per-marketplace breakdown */}
+        {queueStats.byMarketplace.length > 0 && (
+          <div className="px-4 pb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">By Marketplace</p>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Marketplace</th>
+                    <th className="text-center px-2 py-2 font-medium text-success">Activated</th>
+                    <th className="text-center px-2 py-2 font-medium text-warning">In Queue</th>
+                    <th className="text-center px-2 py-2 font-medium text-muted-foreground">Checked Out</th>
+                    <th className="text-center px-2 py-2 font-medium text-primary">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queueStats.byMarketplace.map(mp => (
+                    <tr key={mp.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium text-foreground truncate max-w-[140px]">{mp.name}</td>
+                      <td className="text-center px-2 py-2 text-foreground">{mp.activated}</td>
+                      <td className="text-center px-2 py-2 text-foreground">{mp.inQueue}</td>
+                      <td className="text-center px-2 py-2 text-foreground">{mp.checkedOut}</td>
+                      <td className="text-center px-2 py-2 font-semibold text-foreground">{mp.totalServed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {marketplaceStats.length > 0 && (
