@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Store, ChevronDown, ChevronRight, DoorOpen, LogOut, UserCheck, Users, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
