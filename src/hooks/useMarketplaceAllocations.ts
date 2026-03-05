@@ -650,7 +650,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }))
         .sort((a, b) => b.registered - a.registered);
 
-      const volDropoutRate = totalVolunteers > 0 ? Math.round(((totalVolunteers - totalAttended) / totalVolunteers) * 100) : 0;
+      const volDropoutRate = effectiveRegistered > 0 ? Math.round(((effectiveRegistered - totalAttended) / effectiveRegistered) * 100) : 0;
 
       return {
         marketplace: {
