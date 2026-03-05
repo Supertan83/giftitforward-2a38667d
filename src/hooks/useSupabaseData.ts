@@ -261,8 +261,7 @@ export const useCardOperations = () => {
       await supabase.from('transactions').insert({
         card_id: card.id,
         type: 'CheckIn' as DbTransactionType,
-        credit_change: 0,
-        marketplace_id: marketplaceId || null
+        credit_change: 0
       });
 
       return updated;

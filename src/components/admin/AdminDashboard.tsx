@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Store, ChevronDown, ChevronRight, DoorOpen, LogOut, UserCheck, Users, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,20 +92,7 @@ export const AdminDashboard = () => {
   const { updateAllocationQuantities } = useAllocationOperations();
   const { toast } = useToast();
 
-  // Fetch archived card data for historical marketplace counts
-  const { data: archivedCards = [] } = useQuery({
-    queryKey: ['archived_card_data_summary'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('archived_card_data')
-        .select('marketplace_id, activated_at, checked_out_at')
-        .not('marketplace_id', 'is', null);
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  // Live queue stats — merge live qr_cards + archived_card_data
+  // Live queue stats
   const queueStats = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -114,65 +100,20 @@ export const AdminDashboard = () => {
     const activeCards = qrCards.filter(c => c.status === 'active');
     const checkedOutCards = qrCards.filter(c => c.status === 'checked_out');
 
-    const isToday = (dateStr: string | null) => {
-      if (!dateStr) return false;
-      const d = new Date(dateStr);
+    const activatedToday = qrCards.filter(c => {
+      if (!c.activatedAt) return false;
+      const d = new Date(c.activatedAt);
       d.setHours(0, 0, 0, 0);
       return d.getTime() === today.getTime();
-    };
-
-    const activatedToday = qrCards.filter(c => isToday(c.activatedAt)).length;
-
-    // Per-marketplace breakdown from live cards
-    const mpMap = new Map<string, { name: string; eventDate: string | null; activated: number; inQueue: number; checkedOut: number; totalServed: number }>();
-
-    const getOrCreate = (mpId: string) => {
-      if (!mpMap.has(mpId)) {
-        const mp = marketplaces.find(m => m.id === mpId);
-        mpMap.set(mpId, {
-          name: mp?.name || 'Unassigned',
-          eventDate: mp?.event_date || null,
-          activated: 0, inQueue: 0, checkedOut: 0, totalServed: 0
-        });
-      }
-      return mpMap.get(mpId)!;
-    };
-
-    for (const card of qrCards) {
-      const mpId = card.marketplaceId || '__unassigned__';
-      const entry = getOrCreate(mpId);
-      if (isToday(card.activatedAt)) entry.activated++;
-      if (card.status === 'active') { entry.inQueue++; entry.totalServed++; }
-      if (card.status === 'checked_out') { entry.checkedOut++; entry.totalServed++; }
-    }
-
-    // Merge archived card data (historical events where cards were reset)
-    for (const arc of archivedCards) {
-      if (!arc.marketplace_id) continue;
-      const entry = getOrCreate(arc.marketplace_id);
-      entry.checkedOut++;
-      entry.totalServed++;
-    }
-
-    const byMarketplace = Array.from(mpMap.entries())
-      .map(([id, stats]) => ({ id, ...stats }))
-      .filter(m => m.totalServed > 0 || m.activated > 0)
-      .sort((a, b) => {
-        // Sort by event date descending, nulls last
-        if (a.eventDate && b.eventDate) return b.eventDate.localeCompare(a.eventDate);
-        if (a.eventDate) return -1;
-        if (b.eventDate) return 1;
-        return b.totalServed - a.totalServed;
-      });
+    }).length;
 
     return {
       activatedToday,
       inQueue: activeCards.length,
       checkedOut: checkedOutCards.length,
       totalServed: activeCards.length + checkedOutCards.length,
-      byMarketplace,
     };
-  }, [qrCards, marketplaces, archivedCards]);
+  }, [qrCards]);
 
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
@@ -384,36 +325,6 @@ export const AdminDashboard = () => {
             <p className="text-2xl font-display font-bold text-foreground">{queueStats.totalServed}</p>
           </div>
         </div>
-        {/* Per-marketplace breakdown */}
-        {queueStats.byMarketplace.length > 0 && (
-          <div className="px-4 pb-4">
-            <p className="text-xs font-medium text-muted-foreground mb-2">By Marketplace</p>
-            <div className="rounded-lg border border-border overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-muted/50">
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Marketplace</th>
-                    <th className="text-center px-2 py-2 font-medium text-success">Activated</th>
-                    <th className="text-center px-2 py-2 font-medium text-warning">In Queue</th>
-                    <th className="text-center px-2 py-2 font-medium text-muted-foreground">Checked Out</th>
-                    <th className="text-center px-2 py-2 font-medium text-primary">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {queueStats.byMarketplace.map(mp => (
-                    <tr key={mp.id} className="border-t border-border">
-                      <td className="px-3 py-2 font-medium text-foreground truncate max-w-[140px]">{mp.name}</td>
-                      <td className="text-center px-2 py-2 text-foreground">{mp.activated}</td>
-                      <td className="text-center px-2 py-2 text-foreground">{mp.inQueue}</td>
-                      <td className="text-center px-2 py-2 text-foreground">{mp.checkedOut}</td>
-                      <td className="text-center px-2 py-2 font-semibold text-foreground">{mp.totalServed}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </div>
 
       {marketplaceStats.length > 0 && (
