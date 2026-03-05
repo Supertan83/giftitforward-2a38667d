@@ -31,7 +31,7 @@ import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewe
 import { HubSpotEmailConfig } from '@/components/admin/HubSpotEmailConfig';
 import { EmailLogsViewer } from '@/components/admin/EmailLogsViewer';
 import { useAuth } from '@/contexts/AuthContext';
-import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useItemTypes, useInventoryOperations, useMarketplaces, useQRCards } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
 import { EmailManagement } from '@/components/admin/EmailManagement';
