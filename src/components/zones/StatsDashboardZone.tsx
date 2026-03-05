@@ -198,19 +198,36 @@ export const StatsDashboardZone = () => {
           <h2 className="font-semibold text-sm">Beneficiary Statistics</h2>
         </div>
         
+        {/* Live Queue Metrics */}
         <div className="grid grid-cols-2 gap-2 md:gap-3 mb-3">
           <StatCard
-            icon={Users}
-            label="Total Beneficiaries"
-            value={isLoading ? '-' : beneficiaryStats.totalBeneficiaries}
-            variant="primary"
-          />
-          <StatCard
-            icon={CalendarCheck}
-            label="Activated Today"
+            icon={DoorOpen}
+            label="Activated (Entrance)"
             value={isLoading ? '-' : beneficiaryStats.activatedToday}
             variant="success"
           />
+          <StatCard
+            icon={Users}
+            label="In Queue"
+            value={isLoading ? '-' : beneficiaryStats.currentlyActive}
+            variant="warning"
+          />
+          <StatCard
+            icon={LogOut}
+            label="Checked Out (Exit)"
+            value={isLoading ? '-' : beneficiaryStats.checkedOut}
+            variant="default"
+          />
+          <StatCard
+            icon={UserCheck}
+            label="Total Served"
+            value={isLoading ? '-' : beneficiaryStats.totalBeneficiaries}
+            variant="primary"
+          />
+        </div>
+
+        {/* Secondary Metrics */}
+        <div className="grid grid-cols-2 gap-2 md:gap-3 mb-3">
           <StatCard
             icon={ShoppingBag}
             label="Items Distributed"
