@@ -692,7 +692,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
   // Add event mutation
   const addEventMutation = useMutation({
-    mutationFn: async ({ pendingId, eventName }: { pendingId: string; eventName: string }) => {
+    mutationFn: async ({ pendingId, eventName, marketplace }: { pendingId: string; eventName: string; marketplace?: { name: string; event_date?: string | null; start_time?: string | null; end_time?: string | null; location?: string | null } }) => {
       // Get the current volunteer to update their events
       const volunteer = volunteers.find(v => v.id === pendingId);
       if (!volunteer) throw new Error('Volunteer not found');
@@ -707,11 +707,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       }
       const newEventsList = currentEvents.join(',');
 
-      // Update events_json (array of event objects)
+      // Format date like "March 12, 2026"
+      const formatMktDate = (dateStr?: string | null) => {
+        if (!dateStr) return null;
+        try {
+          const d = new Date(dateStr);
+          return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        } catch { return null; }
+      };
+
+      // Format time range like "07.00 am - 01.30 pm"
+      const formatMktTime = (start?: string | null, end?: string | null) => {
+        if (!start && !end) return null;
+        const fmt = (t: string) => {
+          try {
+            const [h, m] = t.split(':').map(Number);
+            const ampm = h >= 12 ? 'pm' : 'am';
+            const h12 = h % 12 || 12;
+            return `${String(h12).padStart(2, '0')}.${String(m).padStart(2, '0')} ${ampm}`;
+          } catch { return t; }
+        };
+        if (start && end) return `${fmt(start)} - ${fmt(end)}`;
+        return start ? fmt(start) : fmt(end!);
+      };
+
+      // Update events_json (array of event objects) with full marketplace details
       const currentEventsJson = Array.isArray(volunteer.events_json) ? volunteer.events_json : [];
-      const newEventJson = {
+      const newEventJson: Record<string, unknown> = {
         event: eventSlug,
-        eventDate: null,
+        name: marketplace?.name || eventName,
+        eventDate: formatMktDate(marketplace?.event_date),
+        eventTime: formatMktTime(marketplace?.start_time, marketplace?.end_time),
+        eventLocation: marketplace?.location || null,
         addedManually: true,
         addedAt: new Date().toISOString()
       };
