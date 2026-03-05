@@ -3116,9 +3116,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             <Button
               onClick={() => {
                 if (selectedVolunteer && selectedEventToAdd) {
+                  const mkt = marketplaces.find(m => m.name === selectedEventToAdd);
                   addEventMutation.mutate({
                     pendingId: selectedVolunteer.id,
-                    eventName: selectedEventToAdd
+                    eventName: selectedEventToAdd,
+                    marketplace: mkt ? { name: mkt.name, event_date: mkt.event_date, start_time: mkt.start_time, end_time: mkt.end_time, location: mkt.location } : undefined
                   });
                 }
               }}
