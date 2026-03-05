@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   BarChart3, Users, UserCheck, Package, Clock, MapPin, 
-  TrendingUp, ShoppingBag, CalendarCheck, CreditCard
+  TrendingUp, ShoppingBag, DoorOpen, LogOut, CreditCard
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { useQRCards, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
@@ -198,19 +198,36 @@ export const StatsDashboardZone = () => {
           <h2 className="font-semibold text-sm">Beneficiary Statistics</h2>
         </div>
         
+        {/* Live Queue Metrics */}
         <div className="grid grid-cols-2 gap-2 md:gap-3 mb-3">
           <StatCard
-            icon={Users}
-            label="Total Beneficiaries"
-            value={isLoading ? '-' : beneficiaryStats.totalBeneficiaries}
-            variant="primary"
-          />
-          <StatCard
-            icon={CalendarCheck}
-            label="Activated Today"
+            icon={DoorOpen}
+            label="Activated (Entrance)"
             value={isLoading ? '-' : beneficiaryStats.activatedToday}
             variant="success"
           />
+          <StatCard
+            icon={Users}
+            label="In Queue"
+            value={isLoading ? '-' : beneficiaryStats.currentlyActive}
+            variant="warning"
+          />
+          <StatCard
+            icon={LogOut}
+            label="Checked Out (Exit)"
+            value={isLoading ? '-' : beneficiaryStats.checkedOut}
+            variant="default"
+          />
+          <StatCard
+            icon={UserCheck}
+            label="Total Served"
+            value={isLoading ? '-' : beneficiaryStats.totalBeneficiaries}
+            variant="primary"
+          />
+        </div>
+
+        {/* Secondary Metrics */}
+        <div className="grid grid-cols-2 gap-2 md:gap-3 mb-3">
           <StatCard
             icon={ShoppingBag}
             label="Items Distributed"
@@ -279,22 +296,6 @@ export const StatsDashboardZone = () => {
               </div>
             </div>
 
-            {/* Status Breakdown */}
-            <div className="pt-2 border-t border-border">
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-muted-foreground">Card Status</span>
-              </div>
-              <div className="flex gap-2">
-                <div className="flex-1 bg-success-soft rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-success">{beneficiaryStats.currentlyActive}</p>
-                  <p className="text-[10px] text-success/80">Active</p>
-                </div>
-                <div className="flex-1 bg-muted rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-muted-foreground">{beneficiaryStats.checkedOut}</p>
-                  <p className="text-[10px] text-muted-foreground">Checked Out</p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </motion.div>
