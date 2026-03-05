@@ -29,6 +29,23 @@ export const StatsDashboardZone = () => {
     selectedMarketplaceId === 'all' ? undefined : selectedMarketplaceId
   );
 
+  // Fetch archived card data for historical counts
+  const { data: archivedCards = [] } = useQuery({
+    queryKey: ['archived_card_data_for_stats', selectedMarketplaceId],
+    queryFn: async () => {
+      let query = supabase
+        .from('archived_card_data')
+        .select('marketplace_id, gender, children_count, credit_balance, activated_at')
+        .not('marketplace_id', 'is', null);
+      if (selectedMarketplaceId !== 'all') {
+        query = query.eq('marketplace_id', selectedMarketplaceId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
   // Filter marketplaces for selector
