@@ -296,22 +296,6 @@ export const StatsDashboardZone = () => {
               </div>
             </div>
 
-            {/* Status Breakdown */}
-            <div className="pt-2 border-t border-border">
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-muted-foreground">Card Status</span>
-              </div>
-              <div className="flex gap-2">
-                <div className="flex-1 bg-success-soft rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-success">{beneficiaryStats.currentlyActive}</p>
-                  <p className="text-[10px] text-success/80">Active</p>
-                </div>
-                <div className="flex-1 bg-muted rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-muted-foreground">{beneficiaryStats.checkedOut}</p>
-                  <p className="text-[10px] text-muted-foreground">Checked Out</p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </motion.div>
