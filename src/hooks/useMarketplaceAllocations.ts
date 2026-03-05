@@ -679,7 +679,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         volunteers: {
           total: totalVolunteers,
           totalHours,
-          totalRegistered: totalVolunteers,
+          totalRegistered: effectiveRegistered,
           totalAttended,
           dropoutRate: volDropoutRate,
           volunteerList,
