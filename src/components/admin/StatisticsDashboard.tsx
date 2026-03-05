@@ -200,7 +200,47 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Live Queue Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Card className="bg-card border-border border-2 border-primary/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-foreground text-base">
+                <Activity className="h-5 w-5 text-primary" />
+                Live Queue
+                <span className="ml-auto text-xs font-normal text-muted-foreground">Auto-updates</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="text-center p-3 bg-success/10 rounded-lg border border-success/20">
+                  <DoorOpen className="h-5 w-5 text-success mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-foreground">{stats.activatedToday}</p>
+                  <p className="text-xs text-muted-foreground">Activated (Entrance)</p>
+                </div>
+                <div className="text-center p-3 bg-warning/10 rounded-lg border border-warning/20">
+                  <Users className="h-5 w-5 text-warning mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-foreground">{stats.activeCards}</p>
+                  <p className="text-xs text-muted-foreground">In Queue</p>
+                </div>
+                <div className="text-center p-3 bg-muted rounded-lg border border-border">
+                  <LogOut className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-foreground">{stats.checkedOutCards}</p>
+                  <p className="text-xs text-muted-foreground">Checked Out (Exit)</p>
+                </div>
+                <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
+                  <UserCheck className="h-5 w-5 text-primary mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-foreground">{stats.beneficiariesServed}</p>
+                  <p className="text-xs text-muted-foreground">Total Served</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {summaryCards.map((card, index) => (
             <motion.div
