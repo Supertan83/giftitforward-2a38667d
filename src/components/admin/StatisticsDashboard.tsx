@@ -13,7 +13,9 @@ import {
   Baby,
   Globe,
   UserCheck,
-  Clock
+  Clock,
+  DoorOpen,
+  LogOut
 } from 'lucide-react';
 import { VolunteerDetailsSection } from '@/components/admin/VolunteerDetailsSection';
 import { Button } from '@/components/ui/button';
