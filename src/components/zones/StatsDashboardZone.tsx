@@ -7,6 +7,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/StatCard';
+import { useQRCards, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
