@@ -66,12 +66,24 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
     
     // Use marketplace allocations for accurate distributed count
     const totalDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
+
+    // Activated today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activatedToday = qrCards.filter(c => {
+      if (!c.activatedAt) return false;
+      const d = new Date(c.activatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() === today.getTime();
+    }).length;
     
     return {
       activeCards,
+      checkedOutCards,
       beneficiariesServed,
       totalDistributed,
-      totalCards: qrCards.length
+      totalCards: qrCards.length,
+      activatedToday,
     };
   }, [qrCards, allocations]);
 
