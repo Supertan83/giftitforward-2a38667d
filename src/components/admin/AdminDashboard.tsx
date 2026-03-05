@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Store, ChevronDown, ChevronRight, DoorOpen, LogOut, UserCheck, Users, Activity } from 'lucide-react';
+import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Store, ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -31,7 +31,7 @@ import { VolunteerQRCardsViewer } from '@/components/admin/VolunteerQRCardsViewe
 import { HubSpotEmailConfig } from '@/components/admin/HubSpotEmailConfig';
 import { EmailLogsViewer } from '@/components/admin/EmailLogsViewer';
 import { useAuth } from '@/contexts/AuthContext';
-import { useItemTypes, useInventoryOperations, useMarketplaces, useQRCards } from '@/hooks/useSupabaseData';
+import { useItemTypes, useInventoryOperations, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
 import { useToast } from '@/hooks/use-toast';
 import { EmailManagement } from '@/components/admin/EmailManagement';
@@ -86,34 +86,10 @@ export const AdminDashboard = () => {
   const { signOut } = useAuth();
   const { data: itemTypes = [], isLoading } = useItemTypes();
   const { data: marketplaces = [] } = useMarketplaces();
-  const { data: qrCards = [] } = useQRCards();
   const { data: allocations = [], isLoading: allocationsLoading } = useMarketplaceAllocations();
   const { allocateItems, updateItemStock, updateItemType, deleteItemType } = useInventoryOperations();
   const { updateAllocationQuantities } = useAllocationOperations();
   const { toast } = useToast();
-
-  // Live queue stats
-  const queueStats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const activeCards = qrCards.filter(c => c.status === 'active');
-    const checkedOutCards = qrCards.filter(c => c.status === 'checked_out');
-
-    const activatedToday = qrCards.filter(c => {
-      if (!c.activatedAt) return false;
-      const d = new Date(c.activatedAt);
-      d.setHours(0, 0, 0, 0);
-      return d.getTime() === today.getTime();
-    }).length;
-
-    return {
-      activatedToday,
-      inQueue: activeCards.length,
-      checkedOut: checkedOutCards.length,
-      totalServed: activeCards.length + checkedOutCards.length,
-    };
-  }, [qrCards]);
 
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
@@ -286,47 +262,6 @@ export const AdminDashboard = () => {
 
   const renderDashboardHome = () => (
     <div className="py-4 md:py-6 px-4 max-w-6xl mx-auto">
-      {/* Live Queue Metrics */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden mb-6">
-        <div className="px-4 py-3 flex items-center gap-3 border-b border-border">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Activity className="w-4 h-4 text-primary" />
-          </div>
-          <span className="font-display font-semibold text-sm md:text-base">Live Queue</span>
-          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">Auto-refresh</span>
-        </div>
-        <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="p-3 rounded-lg bg-success/10 border border-success/20">
-            <div className="flex items-center gap-2 mb-1">
-              <DoorOpen className="w-4 h-4 text-success" />
-              <span className="text-xs text-muted-foreground">Activated Today</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-foreground">{queueStats.activatedToday}</p>
-          </div>
-          <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-warning" />
-              <span className="text-xs text-muted-foreground">In Queue</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-foreground">{queueStats.inQueue}</p>
-          </div>
-          <div className="p-3 rounded-lg bg-muted border border-border">
-            <div className="flex items-center gap-2 mb-1">
-              <LogOut className="w-4 h-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Checked Out</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-foreground">{queueStats.checkedOut}</p>
-          </div>
-          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <div className="flex items-center gap-2 mb-1">
-              <UserCheck className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Total Served</span>
-            </div>
-            <p className="text-2xl font-display font-bold text-foreground">{queueStats.totalServed}</p>
-          </div>
-        </div>
-      </div>
-
       {marketplaceStats.length > 0 && (
         <div className="bg-card rounded-xl border border-border overflow-hidden mb-6">
           <button
