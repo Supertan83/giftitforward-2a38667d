@@ -345,8 +345,37 @@ export const AdminDashboard = () => {
               <span className="text-xs text-muted-foreground">Total Served</span>
             </div>
             <p className="text-2xl font-display font-bold text-foreground">{queueStats.totalServed}</p>
+        {/* Per-marketplace breakdown */}
+        {queueStats.byMarketplace.length > 0 && (
+          <div className="px-4 pb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">By Marketplace</p>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Marketplace</th>
+                    <th className="text-center px-2 py-2 font-medium text-success">Activated</th>
+                    <th className="text-center px-2 py-2 font-medium text-warning">In Queue</th>
+                    <th className="text-center px-2 py-2 font-medium text-muted-foreground">Checked Out</th>
+                    <th className="text-center px-2 py-2 font-medium text-primary">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queueStats.byMarketplace.map(mp => (
+                    <tr key={mp.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium text-foreground truncate max-w-[140px]">{mp.name}</td>
+                      <td className="text-center px-2 py-2 text-foreground">{mp.activated}</td>
+                      <td className="text-center px-2 py-2 text-foreground">{mp.inQueue}</td>
+                      <td className="text-center px-2 py-2 text-foreground">{mp.checkedOut}</td>
+                      <td className="text-center px-2 py-2 font-semibold text-foreground">{mp.totalServed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
+      </div>
       </div>
 
       {marketplaceStats.length > 0 && (
