@@ -345,6 +345,8 @@ export const AdminDashboard = () => {
               <span className="text-xs text-muted-foreground">Total Served</span>
             </div>
             <p className="text-2xl font-display font-bold text-foreground">{queueStats.totalServed}</p>
+          </div>
+        </div>
         {/* Per-marketplace breakdown */}
         {queueStats.byMarketplace.length > 0 && (
           <div className="px-4 pb-4">
@@ -375,7 +377,6 @@ export const AdminDashboard = () => {
             </div>
           </div>
         )}
-      </div>
       </div>
 
       {marketplaceStats.length > 0 && (
