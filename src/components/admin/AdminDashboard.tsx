@@ -86,10 +86,34 @@ export const AdminDashboard = () => {
   const { signOut } = useAuth();
   const { data: itemTypes = [], isLoading } = useItemTypes();
   const { data: marketplaces = [] } = useMarketplaces();
+  const { data: qrCards = [] } = useQRCards();
   const { data: allocations = [], isLoading: allocationsLoading } = useMarketplaceAllocations();
   const { allocateItems, updateItemStock, updateItemType, deleteItemType } = useInventoryOperations();
   const { updateAllocationQuantities } = useAllocationOperations();
   const { toast } = useToast();
+
+  // Live queue stats
+  const queueStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const activeCards = qrCards.filter(c => c.status === 'active');
+    const checkedOutCards = qrCards.filter(c => c.status === 'checked_out');
+
+    const activatedToday = qrCards.filter(c => {
+      if (!c.activatedAt) return false;
+      const d = new Date(c.activatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() === today.getTime();
+    }).length;
+
+    return {
+      activatedToday,
+      inQueue: activeCards.length,
+      checkedOut: checkedOutCards.length,
+      totalServed: activeCards.length + checkedOutCards.length,
+    };
+  }, [qrCards]);
 
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
