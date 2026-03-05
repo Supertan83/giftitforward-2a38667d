@@ -4,6 +4,8 @@ import {
   BarChart3, Users, UserCheck, Package, Clock, MapPin, 
   TrendingUp, ShoppingBag, DoorOpen, LogOut, CreditCard
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/StatCard';
 import { useQRCards, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
@@ -26,6 +28,23 @@ export const StatsDashboardZone = () => {
   const { data: allocations = [], isLoading: isLoadingAllocations } = useMarketplaceAllocations(
     selectedMarketplaceId === 'all' ? undefined : selectedMarketplaceId
   );
+
+  // Fetch archived card data for historical counts
+  const { data: archivedCards = [] } = useQuery({
+    queryKey: ['archived_card_data_for_stats', selectedMarketplaceId],
+    queryFn: async () => {
+      let query = supabase
+        .from('archived_card_data')
+        .select('marketplace_id, gender, children_count, credit_balance, activated_at')
+        .not('marketplace_id', 'is', null);
+      if (selectedMarketplaceId !== 'all') {
+        query = query.eq('marketplace_id', selectedMarketplaceId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
@@ -57,9 +76,13 @@ export const StatsDashboardZone = () => {
     // Total items distributed from marketplace allocations (accurate count)
     const totalItemsDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
 
+    // Count archived beneficiaries for historical events
+    const archivedCount = archivedCards.length;
+    const totalBeneficiaries = allProcessedCards.length + archivedCount;
+
     // Average items per beneficiary
-    const avgItemsPerBeneficiary = allProcessedCards.length > 0 
-      ? Math.round((totalItemsDistributed / allProcessedCards.length) * 10) / 10
+    const avgItemsPerBeneficiary = totalBeneficiaries > 0 
+      ? Math.round((totalItemsDistributed / totalBeneficiaries) * 10) / 10
       : 0;
 
     // Build marketplace credit limit lookup
@@ -68,34 +91,41 @@ export const StatsDashboardZone = () => {
       marketplaceLimitMap[m.id] = m.beneficiary_credit_limit ?? 15;
     }
 
-    // Credits used (marketplace limit - remaining balance)
+    // Credits used (marketplace limit - remaining balance) — live cards
     const totalCreditsUsed = allProcessedCards.reduce((sum, c) => {
       const limit = c.marketplaceId ? (marketplaceLimitMap[c.marketplaceId] ?? 15) : 15;
       return sum + (limit - (c.creditBalance || 0));
     }, 0);
 
-    // Gender breakdown
+    // Add archived credits used
+    const archivedCreditsUsed = archivedCards.reduce((sum, arc) => {
+      const limit = arc.marketplace_id ? (marketplaceLimitMap[arc.marketplace_id] ?? 15) : 15;
+      return sum + (limit - (arc.credit_balance || 0));
+    }, 0);
+
+    // Gender breakdown — merge live + archived
     const genderBreakdown = {
-      male: allProcessedCards.filter(c => c.gender === 'male').length,
-      female: allProcessedCards.filter(c => c.gender === 'female').length,
-      other: allProcessedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
+      male: allProcessedCards.filter(c => c.gender === 'male').length + archivedCards.filter(a => a.gender === 'male').length,
+      female: allProcessedCards.filter(c => c.gender === 'female').length + archivedCards.filter(a => a.gender === 'female').length,
+      other: allProcessedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length + archivedCards.filter(a => a.gender && a.gender !== 'male' && a.gender !== 'female').length,
     };
 
-    // Total children
-    const totalChildren = allProcessedCards.reduce((sum, c) => sum + (c.childrenCount || 0), 0);
+    // Total children — merge live + archived
+    const totalChildren = allProcessedCards.reduce((sum, c) => sum + (c.childrenCount || 0), 0)
+      + archivedCards.reduce((sum, a) => sum + (a.children_count || 0), 0);
 
     return {
-      totalBeneficiaries: allProcessedCards.length,
+      totalBeneficiaries,
       activatedToday,
       currentlyActive: activeCards.length,
-      checkedOut: checkedOutCards.length,
+      checkedOut: checkedOutCards.length + archivedCount,
       totalItemsDistributed,
       avgItemsPerBeneficiary,
-      totalCreditsUsed,
+      totalCreditsUsed: totalCreditsUsed + archivedCreditsUsed,
       genderBreakdown,
       totalChildren,
     };
-  }, [qrCards, selectedMarketplaceId, allocations, marketplaces]);
+  }, [qrCards, selectedMarketplaceId, allocations, marketplaces, archivedCards]);
 
   // Calculate volunteer statistics
   const volunteerStats = useMemo(() => {

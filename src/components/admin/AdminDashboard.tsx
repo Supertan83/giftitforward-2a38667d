@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package, BarChart3, QrCode, ArrowRight, Building, Calendar, TrendingUp, Loader2, Store, ChevronDown, ChevronRight, DoorOpen, LogOut, UserCheck, Users, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,7 +93,20 @@ export const AdminDashboard = () => {
   const { updateAllocationQuantities } = useAllocationOperations();
   const { toast } = useToast();
 
-  // Live queue stats
+  // Fetch archived card data for historical marketplace counts
+  const { data: archivedCards = [] } = useQuery({
+    queryKey: ['archived_card_data_summary'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('archived_card_data')
+        .select('marketplace_id, activated_at, checked_out_at')
+        .not('marketplace_id', 'is', null);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Live queue stats — merge live qr_cards + archived_card_data
   const queueStats = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -109,24 +123,47 @@ export const AdminDashboard = () => {
 
     const activatedToday = qrCards.filter(c => isToday(c.activatedAt)).length;
 
-    // Per-marketplace breakdown
-    const mpMap = new Map<string, { name: string; activated: number; inQueue: number; checkedOut: number; totalServed: number }>();
-    for (const card of qrCards) {
-      const mpId = card.marketplaceId || '__unassigned__';
+    // Per-marketplace breakdown from live cards
+    const mpMap = new Map<string, { name: string; eventDate: string | null; activated: number; inQueue: number; checkedOut: number; totalServed: number }>();
+
+    const getOrCreate = (mpId: string) => {
       if (!mpMap.has(mpId)) {
         const mp = marketplaces.find(m => m.id === mpId);
-        mpMap.set(mpId, { name: mp?.name || 'Unassigned', activated: 0, inQueue: 0, checkedOut: 0, totalServed: 0 });
+        mpMap.set(mpId, {
+          name: mp?.name || 'Unassigned',
+          eventDate: mp?.event_date || null,
+          activated: 0, inQueue: 0, checkedOut: 0, totalServed: 0
+        });
       }
-      const entry = mpMap.get(mpId)!;
+      return mpMap.get(mpId)!;
+    };
+
+    for (const card of qrCards) {
+      const mpId = card.marketplaceId || '__unassigned__';
+      const entry = getOrCreate(mpId);
       if (isToday(card.activatedAt)) entry.activated++;
       if (card.status === 'active') { entry.inQueue++; entry.totalServed++; }
       if (card.status === 'checked_out') { entry.checkedOut++; entry.totalServed++; }
     }
 
+    // Merge archived card data (historical events where cards were reset)
+    for (const arc of archivedCards) {
+      if (!arc.marketplace_id) continue;
+      const entry = getOrCreate(arc.marketplace_id);
+      entry.checkedOut++;
+      entry.totalServed++;
+    }
+
     const byMarketplace = Array.from(mpMap.entries())
       .map(([id, stats]) => ({ id, ...stats }))
       .filter(m => m.totalServed > 0 || m.activated > 0)
-      .sort((a, b) => b.totalServed - a.totalServed);
+      .sort((a, b) => {
+        // Sort by event date descending, nulls last
+        if (a.eventDate && b.eventDate) return b.eventDate.localeCompare(a.eventDate);
+        if (a.eventDate) return -1;
+        if (b.eventDate) return 1;
+        return b.totalServed - a.totalServed;
+      });
 
     return {
       activatedToday,
@@ -135,7 +172,7 @@ export const AdminDashboard = () => {
       totalServed: activeCards.length + checkedOutCards.length,
       byMarketplace,
     };
-  }, [qrCards, marketplaces]);
+  }, [qrCards, marketplaces, archivedCards]);
 
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
