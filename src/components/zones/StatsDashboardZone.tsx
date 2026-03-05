@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   BarChart3, Users, UserCheck, Package, Clock, MapPin, 
-  TrendingUp, ShoppingBag, CalendarCheck, CreditCard
+  TrendingUp, ShoppingBag, DoorOpen, LogOut, CreditCard
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { useQRCards, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
