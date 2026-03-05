@@ -480,6 +480,21 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
       const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
+// Fetch registered volunteers from pending_volunteers using events_list matching
+      const { data: pendingVolunteers } = await supabase
+        .from('pending_volunteers')
+        .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json')
+        .not('events_list', 'is', null);
+
+      // Match volunteers to this marketplace using slug matching (same logic as VolunteerTrackingSection)
+      const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
+        if (!pv.events_list) return false;
+        const eventsLower = pv.events_list.toLowerCase().replace(/[^a-z0-9,]/g, '');
+        return eventsLower.includes(marketplaceNameSlug);
+      });
+      const totalRegisteredFromForm = formRegisteredVolunteers.length;
+
 // Fetch volunteer data via attendance records (per-marketplace source of truth)
       const { data: attendanceRecords } = await supabase
         .from('volunteer_attendance')
