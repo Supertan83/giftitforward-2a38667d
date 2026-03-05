@@ -480,6 +480,21 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
       const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
+// Fetch registered volunteers from pending_volunteers using events_list matching
+      const { data: pendingVolunteers } = await supabase
+        .from('pending_volunteers')
+        .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json')
+        .not('events_list', 'is', null);
+
+      // Match volunteers to this marketplace using slug matching (same logic as VolunteerTrackingSection)
+      const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
+        if (!pv.events_list) return false;
+        const eventsLower = pv.events_list.toLowerCase().replace(/[^a-z0-9,]/g, '');
+        return eventsLower.includes(marketplaceNameSlug);
+      });
+      const totalRegisteredFromForm = formRegisteredVolunteers.length;
+
 // Fetch volunteer data via attendance records (per-marketplace source of truth)
       const { data: attendanceRecords } = await supabase
         .from('volunteer_attendance')
@@ -557,6 +572,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalVolunteers = volCardMap.size;
       const totalHours = Array.from(volCardMap.values()).reduce((sum, v) => sum + v.totalHours, 0);
       const totalAttended = Array.from(volCardMap.values()).filter(v => v.attended).length;
+      // Use form registration count as the true "registered" number (fallback to card count if higher)
+      const effectiveRegistered = Math.max(totalRegisteredFromForm, totalVolunteers);
 
       // Build category breakdown from per-marketplace volunteer data
       const volCategoryMap = new Map<string, {
@@ -633,7 +650,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }))
         .sort((a, b) => b.registered - a.registered);
 
-      const volDropoutRate = totalVolunteers > 0 ? Math.round(((totalVolunteers - totalAttended) / totalVolunteers) * 100) : 0;
+      const volDropoutRate = effectiveRegistered > 0 ? Math.round(((effectiveRegistered - totalAttended) / effectiveRegistered) * 100) : 0;
 
       return {
         marketplace: {
@@ -662,7 +679,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         volunteers: {
           total: totalVolunteers,
           totalHours,
-          totalRegistered: totalVolunteers,
+          totalRegistered: effectiveRegistered,
           totalAttended,
           dropoutRate: volDropoutRate,
           volunteerList,

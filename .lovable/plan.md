@@ -1,30 +1,38 @@
 
 
-# Fix: Volunteer Registration Count Mismatch per Marketplace
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## Problem
-When viewing a marketplace report, "Total Registered" shows ~40 volunteers instead of the actual 70+ who signed up via the DH form. This is because the count is based solely on `volunteer_qr_cards.marketplace_id` and `volunteer_attendance.marketplace_id`, which only get set when a volunteer is checked in or manually assigned. Volunteers who registered via the form have their marketplace stored in `events_list`/`events_json` on `pending_volunteers`, but that data is never used for the registration count.
+## Problems Identified
 
-## Root Cause
-In `src/hooks/useMarketplaceAllocations.ts` (the `useMarketplaceReport` hook), `totalRegistered` is set to `volCardMap.size`, which only includes:
-1. Volunteers with `volunteer_attendance` records for the marketplace
-2. Volunteers with `volunteer_qr_cards.marketplace_id` matching the marketplace
+From the edge function logs, two critical issues are causing incorrect data:
 
-It completely ignores the `events_list`/`events_json` registration data.
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-## Fix
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-### File: `src/hooks/useMarketplaceAllocations.ts`
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
-In the `useMarketplaceReport` query function (around line 483-665):
+## Plan
 
-1. **Fetch registered volunteers from `pending_volunteers`** — Query all approved volunteers with non-null `events_list`, then filter client-side using the marketplace name slug matching (same logic already used in `VolunteerTrackingSection.tsx` lines 57-65).
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
 
-2. **Set `totalRegistered`** to the count of volunteers matched from `events_list`/`events_json`, instead of `volCardMap.size`. This reflects actual form registrations.
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
 
-3. **Keep `totalAttended`** as-is (from attendance/QR card records), since that correctly tracks who actually showed up.
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
 
-4. **Recalculate `dropoutRate`** using the new `totalRegistered` as the denominator.
+## Files Changed
 
-This ensures the marketplace report shows the true registration count from the DH form while attendance remains based on actual check-in data. The `VolunteerTrackingSection` component already does this correctly — we're applying the same pattern to the report hook.
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 
