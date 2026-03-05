@@ -100,20 +100,42 @@ export const AdminDashboard = () => {
     const activeCards = qrCards.filter(c => c.status === 'active');
     const checkedOutCards = qrCards.filter(c => c.status === 'checked_out');
 
-    const activatedToday = qrCards.filter(c => {
-      if (!c.activatedAt) return false;
-      const d = new Date(c.activatedAt);
+    const isToday = (dateStr: string | null) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
       d.setHours(0, 0, 0, 0);
       return d.getTime() === today.getTime();
-    }).length;
+    };
+
+    const activatedToday = qrCards.filter(c => isToday(c.activatedAt)).length;
+
+    // Per-marketplace breakdown
+    const mpMap = new Map<string, { name: string; activated: number; inQueue: number; checkedOut: number; totalServed: number }>();
+    for (const card of qrCards) {
+      const mpId = card.marketplaceId || '__unassigned__';
+      if (!mpMap.has(mpId)) {
+        const mp = marketplaces.find(m => m.id === mpId);
+        mpMap.set(mpId, { name: mp?.name || 'Unassigned', activated: 0, inQueue: 0, checkedOut: 0, totalServed: 0 });
+      }
+      const entry = mpMap.get(mpId)!;
+      if (isToday(card.activatedAt)) entry.activated++;
+      if (card.status === 'active') { entry.inQueue++; entry.totalServed++; }
+      if (card.status === 'checked_out') { entry.checkedOut++; entry.totalServed++; }
+    }
+
+    const byMarketplace = Array.from(mpMap.entries())
+      .map(([id, stats]) => ({ id, ...stats }))
+      .filter(m => m.totalServed > 0 || m.activated > 0)
+      .sort((a, b) => b.totalServed - a.totalServed);
 
     return {
       activatedToday,
       inQueue: activeCards.length,
       checkedOut: checkedOutCards.length,
       totalServed: activeCards.length + checkedOutCards.length,
+      byMarketplace,
     };
-  }, [qrCards]);
+  }, [qrCards, marketplaces]);
 
   const handleSaveStock = async (itemId: string) => {
     const newStock = parseInt(editingStock);
