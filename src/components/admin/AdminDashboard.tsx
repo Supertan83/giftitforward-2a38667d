@@ -286,6 +286,47 @@ export const AdminDashboard = () => {
 
   const renderDashboardHome = () => (
     <div className="py-4 md:py-6 px-4 max-w-6xl mx-auto">
+      {/* Live Queue Metrics */}
+      <div className="bg-card rounded-xl border border-border overflow-hidden mb-6">
+        <div className="px-4 py-3 flex items-center gap-3 border-b border-border">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Activity className="w-4 h-4 text-primary" />
+          </div>
+          <span className="font-display font-semibold text-sm md:text-base">Live Queue</span>
+          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">Auto-refresh</span>
+        </div>
+        <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-lg bg-success/10 border border-success/20">
+            <div className="flex items-center gap-2 mb-1">
+              <DoorOpen className="w-4 h-4 text-success" />
+              <span className="text-xs text-muted-foreground">Activated Today</span>
+            </div>
+            <p className="text-2xl font-display font-bold text-foreground">{queueStats.activatedToday}</p>
+          </div>
+          <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="w-4 h-4 text-warning" />
+              <span className="text-xs text-muted-foreground">In Queue</span>
+            </div>
+            <p className="text-2xl font-display font-bold text-foreground">{queueStats.inQueue}</p>
+          </div>
+          <div className="p-3 rounded-lg bg-muted border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <LogOut className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Checked Out</span>
+            </div>
+            <p className="text-2xl font-display font-bold text-foreground">{queueStats.checkedOut}</p>
+          </div>
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+            <div className="flex items-center gap-2 mb-1">
+              <UserCheck className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Total Served</span>
+            </div>
+            <p className="text-2xl font-display font-bold text-foreground">{queueStats.totalServed}</p>
+          </div>
+        </div>
+      </div>
+
       {marketplaceStats.length > 0 && (
         <div className="bg-card rounded-xl border border-border overflow-hidden mb-6">
           <button
