@@ -1,38 +1,40 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Fix: Populate marketplace details when admin adds event
 
-## Problems Identified
+## Root Cause
 
-From the edge function logs, two critical issues are causing incorrect data:
+When an admin clicks "Add Event" in the volunteer details panel, the `addEventMutation` (line 694-730 of `PendingVolunteers.tsx`) creates an `events_json` entry with only:
+```js
+{ event: eventSlug, eventDate: null, addedManually: true, addedAt: "..." }
+```
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+It does **not** include `eventDate`, `eventTime`, `eventLocation`, or `name` — even though the full marketplace object (with `event_date`, `start_time`, `end_time`, `location`) is available in the `marketplaces` array used to render the dropdown.
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+When the resend-welcome-email function later tries to resolve event details, the `events_json` has null values and the fuzzy slug-to-marketplace matching via `ilike` often fails due to slug format differences (dashes vs. spaces, special characters). Result: blank marketplace details in the email.
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
+## Fix
 
-## Plan
+**File**: `src/components/admin/PendingVolunteers.tsx`
 
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
+**Change 1** — Pass the full marketplace object instead of just the name to the mutation. Update `addEventMutation` (lines 694-730) to:
+- Accept the marketplace object (or at least its id, name, event_date, start_time, end_time, location)
+- Populate `events_json` with complete details:
+  ```js
+  {
+    event: eventSlug,
+    name: marketplace.name,
+    eventDate: formatDate(marketplace.event_date),   // "March 12, 2026"
+    eventTime: formatTimeRange(marketplace.start_time, marketplace.end_time), // "07.00 am - 01.30 pm"
+    eventLocation: marketplace.location,
+    addedManually: true,
+    addedAt: new Date().toISOString()
+  }
+  ```
 
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
+**Change 2** — Update the dialog's "Add Event" button click handler (line 3090-3095) to find the selected marketplace object from the `marketplaces` array and pass it to the mutation instead of just the name string.
 
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
+This ensures that when the resend-welcome-email function reads `events_json`, it already has the date/time/location as fallback values (lines 113-119 of the edge function), eliminating the dependency on fuzzy slug matching entirely.
 
-## Files Changed
-
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+No edge function changes needed — the existing fallback logic in `resend-welcome-email` already reads `eventDate`, `eventTime`, `eventLocation` from `events_json` entries.
 
