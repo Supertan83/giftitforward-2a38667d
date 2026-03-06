@@ -1,44 +1,38 @@
 
 
-# Fix: Total Registered should include family members
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## Problem
-The "Total Registered" count in Marketplace Reports only counts primary volunteers. The user wants it to include family members registered for that specific marketplace.
+## Problems Identified
 
-## Current logic
-- `totalRegisteredFromForm` = count of `formRegisteredVolunteers` (primary volunteers only)
-- `effectiveRegistered = Math.max(totalRegisteredFromForm, totalVolunteers)`
-- Family member data exists in each volunteer's `events_json` array, with per-event `number-of-adults` and `number-of-children` fields
+From the edge function logs, two critical issues are causing incorrect data:
 
-## Fix
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-### File: `src/hooks/useMarketplaceAllocations.ts`
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-After calculating `totalRegisteredFromForm` (line 498), add a family member count by iterating over `formRegisteredVolunteers` and summing `number-of-adults` + `number-of-children` from the matching event in each volunteer's `events_json`:
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
-```typescript
-let totalFamilyMembers = 0;
-for (const fv of formRegisteredVolunteers) {
-  if (fv.events_json && Array.isArray(fv.events_json)) {
-    for (const evt of fv.events_json as any[]) {
-      const eventSlug = (evt['event-slug'] || evt.event_slug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (eventSlug === marketplaceNameSlug) {
-        totalFamilyMembers += (evt['number-of-adults'] || evt.number_of_adults || 0);
-        totalFamilyMembers += (evt['number-of-children'] || evt.number_of_children || 0);
-      }
-    }
-  }
-}
-```
+## Plan
 
-Then update `effectiveRegistered` (line 578) to include family members:
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
 
-```typescript
-const effectiveRegistered = Math.max(totalRegisteredFromForm + totalFamilyMembers, totalVolunteers);
-```
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
 
-This ensures the "Total Registered" stat reflects both primary volunteers and their registered family members for each specific marketplace.
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
 
-### Files changed
-1. **`src/hooks/useMarketplaceAllocations.ts`** -- Add family member counting from `events_json` per marketplace
+## Files Changed
+
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 
