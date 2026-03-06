@@ -503,7 +503,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       for (const fv of formRegisteredVolunteers) {
         if (fv.events_json && Array.isArray(fv.events_json)) {
           for (const evt of fv.events_json as any[]) {
-            const eventSlug = (evt['event-slug'] || evt.event_slug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const eventSlug = (evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             if (eventSlug === marketplaceNameSlug) {
               totalFamilyMembers += (evt['number-of-adults'] || evt.number_of_adults || 0);
               totalFamilyMembers += (evt['number-of-children'] || evt.number_of_children || 0);
