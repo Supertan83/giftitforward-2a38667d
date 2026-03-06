@@ -193,15 +193,30 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
         className="max-w-7xl mx-auto space-y-6"
       >
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-              Live Statistics
-            </h1>
-            <p className="text-muted-foreground">Real-time distribution analytics</p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={onBack}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                Live Statistics
+              </h1>
+              <p className="text-muted-foreground">Real-time distribution analytics</p>
+            </div>
+          </div>
+          <div className="sm:ml-auto w-full sm:w-64">
+            <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by marketplace" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Marketplaces</SelectItem>
+                {marketplaces.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
