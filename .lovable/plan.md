@@ -1,38 +1,29 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Add Family Members Card & Fix Total Registered in Marketplace Reports
 
-## Problems Identified
+## Problem
+The Marketplace Reports volunteer section shows 4 cards: Total Registered, Total Attended, Total Hours, Drop-out Rate. The user wants:
+1. A **Family Members** card added (like in the Statistics Dashboard's Volunteer Details section)
+2. **Total Registered** to show volunteers + family members combined
 
-From the edge function logs, two critical issues are causing incorrect data:
+## Current State
+- `effectiveRegistered` already includes family members in the count (line 592: `totalRegisteredFromForm + totalFamilyMembers`)
+- But `totalFamilyMembers` is not exposed separately in the report object — it's baked into `totalRegistered`
+- The UI shows 4 cards in a 2x2 / 4-col grid with no family member card
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+## Changes
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+### 1. `src/hooks/useMarketplaceAllocations.ts`
+- Add `familyMembers: number` to the `volunteers` type definition (line ~128)
+- Expose `totalFamilyMembers` in the returned report object (line ~736):
+  ```
+  familyMembers: totalFamilyMembers,
+  ```
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
-
-## Plan
-
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
-
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
-
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
-
-## Files Changed
-
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+### 2. `src/components/admin/MarketplaceReports.tsx` (lines 369-390)
+- Change grid from `grid-cols-2 md:grid-cols-4` to `grid-cols-2 md:grid-cols-5`
+- Add a **Family Members** card (violet themed, matching the Statistics Dashboard style) between Total Attended and Total Hours
+- Update the "Total Registered" subtitle to say "Volunteers + Family" instead of "Volunteers"
+- The Drop-out Rate subtitle should use `totalRegistered - familyMembers` for the dropout volunteer count to remain accurate
 
