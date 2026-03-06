@@ -1,40 +1,38 @@
 
 
-# Fix Volunteer Count Cards to Match Volunteer List
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## Problem
-The summary cards show `Total Registered: 106` (70 form volunteers + 36 family members), but the volunteer list only shows ~85 people. Family members are counted as a numeric total from `number-of-adults` and `number-of-children` fields but are NOT added as individual rows in the volunteer list. This creates a disconnect.
+## Problems Identified
 
-**Database reality for Feb 21 marketplace:**
-- 70 form-registered volunteers (events_list match)
-- 36 family members (number-of-adults + number-of-children sum)
-- 43 QR cards (29 distinct volunteers) with attendance/assignment
-- Volunteer list = 43 card entries + 42 form-only = 85 rows
+From the edge function logs, two critical issues are causing incorrect data:
 
-## Fix
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-### File: `src/hooks/useMarketplaceAllocations.ts`
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-**1. Add family members as individual rows in the volunteer list** (lines 664-697 area)
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
-After merging form-registered volunteers who don't have cards, also add their dependents from `events_json` as separate rows in the `volunteerList`. For each form-registered volunteer with dependents for this marketplace:
-- Extract dependents using `extractUniqueDependents` (already exists)
-- Add each dependent as a row with `name: "DependentName (Family)"`, `status: 'registered'`, `hoursWorked: 0`, `category` inherited from primary volunteer, `company` inherited
+## Plan
 
-This ensures the volunteer list actually contains family member rows.
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
 
-**2. Update `effectiveRegistered`** (line 593)
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
 
-Change from `Math.max(totalRegisteredFromForm + totalFamilyMembers, totalVolunteers)` to simply use the actual `volunteerList.length` after all entries (cards + form-only + dependents) are added. Move the `effectiveRegistered` calculation to AFTER the list is built.
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
 
-**3. Recalculate `totalFamilyMembers`** to count actual dependent rows added to the list (not the `number-of-adults`+`number-of-children` sum which can include the primary volunteer themselves in `total-attendees`).
+## Files Changed
 
-### Summary of changes
-- Family members become actual rows in the volunteer list (name resolved from `dependents` array in `events_json`)
-- `totalRegistered` = `volunteerList.length`
-- `familyMembers` = count of family rows in the list
-- All 3 numbers (Total Registered, Family Members, list row count) will match
-
-### Files changed
-1. `src/hooks/useMarketplaceAllocations.ts` — Add dependent rows to volunteerList, derive card counts from list
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 

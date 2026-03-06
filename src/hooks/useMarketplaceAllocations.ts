@@ -590,7 +590,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalHours = Array.from(volCardMap.values()).reduce((sum, v) => sum + v.totalHours, 0);
       const totalAttended = Array.from(volCardMap.values()).filter(v => v.attended).length;
       // Use form registration count as the true "registered" number (fallback to card count if higher)
-      const effectiveRegistered = Math.max(totalRegisteredFromForm + totalFamilyMembers, totalVolunteers);
+      // effectiveRegistered will be recalculated after volunteer list is built
 
       // Build category breakdown from per-marketplace volunteer data
       const volCategoryMap = new Map<string, {
@@ -661,8 +661,31 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         if (entry.vol?.id) volIdsInCardMap.add(entry.vol.id);
       }
 
+      // Helper to extract dependents for this specific marketplace from events_json
+      const extractDependentsForMarketplace = (eventsJson: unknown): Array<{ name: string; type: string; gender?: string }> => {
+        if (!eventsJson || !Array.isArray(eventsJson)) return [];
+        const seen = new Map<string, { name: string; type: string; gender?: string }>();
+        for (const evt of eventsJson) {
+          const eventSlug = (evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (eventSlug !== marketplaceNameSlug) continue;
+          if (evt.dependents && Array.isArray(evt.dependents)) {
+            for (const dep of evt.dependents) {
+              const name = dep.name?.trim();
+              if (!name) continue;
+              const key = name.toLowerCase();
+              if (!seen.has(key)) {
+                seen.set(key, { name, type: dep.type || 'adult', gender: dep.gender || undefined });
+              }
+            }
+          }
+        }
+        return Array.from(seen.values());
+      };
+
+      let actualFamilyCount = 0;
+
       for (const fv of formRegisteredVolunteers) {
-        if (volIdsInCardMap.has(fv.id)) continue;
+        const alreadyInCards = volIdsInCardMap.has(fv.id);
 
         let categoryKey: string;
         if (fv.is_employee) {
@@ -674,27 +697,75 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
         const company = fv.external_company || (fv.is_employee ? 'Dubai Holding' : 'Other');
 
-        volunteerList.push({
-          name: `${fv.first_name} ${fv.last_name}`,
-          status: 'registered',
-          hoursWorked: 0,
-          category: categoryKey,
-          company,
-          gender: fv.gender || null,
-          cardId: '',
-          checkedInAt: null,
-          checkedOutAt: null,
-        });
+        // Add primary volunteer row if not already in card map
+        if (!alreadyInCards) {
+          volunteerList.push({
+            name: `${fv.first_name} ${fv.last_name}`,
+            status: 'registered',
+            hoursWorked: 0,
+            category: categoryKey,
+            company,
+            gender: fv.gender || null,
+            cardId: '',
+            checkedInAt: null,
+            checkedOutAt: null,
+          });
 
-        if (!volCategoryMap.has(categoryKey)) {
-          volCategoryMap.set(categoryKey, { registered: 0, attended: 0, male: 0, female: 0, companies: new Map() });
+          if (!volCategoryMap.has(categoryKey)) {
+            volCategoryMap.set(categoryKey, { registered: 0, attended: 0, male: 0, female: 0, companies: new Map() });
+          }
+          const cat = volCategoryMap.get(categoryKey)!;
+          cat.registered++;
+          if (fv.gender?.toLowerCase() === 'male') cat.male++;
+          if (fv.gender?.toLowerCase() === 'female') cat.female++;
+          cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
         }
-        const cat = volCategoryMap.get(categoryKey)!;
-        cat.registered++;
-        if (fv.gender?.toLowerCase() === 'male') cat.male++;
-        if (fv.gender?.toLowerCase() === 'female') cat.female++;
-        cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
+
+        // Add dependents as individual rows (skip those already represented by family QR cards)
+        const dependents = extractDependentsForMarketplace(fv.events_json);
+        // Count how many family cards this volunteer already has in the card map
+        const existingFamilyCardCount = alreadyInCards
+          ? (cardsByVolunteerId.get(fv.id) || []).filter(c => /-F\d/.test(c.uniqueId)).length
+          : 0;
+
+        // Only add dependents not already covered by family QR card rows
+        const dependentsToAdd = dependents.slice(existingFamilyCardCount);
+        for (const dep of dependentsToAdd) {
+          actualFamilyCount++;
+          volunteerList.push({
+            name: `${dep.name} (Family)`,
+            status: 'registered',
+            hoursWorked: 0,
+            category: categoryKey,
+            company,
+            gender: dep.gender || null,
+            cardId: '',
+            checkedInAt: null,
+            checkedOutAt: null,
+          });
+
+          if (!volCategoryMap.has(categoryKey)) {
+            volCategoryMap.set(categoryKey, { registered: 0, attended: 0, male: 0, female: 0, companies: new Map() });
+          }
+          const cat = volCategoryMap.get(categoryKey)!;
+          cat.registered++;
+          if (dep.gender?.toLowerCase() === 'male') cat.male++;
+          if (dep.gender?.toLowerCase() === 'female') cat.female++;
+          cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
+        }
       }
+
+      // Also count family cards already in the volCardMap
+      for (const [, entry] of volCardMap) {
+        const card = (attendanceRecords || []).find(a => a.volunteer_card_id === entry.cardId)?.volunteer_qr_cards as any
+          || (assignedCards || []).find(c => c.id === entry.cardId);
+        if (card?.unique_id && /-F\d/.test(card.unique_id)) {
+          actualFamilyCount++;
+        }
+      }
+
+      // Derive counts from the actual volunteer list
+      const effectiveRegisteredFromList = volunteerList.length;
 
       const volunteerCategoryBreakdown = Array.from(volCategoryMap.entries())
         .map(([category, d]) => ({
@@ -708,7 +779,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }))
         .sort((a, b) => b.registered - a.registered);
 
-      const volDropoutRate = effectiveRegistered > 0 ? Math.round(((effectiveRegistered - totalAttended) / effectiveRegistered) * 100) : 0;
+      const volDropoutRate = effectiveRegisteredFromList > 0 ? Math.round(((effectiveRegisteredFromList - totalAttended) / effectiveRegisteredFromList) * 100) : 0;
 
       return {
         marketplace: {
@@ -737,9 +808,9 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         volunteers: {
           total: totalVolunteers,
           totalHours,
-          totalRegistered: effectiveRegistered,
+          totalRegistered: effectiveRegisteredFromList,
           totalAttended,
-          familyMembers: totalFamilyMembers,
+          familyMembers: actualFamilyCount,
           dropoutRate: volDropoutRate,
           volunteerList,
           categoryBreakdown: volunteerCategoryBreakdown,
