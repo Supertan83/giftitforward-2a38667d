@@ -51,11 +51,15 @@ const COLORS = [
 ];
 
 export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('all');
   const { data: qrCards = [], isLoading: cardsLoading } = useQRCards();
   const { data: itemTypes = [], isLoading: itemsLoading } = useItemTypes();
   const { data: demographics, isLoading: demographicsLoading } = useBeneficiaryDemographics();
   const { data: volunteerCards = [], isLoading: volunteersLoading } = useVolunteerQRCards();
   const { data: allocations = [], isLoading: allocationsLoading } = useMarketplaceAllocations();
+  const { data: marketplaces = [] } = useMarketplaces();
+
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
   const isLoading = cardsLoading || itemsLoading || demographicsLoading || volunteersLoading || allocationsLoading;
 
