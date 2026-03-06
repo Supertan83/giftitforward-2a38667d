@@ -130,6 +130,7 @@ export interface MarketplaceReport {
     totalHours: number;
     totalRegistered: number;
     totalAttended: number;
+    familyMembers: number;
     dropoutRate: number;
     volunteerList: Array<{
       name: string;
@@ -738,6 +739,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           totalHours,
           totalRegistered: effectiveRegistered,
           totalAttended,
+          familyMembers: totalFamilyMembers,
           dropoutRate: volDropoutRate,
           volunteerList,
           categoryBreakdown: volunteerCategoryBreakdown,

@@ -366,16 +366,21 @@ export const MarketplaceReports = ({
                       <p className="text-sm text-muted-foreground">Comprehensive volunteer tracking and attendance data</p>
                       
                       {/* Summary Cards */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <div className="rounded-lg border p-3 md:p-4 bg-primary/5 border-primary/20">
                           <p className="text-xs text-muted-foreground mb-1">Total Registered</p>
                           <p className="text-xl md:text-2xl font-bold text-primary">{report.volunteers?.totalRegistered || 0}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Volunteers</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Volunteers + Family</p>
                         </div>
                         <div className="rounded-lg border p-3 md:p-4 bg-success/5 border-success/20">
                           <p className="text-xs text-muted-foreground mb-1">Total Attended</p>
                           <p className="text-xl md:text-2xl font-bold text-success">{report.volunteers?.totalAttended || 0}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Volunteers</p>
+                        </div>
+                        <div className="rounded-lg border p-3 md:p-4 bg-violet-500/5 border-violet-500/20">
+                          <p className="text-xs text-muted-foreground mb-1">Family Members</p>
+                          <p className="text-xl md:text-2xl font-bold text-violet-600">{report.volunteers?.familyMembers || 0}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Registered: {(report.volunteers?.totalRegistered || 0) - (report.volunteers?.familyMembers || 0)}</p>
                         </div>
                         <div className="rounded-lg border p-3 md:p-4 bg-blue-500/5 border-blue-500/20">
                           <p className="text-xs text-muted-foreground mb-1">Total Hours</p>
@@ -385,7 +390,7 @@ export const MarketplaceReports = ({
                         <div className="rounded-lg border p-3 md:p-4 bg-destructive/5 border-destructive/20">
                           <p className="text-xs text-muted-foreground mb-1">Drop-out Rate</p>
                           <p className="text-xl md:text-2xl font-bold text-destructive">{report.volunteers?.dropoutRate || 0}%</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{(report.volunteers?.totalRegistered || 0) - (report.volunteers?.totalAttended || 0)} volunteers</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{(report.volunteers?.totalRegistered || 0) - (report.volunteers?.familyMembers || 0) - (report.volunteers?.totalAttended || 0)} volunteers</p>
                         </div>
                       </div>
 
