@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -20,7 +20,8 @@ import {
 import { VolunteerDetailsSection } from '@/components/admin/VolunteerDetailsSection';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useQRCards, useItemTypes, useBeneficiaryDemographics, useVolunteerQRCards } from '@/hooks/useSupabaseData';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQRCards, useItemTypes, useBeneficiaryDemographics, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
 import {
   BarChart,
