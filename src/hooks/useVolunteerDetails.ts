@@ -71,8 +71,8 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
             for (const evt of vol.events_json as any[]) {
               const eventSlug = evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '';
               if (slugify(eventSlug) === marketplaceSlug) {
-                totalFamilyMembers += (evt['number-of-adults'] || evt.number_of_adults || 0);
-                totalFamilyMembers += (evt['number-of-children'] || evt.number_of_children || 0);
+                totalFamilyMembers += Number(evt['number-of-adults'] || evt.number_of_adults || 0);
+                totalFamilyMembers += Number(evt['number-of-children'] || evt.number_of_children || 0);
               }
             }
           }
