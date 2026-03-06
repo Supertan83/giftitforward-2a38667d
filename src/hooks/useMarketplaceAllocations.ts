@@ -739,6 +739,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           totalHours,
           totalRegistered: effectiveRegistered,
           totalAttended,
+          familyMembers: totalFamilyMembers,
           dropoutRate: volDropoutRate,
           volunteerList,
           categoryBreakdown: volunteerCategoryBreakdown,
