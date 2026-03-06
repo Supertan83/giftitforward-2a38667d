@@ -484,14 +484,16 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const { data: pendingVolunteers } = await supabase
         .from('pending_volunteers')
         .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json')
+        .eq('status', 'approved')
         .not('events_list', 'is', null);
 
-      // Match volunteers to this marketplace using slug matching (same logic as VolunteerTrackingSection)
+      // Match volunteers to this marketplace using exact slug matching per event
       const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
         if (!pv.events_list) return false;
-        const eventsLower = pv.events_list.toLowerCase().replace(/[^a-z0-9,]/g, '');
-        return eventsLower.includes(marketplaceNameSlug);
+        return pv.events_list.split(',').some(
+          slug => slug.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === marketplaceNameSlug
+        );
       });
       const totalRegisteredFromForm = formRegisteredVolunteers.length;
 
