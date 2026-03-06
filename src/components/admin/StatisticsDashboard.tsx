@@ -602,7 +602,10 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
         </motion.div>
 
         {/* Volunteer Details */}
-        <VolunteerDetailsSection />
+        <VolunteerDetailsSection 
+          marketplaceName={selectedMarketplace?.name}
+          marketplaceId={selectedMarketplaceId !== 'all' ? selectedMarketplaceId : undefined}
+        />
 
         {/* Info Card */}
         <motion.div
