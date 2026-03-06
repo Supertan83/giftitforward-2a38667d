@@ -640,6 +640,47 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
       }
 
+      // Merge form-registered volunteers not already in volCardMap
+      const volIdsInCardMap = new Set<string>();
+      for (const [, entry] of volCardMap) {
+        if (entry.vol?.id) volIdsInCardMap.add(entry.vol.id);
+      }
+
+      for (const fv of formRegisteredVolunteers) {
+        if (volIdsInCardMap.has(fv.id)) continue;
+
+        let categoryKey: string;
+        if (fv.is_employee) {
+          categoryKey = 'Corporate Internal';
+        } else if (fv.external_company) {
+          categoryKey = 'Corporate External';
+        } else {
+          categoryKey = 'Outreach Partners';
+        }
+        const company = fv.external_company || (fv.is_employee ? 'Dubai Holding' : 'Other');
+
+        volunteerList.push({
+          name: `${fv.first_name} ${fv.last_name}`,
+          status: 'registered',
+          hoursWorked: 0,
+          category: categoryKey,
+          company,
+          gender: fv.gender || null,
+          cardId: '',
+          checkedInAt: null,
+          checkedOutAt: null,
+        });
+
+        if (!volCategoryMap.has(categoryKey)) {
+          volCategoryMap.set(categoryKey, { registered: 0, attended: 0, male: 0, female: 0, companies: new Map() });
+        }
+        const cat = volCategoryMap.get(categoryKey)!;
+        cat.registered++;
+        if (fv.gender?.toLowerCase() === 'male') cat.male++;
+        if (fv.gender?.toLowerCase() === 'female') cat.female++;
+        cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
+      }
+
       const volunteerCategoryBreakdown = Array.from(volCategoryMap.entries())
         .map(([category, d]) => ({
           category,
