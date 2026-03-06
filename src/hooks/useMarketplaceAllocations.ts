@@ -130,6 +130,7 @@ export interface MarketplaceReport {
     totalHours: number;
     totalRegistered: number;
     totalAttended: number;
+    familyMembers: number;
     dropoutRate: number;
     volunteerList: Array<{
       name: string;
