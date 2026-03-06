@@ -589,7 +589,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalHours = Array.from(volCardMap.values()).reduce((sum, v) => sum + v.totalHours, 0);
       const totalAttended = Array.from(volCardMap.values()).filter(v => v.attended).length;
       // Use form registration count as the true "registered" number (fallback to card count if higher)
-      const effectiveRegistered = Math.max(totalRegisteredFromForm, totalVolunteers);
+      const effectiveRegistered = Math.max(totalRegisteredFromForm + totalFamilyMembers, totalVolunteers);
 
       // Build category breakdown from per-marketplace volunteer data
       const volCategoryMap = new Map<string, {
