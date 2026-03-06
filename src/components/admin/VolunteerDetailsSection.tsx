@@ -4,8 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useVolunteerDetails } from '@/hooks/useVolunteerDetails';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export const VolunteerDetailsSection = () => {
-  const { data, isLoading } = useVolunteerDetails();
+interface VolunteerDetailsSectionProps {
+  marketplaceName?: string;
+  marketplaceId?: string;
+}
+
+export const VolunteerDetailsSection = ({ marketplaceName, marketplaceId }: VolunteerDetailsSectionProps) => {
+  const { data, isLoading } = useVolunteerDetails(marketplaceName, marketplaceId);
 
   if (isLoading) {
     return (

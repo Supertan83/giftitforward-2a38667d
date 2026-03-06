@@ -20,9 +20,11 @@ export interface VolunteerDetailsData {
   categoryBreakdown: VolunteerCategoryBreakdown[];
 }
 
-export const useVolunteerDetails = () => {
+const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: string) => {
   return useQuery({
-    queryKey: ['volunteer_details_stats'],
+    queryKey: ['volunteer_details_stats', marketplaceName || 'all', marketplaceId || 'all'],
     queryFn: async (): Promise<VolunteerDetailsData> => {
       // Fetch all approved volunteers with their QR card status
       const { data: volunteers, error } = await supabase
@@ -33,41 +35,75 @@ export const useVolunteerDetails = () => {
           external_company,
           gender,
           source,
+          events_list,
+          events_json,
           volunteer_qr_cards (
             id,
-            status
+            status,
+            marketplace_id
           )
         `)
         .eq('status', 'approved');
 
       if (error) throw error;
 
-      const vols = volunteers || [];
+      let vols = volunteers || [];
 
-      // Also fetch registration events for family member counts
-      const volunteerIds = vols.map(v => v.id);
+      // Filter by marketplace if provided
+      if (marketplaceName) {
+        const marketplaceSlug = slugify(marketplaceName);
+        vols = vols.filter(v => {
+          if (!v.events_list) return false;
+          return v.events_list.split(',').some(
+            (slug: string) => slugify(slug.trim()) === marketplaceSlug
+          );
+        });
+      }
+
+      // Calculate family members
       let totalFamilyMembers = 0;
-      
-      if (volunteerIds.length > 0) {
-        // Get partner_registrations linked to these volunteers by email
+
+      if (marketplaceName) {
+        // Use events_json to count family members for this specific marketplace
+        const marketplaceSlug = slugify(marketplaceName);
+        for (const vol of vols) {
+          if (vol.events_json && Array.isArray(vol.events_json)) {
+            for (const evt of vol.events_json as any[]) {
+              const eventSlug = evt['event-slug'] || evt.event_slug || '';
+              if (slugify(eventSlug) === marketplaceSlug) {
+                totalFamilyMembers += (evt['number-of-adults'] || evt.number_of_adults || 0);
+                totalFamilyMembers += (evt['number-of-children'] || evt.number_of_children || 0);
+              }
+            }
+          }
+        }
+      } else {
+        // Global: fetch from registration_events
         const { data: regEvents } = await supabase
           .from('registration_events')
           .select('number_of_adults, number_of_children')
           .limit(1000);
-        
+
         if (regEvents) {
-          totalFamilyMembers = regEvents.reduce((sum, re) => 
+          totalFamilyMembers = regEvents.reduce((sum, re) =>
             sum + (re.number_of_adults || 0) + (re.number_of_children || 0), 0);
         }
       }
 
       // Calculate totals
       const totalRegistered = vols.length;
-      const totalAttended = vols.filter(v => 
-        v.volunteer_qr_cards?.some((c: any) => c.status === 'checked_in' || c.status === 'checked_out')
-      ).length;
-      const dropoutRate = totalRegistered > 0 
-        ? Math.round(((totalRegistered - totalAttended) / totalRegistered) * 100) 
+      const totalAttended = vols.filter(v => {
+        const cards = v.volunteer_qr_cards || [];
+        if (marketplaceId) {
+          return cards.some((c: any) =>
+            c.marketplace_id === marketplaceId &&
+            (c.status === 'checked_in' || c.status === 'checked_out')
+          );
+        }
+        return cards.some((c: any) => c.status === 'checked_in' || c.status === 'checked_out');
+      }).length;
+      const dropoutRate = totalRegistered > 0
+        ? Math.round(((totalRegistered - totalAttended) / totalRegistered) * 100)
         : 0;
 
       // Group by category
@@ -109,9 +145,10 @@ export const useVolunteerDetails = () => {
         const cat = categoryMap.get(categoryKey)!;
         cat.registered++;
 
-        const hasAttended = vol.volunteer_qr_cards?.some(
-          (c: any) => c.status === 'checked_in' || c.status === 'checked_out'
-        );
+        const cards = vol.volunteer_qr_cards || [];
+        const hasAttended = marketplaceId
+          ? cards.some((c: any) => c.marketplace_id === marketplaceId && (c.status === 'checked_in' || c.status === 'checked_out'))
+          : cards.some((c: any) => c.status === 'checked_in' || c.status === 'checked_out');
         if (hasAttended) cat.attended++;
 
         if (vol.gender?.toLowerCase() === 'male') cat.male++;
