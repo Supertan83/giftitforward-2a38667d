@@ -1,38 +1,22 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Fix: Send Beneficiaries Under Their Marketplace Event
 
-## Problems Identified
+## Problem
+The beneficiary sync sends each beneficiary to `POST /api/common/volunteers` without including the Surpluss `event_id`. Surpluss has no way to know which marketplace/event each beneficiary belongs to, so they appear nowhere.
 
-From the edge function logs, two critical issues are causing incorrect data:
+## Solution
+Include the marketplace's `external_id` as `event_id` in each beneficiary payload sent to Surpluss. This links beneficiaries to their correct marketplace event on the Surpluss side.
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+## Changes
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+### 1. Edge Function: `supabase/functions/sync-surpluss-beneficiaries/index.ts`
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
+- When fetching marketplace data (line 137-141), also select `external_id`
+- Add `event_id: marketplace.external_id` to every beneficiary payload in `buildBeneficiaryPayload` (pass it as a parameter)
+- Also add `event_id` to the bulk-update payloads for previously synced cards
+- Skip marketplaces that have no `external_id` (log a warning)
 
-## Plan
-
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
-
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
-
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
-
-## Files Changed
-
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+### 2. No UI changes needed
+The button already correctly passes `marketplace_id` / `marketplace_ids`. The fix is purely in the edge function payload.
 
