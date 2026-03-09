@@ -42,7 +42,8 @@ export const useSurplussVolunteerBeneficiarySync = () => {
       } else {
         toast({
           title: 'Sync Completed with Issues',
-          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.bDemographics: ${result.demographice',
+          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Demographics: ${result.demographics_failed} failed.`,
+          variant: 'destructive',
         });
       }
 
