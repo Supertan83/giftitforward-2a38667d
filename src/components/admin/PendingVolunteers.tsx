@@ -3157,39 +3157,70 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           
           {syncResult && (
             <div className="space-y-4">
-              {/* Summary Stats */}
-              <div className="grid grid-cols-4 gap-3">
-                <div className="rounded-lg border p-3 text-center">
-                  <p className="text-2xl font-bold">{syncResult.volunteers_total || 0}</p>
-                  <p className="text-xs text-muted-foreground">Total</p>
+              {/* Volunteer Summary Stats */}
+              <div>
+                <p className="text-sm font-medium mb-2">Volunteers</p>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-2xl font-bold">{syncResult.volunteers_total || 0}</p>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                  </div>
+                  <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-green-600">{syncResult.volunteers_sent || 0}</p>
+                    <p className="text-xs text-muted-foreground">Sent</p>
+                  </div>
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-yellow-600">{syncResult.volunteers_skipped || 0}</p>
+                    <p className="text-xs text-muted-foreground">Skipped</p>
+                  </div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-red-600">{syncResult.volunteers_failed || 0}</p>
+                    <p className="text-xs text-muted-foreground">Failed</p>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-3 text-center">
-                  <p className="text-2xl font-bold text-green-600">{syncResult.volunteers_sent || 0}</p>
-                  <p className="text-xs text-muted-foreground">Sent</p>
-                </div>
-                <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-center">
-                  <p className="text-2xl font-bold text-yellow-600">{syncResult.volunteers_skipped || 0}</p>
-                  <p className="text-xs text-muted-foreground">Skipped</p>
-                </div>
-                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 text-center">
-                  <p className="text-2xl font-bold text-red-600">{syncResult.volunteers_failed || 0}</p>
-                  <p className="text-xs text-muted-foreground">Failed</p>
+              </div>
+
+              {/* Beneficiary Summary Stats */}
+              <div>
+                <p className="text-sm font-medium mb-2">Beneficiaries (QR Cards)</p>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-2xl font-bold">{syncResult.beneficiaries_total || 0}</p>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                  </div>
+                  <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-green-600">{syncResult.beneficiaries_sent || 0}</p>
+                    <p className="text-xs text-muted-foreground">Sent</p>
+                  </div>
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-yellow-600">{syncResult.beneficiaries_skipped || 0}</p>
+                    <p className="text-xs text-muted-foreground">Skipped</p>
+                  </div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-red-600">{syncResult.beneficiaries_failed || 0}</p>
+                    <p className="text-xs text-muted-foreground">Failed</p>
+                  </div>
                 </div>
               </div>
 
               {/* Demographics */}
               <div className="rounded-lg border p-3">
                 <p className="text-sm font-medium mb-1">Demographics Update</p>
-                <Badge variant={syncResult.beneficiary_update_success ? 'default' : 'destructive'}>
-                  {syncResult.beneficiary_update_success ? 'Success' : syncResult.surpluss_event_id ? 'Failed' : 'Skipped (no matching event)'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={(syncResult.demographics_sent || 0) > 0 ? 'default' : 'destructive'}>
+                    {(syncResult.demographics_sent || 0) > 0 ? `${syncResult.demographics_sent} Updated` : 'None Updated'}
+                  </Badge>
+                  {(syncResult.demographics_failed || 0) > 0 && (
+                    <Badge variant="destructive">{syncResult.demographics_failed} Failed</Badge>
+                  )}
+                </div>
               </div>
 
               {/* Volunteer Details */}
               {syncResult.volunteer_details?.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Volunteer Details</p>
-                  <ScrollArea className="max-h-[250px]">
+                  <ScrollArea className="max-h-[200px]">
                     <div className="space-y-1">
                       {syncResult.volunteer_details.map((v: any, i: number) => (
                         <div key={i} className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted/50">
@@ -3197,24 +3228,44 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                           <div className="flex items-center gap-2 shrink-0">
                             {v.status === 'sent' && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Sent</Badge>}
                             {v.status === 'skipped' && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Skipped</Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>{v.reason}</p></TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <TooltipProvider><Tooltip><TooltipTrigger>
+                                <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Skipped</Badge>
+                              </TooltipTrigger><TooltipContent><p>{v.reason}</p></TooltipContent></Tooltip></TooltipProvider>
                             )}
+                            {v.status === 'bulk_updated' && <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Updated</Badge>}
                             {v.status === 'failed' && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge variant="destructive">Failed</Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-xs"><p>{v.reason}</p></TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <TooltipProvider><Tooltip><TooltipTrigger>
+                                <Badge variant="destructive">Failed</Badge>
+                              </TooltipTrigger><TooltipContent className="max-w-xs"><p>{v.reason}</p></TooltipContent></Tooltip></TooltipProvider>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Beneficiary Card Details */}
+              {syncResult.beneficiary_card_details?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Beneficiary Details</p>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="space-y-1">
+                      {syncResult.beneficiary_card_details.map((b: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted/50">
+                          <span className="truncate mr-2 font-mono text-xs">{b.unique_id}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {b.status === 'sent' && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Sent</Badge>}
+                            {b.status === 'skipped' && (
+                              <TooltipProvider><Tooltip><TooltipTrigger>
+                                <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Skipped</Badge>
+                              </TooltipTrigger><TooltipContent><p>{b.reason}</p></TooltipContent></Tooltip></TooltipProvider>
+                            )}
+                            {b.status === 'failed' && (
+                              <TooltipProvider><Tooltip><TooltipTrigger>
+                                <Badge variant="destructive">Failed</Badge>
+                              </TooltipTrigger><TooltipContent className="max-w-xs"><p>{b.reason}</p></TooltipContent></Tooltip></TooltipProvider>
                             )}
                           </div>
                         </div>
