@@ -141,11 +141,20 @@ serve(async (req) => {
 
       const { data: marketplace } = await supabase
         .from('marketplace_events')
-        .select('name')
+        .select('name, external_id')
         .eq('id', mpId)
         .single();
 
       const mpName = marketplace?.name || mpId;
+      const externalId = marketplace?.external_id;
+
+      if (!externalId) {
+        console.log(`⚠️ Marketplace "${mpName}" has no external_id — skipping sync`);
+        allErrors.push(`Marketplace "${mpName}" has no external_id configured. Cannot link beneficiaries to Surpluss event.`);
+        continue;
+      }
+
+      console.log(`Using external_id=${externalId} for marketplace "${mpName}"`);
 
       // Fetch beneficiary cards for this marketplace
       const { data: cards, error: cardsError } = await supabase
