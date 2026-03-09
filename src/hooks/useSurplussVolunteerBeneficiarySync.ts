@@ -6,7 +6,18 @@ interface SyncResult {
   success: boolean;
   volunteers_sent: number;
   volunteers_failed: number;
-  beneficiary_update_success: boolean;
+  volunteers_skipped: number;
+  volunteers_bulk_updated: number;
+  volunteers_total: number;
+  volunteer_details: { name: string; status: string; reason?: string }[];
+  beneficiaries_sent: number;
+  beneficiaries_failed: number;
+  beneficiaries_skipped: number;
+  beneficiaries_total: number;
+  beneficiary_card_details: { unique_id: string; status: string; reason?: string }[];
+  demographics_sent: number;
+  demographics_failed: number;
+  demographics_details: { marketplace_id: string; marketplace_name: string; status: string; reason?: string }[];
   errors: string[];
 }
 
@@ -31,12 +42,12 @@ export const useSurplussVolunteerBeneficiarySync = () => {
       if (result.success) {
         toast({
           title: 'Sync Complete',
-          description: `Sent ${result.volunteers_sent} volunteers, demographics ${result.beneficiary_update_success ? 'updated' : 'failed'}.`,
+          description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent. Demographics: ${result.demographics_sent} updated.`,
         });
       } else {
         toast({
           title: 'Sync Completed with Issues',
-          description: `${result.volunteers_sent} sent, ${result.volunteers_failed} failed. ${result.errors.length} error(s).`,
+          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed.`,
           variant: 'destructive',
         });
       }
