@@ -198,6 +198,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncingBeneficiaries, setSyncingBeneficiaries] = useState(false);
+  const [showBenSyncResultDialog, setShowBenSyncResultDialog] = useState(false);
+  const [benSyncResult, setBenSyncResult] = useState<any>(null);
   const [generatingFamilyQRs, setGeneratingFamilyQRs] = useState(false);
   const [sendingFamilyCerts, setSendingFamilyCerts] = useState(false);
   const [showFamilyCertsDialog, setShowFamilyCertsDialog] = useState(false);
