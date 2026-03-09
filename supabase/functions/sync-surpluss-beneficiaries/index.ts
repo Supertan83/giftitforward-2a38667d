@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 /** Build beneficiary payload for Surpluss API */
-function buildBeneficiaryPayload(card: any): Record<string, any> {
+function buildBeneficiaryPayload(card: any, eventId?: number): Record<string, any> {
   const uniqueId = card.unique_id;
   if (!uniqueId) {
     throw new Error('unique_id is required for beneficiary');
@@ -18,6 +18,11 @@ function buildBeneficiaryPayload(card: any): Record<string, any> {
     unique_id: uniqueId,
     type: 'beneficiary',
   };
+
+  // Link to Surpluss marketplace event
+  if (eventId) {
+    payload.event_id = eventId;
+  }
 
   // Gender mapping (MALE or FEMALE)
   if (card.gender) {
@@ -136,11 +141,20 @@ serve(async (req) => {
 
       const { data: marketplace } = await supabase
         .from('marketplace_events')
-        .select('name')
+        .select('name, external_id')
         .eq('id', mpId)
         .single();
 
       const mpName = marketplace?.name || mpId;
+      const externalId = marketplace?.external_id;
+
+      if (!externalId) {
+        console.log(`⚠️ Marketplace "${mpName}" has no external_id — skipping sync`);
+        allErrors.push(`Marketplace "${mpName}" has no external_id configured. Cannot link beneficiaries to Surpluss event.`);
+        continue;
+      }
+
+      console.log(`Using external_id=${externalId} for marketplace "${mpName}"`);
 
       // Fetch beneficiary cards for this marketplace
       const { data: cards, error: cardsError } = await supabase
@@ -190,7 +204,7 @@ serve(async (req) => {
       for (const card of newCards) {
         const beneficiaryName = `Beneficiary-${card.unique_id}`;
         try {
-          const beneficiaryPayload = buildBeneficiaryPayload(card);
+          const beneficiaryPayload = buildBeneficiaryPayload(card, externalId);
 
           const response = await fetch(`${baseUrl}/api/common/volunteers`, {
             method: 'POST',
@@ -255,6 +269,7 @@ serve(async (req) => {
             name: `Beneficiary-${card.unique_id}`,
             unique_id: card.unique_id,
             type: 'beneficiary',
+            event_id: externalId,
           };
           if (card.gender) {
             const g = card.gender.toLowerCase();
