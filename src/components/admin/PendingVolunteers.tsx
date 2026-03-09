@@ -198,6 +198,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncingBeneficiaries, setSyncingBeneficiaries] = useState(false);
+  const [showBenSyncResultDialog, setShowBenSyncResultDialog] = useState(false);
+  const [benSyncResult, setBenSyncResult] = useState<any>(null);
   const [generatingFamilyQRs, setGeneratingFamilyQRs] = useState(false);
   const [sendingFamilyCerts, setSendingFamilyCerts] = useState(false);
   const [showFamilyCertsDialog, setShowFamilyCertsDialog] = useState(false);
@@ -1319,6 +1322,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               >
                 {syncingSurpluss ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 <span className="hidden sm:inline">Sync to Surpluss</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  setSyncingBeneficiaries(true);
+                  try {
+                    const body: any = { environment: 'production' };
+                    if (eventFilter !== 'all') {
+                      body.marketplace_id = marketplaces.find(m => m.name === eventFilter)?.id;
+                    } else if (marketplaces.length > 0) {
+                      body.marketplace_ids = marketplaces.map(m => m.id);
+                    }
+                    const { data, error } = await supabase.functions.invoke('sync-surpluss-beneficiaries', { body });
+                    if (error) throw error;
+                    setBenSyncResult(data);
+                    setShowBenSyncResultDialog(true);
+                  } catch (err) {
+                    toast({
+                      title: 'Beneficiary Sync Failed',
+                      description: err instanceof Error ? err.message : 'Unknown error',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setSyncingBeneficiaries(false);
+                  }
+                }}
+                disabled={syncingBeneficiaries || marketplaces.length === 0}
+                className="gap-2"
+              >
+                {syncingBeneficiaries ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                <span className="hidden sm:inline">Sync Beneficiaries</span>
               </Button>
               <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)} className="gap-2">
                 <Download className="w-4 h-4" />
@@ -3291,6 +3326,93 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
           <DialogFooter>
             <Button onClick={() => setShowSyncResultDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Beneficiary Sync Result Dialog */}
+      <Dialog open={showBenSyncResultDialog} onOpenChange={setShowBenSyncResultDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Beneficiary Sync Results
+            </DialogTitle>
+          </DialogHeader>
+          
+          {benSyncResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="rounded-lg border p-3 text-center">
+                  <p className="text-2xl font-bold">{benSyncResult.beneficiaries_total || 0}</p>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{benSyncResult.beneficiaries_sent || 0}</p>
+                  <p className="text-xs text-muted-foreground">Sent</p>
+                </div>
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-yellow-600">{benSyncResult.beneficiaries_skipped || 0}</p>
+                  <p className="text-xs text-muted-foreground">Skipped</p>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">{benSyncResult.beneficiaries_failed || 0}</p>
+                  <p className="text-xs text-muted-foreground">Failed</p>
+                </div>
+              </div>
+
+              {(benSyncResult.beneficiaries_bulk_updated || 0) > 0 && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-3 text-center">
+                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    {benSyncResult.beneficiaries_bulk_updated} Bulk Updated
+                  </Badge>
+                </div>
+              )}
+
+              {benSyncResult.beneficiary_details?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Details</p>
+                  <ScrollArea className="max-h-[250px]">
+                    <div className="space-y-1">
+                      {benSyncResult.beneficiary_details.map((b: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted/50">
+                          <span className="truncate mr-2 font-mono text-xs">{b.unique_id}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {b.status === 'sent' && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Sent</Badge>}
+                            {b.status === 'bulk_updated' && <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Updated</Badge>}
+                            {b.status === 'skipped' && (
+                              <TooltipProvider><Tooltip><TooltipTrigger>
+                                <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Skipped</Badge>
+                              </TooltipTrigger><TooltipContent><p>{b.reason}</p></TooltipContent></Tooltip></TooltipProvider>
+                            )}
+                            {b.status === 'failed' && (
+                              <TooltipProvider><Tooltip><TooltipTrigger>
+                                <Badge variant="destructive">Failed</Badge>
+                              </TooltipTrigger><TooltipContent className="max-w-xs"><p>{b.reason}</p></TooltipContent></Tooltip></TooltipProvider>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {benSyncResult.errors?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-destructive">Errors</p>
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-1 max-h-[150px] overflow-y-auto">
+                    {benSyncResult.errors.map((err: string, i: number) => (
+                      <p key={i} className="text-xs text-destructive">{err}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setShowBenSyncResultDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -10,11 +10,6 @@ interface SyncResult {
   volunteers_bulk_updated: number;
   volunteers_total: number;
   volunteer_details: { name: string; status: string; reason?: string }[];
-  beneficiaries_sent: number;
-  beneficiaries_failed: number;
-  beneficiaries_skipped: number;
-  beneficiaries_total: number;
-  beneficiary_card_details: { unique_id: string; status: string; reason?: string }[];
   demographics_sent: number;
   demographics_failed: number;
   demographics_details: { marketplace_id: string; marketplace_name: string; status: string; reason?: string }[];
@@ -42,12 +37,12 @@ export const useSurplussVolunteerBeneficiarySync = () => {
       if (result.success) {
         toast({
           title: 'Sync Complete',
-          description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent. Demographics: ${result.demographics_sent} updated.`,
+          description: `Volunteers: ${result.volunteers_sent} sent. `,
         });
       } else {
         toast({
           title: 'Sync Completed with Issues',
-          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed.`,
+          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Demographics: ${result.demographics_failed} failed.`,
           variant: 'destructive',
         });
       }

@@ -1,36 +1,38 @@
 
 
-# Create Dedicated Beneficiary Sync Edge Function
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## Summary
+## Problems Identified
 
-Deploy the uploaded `beneficary_1.js` as a new standalone edge function `sync-surpluss-beneficiaries` that sends beneficiary data to Surpluss independently from the volunteer sync. The uploaded code queries a `pending_beneficiaries` table that does not exist in the current schema, so it will be adapted to use the existing `qr_cards` table instead.
+From the edge function logs, two critical issues are causing incorrect data:
 
-## Changes
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-### 1. New Edge Function: `supabase/functions/sync-surpluss-beneficiaries/index.ts`
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-Based on the uploaded file, adapted to:
-- Query `qr_cards` (filtered by `marketplace_id`) instead of non-existent `pending_beneficiaries`
-- Use `buildBeneficiaryPayload` from the uploaded file (gender mapping, nationality, marital status, children count, items collected)
-- POST to `/api/common/volunteers` with `type: "beneficiary"`
-- Deduplication via `surpluss_api_audit_log` with action `sync_beneficiary`
-- Skip previously synced cards
-- Return detailed results (sent/failed/skipped counts + per-card details)
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
-### 2. Config: `supabase/config.toml`
+## Plan
 
-Add `[functions.sync-surpluss-beneficiaries]` with `verify_jwt = false`.
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
 
-### 3. Frontend Hook: `src/hooks/useSurplussBeneficiarySync.ts`
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
 
-New hook to invoke the dedicated function, similar to `useSurplussVolunteerBeneficiarySync` but calling `sync-surpluss-beneficiaries`.
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
 
-### 4. UI: `src/components/admin/PendingVolunteers.tsx`
+## Files Changed
 
-Add a separate "Send Beneficiaries to Surpluss" button that uses the new hook, with its own result dialog showing beneficiary sync stats.
-
-### 5. Remove beneficiary logic from existing function
-
-Remove the individual beneficiary card sync (lines 463-592) from `sync-surpluss-volunteer-beneficiary/index.ts` since it will now be handled by the dedicated function. Keep volunteer + demographics sync intact.
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 

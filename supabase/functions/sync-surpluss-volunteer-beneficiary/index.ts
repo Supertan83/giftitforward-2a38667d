@@ -126,13 +126,6 @@ serve(async (req) => {
     let demographicsFailed = 0;
     const demographicsDetails: { marketplace_id: string; marketplace_name: string; status: 'sent' | 'failed' | 'skipped'; reason?: string; surpluss_event_id?: number }[] = [];
 
-    // Individual beneficiary tracking (qr_cards)
-    let beneficiariesSent = 0;
-    let beneficiariesFailed = 0;
-    let beneficiariesSkipped = 0;
-    let beneficiariesTotal = 0;
-    const beneficiaryCardDetails: { unique_id: string; status: 'sent' | 'failed' | 'skipped'; reason?: string }[] = [];
-
     // 1. Fetch marketplace events for slug resolution
     const { data: marketplaceEvents } = await supabase
       .from('marketplace_events')
@@ -367,23 +360,6 @@ serve(async (req) => {
         allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
 
-      // Fetch previously synced beneficiary card IDs for dedup
-      const { data: previousBenSyncs } = await supabase
-        .from('surpluss_api_audit_log')
-        .select('request_payload')
-        .eq('action', 'sync_beneficiary')
-        .eq('success', true);
-
-      const alreadySyncedCardIds = new Set<string>();
-      if (previousBenSyncs) {
-        for (const log of previousBenSyncs) {
-          const payload = log.request_payload as any;
-          if (payload?.unique_id) {
-            alreadySyncedCardIds.add(payload.unique_id.toLowerCase());
-          }
-        }
-      }
-      console.log(`Found ${alreadySyncedCardIds.size} previously synced beneficiary card IDs`);
 
       for (const mpId of marketplaceIdsToProcess) {
         console.log(`\n=== Processing Marketplace ID: ${mpId} ===`);
@@ -460,153 +436,19 @@ serve(async (req) => {
           demographicsDetails.push({ marketplace_id: mpId, marketplace_name: marketplace.name, status: 'failed', reason: 'No matching Surpluss event' });
         }
 
-        // --- Individual Beneficiary Cards Sync ---
-        console.log(`\n👥 Fetching beneficiary cards for marketplace: ${marketplace.name}`);
-        const { data: cards, error: cardsError } = await supabase
-          .from('qr_cards')
-          .select('unique_id, gender, nationality, marital_status, children_count, total_items_collected, credit_balance')
-          .eq('marketplace_id', mpId);
-
-        if (cardsError) {
-          console.log(`❌ Failed to fetch cards: ${cardsError.message}`);
-          allErrors.push(`Failed to fetch beneficiary cards for "${marketplace.name}": ${cardsError.message}`);
-        } else if (cards && cards.length > 0) {
-          console.log(`Found ${cards.length} beneficiary cards for ${marketplace.name}`);
-          beneficiariesTotal += cards.length;
-
-          const newCards: any[] = [];
-          const previousCards: any[] = [];
-          for (const card of cards) {
-            if (alreadySyncedCardIds.has(card.unique_id.toLowerCase())) {
-              previousCards.push(card);
-            } else {
-              newCards.push(card);
-            }
-          }
-
-          console.log(`  New: ${newCards.length}, Previously synced: ${previousCards.length}`);
-
-          // POST new beneficiary cards
-          for (const card of newCards) {
-            const cardPayload: Record<string, any> = {
-              name: `Beneficiary-${card.unique_id}`,
-              unique_id: card.unique_id,
-              type: 'beneficiary',
-            };
-            if (card.gender) {
-              const g = card.gender.toLowerCase();
-              if (g === 'male' || g === 'female') cardPayload.gender = g.toUpperCase();
-            }
-            if (card.nationality) cardPayload.nationality = card.nationality;
-            if (card.children_count != null) cardPayload.children_count = card.children_count;
-            if (card.total_items_collected != null) cardPayload.items_collected = card.total_items_collected;
-            if (card.marital_status) cardPayload.marital_status = card.marital_status;
-
-            try {
-              const response = await fetch(`${baseUrl}/api/common/volunteers`, {
-                method: 'POST', headers: apiHeaders, body: JSON.stringify(cardPayload),
-              });
-              const responseBody = await response.text();
-              let responseJson: any;
-              try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody.substring(0, 500) }; }
-
-              await supabase.from('surpluss_api_audit_log').insert({
-                action: 'sync_beneficiary', environment,
-                request_payload: cardPayload, response_status: response.status,
-                response_body: responseJson, success: response.ok,
-              });
-
-              if (response.ok) {
-                beneficiariesSent++;
-                beneficiaryCardDetails.push({ unique_id: card.unique_id, status: 'sent' });
-              } else if (responseBody.includes('already exists')) {
-                beneficiariesSkipped++;
-                beneficiaryCardDetails.push({ unique_id: card.unique_id, status: 'skipped', reason: 'Already exists' });
-                const { data: recentLogs } = await supabase
-                  .from('surpluss_api_audit_log')
-                  .select('id').eq('action', 'sync_beneficiary').eq('success', false)
-                  .order('created_at', { ascending: false }).limit(1);
-                if (recentLogs && recentLogs.length > 0) {
-                  await supabase.from('surpluss_api_audit_log').update({ success: true }).eq('id', recentLogs[0].id);
-                }
-              } else {
-                beneficiariesFailed++;
-                beneficiaryCardDetails.push({ unique_id: card.unique_id, status: 'failed', reason: `${response.status}` });
-              }
-            } catch (err) {
-              beneficiariesFailed++;
-              beneficiaryCardDetails.push({ unique_id: card.unique_id, status: 'failed', reason: err instanceof Error ? err.message : 'Unknown' });
-            }
-          }
-
-          // Bulk-update previously synced beneficiary cards
-          if (previousCards.length > 0) {
-            const bulkPayload = previousCards.map(card => {
-              const p: Record<string, any> = {
-                name: `Beneficiary-${card.unique_id}`,
-                unique_id: card.unique_id,
-                type: 'beneficiary',
-              };
-              if (card.gender) {
-                const g = card.gender.toLowerCase();
-                if (g === 'male' || g === 'female') p.gender = g.toUpperCase();
-              }
-              if (card.nationality) p.nationality = card.nationality;
-              if (card.children_count != null) p.children_count = card.children_count;
-              if (card.total_items_collected != null) p.items_collected = card.total_items_collected;
-              return p;
-            });
-
-            try {
-              const response = await fetch(`${baseUrl}/api/common/volunteers/bulk-update`, {
-                method: 'POST', headers: apiHeaders, body: JSON.stringify({ volunteers: bulkPayload }),
-              });
-              const responseBody = await response.text();
-              let responseJson: any;
-              try { responseJson = JSON.parse(responseBody); } catch { responseJson = { raw: responseBody.substring(0, 500) }; }
-
-              await supabase.from('surpluss_api_audit_log').insert({
-                action: 'bulk_update_beneficiaries', environment,
-                request_payload: { count: bulkPayload.length, sample: bulkPayload.slice(0, 3) },
-                response_status: response.status, response_body: responseJson, success: response.ok,
-              });
-
-              if (response.ok) {
-                for (const card of previousCards) {
-                  beneficiaryCardDetails.push({ unique_id: card.unique_id, status: 'sent' });
-                }
-                beneficiariesSent += previousCards.length;
-              } else {
-                for (const card of previousCards) {
-                  beneficiaryCardDetails.push({ unique_id: card.unique_id, status: 'skipped', reason: 'Bulk-update failed' });
-                }
-                beneficiariesSkipped += previousCards.length;
-              }
-            } catch (err) {
-              beneficiariesSkipped += previousCards.length;
-              allErrors.push(`Beneficiary bulk-update error: ${err instanceof Error ? err.message : 'Unknown'}`);
-            }
-          }
-        } else {
-          console.log(`No beneficiary cards found for marketplace: ${marketplace.name}`);
-        }
+        // Note: Individual beneficiary card sync is now handled by the dedicated sync-surpluss-beneficiaries function
       }
     }
 
     return new Response(
       JSON.stringify({
-        success: totalFailed === 0 && demographicsFailed === 0 && beneficiariesFailed === 0,
+        success: totalFailed === 0 && demographicsFailed === 0,
         volunteers_sent: totalSent,
         volunteers_failed: totalFailed,
         volunteers_skipped: totalSkipped,
         volunteers_bulk_updated: totalBulkUpdated,
         volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
-        beneficiaries_sent: beneficiariesSent,
-        beneficiaries_failed: beneficiariesFailed,
-        beneficiaries_skipped: beneficiariesSkipped,
-        beneficiaries_total: beneficiariesTotal,
-        beneficiary_card_details: beneficiaryCardDetails,
         demographics_sent: demographicsSent,
         demographics_failed: demographicsFailed,
         demographics_details: demographicsDetails,

@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.fix-allocation-data]
 verify_jwt = false
+
+[functions.sync-surpluss-beneficiaries]
+verify_jwt = false
