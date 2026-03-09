@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 /** Build beneficiary payload for Surpluss API */
-function buildBeneficiaryPayload(card: any): Record<string, any> {
+function buildBeneficiaryPayload(card: any, eventId?: number): Record<string, any> {
   const uniqueId = card.unique_id;
   if (!uniqueId) {
     throw new Error('unique_id is required for beneficiary');
@@ -18,6 +18,11 @@ function buildBeneficiaryPayload(card: any): Record<string, any> {
     unique_id: uniqueId,
     type: 'beneficiary',
   };
+
+  // Link to Surpluss marketplace event
+  if (eventId) {
+    payload.event_id = eventId;
+  }
 
   // Gender mapping (MALE or FEMALE)
   if (card.gender) {
