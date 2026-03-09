@@ -212,7 +212,7 @@ serve(async (req) => {
         if (response.ok) {
           totalSent++;
           allVolunteerDetails.push({ name: volunteerName, status: 'sent' });
-        } else if (responseBody.includes('already exists')) {
+        } else if (responseBody.includes('already exists') || responseBody.includes('already assigned')) {
           totalSkipped++;
           allVolunteerDetails.push({ name: volunteerName, status: 'skipped', reason: 'Already exists in Surpluss' });
           // Find and update the most recent failed log entry for this volunteer
