@@ -1269,6 +1269,80 @@ export type Database = {
           },
         ]
       }
+      pending_beneficiaries: {
+        Row: {
+          age_0_17_count: number | null
+          age_18_30_count: number | null
+          age_31_40_count: number | null
+          age_41_50_count: number | null
+          age_51_60_count: number | null
+          age_61_plus_count: number | null
+          beneficiary_type_id: number | null
+          children_count: number | null
+          created_at: string
+          gender: string | null
+          id: string
+          items_collected: number | null
+          marital_status: string | null
+          marketplace_event_id: string | null
+          marketplace_id: string | null
+          nationality: string | null
+          qr_id: string | null
+          unique_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          age_0_17_count?: number | null
+          age_18_30_count?: number | null
+          age_31_40_count?: number | null
+          age_41_50_count?: number | null
+          age_51_60_count?: number | null
+          age_61_plus_count?: number | null
+          beneficiary_type_id?: number | null
+          children_count?: number | null
+          created_at?: string
+          gender?: string | null
+          id?: string
+          items_collected?: number | null
+          marital_status?: string | null
+          marketplace_event_id?: string | null
+          marketplace_id?: string | null
+          nationality?: string | null
+          qr_id?: string | null
+          unique_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          age_0_17_count?: number | null
+          age_18_30_count?: number | null
+          age_31_40_count?: number | null
+          age_41_50_count?: number | null
+          age_51_60_count?: number | null
+          age_61_plus_count?: number | null
+          beneficiary_type_id?: number | null
+          children_count?: number | null
+          created_at?: string
+          gender?: string | null
+          id?: string
+          items_collected?: number | null
+          marital_status?: string | null
+          marketplace_event_id?: string | null
+          marketplace_id?: string | null
+          nationality?: string | null
+          qr_id?: string | null
+          unique_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_beneficiaries_marketplace_event_id_fkey"
+            columns: ["marketplace_event_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_volunteers: {
         Row: {
           approved_at: string | null
