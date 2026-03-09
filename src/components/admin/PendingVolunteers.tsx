@@ -1323,6 +1323,38 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 {syncingSurpluss ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 <span className="hidden sm:inline">Sync to Surpluss</span>
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  setSyncingBeneficiaries(true);
+                  try {
+                    const body: any = { environment: 'production' };
+                    if (eventFilter !== 'all') {
+                      body.marketplace_id = marketplaces.find(m => m.name === eventFilter)?.id;
+                    } else if (marketplaces.length > 0) {
+                      body.marketplace_ids = marketplaces.map(m => m.id);
+                    }
+                    const { data, error } = await supabase.functions.invoke('sync-surpluss-beneficiaries', { body });
+                    if (error) throw error;
+                    setBenSyncResult(data);
+                    setShowBenSyncResultDialog(true);
+                  } catch (err) {
+                    toast({
+                      title: 'Beneficiary Sync Failed',
+                      description: err instanceof Error ? err.message : 'Unknown error',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setSyncingBeneficiaries(false);
+                  }
+                }}
+                disabled={syncingBeneficiaries || marketplaces.length === 0}
+                className="gap-2"
+              >
+                {syncingBeneficiaries ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                <span className="hidden sm:inline">Sync Beneficiaries</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)} className="gap-2">
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
