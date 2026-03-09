@@ -1,38 +1,43 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Send Beneficiaries to Surpluss (alongside Volunteers)
 
-## Problems Identified
+## What changes
 
-From the edge function logs, two critical issues are causing incorrect data:
+### 1. Edge function: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+**Add beneficiary sync step** after the volunteer sync (steps 5-6). For each marketplace being processed:
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+- Query `qr_cards` where `marketplace_id` matches, selecting `unique_id`, `gender`, `nationality`, `marital_status`, `children_count`, `total_items_collected`, `credit_balance`
+- Build a payload per card similar to the volunteer payload format (since it goes to the same `/api/common/volunteers` endpoint), mapping:
+  - `name` → unique_id (or "Beneficiary-{unique_id}")
+  - `gender` → mapped to MALE/FEMALE
+  - `nationality` → passed through
+  - `type` → "beneficiary" (or similar flag to distinguish from volunteers)
+  - `children_count`, `items_collected` as additional fields
+- Deduplicate against `surpluss_api_audit_log` (action = `sync_beneficiary`) to avoid re-sending
+- POST new beneficiaries, bulk-update previously synced ones
+- Log each to `surpluss_api_audit_log` with action `sync_beneficiary`
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
+**Keep demographics** (aggregated PUT to `/api/common/marketplace-events/{id}`) as-is.
 
-## Plan
+### 2. Frontend: `src/components/admin/PendingVolunteers.tsx`
 
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
+**Update the sync result dialog** to show beneficiary sync results:
+- Add a new stats row for beneficiaries (total, sent, skipped, failed)
+- Add a "Beneficiary Details" scrollable list similar to the volunteer details list
+- Update the body payload to pass `include_beneficiaries: true` flag
 
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
+### 3. Hook: `src/hooks/useSurplussVolunteerBeneficiarySync.ts`
 
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
+- Update `SyncResult` interface to include `beneficiaries_sent`, `beneficiaries_failed`, `beneficiaries_total`, `beneficiary_details`
+- Update toast messages to include beneficiary counts
 
-## Files Changed
+## Technical details
 
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+- Beneficiaries come from the `qr_cards` table filtered by `marketplace_id`
+- They are sent to `POST /api/common/volunteers` (same endpoint as volunteers) — the Surpluss API differentiates them by the data fields
+- Deduplication uses `surpluss_api_audit_log` with a new action type `sync_beneficiary`
+- Previously synced beneficiaries get bulk-updated via `POST /api/common/volunteers/bulk-update`
+- The existing demographics PUT to `/api/common/marketplace-events/{id}` remains unchanged
 
