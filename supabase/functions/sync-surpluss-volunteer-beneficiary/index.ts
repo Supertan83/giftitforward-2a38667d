@@ -126,13 +126,6 @@ serve(async (req) => {
     let demographicsFailed = 0;
     const demographicsDetails: { marketplace_id: string; marketplace_name: string; status: 'sent' | 'failed' | 'skipped'; reason?: string; surpluss_event_id?: number }[] = [];
 
-    // Individual beneficiary tracking (qr_cards)
-    let beneficiariesSent = 0;
-    let beneficiariesFailed = 0;
-    let beneficiariesSkipped = 0;
-    let beneficiariesTotal = 0;
-    const beneficiaryCardDetails: { unique_id: string; status: 'sent' | 'failed' | 'skipped'; reason?: string }[] = [];
-
     // 1. Fetch marketplace events for slug resolution
     const { data: marketplaceEvents } = await supabase
       .from('marketplace_events')
