@@ -37,7 +37,7 @@ export const useSurplussVolunteerBeneficiarySync = () => {
       if (result.success) {
         toast({
           title: 'Sync Complete',
-          description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent. Demographics: ${result.demographics_sent} updated.`,
+          description: `Volunteers: ${result.volunteers_sent} sent. Demographics: ${result.demographics_sent} updated.`,
         });
       } else {
         toast({
