@@ -360,23 +360,6 @@ serve(async (req) => {
         allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
 
-      // Fetch previously synced beneficiary card IDs for dedup
-      const { data: previousBenSyncs } = await supabase
-        .from('surpluss_api_audit_log')
-        .select('request_payload')
-        .eq('action', 'sync_beneficiary')
-        .eq('success', true);
-
-      const alreadySyncedCardIds = new Set<string>();
-      if (previousBenSyncs) {
-        for (const log of previousBenSyncs) {
-          const payload = log.request_payload as any;
-          if (payload?.unique_id) {
-            alreadySyncedCardIds.add(payload.unique_id.toLowerCase());
-          }
-        }
-      }
-      console.log(`Found ${alreadySyncedCardIds.size} previously synced beneficiary card IDs`);
 
       for (const mpId of marketplaceIdsToProcess) {
         console.log(`\n=== Processing Marketplace ID: ${mpId} ===`);
