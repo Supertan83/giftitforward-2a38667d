@@ -269,6 +269,7 @@ serve(async (req) => {
             name: `Beneficiary-${card.unique_id}`,
             unique_id: card.unique_id,
             type: 'beneficiary',
+            event_id: externalId,
           };
           if (card.gender) {
             const g = card.gender.toLowerCase();
