@@ -7,8 +7,9 @@ interface BeneficiarySyncResult {
   beneficiaries_sent: number;
   beneficiaries_failed: number;
   beneficiaries_skipped: number;
-  beneficiaries_bulk_updated: number;
   beneficiaries_total: number;
+  marketplace_events_updated: number;
+  marketplace_events_failed: number;
   beneficiary_details: { unique_id: string; name: string; status: string; reason?: string }[];
   errors: string[];
 }
