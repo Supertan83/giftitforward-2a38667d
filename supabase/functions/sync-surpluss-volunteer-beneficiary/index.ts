@@ -442,18 +442,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        success: totalFailed === 0 && demographicsFailed === 0 && beneficiariesFailed === 0,
+        success: totalFailed === 0 && demographicsFailed === 0,
         volunteers_sent: totalSent,
         volunteers_failed: totalFailed,
         volunteers_skipped: totalSkipped,
         volunteers_bulk_updated: totalBulkUpdated,
         volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
-        beneficiaries_sent: beneficiariesSent,
-        beneficiaries_failed: beneficiariesFailed,
-        beneficiaries_skipped: beneficiariesSkipped,
-        beneficiaries_total: beneficiariesTotal,
-        beneficiary_card_details: beneficiaryCardDetails,
         demographics_sent: demographicsSent,
         demographics_failed: demographicsFailed,
         demographics_details: demographicsDetails,
