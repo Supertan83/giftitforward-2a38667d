@@ -35,7 +35,7 @@ export const useSurplussBeneficiarySync = () => {
       if (result.success) {
         toast({
           title: 'Beneficiary Sync Complete',
-          description: `Sent: ${result.beneficiaries_sent}, Updated: ${result.beneficiaries_bulk_updated}, Skipped: ${result.beneficiaries_skipped}`,
+          description: `Sent: ${result.beneficiaries_sent}, Skipped: ${result.beneficiaries_skipped}, Events Updated: ${result.marketplace_events_updated}`,
         });
       } else {
         toast({
