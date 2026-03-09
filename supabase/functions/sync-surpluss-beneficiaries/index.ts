@@ -116,27 +116,36 @@ serve(async (req) => {
     }
     console.log(`Found ${alreadySyncedUniqueIds.size} previously synced beneficiaries`);
 
-    // 2. Determine which beneficiaries to fetch
-    let beneficiariesQuery = supabase
-      .from('pending_beneficiaries')
-      .select('*');
+    // 2. Fetch beneficiaries from qr_cards (active) and archived_card_data (checked-out)
+    const targetMarketplaceIds = marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0
+      ? marketplace_ids
+      : marketplace_id ? [marketplace_id] : [];
 
-    // Filter by marketplace if provided
-    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
-      const orConditions = marketplace_ids.map(id => `marketplace_event_id.eq.${id},marketplace_id.eq.${id}`).join(',');
-      beneficiariesQuery = beneficiariesQuery.or(orConditions);
-    } else if (marketplace_id) {
-      beneficiariesQuery = beneficiariesQuery.or(`marketplace_event_id.eq.${marketplace_id},marketplace_id.eq.${marketplace_id}`);
+    let activeCards: any[] = [];
+    let archivedCards: any[] = [];
+
+    if (targetMarketplaceIds.length > 0) {
+      const { data: active, error: activeErr } = await supabase
+        .from('qr_cards')
+        .select('*')
+        .in('marketplace_id', targetMarketplaceIds);
+      if (activeErr) throw new Error(`Failed to fetch qr_cards: ${activeErr.message}`);
+      activeCards = active || [];
+
+      const { data: archived, error: archivedErr } = await supabase
+        .from('archived_card_data')
+        .select('*')
+        .in('marketplace_id', targetMarketplaceIds);
+      if (archivedErr) throw new Error(`Failed to fetch archived_card_data: ${archivedErr.message}`);
+      archivedCards = archived || [];
     }
 
-    const { data: allBeneficiaries, error: benError } = await beneficiariesQuery;
-
-    if (benError) {
-      throw new Error(`Failed to fetch beneficiaries: ${benError.message}`);
-    }
-
-    const beneficiaries = allBeneficiaries || [];
-    console.log(`Fetched ${beneficiaries.length} beneficiaries from pending_beneficiaries`);
+    // Combine and normalize — both tables share: unique_id, gender, nationality, marital_status, children_count, marketplace_id
+    const beneficiaries = [
+      ...activeCards.map(c => ({ ...c, marketplace_event_id: c.marketplace_id })),
+      ...archivedCards.map(c => ({ ...c, marketplace_event_id: c.marketplace_id })),
+    ];
+    console.log(`Fetched ${activeCards.length} active + ${archivedCards.length} archived = ${beneficiaries.length} beneficiaries`);
 
     // 3. Separate new vs already-synced beneficiaries
     const newBeneficiaries: any[] = [];
