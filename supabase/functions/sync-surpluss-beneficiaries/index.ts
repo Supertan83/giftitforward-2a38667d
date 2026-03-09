@@ -204,7 +204,7 @@ serve(async (req) => {
       for (const card of newCards) {
         const beneficiaryName = `Beneficiary-${card.unique_id}`;
         try {
-          const beneficiaryPayload = buildBeneficiaryPayload(card);
+          const beneficiaryPayload = buildBeneficiaryPayload(card, externalId);
 
           const response = await fetch(`${baseUrl}/api/common/volunteers`, {
             method: 'POST',
