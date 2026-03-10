@@ -132,6 +132,7 @@ export interface MarketplaceReport {
     totalAttended: number;
     familyMembers: number;
     dropoutRate: number;
+    trainingCompletedAfterEvent: number;
     volunteerList: Array<{
       name: string;
       status: string;
@@ -484,7 +485,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 // Fetch registered volunteers from pending_volunteers using events_list matching
       const { data: pendingVolunteers } = await supabase
         .from('pending_volunteers')
-        .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json')
+        .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json, training_completed, training_completed_at')
         .eq('status', 'approved')
         .not('events_list', 'is', null);
 
@@ -781,6 +782,20 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       const volDropoutRate = effectiveRegisteredFromList > 0 ? Math.round(((effectiveRegisteredFromList - totalAttended) / effectiveRegisteredFromList) * 100) : 0;
 
+      // Count volunteers who completed training after the marketplace event date
+      let trainingCompletedAfterEvent = 0;
+      if (marketplace.event_date) {
+        const eventDateStr = marketplace.event_date; // YYYY-MM-DD
+        for (const fv of formRegisteredVolunteers) {
+          if (fv.training_completed && fv.training_completed_at) {
+            const completedDate = fv.training_completed_at.slice(0, 10); // YYYY-MM-DD
+            if (completedDate > eventDateStr) {
+              trainingCompletedAfterEvent++;
+            }
+          }
+        }
+      }
+
       return {
         marketplace: {
           id: marketplace.id,
@@ -814,6 +829,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           dropoutRate: volDropoutRate,
           volunteerList,
           categoryBreakdown: volunteerCategoryBreakdown,
+          trainingCompletedAfterEvent,
         },
       };
     },

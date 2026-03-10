@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
@@ -366,7 +366,7 @@ export const MarketplaceReports = ({
                       <p className="text-sm text-muted-foreground">Comprehensive volunteer tracking and attendance data</p>
                       
                       {/* Summary Cards */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                         <div className="rounded-lg border p-3 md:p-4 bg-primary/5 border-primary/20">
                           <p className="text-xs text-muted-foreground mb-1">Total Registered</p>
                           <p className="text-xl md:text-2xl font-bold text-primary">{report.volunteers?.totalRegistered || 0}</p>
@@ -391,6 +391,14 @@ export const MarketplaceReports = ({
                           <p className="text-xs text-muted-foreground mb-1">Drop-out Rate</p>
                           <p className="text-xl md:text-2xl font-bold text-destructive">{report.volunteers?.dropoutRate || 0}%</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{(report.volunteers?.totalRegistered || 0) - (report.volunteers?.familyMembers || 0) - (report.volunteers?.totalAttended || 0)} volunteers</p>
+                        </div>
+                        <div className="rounded-lg border p-3 md:p-4 bg-amber-500/5 border-amber-500/20">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
+                            <p className="text-xs text-muted-foreground">Training After Event</p>
+                          </div>
+                          <p className="text-xl md:text-2xl font-bold text-amber-600">{report.volunteers?.trainingCompletedAfterEvent || 0}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Completed post-event</p>
                         </div>
                       </div>
 
