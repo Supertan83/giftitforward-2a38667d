@@ -782,6 +782,20 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       const volDropoutRate = effectiveRegisteredFromList > 0 ? Math.round(((effectiveRegisteredFromList - totalAttended) / effectiveRegisteredFromList) * 100) : 0;
 
+      // Count volunteers who completed training after the marketplace event date
+      let trainingCompletedAfterEvent = 0;
+      if (marketplace.event_date) {
+        const eventDateStr = marketplace.event_date; // YYYY-MM-DD
+        for (const fv of formRegisteredVolunteers) {
+          if (fv.training_completed && fv.training_completed_at) {
+            const completedDate = fv.training_completed_at.slice(0, 10); // YYYY-MM-DD
+            if (completedDate > eventDateStr) {
+              trainingCompletedAfterEvent++;
+            }
+          }
+        }
+      }
+
       return {
         marketplace: {
           id: marketplace.id,
