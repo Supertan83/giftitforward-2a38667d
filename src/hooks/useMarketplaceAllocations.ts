@@ -789,7 +789,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         for (const fv of formRegisteredVolunteers) {
           if (fv.training_completed && fv.training_completed_at) {
             const completedDate = fv.training_completed_at.slice(0, 10); // YYYY-MM-DD
-            if (completedDate > eventDateStr) {
+            if (completedDate >= eventDateStr) {
               trainingCompletedAfterEvent++;
             }
           }
