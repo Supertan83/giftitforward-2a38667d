@@ -260,9 +260,24 @@ serve(async (req) => {
         // Use donation.id as unique key (not material_group.id which is shared across many donations)
         const materialId = donation.id;
         const rawTag = donation.donation_tag;
-        const categoryName = (typeof rawTag === 'object' && rawTag !== null ? rawTag.name : rawTag) || donation.material_group?.name || 'Uncategorized';
+        let categoryName = (typeof rawTag === 'object' && rawTag !== null ? rawTag.name : rawTag) || donation.material_group?.name || 'Uncategorized';
         const rawSubTag = donation.donation_tag_subcategory;
         const subcategoryName = (typeof rawSubTag === 'object' && rawSubTag !== null ? rawSubTag.name : rawSubTag) || null;
+
+        // Remap "Waste" category — Surpluss says this is not a valid tag on their platform
+        if (categoryName.toLowerCase() === 'waste' && subcategoryName) {
+          const sub = subcategoryName.toLowerCase();
+          if (/toddler|baby|children|diaper|kids/.test(sub)) categoryName = 'Baby & Kids';
+          else if (/apparel|shoe|slipper|bag|accessor|clothing|purse|fashion|garment/.test(sub)) categoryName = 'Clothing, Apparel & Accessories';
+          else if (/towel|bedding|curtain|cushion|pillow|blanket|duvet|linen|textile/.test(sub)) categoryName = 'Home Textile (soft goods)';
+          else if (/kitchen|cutlery|cookware|dinnerware|tableware/.test(sub)) categoryName = 'Kitchen & Dining';
+          else if (/household|d[eé]cor|vase|candle|frame|furniture|storage/.test(sub)) categoryName = 'Home Goods';
+          else if (/cosmetic|skincare|personal.care|perfume|hygiene|beauty|fragrance/.test(sub)) categoryName = 'Beauty, Hygiene & Personal Care';
+          else if (/electronic|appliance/.test(sub)) categoryName = 'Electronics & Appliances';
+          else if (/toy|sport|stationery|school|game/.test(sub)) categoryName = 'Toys, Sports & Stationery';
+          else categoryName = 'General Donations';
+          console.log(`Remapped "Waste" → "${categoryName}" for subcategory: ${subcategoryName}`);
+        }
         // NOTE: donation.quantity from the Surpluss donations API represents the
         // "remaining unallocated quantity" on the Surpluss platform — NOT the total
         // donated or the amount allocated to GIF. We still store it here because
