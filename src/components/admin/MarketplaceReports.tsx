@@ -392,6 +392,14 @@ export const MarketplaceReports = ({
                           <p className="text-xl md:text-2xl font-bold text-destructive">{report.volunteers?.dropoutRate || 0}%</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{(report.volunteers?.totalRegistered || 0) - (report.volunteers?.familyMembers || 0) - (report.volunteers?.totalAttended || 0)} volunteers</p>
                         </div>
+                        <div className="rounded-lg border p-3 md:p-4 bg-amber-500/5 border-amber-500/20">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
+                            <p className="text-xs text-muted-foreground">Training After Event</p>
+                          </div>
+                          <p className="text-xl md:text-2xl font-bold text-amber-600">{report.volunteers?.trainingCompletedAfterEvent || 0}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Completed post-event</p>
+                        </div>
                       </div>
 
                       {/* Category Breakdown Table - Desktop */}

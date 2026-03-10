@@ -829,6 +829,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           dropoutRate: volDropoutRate,
           volunteerList,
           categoryBreakdown: volunteerCategoryBreakdown,
+          trainingCompletedAfterEvent,
         },
       };
     },
