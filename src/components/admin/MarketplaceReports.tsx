@@ -366,7 +366,7 @@ export const MarketplaceReports = ({
                       <p className="text-sm text-muted-foreground">Comprehensive volunteer tracking and attendance data</p>
                       
                       {/* Summary Cards */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                         <div className="rounded-lg border p-3 md:p-4 bg-primary/5 border-primary/20">
                           <p className="text-xs text-muted-foreground mb-1">Total Registered</p>
                           <p className="text-xl md:text-2xl font-bold text-primary">{report.volunteers?.totalRegistered || 0}</p>
