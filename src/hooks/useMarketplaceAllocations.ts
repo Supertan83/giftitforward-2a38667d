@@ -485,7 +485,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 // Fetch registered volunteers from pending_volunteers using events_list matching
       const { data: pendingVolunteers } = await supabase
         .from('pending_volunteers')
-        .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json')
+        .select('id, first_name, last_name, is_employee, external_company, gender, events_list, events_json, training_completed, training_completed_at')
         .eq('status', 'approved')
         .not('events_list', 'is', null);
 
