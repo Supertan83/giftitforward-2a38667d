@@ -83,20 +83,24 @@ Deno.serve(async (req) => {
       .select("volunteer_name, volunteer_email, completed_at, answers, marketplace_id, experience_word, would_volunteer_again, improvement_suggestions, volunteer_card_id")
       .not("completed_at", "is", null);
 
-    // Batch lookup hours for internal surveys with volunteer_card_id
+    // Batch lookup hours and marketplace fallback for internal surveys with volunteer_card_id
     const cardIds = (internalSurveys || [])
       .map((s: any) => s.volunteer_card_id)
       .filter(Boolean);
 
     const hoursMap: Record<string, number> = {};
+    const cardMarketplaceMap: Record<string, string | null> = {};
     if (cardIds.length > 0) {
       const { data: cards } = await adminClient
         .from("volunteer_qr_cards")
-        .select("id, total_hours_worked")
+        .select("id, total_hours_worked, marketplace_id")
         .in("id", cardIds);
       (cards || []).forEach((c: any) => {
         if (c.total_hours_worked != null) {
           hoursMap[c.id] = c.total_hours_worked;
+        }
+        if (c.marketplace_id) {
+          cardMarketplaceMap[c.id] = c.marketplace_id;
         }
       });
     }
@@ -112,13 +116,15 @@ Deno.serve(async (req) => {
 
     (internalSurveys || []).forEach((s: any) => {
       if (search && !s.volunteer_name?.toLowerCase().includes(search)) return;
+      // Resolve marketplace: direct link first, then fallback via volunteer card
+      const resolvedMarketplaceId = s.marketplace_id || (s.volunteer_card_id ? cardMarketplaceMap[s.volunteer_card_id] : null);
       results.push({
         name: s.volunteer_name,
         email: s.volunteer_email || "",
         completedAt: s.completed_at,
         source: "internal",
         answers: s.answers || {},
-        marketplaceName: s.marketplace_id ? (marketplaceMap[s.marketplace_id] || "") : "",
+        marketplaceName: resolvedMarketplaceId ? (marketplaceMap[resolvedMarketplaceId] || "") : "",
         experienceWord: s.experience_word || "",
         wouldVolunteerAgain: s.would_volunteer_again,
         improvementSuggestions: s.improvement_suggestions || "",

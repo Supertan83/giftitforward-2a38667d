@@ -1,35 +1,38 @@
 
 
-# Fix Survey Excel Export — Missing Data and Column Cleanup
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## Issues Found
+## Problems Identified
 
-1. **Marketplace Name empty**: 150/154 internal surveys DO have `marketplace_id` and should resolve. 55 external surveys have NO `marketplace_id` at all — this is a data gap. The edge function logic is correct, so the empty values in the screenshot likely came from a deployment timing issue or external surveys without marketplace links.
+From the edge function logs, two critical issues are causing incorrect data:
 
-2. **Volunteer Email empty**: All 154 internal surveys have emails in the database. Same likely deployment timing issue — the fields are being returned correctly in the current code.
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-3. **Columns to remove**: Organisation Name, One-word GIF Experience, Future Participation — user confirmed these are redundant since they appear as dynamic question answers already.
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-4. **Volunteer Hours**: Already included but may show empty for external volunteers (no card link).
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
-## Changes
+## Plan
 
-### 1. `SurveyReviewsViewer.tsx` — Clean up Excel columns
-Remove these columns from the `generateExcel` function:
-- Organisation Name
-- One-word GIF Experience  
-- Future Participation
-- Source
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
 
-Keep: Survey Date, Marketplace Name, Volunteer Name, Volunteer Email, Volunteer Hours, then dynamic question columns.
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
 
-### 2. `get-survey-reviews/index.ts` — Fallback marketplace resolution for internal surveys
-For internal surveys where `marketplace_id` is null but `volunteer_card_id` exists, look up the marketplace from the volunteer card. This fills in a few more gaps.
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
 
-### 3. Redeploy edge function
-Ensure the latest version with all field mappings is active.
+## Files Changed
 
-### Files
-- `src/components/admin/SurveyReviewsViewer.tsx` — remove 4 columns from Excel export
-- `supabase/functions/get-survey-reviews/index.ts` — add card-based marketplace fallback
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 
