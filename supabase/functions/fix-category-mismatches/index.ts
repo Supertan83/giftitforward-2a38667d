@@ -19,6 +19,7 @@ serve(async (req) => {
     // Subcategory → correct category mapping from Excel
     const fixes: Array<{ subcategoryPattern: string; correctCategory: string }> = [
       // Baby & Kids → Clothing, Apparel & Accessories
+      { subcategoryPattern: "Children's Apparel", correctCategory: 'Clothing, Apparel & Accessories' },
       { subcategoryPattern: "Children's Shoes", correctCategory: 'Clothing, Apparel & Accessories' },
       { subcategoryPattern: "Children's Slippers", correctCategory: 'Clothing, Apparel & Accessories' },
       { subcategoryPattern: "Toddlers Apparel", correctCategory: 'Clothing, Apparel & Accessories' },
