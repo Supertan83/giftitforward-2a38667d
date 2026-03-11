@@ -16,7 +16,6 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify the caller is authenticated staff
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -39,7 +38,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check staff role
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: roleData } = await adminClient
       .from("user_roles")
@@ -69,16 +67,44 @@ Deno.serve(async (req) => {
       questionMap[q.id] = q.question_text;
     });
 
-    // Fetch internal volunteer surveys
+    // Fetch marketplace names for resolution
+    const { data: marketplaces } = await adminClient
+      .from("marketplace_events")
+      .select("id, name");
+
+    const marketplaceMap: Record<string, string> = {};
+    (marketplaces || []).forEach((m: any) => {
+      marketplaceMap[m.id] = m.name;
+    });
+
+    // Fetch internal volunteer surveys with expanded fields
     const { data: internalSurveys } = await adminClient
       .from("volunteer_surveys")
-      .select("volunteer_name, completed_at, answers")
+      .select("volunteer_name, volunteer_email, completed_at, answers, marketplace_id, experience_word, would_volunteer_again, improvement_suggestions, volunteer_card_id")
       .not("completed_at", "is", null);
 
-    // Fetch external survey responses
+    // Batch lookup hours for internal surveys with volunteer_card_id
+    const cardIds = (internalSurveys || [])
+      .map((s: any) => s.volunteer_card_id)
+      .filter(Boolean);
+
+    const hoursMap: Record<string, number> = {};
+    if (cardIds.length > 0) {
+      const { data: cards } = await adminClient
+        .from("volunteer_qr_cards")
+        .select("id, total_hours_worked")
+        .in("id", cardIds);
+      (cards || []).forEach((c: any) => {
+        if (c.total_hours_worked != null) {
+          hoursMap[c.id] = c.total_hours_worked;
+        }
+      });
+    }
+
+    // Fetch external survey responses with expanded fields
     const { data: externalSurveys } = await adminClient
       .from("external_survey_responses")
-      .select("volunteer_name, completed_at, answers")
+      .select("volunteer_name, volunteer_email, completed_at, answers, marketplace_id, experience_word, would_volunteer_again, improvement_suggestions, company_name")
       .not("completed_at", "is", null);
 
     // Unify results
@@ -88,9 +114,16 @@ Deno.serve(async (req) => {
       if (search && !s.volunteer_name?.toLowerCase().includes(search)) return;
       results.push({
         name: s.volunteer_name,
+        email: s.volunteer_email || "",
         completedAt: s.completed_at,
         source: "internal",
         answers: s.answers || {},
+        marketplaceName: s.marketplace_id ? (marketplaceMap[s.marketplace_id] || "") : "",
+        experienceWord: s.experience_word || "",
+        wouldVolunteerAgain: s.would_volunteer_again,
+        improvementSuggestions: s.improvement_suggestions || "",
+        company: "Dubai Holding",
+        totalHours: s.volunteer_card_id ? (hoursMap[s.volunteer_card_id] ?? null) : null,
       });
     });
 
@@ -98,13 +131,19 @@ Deno.serve(async (req) => {
       if (search && !s.volunteer_name?.toLowerCase().includes(search)) return;
       results.push({
         name: s.volunteer_name,
+        email: s.volunteer_email || "",
         completedAt: s.completed_at,
         source: "external",
         answers: s.answers || {},
+        marketplaceName: s.marketplace_id ? (marketplaceMap[s.marketplace_id] || "") : "",
+        experienceWord: s.experience_word || "",
+        wouldVolunteerAgain: s.would_volunteer_again,
+        improvementSuggestions: s.improvement_suggestions || "",
+        company: s.company_name || "",
+        totalHours: null,
       });
     });
 
-    // Sort by most recent first
     results.sort(
       (a, b) =>
         new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
