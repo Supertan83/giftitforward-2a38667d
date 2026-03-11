@@ -269,12 +269,12 @@ serve(async (req) => {
           const sub = subcategoryName.toLowerCase();
           if (/toddler|baby|children|diaper|kids/.test(sub)) categoryName = 'Baby & Kids';
           else if (/apparel|shoe|slipper|bag|accessor|clothing|purse|fashion|garment/.test(sub)) categoryName = 'Clothing, Apparel & Accessories';
-          else if (/towel|bedding|curtain|cushion|pillow|blanket|duvet|linen|textile/.test(sub)) categoryName = 'Home Textile (soft goods)';
-          else if (/kitchen|cutlery|cookware|dinnerware|tableware/.test(sub)) categoryName = 'Kitchen & Dining';
-          else if (/household|d[eé]cor|vase|candle|frame|furniture|storage/.test(sub)) categoryName = 'Home Goods';
-          else if (/cosmetic|skincare|personal.care|perfume|hygiene|beauty|fragrance/.test(sub)) categoryName = 'Beauty, Hygiene & Personal Care';
-          else if (/electronic|appliance/.test(sub)) categoryName = 'Electronics & Appliances';
-          else if (/toy|sport|stationery|school|game/.test(sub)) categoryName = 'Toys, Sports & Stationery';
+          else if (/towel|bedding|curtain|cushion|pillow|blanket|duvet|linen|textile|prayer.mat|yoga/.test(sub)) categoryName = 'Home Textile (soft goods)';
+          else if (/kitchen|cutlery|cookware|dinnerware|tableware|bottle|container|cup|mug|glass|plate|bowl|tray/.test(sub)) categoryName = 'Kitchen & Dining';
+          else if (/household|d[eé]cor|vase|candle|frame|furniture|storage|gift.box|gift.set|basket|mirror|organiz|paper.product|tissue|napkin/.test(sub)) categoryName = 'Home Goods';
+          else if (/cosmetic|skincare|personal.care|perfume|hygiene|beauty|fragrance|soap|shower|scrub|shampoo|conditioner|body.care|skin.care|cream|serum|moistur|face.wash|makeup|oil|massage/.test(sub)) categoryName = 'Beauty, Hygiene & Personal Care';
+          else if (/electronic|appliance|kettle|laptop|television|tv|iron|steamer|induction|stove/.test(sub)) categoryName = 'Electronics & Appliances';
+          else if (/toy|sport|stationery|school|game|book|magazine|notebook|craft|sewing|art.suppl/.test(sub)) categoryName = 'Toys, Sports & Stationery';
           else categoryName = 'General Donations';
           console.log(`Remapped "Waste" → "${categoryName}" for subcategory: ${subcategoryName}`);
         }
