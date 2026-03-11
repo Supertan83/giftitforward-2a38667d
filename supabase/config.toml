@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.sync-surpluss-beneficiaries]
 verify_jwt = false
+
+[functions.fix-category-mismatches]
+verify_jwt = false

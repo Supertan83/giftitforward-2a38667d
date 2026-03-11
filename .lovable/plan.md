@@ -1,37 +1,38 @@
 
 
-# Fix Item Category Mismatches per Excel Mapping
+# Fix "Send to Surpluss" — Volunteer & Demographics Sync
 
-## Mismatches Found (12 subcategory groups, ~43 items)
+## Problems Identified
 
-| Subcategory | Current Category | Correct Category | Count |
-|---|---|---|---|
-| Accessories (car care, sunshades...) | Clothing, Apparel & Accessories | **Miscellaneous** | 2 |
-| Accessories (chargers, cables...) | Clothing, Apparel & Accessories | **Electronics & Appliances** | 1 |
-| Accessories (Gift bags) | Clothing, Apparel & Accessories | **Miscellaneous** | 3 |
-| Bathroom Accessories | Clothing, Apparel & Accessories | **Home Goods** | 2 |
-| Children's Shoes | Baby & Kids | **Clothing, Apparel & Accessories** | 3 |
-| Children's Slippers | Baby & Kids | **Clothing, Apparel & Accessories** | 5 |
-| Household Accessories | Clothing, Apparel & Accessories | **Home Goods** | 10 |
-| Kids Girl's Accessories | Baby & Kids | **Clothing, Apparel & Accessories** | 2 |
-| Shoe Products & Accessories | Clothing, Apparel & Accessories | **Beauty, Hygiene & Personal Care** | 1 |
-| Swimming Accessories | Clothing, Apparel & Accessories | **Toys, Sports & Stationery** | 4 |
-| Toddlers Apparel (0-5) | Baby & Kids | **Clothing, Apparel & Accessories** | 7 |
-| Toddlers Shoes | Baby & Kids | **Clothing, Apparel & Accessories** | 3 |
+From the edge function logs, two critical issues are causing incorrect data:
 
-## Changes
+### 1. Demographics never reach Surpluss
+The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
 
-### 1. Database — Fix existing items (via edge function per project convention)
-Deploy and invoke a one-time edge function that runs 12 UPDATE statements to correct the categories above.
+### 2. ALL volunteers are synced, not per-marketplace
+When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
 
-### 2. Sync function — Expand remapping to prevent regression
-Update `sync-surpluss-allocations/index.ts` to add a **secondary remapping pass** that runs on ALL items (not just "Waste") to enforce the Excel mapping. This catches items where Surpluss sends incorrect tags:
+### 3. Volunteer event filtering is missing
+Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
 
-- Add subcategory-to-category override map after the Waste remap block
-- Covers all 12 mismatched subcategories plus adds "Miscellaneous" as a valid category
-- Ensures future syncs maintain correct classifications
+## Plan
 
-### Files
-- **New**: `supabase/functions/fix-category-mismatches/index.ts` — one-time correction
-- **Edit**: `supabase/functions/sync-surpluss-allocations/index.ts` — add subcategory override map
+### 1. Use `external_id` for Surpluss event matching (edge function)
+Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
+
+### 2. Filter volunteers by marketplace (edge function)
+- Fetch the selected marketplace's name and slugify it
+- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
+- This prevents sending all 701 volunteers when only a subset registered for the event
+
+### 3. Update the hook to pass marketplace context
+The hook currently passes `marketplace_id` correctly. No changes needed there.
+
+## Files Changed
+
+1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
+   - Replace fuzzy name matching with `external_id` lookup for demographics
+   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
+   - Remove the unnecessary `/api/common/marketplace-events` API call
+   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
 
