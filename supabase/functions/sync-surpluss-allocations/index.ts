@@ -283,6 +283,7 @@ serve(async (req) => {
         // This runs on ALL items regardless of original category to catch mismatches
         if (subcategoryName) {
           const subcategoryOverrides: Array<[RegExp, string]> = [
+            [/children'?s\s*apparel/i, 'Clothing, Apparel & Accessories'],
             [/children'?s\s*shoes/i, 'Clothing, Apparel & Accessories'],
             [/children'?s\s*slippers/i, 'Clothing, Apparel & Accessories'],
             [/toddlers?\s*apparel/i, 'Clothing, Apparel & Accessories'],
