@@ -278,6 +278,35 @@ serve(async (req) => {
           else categoryName = 'General Donations';
           console.log(`Remapped "Waste" → "${categoryName}" for subcategory: ${subcategoryName}`);
         }
+
+        // Secondary remapping: enforce subcategory→category overrides from Excel mapping
+        // This runs on ALL items regardless of original category to catch mismatches
+        if (subcategoryName) {
+          const subcategoryOverrides: Array<[RegExp, string]> = [
+            [/children'?s\s*shoes/i, 'Clothing, Apparel & Accessories'],
+            [/children'?s\s*slippers/i, 'Clothing, Apparel & Accessories'],
+            [/toddlers?\s*apparel/i, 'Clothing, Apparel & Accessories'],
+            [/toddlers?\s*shoes/i, 'Clothing, Apparel & Accessories'],
+            [/kids?\s*girl'?s?\s*accessor/i, 'Clothing, Apparel & Accessories'],
+            [/bathroom\s*accessor/i, 'Home Goods'],
+            [/household\s*accessor/i, 'Home Goods'],
+            [/gift\s*bag/i, 'Miscellaneous'],
+            [/shoe\s*products?/i, 'Beauty, Hygiene & Personal Care'],
+            [/swimming\s*accessor/i, 'Toys, Sports & Stationery'],
+            [/car\s*care|sunshade|car\s*seat\s*cover/i, 'Miscellaneous'],
+            [/charger|cable|adapter/i, 'Electronics & Appliances'],
+          ];
+          for (const [pattern, correctCat] of subcategoryOverrides) {
+            if (pattern.test(subcategoryName)) {
+              if (categoryName !== correctCat) {
+                console.log(`Subcategory override: "${subcategoryName}" → "${correctCat}" (was "${categoryName}")`);
+                categoryName = correctCat;
+              }
+              break;
+            }
+          }
+        }
+
         // NOTE: donation.quantity from the Surpluss donations API represents the
         // "remaining unallocated quantity" on the Surpluss platform — NOT the total
         // donated or the amount allocated to GIF. We still store it here because
@@ -322,36 +351,6 @@ serve(async (req) => {
           });
           console.log(`Created item_type for donation ${materialId}: ${donation.title}`);
         }
-
-        // Secondary remapping: enforce subcategory→category overrides from Excel mapping
-        // This runs on ALL items regardless of original category to catch mismatches
-        if (subcategoryName) {
-          const subLower = subcategoryName.toLowerCase();
-          const subcategoryOverrides: Array<[RegExp, string]> = [
-            [/children'?s\s*shoes/i, 'Clothing, Apparel & Accessories'],
-            [/children'?s\s*slippers/i, 'Clothing, Apparel & Accessories'],
-            [/toddlers?\s*apparel/i, 'Clothing, Apparel & Accessories'],
-            [/toddlers?\s*shoes/i, 'Clothing, Apparel & Accessories'],
-            [/kids?\s*girl'?s?\s*accessor/i, 'Clothing, Apparel & Accessories'],
-            [/bathroom\s*accessor/i, 'Home Goods'],
-            [/household\s*accessor/i, 'Home Goods'],
-            [/gift\s*bag/i, 'Miscellaneous'],
-            [/shoe\s*products?/i, 'Beauty, Hygiene & Personal Care'],
-            [/swimming\s*accessor/i, 'Toys, Sports & Stationery'],
-            [/car\s*care|sunshade|car\s*seat\s*cover/i, 'Miscellaneous'],
-            [/charger|cable|adapter/i, 'Electronics & Appliances'],
-          ];
-          for (const [pattern, correctCat] of subcategoryOverrides) {
-            if (pattern.test(subcategoryName)) {
-              if (categoryName !== correctCat) {
-                console.log(`Subcategory override: "${subcategoryName}" → "${correctCat}" (was "${categoryName}")`);
-                categoryName = correctCat;
-              }
-              break;
-            }
-          }
-        }
-
         // Handle SDG goals
         if (donation.sdg_goals && Array.isArray(donation.sdg_goals) && itemId) {
           await supabase.from('external_item_sdg_goals').delete().eq('item_id', itemId);
