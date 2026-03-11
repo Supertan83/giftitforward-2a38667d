@@ -1,38 +1,59 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Reclassify "General Donations" Items Using Excel Mapping
 
-## Problems Identified
+## Problem
+65+ items are stuck in "General Donations" because the previous Waste remapping fallback put them there. Each item already has a correct `subcategory` value that maps directly to a proper main category per the uploaded Excel sheet.
 
-From the edge function logs, two critical issues are causing incorrect data:
+## Subcategory-to-Category Mapping (from Excel)
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+| Subcategory (in DB) | Correct Category |
+|---|---|
+| Art Supplies & Craft Materials | Toys, Sports & Stationery |
+| Body Care (Soap, Shower Gel, Scrub) | Beauty, Hygiene & Personal Care |
+| Books & Magazines | Toys, Sports & Stationery |
+| Bottles | Kitchen & Dining |
+| Containers | Kitchen & Dining |
+| Cups & Mugs | Kitchen & Dining |
+| Essential & Massage Oil | Beauty, Hygiene & Personal Care |
+| Gift Box / Sets (Stanley, notepad, pen) | Home Goods |
+| Glassware | Kitchen & Dining |
+| Hair Care (Shampoo, Conditioner, Mask) | Beauty, Hygiene & Personal Care |
+| Hard Baskets | Home Goods |
+| Induction Stove | Electronics & Appliances |
+| Iron & Steamers | Electronics & Appliances |
+| Kettles | Electronics & Appliances |
+| Laptops | Electronics & Appliances |
+| Magazine holder | Toys, Sports & Stationery |
+| Makeup | Beauty, Hygiene & Personal Care |
+| Mirror | Home Goods |
+| Notebooks | Toys, Sports & Stationery |
+| Organizer | Home Goods |
+| Paper products (tissue, napkins) | Home Goods |
+| Plates & Bowls | Kitchen & Dining |
+| Prayer Mat | Home Textile (soft goods) |
+| Skin Care (creams, serums, moisturizers, face wash) | Beauty, Hygiene & Personal Care |
+| Television (Smart LED) | Electronics & Appliances |
+| Trays | Kitchen & Dining |
+| Yoga Mats | Home Textile (soft goods) |
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+## Changes
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
+### 1. Database migration — reclassify all 65+ "General Donations" items
+Run UPDATE statements for each subcategory mapping above to set the correct `category`.
 
-## Plan
+### 2. Update sync function remapping logic
+Expand the regex-based Waste remapping in `sync-surpluss-allocations/index.ts` to cover subcategories that currently fall through to "General Donations":
+- Add patterns for: books, magazine, notebook, stationery, craft, sewing → Toys, Sports & Stationery
+- Add patterns for: bottle, container, cup, mug, glass, plate, bowl, tray → Kitchen & Dining
+- Add patterns for: gift.set, basket, mirror, organiz, paper.product, tissue → Home Goods
+- Add patterns for: prayer.mat, yoga → Home Textile (soft goods)
+- Add patterns for: oil, massage → Beauty, Hygiene & Personal Care
+- Add patterns for: kettle, laptop, television, tv, iron, steamer, induction → Electronics & Appliances
 
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
+This ensures future syncs classify items correctly instead of falling back to "General Donations".
 
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
-
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
-
-## Files Changed
-
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+### Files to modify
+- **Database** — SQL UPDATE statements (via insert tool) to fix existing data
+- `supabase/functions/sync-surpluss-allocations/index.ts` — expand Waste remapping regex
 
