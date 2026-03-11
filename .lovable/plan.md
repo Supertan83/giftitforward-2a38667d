@@ -1,38 +1,45 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Add Excel/CSV Export to Survey Reviews
 
-## Problems Identified
+## What changes
 
-From the edge function logs, two critical issues are causing incorrect data:
+### 1. Update edge function `get-survey-reviews` to return richer data
+Currently it only selects `volunteer_name, completed_at, answers`. Expand the SELECT to include:
+- `volunteer_email`
+- `marketplace_id`
+- `experience_word`
+- `would_volunteer_again`
+- `volunteer_card_id` (internal only, for hours lookup)
+- `company_name` (external only)
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+Also join/resolve:
+- `marketplace_events` → marketplace name from `marketplace_id`
+- `volunteer_qr_cards` → `total_hours_worked` from `volunteer_card_id` (internal surveys)
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+Return these extra fields in each survey result object.
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
+### 2. Update `SurveyReviewsViewer.tsx` — add "Download Excel" button
+- Add an "Export Excel" button next to the existing "Download All" (PDF) button
+- Use the existing `xlsx` package (already installed) to generate a workbook
+- Each row contains the columns from the screenshot:
 
-## Plan
+| Column | Source |
+|---|---|
+| Survey Date | `completedAt` |
+| Marketplace Name | resolved from `marketplace_id` |
+| Volunteer Name | `name` |
+| Volunteer Email | `email` |
+| Organisation Name | `company` (external) or "Dubai Holding" (internal employee) |
+| Favorite Part | answer mapped to the relevant question |
+| Areas for Improvement | `improvement_suggestions` or mapped answer |
+| Future Participation | `wouldVolunteerAgain` (Yes/No) |
+| One-word GIF Experience | `experienceWord` |
+| Volunteer Hours | `totalHours` |
 
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
+Plus dynamic question columns from `answers` JSONB.
 
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
-
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
-
-## Files Changed
-
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+### Files to modify
+- `supabase/functions/get-survey-reviews/index.ts` — expand query fields, join marketplace name and hours
+- `src/components/admin/SurveyReviewsViewer.tsx` — add Excel export button using `xlsx`, update interface
 
