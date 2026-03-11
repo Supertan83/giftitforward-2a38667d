@@ -83,20 +83,24 @@ Deno.serve(async (req) => {
       .select("volunteer_name, volunteer_email, completed_at, answers, marketplace_id, experience_word, would_volunteer_again, improvement_suggestions, volunteer_card_id")
       .not("completed_at", "is", null);
 
-    // Batch lookup hours for internal surveys with volunteer_card_id
+    // Batch lookup hours and marketplace fallback for internal surveys with volunteer_card_id
     const cardIds = (internalSurveys || [])
       .map((s: any) => s.volunteer_card_id)
       .filter(Boolean);
 
     const hoursMap: Record<string, number> = {};
+    const cardMarketplaceMap: Record<string, string | null> = {};
     if (cardIds.length > 0) {
       const { data: cards } = await adminClient
         .from("volunteer_qr_cards")
-        .select("id, total_hours_worked")
+        .select("id, total_hours_worked, marketplace_id")
         .in("id", cardIds);
       (cards || []).forEach((c: any) => {
         if (c.total_hours_worked != null) {
           hoursMap[c.id] = c.total_hours_worked;
+        }
+        if (c.marketplace_id) {
+          cardMarketplaceMap[c.id] = c.marketplace_id;
         }
       });
     }
