@@ -5,15 +5,23 @@ import { Input } from '@/components/ui/input';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, ClipboardList, Loader2, ArrowLeft, Download } from 'lucide-react';
+import { Search, ClipboardList, Loader2, ArrowLeft, Download, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 
 interface SurveyReview {
   name: string;
+  email: string;
   completedAt: string;
   source: 'internal' | 'external';
   answers: Record<string, string>;
+  marketplaceName: string;
+  experienceWord: string;
+  wouldVolunteerAgain: boolean | null;
+  improvementSuggestions: string;
+  company: string;
+  totalHours: number | null;
 }
 
 interface SurveyReviewsViewerProps {
@@ -52,8 +60,42 @@ export const SurveyReviewsViewer = ({ onBack }: SurveyReviewsViewerProps) => {
   const surveys = data?.surveys || [];
   const questionMap = data?.questionMap || {};
 
-  const renderAnswerLabel = (key: string) => {
-    return questionMap[key] || key;
+  const renderAnswerLabel = (key: string) => questionMap[key] || key;
+
+  const generateExcel = (surveyList: SurveyReview[], qMap: Record<string, string>) => {
+    // Collect all unique question IDs across all surveys
+    const allQuestionIds = new Set<string>();
+    surveyList.forEach(s => Object.keys(s.answers).forEach(k => allQuestionIds.add(k)));
+
+    // Build ordered question columns
+    const questionColumns = Array.from(allQuestionIds);
+
+    const rows = surveyList.map(survey => {
+      const row: Record<string, string | number> = {
+        'Survey Date': format(new Date(survey.completedAt), 'MMM d, yyyy'),
+        'Marketplace Name': survey.marketplaceName,
+        'Volunteer Name': survey.name,
+        'Volunteer Email': survey.email,
+        'Organisation Name': survey.company,
+        'Source': survey.source === 'internal' ? 'Volunteer' : 'External',
+        'One-word GIF Experience': survey.experienceWord,
+        'Future Participation': survey.wouldVolunteerAgain === true ? 'Yes' : survey.wouldVolunteerAgain === false ? 'No' : '',
+        'Volunteer Hours': survey.totalHours != null ? Math.round(survey.totalHours * 100) / 100 : '',
+      };
+
+      // Add dynamic question answers as columns
+      questionColumns.forEach(qId => {
+        const colName = qMap[qId] || qId;
+        row[colName] = survey.answers[qId] != null ? String(survey.answers[qId]) : '';
+      });
+
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Survey Reviews');
+    XLSX.writeFile(wb, 'survey-reviews.xlsx');
   };
 
   const generateSurveyPDF = (surveyList: SurveyReview[], qMap: Record<string, string>) => {
@@ -132,17 +174,27 @@ export const SurveyReviewsViewer = ({ onBack }: SurveyReviewsViewerProps) => {
           </div>
         </div>
         {surveys.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const doc = generateSurveyPDF(surveys, questionMap);
-              doc.save('survey-reviews.pdf');
-            }}
-          >
-            <Download className="w-4 h-4 mr-1" />
-            Download All
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateExcel(surveys, questionMap)}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-1" />
+              Export Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const doc = generateSurveyPDF(surveys, questionMap);
+                doc.save('survey-reviews.pdf');
+              }}
+            >
+              <Download className="w-4 h-4 mr-1" />
+              Download PDF
+            </Button>
+          </div>
         )}
       </div>
 
