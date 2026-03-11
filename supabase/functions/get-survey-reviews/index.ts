@@ -116,13 +116,15 @@ Deno.serve(async (req) => {
 
     (internalSurveys || []).forEach((s: any) => {
       if (search && !s.volunteer_name?.toLowerCase().includes(search)) return;
+      // Resolve marketplace: direct link first, then fallback via volunteer card
+      const resolvedMarketplaceId = s.marketplace_id || (s.volunteer_card_id ? cardMarketplaceMap[s.volunteer_card_id] : null);
       results.push({
         name: s.volunteer_name,
         email: s.volunteer_email || "",
         completedAt: s.completed_at,
         source: "internal",
         answers: s.answers || {},
-        marketplaceName: s.marketplace_id ? (marketplaceMap[s.marketplace_id] || "") : "",
+        marketplaceName: resolvedMarketplaceId ? (marketplaceMap[resolvedMarketplaceId] || "") : "",
         experienceWord: s.experience_word || "",
         wouldVolunteerAgain: s.would_volunteer_again,
         improvementSuggestions: s.improvement_suggestions || "",
