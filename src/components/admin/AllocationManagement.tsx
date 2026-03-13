@@ -185,6 +185,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     try {
       await deleteAllocation.mutateAsync(allocationId);
 
+      // Reverse sync to Surpluss if allocation has a surpluss_allocation_id
+      if (alloc?.surplussAllocationId) {
+        try {
+          await supabase.functions.invoke('surpluss-allocations-api', {
+            body: { action: 'delete_allocation', allocation_id: alloc.surplussAllocationId, environment: 'production' }
+          });
+          console.log(`[reverse-sync] Deleted Surpluss allocation ${alloc.surplussAllocationId}`);
+        } catch (syncErr) {
+          console.error('[reverse-sync] Failed to delete from Surpluss:', syncErr);
+        }
+      }
+
       if (alloc) {
         logEvent.mutate({
           allocationId,
