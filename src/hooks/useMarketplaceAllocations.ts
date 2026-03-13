@@ -87,6 +87,7 @@ export interface MarketplaceAllocation {
   itemName?: string;
   itemIcon?: string;
   externalMaterialId?: number | null;
+  surplussAllocationId?: number | null;
   allocatedQuantity: number;
   distributedQuantity: number;
 }
