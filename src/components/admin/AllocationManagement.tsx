@@ -185,6 +185,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     try {
       await deleteAllocation.mutateAsync(allocationId);
 
+      // Reverse sync to Surpluss if allocation has a surpluss_allocation_id
+      if (alloc?.surplussAllocationId) {
+        try {
+          await supabase.functions.invoke('surpluss-allocations-api', {
+            body: { action: 'delete_allocation', allocation_id: alloc.surplussAllocationId, environment: 'production' }
+          });
+          console.log(`[reverse-sync] Deleted Surpluss allocation ${alloc.surplussAllocationId}`);
+        } catch (syncErr) {
+          console.error('[reverse-sync] Failed to delete from Surpluss:', syncErr);
+        }
+      }
+
       if (alloc) {
         logEvent.mutate({
           allocationId,
@@ -236,6 +248,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         allocatedQuantity: editAllocated,
         distributedQuantity: editDistributed,
       });
+
+      // Reverse sync quantity update to Surpluss
+      if (alloc?.surplussAllocationId) {
+        try {
+          await supabase.functions.invoke('surpluss-allocations-api', {
+            body: { action: 'update_allocation', allocation_id: alloc.surplussAllocationId, amount: editAllocated, environment: 'production' }
+          });
+          console.log(`[reverse-sync] Updated Surpluss allocation ${alloc.surplussAllocationId} to ${editAllocated}`);
+        } catch (syncErr) {
+          console.error('[reverse-sync] Failed to update Surpluss:', syncErr);
+        }
+      }
 
       logEvent.mutate({
         allocationId: editingAllocationId,
@@ -319,6 +343,24 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
           allocationId: undoAllocation.id,
           allocatedQuantity: newAllocated,
         });
+      }
+
+      // Reverse sync return to Surpluss
+      if (alloc?.surplussAllocationId) {
+        try {
+          if (newAllocated <= 0 && undoAllocation.distributed <= 0) {
+            await supabase.functions.invoke('surpluss-allocations-api', {
+              body: { action: 'return_remaining', allocation_id: alloc.surplussAllocationId, environment: 'production' }
+            });
+          } else {
+            await supabase.functions.invoke('surpluss-allocations-api', {
+              body: { action: 'update_allocation', allocation_id: alloc.surplussAllocationId, amount: newAllocated, environment: 'production' }
+            });
+          }
+          console.log(`[reverse-sync] Returned ${qty} items to warehouse on Surpluss`);
+        } catch (syncErr) {
+          console.error('[reverse-sync] Failed to sync return to Surpluss:', syncErr);
+        }
       }
 
       logEvent.mutate({

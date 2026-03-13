@@ -1049,6 +1049,7 @@ export type Database = {
           id: string
           item_type_id: string
           marketplace_id: string
+          surpluss_allocation_id: number | null
           updated_at: string
         }
         Insert: {
@@ -1058,6 +1059,7 @@ export type Database = {
           id?: string
           item_type_id: string
           marketplace_id: string
+          surpluss_allocation_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -1067,6 +1069,7 @@ export type Database = {
           id?: string
           item_type_id?: string
           marketplace_id?: string
+          surpluss_allocation_id?: number | null
           updated_at?: string
         }
         Relationships: [

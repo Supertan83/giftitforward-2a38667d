@@ -159,7 +159,8 @@ async function syncMaterial(
   distributedAmount: number,
   category: string | null,
   subcategory: string | null,
-  errors: string[]
+  errors: string[],
+  surplussAllocationId?: number
 ) {
   let { data: itemType } = await supabase
     .from('item_types').select('id').eq('external_material_id', materialId).limit(1).maybeSingle();
@@ -198,12 +199,16 @@ async function syncMaterial(
 
   if (existingAlloc) {
     const finalDistributed = Math.max(existingAlloc.distributed_quantity || 0, distributedAmount);
+    const updateData: any = { allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() };
+    if (surplussAllocationId) updateData.surpluss_allocation_id = surplussAllocationId;
     await supabase.from('marketplace_item_allocations')
-      .update({ allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('id', existingAlloc.id);
   } else {
+    const insertData: any = { marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount };
+    if (surplussAllocationId) insertData.surpluss_allocation_id = surplussAllocationId;
     await supabase.from('marketplace_item_allocations')
-      .insert({ marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount });
+      .insert(insertData);
   }
 }
 
@@ -272,6 +277,9 @@ async function syncSingleMarketplace(
       const allocatedMaterials = alloc.allocated_materials || [];
       
       // If allocated_materials exists, iterate through each material
+      // Extract Surpluss allocation ID for two-way sync tracking
+      const surplussAllocId = alloc.id ? Number(alloc.id) : undefined;
+
       if (allocatedMaterials.length > 0) {
         for (const mat of allocatedMaterials) {
           const materialId = mat.material_id || mat.donation_metadata_id;
@@ -283,9 +291,8 @@ async function syncSingleMarketplace(
           
           if (!materialId) { errors.push('No material ID in allocated_materials entry'); continue; }
           
-          await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, category, subcategory, errors);
+          await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, category, subcategory, errors, surplussAllocId);
           synced++;
-          // Track created/updated via closure
         }
       } else {
         // Fallback: legacy format where allocation itself is a material
@@ -295,12 +302,11 @@ async function syncSingleMarketplace(
         const distributedAmount = alloc.distributed_amount || alloc.total_distributed || 0;
         
         if (!materialId) { 
-          // Skip allocations without material IDs (they use allocated_materials which was empty)
           console.log(`[sync] Skipping allocation ${alloc.id}: no materials`);
           continue; 
         }
         
-        await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, null, null, errors);
+        await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, null, null, errors, surplussAllocId);
         synced++;
       }
     } catch (e) {
