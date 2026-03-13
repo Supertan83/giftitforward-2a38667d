@@ -345,6 +345,24 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         });
       }
 
+      // Reverse sync return to Surpluss
+      if (alloc?.surplussAllocationId) {
+        try {
+          if (newAllocated <= 0 && undoAllocation.distributed <= 0) {
+            await supabase.functions.invoke('surpluss-allocations-api', {
+              body: { action: 'return_remaining', allocation_id: alloc.surplussAllocationId, environment: 'production' }
+            });
+          } else {
+            await supabase.functions.invoke('surpluss-allocations-api', {
+              body: { action: 'update_allocation', allocation_id: alloc.surplussAllocationId, amount: newAllocated, environment: 'production' }
+            });
+          }
+          console.log(`[reverse-sync] Returned ${qty} items to warehouse on Surpluss`);
+        } catch (syncErr) {
+          console.error('[reverse-sync] Failed to sync return to Surpluss:', syncErr);
+        }
+      }
+
       logEvent.mutate({
         allocationId: undoAllocation.id,
         itemTypeId: alloc?.itemTypeId,
