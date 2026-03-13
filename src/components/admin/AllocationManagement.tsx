@@ -249,6 +249,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         distributedQuantity: editDistributed,
       });
 
+      // Reverse sync quantity update to Surpluss
+      if (alloc?.surplussAllocationId) {
+        try {
+          await supabase.functions.invoke('surpluss-allocations-api', {
+            body: { action: 'update_allocation', allocation_id: alloc.surplussAllocationId, amount: editAllocated, environment: 'production' }
+          });
+          console.log(`[reverse-sync] Updated Surpluss allocation ${alloc.surplussAllocationId} to ${editAllocated}`);
+        } catch (syncErr) {
+          console.error('[reverse-sync] Failed to update Surpluss:', syncErr);
+        }
+      }
+
       logEvent.mutate({
         allocationId: editingAllocationId,
         itemTypeId: alloc?.itemTypeId,
