@@ -1,0 +1,1 @@
+ALTER TABLE marketplace_item_allocations ADD COLUMN surpluss_allocation_id bigint;
