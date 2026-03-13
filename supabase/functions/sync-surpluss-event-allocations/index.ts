@@ -159,7 +159,8 @@ async function syncMaterial(
   distributedAmount: number,
   category: string | null,
   subcategory: string | null,
-  errors: string[]
+  errors: string[],
+  surplussAllocationId?: number
 ) {
   let { data: itemType } = await supabase
     .from('item_types').select('id').eq('external_material_id', materialId).limit(1).maybeSingle();
@@ -198,12 +199,16 @@ async function syncMaterial(
 
   if (existingAlloc) {
     const finalDistributed = Math.max(existingAlloc.distributed_quantity || 0, distributedAmount);
+    const updateData: any = { allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() };
+    if (surplussAllocationId) updateData.surpluss_allocation_id = surplussAllocationId;
     await supabase.from('marketplace_item_allocations')
-      .update({ allocated_quantity: allocatedAmount, distributed_quantity: finalDistributed, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('id', existingAlloc.id);
   } else {
+    const insertData: any = { marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount };
+    if (surplussAllocationId) insertData.surpluss_allocation_id = surplussAllocationId;
     await supabase.from('marketplace_item_allocations')
-      .insert({ marketplace_id: marketplace.id, item_type_id: itemType.id, allocated_quantity: allocatedAmount, distributed_quantity: distributedAmount });
+      .insert(insertData);
   }
 }
 
