@@ -184,6 +184,7 @@ export const useMarketplaceAllocations = (marketplaceId?: string) => {
         itemName: allocation.item_types?.name,
         itemIcon: allocation.item_types?.icon,
         externalMaterialId: allocation.item_types?.external_material_id,
+        surplussAllocationId: allocation.surpluss_allocation_id,
         allocatedQuantity: allocation.allocated_quantity,
         distributedQuantity: allocation.distributed_quantity,
       }));

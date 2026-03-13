@@ -277,6 +277,9 @@ async function syncSingleMarketplace(
       const allocatedMaterials = alloc.allocated_materials || [];
       
       // If allocated_materials exists, iterate through each material
+      // Extract Surpluss allocation ID for two-way sync tracking
+      const surplussAllocId = alloc.id ? Number(alloc.id) : undefined;
+
       if (allocatedMaterials.length > 0) {
         for (const mat of allocatedMaterials) {
           const materialId = mat.material_id || mat.donation_metadata_id;
@@ -288,9 +291,8 @@ async function syncSingleMarketplace(
           
           if (!materialId) { errors.push('No material ID in allocated_materials entry'); continue; }
           
-          await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, category, subcategory, errors);
+          await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, category, subcategory, errors, surplussAllocId);
           synced++;
-          // Track created/updated via closure
         }
       } else {
         // Fallback: legacy format where allocation itself is a material
@@ -300,12 +302,11 @@ async function syncSingleMarketplace(
         const distributedAmount = alloc.distributed_amount || alloc.total_distributed || 0;
         
         if (!materialId) { 
-          // Skip allocations without material IDs (they use allocated_materials which was empty)
           console.log(`[sync] Skipping allocation ${alloc.id}: no materials`);
           continue; 
         }
         
-        await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, null, null, errors);
+        await syncMaterial(supabase, marketplace, materialId, materialTitle, allocatedAmount, distributedAmount, null, null, errors, surplussAllocId);
         synced++;
       }
     } catch (e) {
