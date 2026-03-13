@@ -14,25 +14,18 @@ const BASE_URLS: Record<string, string> = {
 interface RequestPayload {
   action: 'allocate' | 'batch_allocate' | 'update_allocation' | 'batch_update' | 'return_remaining' | 'delete_allocation' | 'get_event_allocations' | 'list_marketplace_events' | 'get_donation_metadata' | 'get_donation_allocations' | 'update_distribution';
   environment: 'staging' | 'production';
-  // For allocate
   material_id?: number;
   marketplace_event_id?: number;
   amount?: number;
-  // For batch_allocate / batch_update
   materials?: Array<{ material_id: number; amount: number }>;
-  // For update_allocation / return_remaining / delete_allocation
   allocation_id?: number;
-  // For get_event_allocations
   event_id?: number;
-  // For list_marketplace_events
   page?: number;
   limit?: number;
   status?: string;
-  // For get_donation_metadata / get_donation_allocations
   search?: string;
   from_date?: string;
   to_date?: string;
-  // For update_distribution
   distribution_data?: Record<string, unknown>;
 }
 
@@ -47,15 +40,11 @@ serve(async (req) => {
 
     const baseUrl = BASE_URLS[environment];
     if (!baseUrl) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid environment' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse('Invalid environment');
     }
 
     const apiBase = `${baseUrl}/api/common`;
 
-    // Build headers
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -82,9 +71,7 @@ serve(async (req) => {
       }
 
       case 'get_event_allocations': {
-        if (!payload.event_id) {
-          return errorResponse('event_id is required');
-        }
+        if (!payload.event_id) return errorResponse('event_id is required');
         url = `${apiBase}/marketplace-events/${payload.event_id}/allocations`;
         method = 'GET';
         break;
@@ -113,9 +100,7 @@ serve(async (req) => {
       }
 
       case 'update_distribution': {
-        if (!payload.distribution_data) {
-          return errorResponse('distribution_data is required');
-        }
+        if (!payload.distribution_data) return errorResponse('distribution_data is required');
         url = `${apiBase}/donation-allocations/distribution`;
         method = 'PUT';
         body = JSON.stringify(payload.distribution_data);
@@ -172,18 +157,14 @@ serve(async (req) => {
       }
 
       case 'return_remaining': {
-        if (!payload.allocation_id) {
-          return errorResponse('allocation_id is required');
-        }
+        if (!payload.allocation_id) return errorResponse('allocation_id is required');
         url = `${apiBase}/donation-allocations/${payload.allocation_id}/return-remaining`;
         method = 'POST';
         break;
       }
 
       case 'delete_allocation': {
-        if (!payload.allocation_id) {
-          return errorResponse('allocation_id is required');
-        }
+        if (!payload.allocation_id) return errorResponse('allocation_id is required');
         url = `${apiBase}/donation-allocations/${payload.allocation_id}`;
         method = 'DELETE';
         break;
@@ -211,8 +192,9 @@ serve(async (req) => {
       responseJson = { raw: responseText };
     }
 
-    // Log write operations to DB for audit trail
-    if (['allocate', 'batch_allocate', 'update_allocation', 'batch_update', 'return_remaining', 'delete_allocation', 'update_distribution'].includes(action)) {
+    // Log write operations + sync to GIF for audit trail
+    const writeActions = ['allocate', 'batch_allocate', 'update_allocation', 'batch_update', 'return_remaining', 'delete_allocation', 'update_distribution'];
+    if (writeActions.includes(action)) {
       try {
         const supabase = createClient(
           Deno.env.get('SUPABASE_URL')!,
@@ -227,8 +209,8 @@ serve(async (req) => {
           success: response.ok,
         });
 
-        // Auto-sync to GIF tables after successful allocate/batch_allocate
-        if (response.ok && (action === 'allocate' || action === 'batch_allocate') && payload.marketplace_event_id) {
+        // Auto-sync to GIF tables after successful write operations
+        if (response.ok) {
           try {
             await autoSyncToGif(supabase, payload, action, responseJson);
           } catch (syncErr) {
@@ -269,9 +251,107 @@ function errorResponse(message: string) {
 
 async function autoSyncToGif(supabase: any, payload: RequestPayload, action: string, apiResponse: any) {
   const surplussEventId = payload.marketplace_event_id;
-  if (!surplussEventId) return;
 
-  // Find the GIF marketplace by external_id
+  // === ALLOCATE / BATCH_ALLOCATE: Create/update GIF allocations ===
+  if ((action === 'allocate' || action === 'batch_allocate') && surplussEventId) {
+    const marketplace = await findGifMarketplace(supabase, surplussEventId);
+    if (!marketplace) return;
+
+    const materials: Array<{ material_id: number; amount: number }> = [];
+    if (action === 'allocate' && payload.material_id && payload.amount) {
+      materials.push({ material_id: payload.material_id, amount: payload.amount });
+    } else if (action === 'batch_allocate' && payload.materials) {
+      materials.push(...payload.materials);
+    }
+
+    for (const mat of materials) {
+      const itemType = await findOrCreateItemType(supabase, mat.material_id);
+      if (!itemType) continue;
+
+      await upsertGifAllocation(supabase, marketplace.id, itemType.id, mat.amount, 'add');
+    }
+
+    console.log(`[auto-sync] Synced ${materials.length} materials to GIF marketplace ${marketplace.id}`);
+  }
+
+  // === DELETE_ALLOCATION: Remove from GIF ===
+  if (action === 'delete_allocation' && payload.allocation_id) {
+    // Try to find GIF allocation by surpluss_allocation_id
+    const { data: gifAlloc } = await supabase
+      .from('marketplace_item_allocations')
+      .select('id')
+      .eq('surpluss_allocation_id', payload.allocation_id)
+      .maybeSingle();
+
+    if (gifAlloc) {
+      await supabase.from('marketplace_item_allocations').delete().eq('id', gifAlloc.id);
+      console.log(`[auto-sync] Deleted GIF allocation ${gifAlloc.id} (surpluss_allocation_id: ${payload.allocation_id})`);
+    } else {
+      console.log(`[auto-sync] No GIF allocation found for surpluss_allocation_id: ${payload.allocation_id}`);
+    }
+
+    // Also clean up sync tracking
+    await supabase.from('surpluss_allocation_sync').delete().eq('allocation_id', payload.allocation_id);
+  }
+
+  // === UPDATE_ALLOCATION: Update amount in GIF ===
+  if (action === 'update_allocation' && payload.allocation_id && payload.amount !== undefined) {
+    const { data: gifAlloc } = await supabase
+      .from('marketplace_item_allocations')
+      .select('id')
+      .eq('surpluss_allocation_id', payload.allocation_id)
+      .maybeSingle();
+
+    if (gifAlloc) {
+      await supabase.from('marketplace_item_allocations')
+        .update({ allocated_quantity: payload.amount, updated_at: new Date().toISOString() })
+        .eq('id', gifAlloc.id);
+      console.log(`[auto-sync] Updated GIF allocation ${gifAlloc.id} to amount ${payload.amount}`);
+    } else {
+      console.log(`[auto-sync] No GIF allocation found for surpluss_allocation_id: ${payload.allocation_id}`);
+    }
+  }
+
+  // === BATCH_UPDATE: Update multiple allocations in GIF ===
+  if (action === 'batch_update' && surplussEventId && payload.materials?.length) {
+    const marketplace = await findGifMarketplace(supabase, surplussEventId);
+    if (!marketplace) return;
+
+    for (const mat of payload.materials) {
+      const itemType = await findOrCreateItemType(supabase, mat.material_id);
+      if (!itemType) continue;
+
+      await upsertGifAllocation(supabase, marketplace.id, itemType.id, mat.amount, 'set');
+    }
+    console.log(`[auto-sync] Batch-updated ${payload.materials.length} materials in GIF marketplace ${marketplace.id}`);
+  }
+
+  // === RETURN_REMAINING: Zero out or delete GIF allocation ===
+  if (action === 'return_remaining' && payload.allocation_id) {
+    const { data: gifAlloc } = await supabase
+      .from('marketplace_item_allocations')
+      .select('id, distributed_quantity')
+      .eq('surpluss_allocation_id', payload.allocation_id)
+      .maybeSingle();
+
+    if (gifAlloc) {
+      if (gifAlloc.distributed_quantity > 0) {
+        // Keep allocation but set allocated = distributed (nothing remaining)
+        await supabase.from('marketplace_item_allocations')
+          .update({ allocated_quantity: gifAlloc.distributed_quantity, updated_at: new Date().toISOString() })
+          .eq('id', gifAlloc.id);
+        console.log(`[auto-sync] Return-remaining: set allocated = ${gifAlloc.distributed_quantity} for GIF allocation ${gifAlloc.id}`);
+      } else {
+        // No distribution happened, just delete
+        await supabase.from('marketplace_item_allocations').delete().eq('id', gifAlloc.id);
+        console.log(`[auto-sync] Return-remaining: deleted GIF allocation ${gifAlloc.id}`);
+      }
+    }
+  }
+}
+
+// Helper: find GIF marketplace by Surpluss external_id
+async function findGifMarketplace(supabase: any, surplussEventId: number) {
   const { data: marketplace } = await supabase
     .from('marketplace_events')
     .select('id')
@@ -280,70 +360,56 @@ async function autoSyncToGif(supabase: any, payload: RequestPayload, action: str
 
   if (!marketplace) {
     console.log(`[auto-sync] No GIF marketplace found for Surpluss event ${surplussEventId}`);
-    return;
   }
+  return marketplace;
+}
 
-  // Build list of materials to sync
-  const materials: Array<{ material_id: number; amount: number }> = [];
-  
-  if (action === 'allocate' && payload.material_id && payload.amount) {
-    materials.push({ material_id: payload.material_id, amount: payload.amount });
-  } else if (action === 'batch_allocate' && payload.materials) {
-    materials.push(...payload.materials);
-  }
+// Helper: find or create item_type by external_material_id
+async function findOrCreateItemType(supabase: any, materialId: number) {
+  let { data: itemType } = await supabase
+    .from('item_types')
+    .select('id')
+    .eq('external_material_id', materialId)
+    .maybeSingle();
 
-  for (const mat of materials) {
-    // Find or create item_type
-    let { data: itemType } = await supabase
+  if (!itemType) {
+    const { data: newItem } = await supabase
       .from('item_types')
+      .insert({
+        name: `Material ${materialId}`,
+        external_material_id: materialId,
+        icon: 'Package',
+        total_stock: 0,
+        surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
+      })
       .select('id')
-      .eq('external_material_id', mat.material_id)
-      .maybeSingle();
-
-    if (!itemType) {
-      const { data: newItem } = await supabase
-        .from('item_types')
-        .insert({
-          name: `Material ${mat.material_id}`,
-          external_material_id: mat.material_id,
-          icon: 'Package',
-          total_stock: mat.amount,
-          surpluss_url: `https://platform.thesurpluss.com/material/${mat.material_id}`,
-        })
-        .select('id')
-        .single();
-      itemType = newItem;
-    }
-
-    if (!itemType) continue;
-
-    // Upsert marketplace_item_allocations
-    const { data: existing } = await supabase
-      .from('marketplace_item_allocations')
-      .select('id, allocated_quantity')
-      .eq('marketplace_id', marketplace.id)
-      .eq('item_type_id', itemType.id)
-      .maybeSingle();
-
-    if (existing) {
-      await supabase
-        .from('marketplace_item_allocations')
-        .update({
-          allocated_quantity: existing.allocated_quantity + mat.amount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
-    } else {
-      await supabase
-        .from('marketplace_item_allocations')
-        .insert({
-          marketplace_id: marketplace.id,
-          item_type_id: itemType.id,
-          allocated_quantity: mat.amount,
-          distributed_quantity: 0,
-        });
-    }
+      .single();
+    itemType = newItem;
   }
+  return itemType;
+}
 
-  console.log(`[auto-sync] Synced ${materials.length} materials to GIF marketplace ${marketplace.id}`);
+// Helper: upsert GIF allocation (add to existing or set directly)
+async function upsertGifAllocation(supabase: any, marketplaceId: string, itemTypeId: string, amount: number, mode: 'add' | 'set') {
+  const { data: existing } = await supabase
+    .from('marketplace_item_allocations')
+    .select('id, allocated_quantity')
+    .eq('marketplace_id', marketplaceId)
+    .eq('item_type_id', itemTypeId)
+    .maybeSingle();
+
+  if (existing) {
+    const newQty = mode === 'add' ? existing.allocated_quantity + amount : amount;
+    await supabase.from('marketplace_item_allocations')
+      .update({ allocated_quantity: newQty, updated_at: new Date().toISOString() })
+      .eq('id', existing.id);
+  } else {
+    await supabase.from('marketplace_item_allocations')
+      .insert({
+        marketplace_id: marketplaceId,
+        item_type_id: itemTypeId,
+        allocated_quantity: amount,
+        distributed_quantity: 0,
+      });
+  }
 }
