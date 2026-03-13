@@ -1,38 +1,77 @@
 
 
-# Fix "Send to Surpluss" — Volunteer & Demographics Sync
+# Two-Way Sync: Gift App ↔ Tractor (Surpluss) Allocations
 
-## Problems Identified
+## Problem
+Currently, changes flow one direction only — Tractor → Gift App via periodic sync. When items are deleted, updated, or returned in either system, the other system doesn't reflect the change.
 
-From the edge function logs, two critical issues are causing incorrect data:
+## Current Architecture
+- **Tractor → GIF**: `SurplussAllocationControl.tsx` calls `surpluss-allocations-api` edge function which proxies to Surpluss API. The `autoSyncToGif` only handles `allocate`/`batch_allocate` — not delete, update, or return.
+- **GIF → Tractor**: `AllocationManagement.tsx` calls `useMarketplaceAllocations` hooks which only modify local DB. No Surpluss API calls.
 
-### 1. Demographics never reach Surpluss
-The function tries to match marketplace names via fuzzy string comparison against the Surpluss `/api/common/marketplace-events` endpoint. But the names don't match (e.g., "Young Dreamers Boys Community School Marketplace" has no counterpart in the 10 Surpluss events). **Meanwhile, every marketplace already has a correct `external_id` column** (e.g., `1` for Young Dreamers, `21` for Feb 21 marketplace) that maps directly to the Surpluss event ID — but it's never used.
+## Solution
 
-### 2. ALL volunteers are synced, not per-marketplace
-When clicking "Send to Surpluss" for a specific marketplace, the function fetches all 701 volunteers from `pending_volunteers` regardless. It should only send volunteers whose `events_list` or `events_json` matches the selected marketplace.
+### Change 1: Tractor → GIF sync (edge function)
+Expand `autoSyncToGif` in `surpluss-allocations-api/index.ts` to handle:
+- **`delete_allocation`**: Find the GIF allocation by matching the Surpluss allocation ID (via `surpluss_allocation_sync` table or by material+marketplace), then delete it from `marketplace_item_allocations`
+- **`update_allocation`**: Find and update `allocated_quantity` in the matching GIF allocation
+- **`return_remaining`**: Find and delete or zero-out the matching GIF allocation
+- **`batch_update`**: Update multiple allocations
 
-### 3. Volunteer event filtering is missing
-Volunteers have `events_list` (comma-separated slugs) and `events_json` (structured array with event slugs). The sync should filter to only volunteers registered for the selected marketplace's event.
+This requires a lookup mechanism. The `surpluss_allocation_sync` table exists but maps Surpluss allocation IDs. We'll enhance `autoSyncToGif` to also store this mapping on allocate, then use it on delete/update/return.
 
-## Plan
+### Change 2: GIF → Tractor sync (UI + hook)
+When users delete/update/return allocations in the Gift App's Allocation Management:
+- Look up the item's `external_material_id` and the marketplace's `external_id`
+- Call `surpluss-allocations-api` with the appropriate action (`update_allocation`, `delete_allocation`, `return_remaining`)
+- This keeps Tractor in sync
 
-### 1. Use `external_id` for Surpluss event matching (edge function)
-Instead of fuzzy name matching against the `/api/common/marketplace-events` API, use the marketplace's `external_id` directly as the Surpluss event ID for the demographics PUT call. This eliminates the name mismatch problem entirely.
+Add a new helper in `AllocationManagement.tsx` that calls the Surpluss API proxy after each local operation succeeds.
 
-### 2. Filter volunteers by marketplace (edge function)
-- Fetch the selected marketplace's name and slugify it
-- Only send volunteers whose `events_list` contains a slug matching the selected marketplace
-- This prevents sending all 701 volunteers when only a subset registered for the event
+### Change 3: Track Surpluss allocation IDs
+When syncing from Tractor (`sync-surpluss-event-allocations`), store the Surpluss allocation ID alongside the GIF allocation so we can reference it for updates/deletes back to Tractor.
 
-### 3. Update the hook to pass marketplace context
-The hook currently passes `marketplace_id` correctly. No changes needed there.
+Add a `surpluss_allocation_id` column to `marketplace_item_allocations` table to enable reverse lookups.
 
-## Files Changed
+## Files to modify
+- **`supabase/functions/surpluss-allocations-api/index.ts`** — expand `autoSyncToGif` for delete/update/return actions
+- **`supabase/functions/sync-surpluss-event-allocations/index.ts`** — store Surpluss allocation ID during sync
+- **`src/components/admin/AllocationManagement.tsx`** — add reverse sync calls after delete/update/return operations
+- **`src/hooks/useMarketplaceAllocations.ts`** — optional: add Surpluss sync helper
+- **DB migration** — add `surpluss_allocation_id` column to `marketplace_item_allocations`
 
-1. **Edit**: `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`
-   - Replace fuzzy name matching with `external_id` lookup for demographics
-   - Add volunteer filtering by marketplace using `events_list`/`events_json` matching
-   - Remove the unnecessary `/api/common/marketplace-events` API call
-   - Keep the volunteer create/bulk-update logic but scoped to filtered volunteers
+## Technical Details
+
+### DB Migration
+```sql
+ALTER TABLE marketplace_item_allocations 
+ADD COLUMN surpluss_allocation_id bigint;
+```
+
+### autoSyncToGif expansion (edge function)
+```typescript
+// After delete_allocation succeeds on Surpluss API:
+if (action === 'delete_allocation' && payload.allocation_id) {
+  // Find GIF allocation by surpluss_allocation_id
+  const { data: gifAlloc } = await supabase
+    .from('marketplace_item_allocations')
+    .select('id')
+    .eq('surpluss_allocation_id', payload.allocation_id)
+    .maybeSingle();
+  if (gifAlloc) {
+    await supabase.from('marketplace_item_allocations').delete().eq('id', gifAlloc.id);
+  }
+}
+```
+
+### GIF → Tractor reverse sync
+```typescript
+// After local delete succeeds in AllocationManagement:
+const alloc = allocations.find(a => a.id === allocationId);
+if (alloc?.surplussAllocationId) {
+  supabase.functions.invoke('surpluss-allocations-api', {
+    body: { action: 'delete_allocation', allocation_id: alloc.surplussAllocationId, environment: 'production' }
+  });
+}
+```
 
