@@ -158,7 +158,7 @@ export const WebhookActionsPanel = () => {
             email: v.email.trim(),
             name: v.name.trim() || undefined,
             phone: v.phone.trim() || undefined,
-            marketplace_id: selectedMarketplaceId || undefined,
+            marketplace_id: selectedMarketplaceId && selectedMarketplaceId !== 'none' ? selectedMarketplaceId : undefined,
           })),
           email_customization: emailCustomization,
         },
