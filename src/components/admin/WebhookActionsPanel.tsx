@@ -361,6 +361,23 @@ export const WebhookActionsPanel = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Marketplace Selector */}
+              <div className="space-y-1.5">
+                <Label htmlFor="marketplace-select" className="text-sm">Assign to Marketplace (optional)</Label>
+                <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+                  <SelectTrigger id="marketplace-select">
+                    <SelectValue placeholder="Select a marketplace event..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No marketplace</SelectItem>
+                    {marketplaces.map(mp => (
+                      <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Associates volunteers with an event so they appear in event filters</p>
+              </div>
+
               {volunteers.map((volunteer, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <div className="grid grid-cols-3 gap-2 flex-1">
