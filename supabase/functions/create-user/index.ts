@@ -202,6 +202,12 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Derive events_list from marketplace lookup if eventName not provided
+      let derivedEventsList = eventName?.trim() || null;
+      if (!derivedEventsList && mpData) {
+        derivedEventsList = mpData.name.toLowerCase().replace(/\s+/g, '-');
+      }
+
       // Create pending_volunteers record first (volunteer_qr_cards has FK to this table)
       const { data: pvData, error: pvError } = await supabaseAdmin
         .from('pending_volunteers')
@@ -215,7 +221,7 @@ Deno.serve(async (req) => {
           gender: gender?.trim() || null,
           external_company: companyName?.trim() || null,
           is_employee: isDhEmployee === true || String(isDhEmployee ?? '').toLowerCase() === 'yes',
-          events_list: eventName?.trim() || null,
+          events_list: derivedEventsList,
           events_json: eventsJson,
           temp_password: password,
         })

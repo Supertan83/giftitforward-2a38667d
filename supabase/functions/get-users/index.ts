@@ -52,20 +52,36 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get all user roles with pagination limit
-    const { data: roles, error: rolesError } = await supabaseAdmin
-      .from('user_roles')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(500) // Prevent unlimited data retrieval
+    // Get all user roles with paginated fetching (no arbitrary limit)
+    const allRoles: Array<{ id: string; user_id: string; role: string; created_at: string }> = [];
+    let rolesPage = 0;
+    const rolesPerPage = 1000;
+    let hasMoreRoles = true;
 
-    if (rolesError) {
-      console.error('Error fetching roles:', rolesError);
-      return new Response(JSON.stringify({ error: 'Unable to fetch users' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    while (hasMoreRoles) {
+      const from = rolesPage * rolesPerPage;
+      const to = from + rolesPerPage - 1;
+      const { data: rolesChunk, error: rolesError } = await supabaseAdmin
+        .from('user_roles')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (rolesError) {
+        console.error('Error fetching roles page', rolesPage, ':', rolesError);
+        return new Response(JSON.stringify({ error: 'Unable to fetch users' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      allRoles.push(...(rolesChunk || []));
+      hasMoreRoles = (rolesChunk?.length || 0) === rolesPerPage;
+      rolesPage++;
     }
+
+    const roles = allRoles;
+    console.log(`Fetched ${roles.length} total user_roles across ${rolesPage} page(s)`);
 
     // Get ALL user emails from auth (paginated - default is only 50)
     const authUsers: Array<{ id: string; email?: string; user_metadata?: Record<string, unknown> }> = [];

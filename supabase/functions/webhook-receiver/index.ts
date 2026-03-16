@@ -2884,6 +2884,26 @@ serve(async (req) => {
           const firstName = volunteer.name?.split(' ')[0] || 'Volunteer';
           const lastName = volunteer.name?.split(' ').slice(1).join(' ') || '';
           
+          // Look up marketplace info if marketplace_id is provided
+          let volunteerMarketplaceId: string | null = null;
+          let volunteerEventsList: string | null = null;
+          let volunteerEventsJson: Array<Record<string, unknown>> | null = null;
+          let volunteerMarketplaceInfo: MarketplaceInfo | null = null;
+
+          if ((volunteer as Record<string, unknown>).marketplace_id) {
+            volunteerMarketplaceId = (volunteer as Record<string, unknown>).marketplace_id as string;
+            volunteerMarketplaceInfo = await getMarketplaceInfo(supabase, volunteerMarketplaceId);
+            if (volunteerMarketplaceInfo) {
+              volunteerEventsList = volunteerMarketplaceInfo.name.toLowerCase().replace(/\s+/g, '-');
+              volunteerEventsJson = [{
+                event: volunteerEventsList,
+                name: volunteerMarketplaceInfo.name,
+                eventDate: volunteerMarketplaceInfo.event_date || undefined,
+                eventLocation: volunteerMarketplaceInfo.location || undefined,
+              }];
+            }
+          }
+
           const { data: pendingData, error: pendingError } = await supabase
             .from('pending_volunteers')
             .insert({
@@ -2895,7 +2915,9 @@ serve(async (req) => {
               approved_at: new Date().toISOString(),
               created_user_id: userData.user.id,
               temp_password: tempPassword,
-              source_data: { created_via: 'admin_webhook_action' }
+              source_data: { created_via: 'admin_webhook_action' },
+              events_list: volunteerEventsList,
+              events_json: volunteerEventsJson,
             })
             .select('id')
             .single();
@@ -2912,7 +2934,8 @@ serve(async (req) => {
             .insert({
               unique_id: volunteerQRId,
               volunteer_id: pendingId,
-              status: 'inactive'
+              status: 'inactive',
+              marketplace_id: volunteerMarketplaceId || null
             });
 
           if (qrError) {
@@ -2936,8 +2959,8 @@ serve(async (req) => {
             pendingId,
             [], // No family members for manual creation
             volunteerPayload.email_customization, // Pass custom email content
-            null, // marketplace info
-            null // marketplaceId
+            volunteerMarketplaceInfo, // marketplace info
+            volunteerMarketplaceId // marketplaceId
           );
 
           if (emailResult.success) {
