@@ -2959,8 +2959,8 @@ serve(async (req) => {
             pendingId,
             [], // No family members for manual creation
             volunteerPayload.email_customization, // Pass custom email content
-            null, // marketplace info
-            null // marketplaceId
+            volunteerMarketplaceInfo, // marketplace info
+            volunteerMarketplaceId // marketplaceId
           );
 
           if (emailResult.success) {
