@@ -2934,7 +2934,8 @@ serve(async (req) => {
             .insert({
               unique_id: volunteerQRId,
               volunteer_id: pendingId,
-              status: 'inactive'
+              status: 'inactive',
+              marketplace_id: volunteerMarketplaceId || null
             });
 
           if (qrError) {
