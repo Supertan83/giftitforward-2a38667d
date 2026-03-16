@@ -70,6 +70,23 @@ interface UpdateResult {
 export const WebhookActionsPanel = () => {
   const { toast } = useToast();
   
+  // Marketplace options state
+  const [marketplaces, setMarketplaces] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
+
+  // Fetch marketplaces on mount
+  useEffect(() => {
+    const fetchMarketplaces = async () => {
+      const { data } = await supabase
+        .from('marketplace_events')
+        .select('id, name')
+        .in('status', ['upcoming', 'active'])
+        .order('event_date', { ascending: true });
+      if (data) setMarketplaces(data);
+    };
+    fetchMarketplaces();
+  }, []);
+
   // Create volunteer state
   const [volunteers, setVolunteers] = useState<VolunteerInput[]>([{ email: '', name: '', phone: '' }]);
   const [createLoading, setCreateLoading] = useState(false);
