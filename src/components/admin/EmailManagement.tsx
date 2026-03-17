@@ -488,6 +488,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
             marketplace_location: marketplaceLocation,
             marketplace_time: marketplaceTime,
             qr_card_id: qrCardId,
+            password: (volunteer as any)?.temp_password || '',
           }
         : {
             first_name: simulatedVolunteer.first_name,
