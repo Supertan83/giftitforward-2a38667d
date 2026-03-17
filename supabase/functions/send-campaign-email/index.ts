@@ -61,6 +61,7 @@ function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceDat
     '{{last_name}}': volunteer?.last_name || '',
     '{{full_name}}': volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : 'Volunteer',
     '{{email}}': volunteer?.email || '',
+    '{{password}}': volunteer?.temp_password || '',
     '{{phone}}': volunteer?.phone_number || '',
     '{{marketplace_name}}': marketplaceData?.name || '',
     '{{marketplace_date}}': marketplaceData?.event_date || '',
