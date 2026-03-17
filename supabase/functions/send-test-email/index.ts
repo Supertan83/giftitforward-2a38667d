@@ -14,6 +14,7 @@ interface VolunteerData {
   last_name?: string;
   name?: string;
   phone?: string;
+  password?: string;
   is_employee?: boolean;
   employee_vertical?: string | null;
   external_company?: string | null;
