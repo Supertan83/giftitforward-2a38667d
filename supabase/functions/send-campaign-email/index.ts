@@ -52,6 +52,7 @@ interface Volunteer {
   phone_number: string | null;
   events_list: string | null;
   events_json: any;
+  temp_password: string | null;
 }
 
 function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceData?: any, qrCardId?: string): string {
