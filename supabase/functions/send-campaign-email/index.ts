@@ -52,6 +52,7 @@ interface Volunteer {
   phone_number: string | null;
   events_list: string | null;
   events_json: any;
+  temp_password: string | null;
 }
 
 function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceData?: any, qrCardId?: string): string {
@@ -60,6 +61,7 @@ function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceDat
     '{{last_name}}': volunteer?.last_name || '',
     '{{full_name}}': volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : 'Volunteer',
     '{{email}}': volunteer?.email || '',
+    '{{password}}': volunteer?.temp_password || '',
     '{{phone}}': volunteer?.phone_number || '',
     '{{marketplace_name}}': marketplaceData?.name || '',
     '{{marketplace_date}}': marketplaceData?.event_date || '',
@@ -309,7 +311,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (volunteerIds.length > 0) {
       const { data: volunteers } = await supabase
         .from("pending_volunteers")
-        .select("id, first_name, last_name, email, phone_number, events_list, events_json")
+        .select("id, first_name, last_name, email, phone_number, events_list, events_json, temp_password")
         .in("id", volunteerIds);
 
       if (volunteers) {
