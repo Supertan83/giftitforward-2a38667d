@@ -642,6 +642,7 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
     '{{last_name}}': volunteerData?.last_name || 'Volunteer',
     '{{full_name}}': volunteerData?.name || `${volunteerData?.first_name || 'Test'} ${volunteerData?.last_name || 'Volunteer'}`,
     '{{email}}': volunteerData?.first_name ? `${volunteerData.first_name.toLowerCase()}@example.com` : 'test@example.com',
+    '{{password}}': volunteerData?.password || 'TestPass123',
     '{{phone}}': volunteerData?.phone || '+971 50 123 4567',
     '{{marketplace_name}}': volunteerData?.marketplace_name || 'GIF Marketplace',
     '{{marketplace_date}}': volunteerData?.marketplace_date || 'TBD',
