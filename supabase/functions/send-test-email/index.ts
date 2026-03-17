@@ -30,7 +30,7 @@ interface VolunteerData {
 interface CustomTemplateData {
   subject: string;
   greeting: string;
-  body_sections: Array<{ type: string; content: string }>;
+  body_sections: Array<{ type: string; content: string; url?: string }>;
   cta_text?: string | null;
   cta_url?: string | null;
 }
