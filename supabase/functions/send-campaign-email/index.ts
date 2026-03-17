@@ -311,7 +311,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (volunteerIds.length > 0) {
       const { data: volunteers } = await supabase
         .from("pending_volunteers")
-        .select("id, first_name, last_name, email, phone_number, events_list, events_json")
+        .select("id, first_name, last_name, email, phone_number, events_list, events_json, temp_password")
         .in("id", volunteerIds);
 
       if (volunteers) {

@@ -48,6 +48,7 @@ const DYNAMIC_TOKENS = [
   { token: '{{last_name}}', label: 'Last Name' },
   { token: '{{full_name}}', label: 'Full Name' },
   { token: '{{email}}', label: 'Email' },
+  { token: '{{password}}', label: 'Password' },
   { token: '{{phone}}', label: 'Phone' },
   { token: '{{marketplace_name}}', label: 'Event Name' },
   { token: '{{marketplace_date}}', label: 'Event Date' },
