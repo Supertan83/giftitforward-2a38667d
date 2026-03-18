@@ -820,7 +820,32 @@ const handler = async (req: Request): Promise<Response> => {
     if (email_type === 'custom_template' && custom_template) {
       // Render from custom template
       html = generateCustomTemplateHTML(custom_template, supabaseUrl, volunteer_data);
-      subject = `[TEST] ${custom_template.subject.replace(/\{\{[^}]+\}\}/g, 'Test')}`;
+      // Resolve tokens in subject instead of stripping them
+      const resolveSubjectTokens = (text: string): string => {
+        const volEmail = volunteer_data?.email || '';
+        const volFullName = volunteer_data?.name || `${volunteer_data?.first_name || 'Volunteer'} ${volunteer_data?.last_name || ''}`.trim();
+        const subjectTokens: Record<string, string> = {
+          '{{first_name}}': volunteer_data?.first_name || 'Volunteer',
+          '{{last_name}}': volunteer_data?.last_name || '',
+          '{{full_name}}': volFullName,
+          '{{email}}': volEmail,
+          '{{username}}': volEmail,
+          '{{password}}': volunteer_data?.password || '',
+          '{{marketplace_name}}': volunteer_data?.marketplace_name || '',
+          '{{marketplace_date}}': volunteer_data?.marketplace_date || '',
+          '{{qr_card_id}}': volunteer_data?.qr_card_id || '',
+          '{{id}}': volunteer_data?.qr_card_id || '',
+          '{{login_url}}': 'https://giftitforward.lovable.app/auth',
+          '{{training_url}}': 'https://giftitforward.lovable.app/training',
+          '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        };
+        let result = text;
+        for (const [token, value] of Object.entries(subjectTokens)) {
+          result = result.replaceAll(token, value);
+        }
+        return result;
+      };
+      subject = `[TEST] ${resolveSubjectTokens(custom_template.subject)}`;
       console.log("Using custom template for email");
     } else {
       const emailSubjects: Record<string, string> = {
