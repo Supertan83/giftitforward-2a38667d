@@ -88,7 +88,7 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
   // Form state
   const [formName, setFormName] = useState('');
   const [formTemplateId, setFormTemplateId] = useState('');
-  const [formRecipientType, setFormRecipientType] = useState<'all' | 'marketplace' | 'manual'>('all');
+  const [formRecipientType, setFormRecipientType] = useState<'all' | 'marketplace' | 'manual' | 'pending_training'>('all');
   const [formMarketplaceId, setFormMarketplaceId] = useState('');
   const [formManualEmails, setFormManualEmails] = useState('');
   const [formScheduleEnabled, setFormScheduleEnabled] = useState(false);
