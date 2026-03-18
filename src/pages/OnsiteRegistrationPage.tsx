@@ -44,8 +44,7 @@ export default function OnsiteRegistrationPage() {
       const { data } = await supabase
         .from('marketplace_events')
         .select('id, name')
-        .in('status', ['active', 'upcoming'])
-        .order('event_date', { ascending: true });
+        .order('event_date', { ascending: false });
       setMarketplaces(data || []);
       setLoadingMarketplaces(false);
     };
