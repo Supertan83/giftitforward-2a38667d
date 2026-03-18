@@ -444,6 +444,33 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
   });
 
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+
+  const sendReminderMutation = useMutation({
+    mutationFn: async (volunteer: PendingVolunteer) => {
+      const { data, error } = await supabase.functions.invoke('send-retake-training', {
+        body: {
+          volunteerId: volunteer.id,
+          firstName: volunteer.first_name,
+          lastName: volunteer.last_name,
+          email: volunteer.email,
+          isReminder: true,
+        }
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || 'Failed to send reminder');
+      return data;
+    },
+    onSuccess: () => {
+      setSendingReminderId(null);
+      toast({ title: 'Reminder Sent', description: 'Training reminder email has been sent.' });
+    },
+    onError: (error: Error) => {
+      setSendingReminderId(null);
+      toast({ title: 'Failed to Send Reminder', description: error.message, variant: 'destructive' });
+    }
+  });
+
   const [resendingSurveyId, setResendingSurveyId] = useState<string | null>(null);
 
   const resendSurveyMutation = useMutation({
@@ -1958,6 +1985,20 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                               <Send className="w-4 h-4 mr-2" />
                                             )}
                                             Resend Survey
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              setSendingReminderId(volunteer.id);
+                                              sendReminderMutation.mutate(volunteer);
+                                            }}
+                                            disabled={sendingReminderId === volunteer.id}
+                                          >
+                                            {sendingReminderId === volunteer.id ? (
+                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            ) : (
+                                              <RefreshCw className="w-4 h-4 mr-2" />
+                                            )}
+                                            Send Reminder
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
                                             onClick={() => {
