@@ -13,6 +13,7 @@ interface VolunteerData {
   first_name?: string;
   last_name?: string;
   name?: string;
+  email?: string;
   phone?: string;
   password?: string;
   is_employee?: boolean;
