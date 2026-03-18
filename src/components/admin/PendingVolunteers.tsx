@@ -3846,6 +3846,66 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Send Reminder Template Picker Dialog */}
+      <Dialog open={!!reminderDialogVolunteer} onOpenChange={(open) => {
+        if (!open) {
+          setReminderDialogVolunteer(null);
+          setReminderTemplateId('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Reminder Email</DialogTitle>
+            <DialogDescription>
+              Choose an email template to send a reminder to <strong>{reminderDialogVolunteer?.first_name} {reminderDialogVolunteer?.last_name}</strong> ({reminderDialogVolunteer?.email})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Email Template</Label>
+              <Select value={reminderTemplateId} onValueChange={setReminderTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailTemplates.filter(t => t.is_active).map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} ({template.category})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setReminderDialogVolunteer(null);
+              setReminderTemplateId('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!reminderTemplateId || sendReminderMutation.isPending}
+              onClick={() => {
+                if (reminderDialogVolunteer && reminderTemplateId) {
+                  setSendingReminderId(reminderDialogVolunteer.id);
+                  sendReminderMutation.mutate({
+                    volunteer: reminderDialogVolunteer,
+                    templateId: reminderTemplateId,
+                  });
+                }
+              }}
+            >
+              {sendReminderMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+              ) : (
+                <><Send className="w-4 h-4" /> Send Reminder</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
