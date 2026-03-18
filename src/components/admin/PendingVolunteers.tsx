@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, ChevronRight, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
@@ -210,6 +211,10 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [sendingCertForVolunteer, setSendingCertForVolunteer] = useState<string | null>(null);
   const [expandedVolunteers, setExpandedVolunteers] = useState<Set<string>>(new Set());
   
+  // Reminder dialog state
+  const [reminderDialogVolunteer, setReminderDialogVolunteer] = useState<PendingVolunteer | null>(null);
+  const [reminderTemplateId, setReminderTemplateId] = useState<string>('');
+  
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -234,6 +239,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   
   // Fetch marketplaces for adding events and export filter
   const { data: marketplaces = [] } = useMarketplaces();
+  
+  // Fetch email templates for reminder dialog
+  const { data: emailTemplates = [] } = useEmailTemplates();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['pending-volunteers', activeTab],
@@ -447,23 +455,51 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
 
   const sendReminderMutation = useMutation({
-    mutationFn: async (volunteer: PendingVolunteer) => {
-      const { data, error } = await supabase.functions.invoke('send-retake-training', {
-        body: {
-          volunteerId: volunteer.id,
-          firstName: volunteer.first_name,
-          lastName: volunteer.last_name,
-          email: volunteer.email,
-          isReminder: true,
-        }
+    mutationFn: async ({ volunteer, templateId }: { volunteer: PendingVolunteer; templateId: string }) => {
+      const { data: userData } = await supabase.auth.getUser();
+      
+      // Create a single-recipient campaign
+      const { data: campaign, error: campaignError } = await supabase
+        .from('email_campaigns' as any)
+        .insert({
+          name: `Reminder: ${volunteer.first_name} ${volunteer.last_name}`,
+          template_id: templateId,
+          status: 'sending',
+          total_recipients: 1,
+          created_by: userData.user?.id,
+          recipient_filter: { type: 'individual_reminder' },
+        } as any)
+        .select()
+        .single();
+      if (campaignError) throw new Error(campaignError.message);
+
+      const campaignId = (campaign as any).id;
+
+      // Add the single recipient
+      const { error: recipientError } = await supabase
+        .from('email_campaign_recipients' as any)
+        .insert({
+          campaign_id: campaignId,
+          volunteer_id: volunteer.id,
+          recipient_email: volunteer.email,
+          recipient_name: `${volunteer.first_name} ${volunteer.last_name}`,
+          status: 'pending',
+        } as any);
+      if (recipientError) throw new Error(recipientError.message);
+
+      // Invoke send-campaign-email
+      const { data, error } = await supabase.functions.invoke('send-campaign-email', {
+        body: { campaign_id: campaignId }
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || 'Failed to send reminder');
       return data;
     },
     onSuccess: () => {
       setSendingReminderId(null);
-      toast({ title: 'Reminder Sent', description: 'Training reminder email has been sent.' });
+      setReminderDialogVolunteer(null);
+      setReminderTemplateId('');
+      queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
+      toast({ title: 'Reminder Sent', description: 'Reminder email has been sent using the selected template.' });
     },
     onError: (error: Error) => {
       setSendingReminderId(null);
@@ -1988,8 +2024,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
                                             onClick={() => {
-                                              setSendingReminderId(volunteer.id);
-                                              sendReminderMutation.mutate(volunteer);
+                                              setReminderDialogVolunteer(volunteer);
+                                              setReminderTemplateId('');
                                             }}
                                             disabled={sendingReminderId === volunteer.id}
                                           >
@@ -3810,6 +3846,66 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Send Reminder Template Picker Dialog */}
+      <Dialog open={!!reminderDialogVolunteer} onOpenChange={(open) => {
+        if (!open) {
+          setReminderDialogVolunteer(null);
+          setReminderTemplateId('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Reminder Email</DialogTitle>
+            <DialogDescription>
+              Choose an email template to send a reminder to <strong>{reminderDialogVolunteer?.first_name} {reminderDialogVolunteer?.last_name}</strong> ({reminderDialogVolunteer?.email})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Email Template</Label>
+              <Select value={reminderTemplateId} onValueChange={setReminderTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailTemplates.filter(t => t.is_active).map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} ({template.category})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setReminderDialogVolunteer(null);
+              setReminderTemplateId('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!reminderTemplateId || sendReminderMutation.isPending}
+              onClick={() => {
+                if (reminderDialogVolunteer && reminderTemplateId) {
+                  setSendingReminderId(reminderDialogVolunteer.id);
+                  sendReminderMutation.mutate({
+                    volunteer: reminderDialogVolunteer,
+                    templateId: reminderTemplateId,
+                  });
+                }
+              }}
+            >
+              {sendReminderMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+              ) : (
+                <><Send className="w-4 h-4" /> Send Reminder</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
