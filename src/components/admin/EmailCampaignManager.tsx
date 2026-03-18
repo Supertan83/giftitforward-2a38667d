@@ -196,11 +196,23 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
           }));
       } else if (formRecipientType === 'manual') {
         const emails = formManualEmails.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean);
-        recipientsList = emails.map(email => ({
-          email,
-          name: email.split('@')[0],
-          volunteer_id: null,
-        }));
+        
+        // Auto-match manual emails to existing volunteers for token resolution
+        const { data: matchedVolunteers } = await supabase
+          .from('pending_volunteers')
+          .select('id, first_name, last_name, email')
+          .in('email', emails);
+        
+        const volMap = new Map((matchedVolunteers || []).map(v => [v.email.toLowerCase(), v]));
+        
+        recipientsList = emails.map(email => {
+          const vol = volMap.get(email.toLowerCase());
+          return {
+            email,
+            name: vol ? `${vol.first_name} ${vol.last_name}` : email.split('@')[0],
+            volunteer_id: vol?.id || null,
+          };
+        });
       } else if (formRecipientType === 'pending_training') {
         const { data: volunteers } = await supabase
           .from('pending_volunteers')
