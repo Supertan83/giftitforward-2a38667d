@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { ArrowLeft, Check, X, Eye, Loader2, User, Mail, Phone, Building, Calendar as CalendarLucide, AlertCircle, Clock, RefreshCw, Send, MailOpen, Users, KeyRound, Search, Copy, QrCode, GraduationCap, Code, ChevronDown, ChevronRight, Briefcase, Upload, Trash2, Award, Download, CalendarIcon, FileSpreadsheet, FileText, Pencil, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
