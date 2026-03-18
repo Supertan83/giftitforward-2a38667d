@@ -88,7 +88,7 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
   // Form state
   const [formName, setFormName] = useState('');
   const [formTemplateId, setFormTemplateId] = useState('');
-  const [formRecipientType, setFormRecipientType] = useState<'all' | 'marketplace' | 'manual'>('all');
+  const [formRecipientType, setFormRecipientType] = useState<'all' | 'marketplace' | 'manual' | 'pending_training'>('all');
   const [formMarketplaceId, setFormMarketplaceId] = useState('');
   const [formManualEmails, setFormManualEmails] = useState('');
   const [formScheduleEnabled, setFormScheduleEnabled] = useState(false);
@@ -200,6 +200,17 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
           email,
           name: email.split('@')[0],
           volunteer_id: null,
+        }));
+      } else if (formRecipientType === 'pending_training') {
+        const { data: volunteers } = await supabase
+          .from('pending_volunteers')
+          .select('id, first_name, last_name, email')
+          .eq('status', 'approved')
+          .or('training_completed.is.null,training_completed.eq.false');
+        recipientsList = (volunteers || []).map(v => ({
+          email: v.email,
+          name: `${v.first_name} ${v.last_name}`,
+          volunteer_id: v.id,
         }));
       }
 
@@ -639,6 +650,7 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
                   <SelectItem value="all">All Approved Volunteers</SelectItem>
                   <SelectItem value="marketplace">By Marketplace</SelectItem>
                   <SelectItem value="manual">Manual Email List</SelectItem>
+                  <SelectItem value="pending_training">Pending – CE Module Incomplete</SelectItem>
                 </SelectContent>
               </Select>
             </div>
