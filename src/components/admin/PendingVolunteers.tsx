@@ -1079,6 +1079,36 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         .in('volunteer_id', volunteerIds)
         .like('unique_id', '%-F%');
 
+      // Fetch completed surveys for survey status matching
+      const { data: completedSurveys } = await supabase
+        .from('volunteer_surveys')
+        .select('volunteer_email, marketplace_id, completed_at')
+        .not('completed_at', 'is', null);
+
+      const { data: externalSurveys } = await supabase
+        .from('external_survey_responses')
+        .select('volunteer_email, marketplace_id, completed_at')
+        .not('completed_at', 'is', null);
+
+      // Build a Set of "email|marketplace_id" keys for O(1) lookup
+      const surveyCompletionSet = new Set<string>();
+      for (const s of (completedSurveys || [])) {
+        if (s.volunteer_email && s.marketplace_id) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|${s.marketplace_id}`);
+        }
+        if (s.volunteer_email) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|any`);
+        }
+      }
+      for (const s of (externalSurveys || [])) {
+        if (s.volunteer_email && s.marketplace_id) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|${s.marketplace_id}`);
+        }
+        if (s.volunteer_email) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|any`);
+        }
+      }
+
       // Build a map of volunteer_id -> family cards
       const familyCardsByVolunteer = new Map<string, typeof familyCards>();
       for (const fc of (familyCards || [])) {
