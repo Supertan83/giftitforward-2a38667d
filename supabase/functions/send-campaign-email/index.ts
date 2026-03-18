@@ -214,6 +214,30 @@ async function getVolunteerQrCardId(supabase: any, volunteerId: string): Promise
   }
 }
 
+async function getVolunteerByEmail(supabase: any, email: string): Promise<Volunteer | null> {
+  try {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) return null;
+
+    const { data, error } = await supabase
+      .from("pending_volunteers")
+      .select("id, first_name, last_name, email, phone_number, events_list, events_json, temp_password")
+      .ilike("email", normalizedEmail)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error(`Error looking up volunteer by email ${email}:`, error);
+      return null;
+    }
+
+    return data && data.length > 0 ? data[0] as Volunteer : null;
+  } catch (err) {
+    console.error(`Unexpected error looking up volunteer by email ${email}:`, err);
+    return null;
+  }
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -364,7 +388,11 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       try {
-        const volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
+        let volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
+
+        if (!volunteer && recipient.recipient_email) {
+          volunteer = await getVolunteerByEmail(supabase, recipient.recipient_email);
+        }
 
         // Look up marketplace data and QR card for this volunteer
         let marketplaceData = null;
@@ -372,7 +400,7 @@ const handler = async (req: Request): Promise<Response> => {
 
         if (volunteer) {
           marketplaceData = await getVolunteerMarketplaceData(supabase, volunteer);
-          qrCardId = (recipient.volunteer_id && qrCardMap[recipient.volunteer_id]) || '';
+          qrCardId = volunteer.id ? ((qrCardMap[volunteer.id]) || await getVolunteerQrCardId(supabase, volunteer.id)) : '';
         }
 
         const html = generateCampaignEmailHTML(template as unknown as EmailTemplate, supabaseUrl, volunteer, marketplaceData, qrCardId);

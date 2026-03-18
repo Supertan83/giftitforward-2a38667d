@@ -195,18 +195,27 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
             volunteer_id: v.id,
           }));
       } else if (formRecipientType === 'manual') {
+        const normalizeEmail = (value: string) => value.trim().toLowerCase();
         const emails = formManualEmails.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean);
-        
-        // Auto-match manual emails to existing volunteers for token resolution
-        const { data: matchedVolunteers } = await supabase
+
+        const { data: matchedVolunteers, error: volunteersError } = await supabase
           .from('pending_volunteers')
-          .select('id, first_name, last_name, email')
-          .in('email', emails);
-        
-        const volMap = new Map((matchedVolunteers || []).map(v => [v.email.toLowerCase(), v]));
-        
+          .select('id, first_name, last_name, email, status, created_at')
+          .order('created_at', { ascending: false });
+
+        if (volunteersError) throw volunteersError;
+
+        const volMap = new Map<string, { id: string; first_name: string; last_name: string; email: string; status: string | null }>();
+        for (const volunteer of matchedVolunteers || []) {
+          const key = normalizeEmail(volunteer.email);
+          const existing = volMap.get(key);
+          if (!existing || (existing.status !== 'approved' && volunteer.status === 'approved')) {
+            volMap.set(key, volunteer);
+          }
+        }
+
         recipientsList = emails.map(email => {
-          const vol = volMap.get(email.toLowerCase());
+          const vol = volMap.get(normalizeEmail(email));
           return {
             email,
             name: vol ? `${vol.first_name} ${vol.last_name}` : email.split('@')[0],
