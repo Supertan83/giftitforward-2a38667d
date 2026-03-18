@@ -239,6 +239,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   
   // Fetch marketplaces for adding events and export filter
   const { data: marketplaces = [] } = useMarketplaces();
+  
+  // Fetch email templates for reminder dialog
+  const { data: emailTemplates = [] } = useEmailTemplates();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['pending-volunteers', activeTab],
