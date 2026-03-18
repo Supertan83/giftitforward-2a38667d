@@ -56,11 +56,13 @@ interface Volunteer {
 }
 
 function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceData?: any, qrCardId?: string): string {
+  const volEmail = volunteer?.email || '';
   const tokens: Record<string, string> = {
     '{{first_name}}': volunteer?.first_name || 'Volunteer',
     '{{last_name}}': volunteer?.last_name || '',
     '{{full_name}}': volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : 'Volunteer',
-    '{{email}}': volunteer?.email || '',
+    '{{email}}': volEmail,
+    '{{username}}': volEmail, // alias
     '{{password}}': volunteer?.temp_password || '',
     '{{phone}}': volunteer?.phone_number || '',
     '{{marketplace_name}}': marketplaceData?.name || '',
@@ -68,6 +70,7 @@ function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceDat
     '{{marketplace_time}}': marketplaceData?.start_time ? `${marketplaceData.start_time} - ${marketplaceData.end_time || ''}` : '',
     '{{marketplace_location}}': marketplaceData?.location || '',
     '{{qr_card_id}}': qrCardId || '',
+    '{{id}}': qrCardId || '', // alias
     '{{login_url}}': 'https://giftitforward.lovable.app/auth',
     '{{training_url}}': 'https://giftitforward.lovable.app/training',
     '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -101,8 +104,10 @@ function generateCampaignEmailHTML(
       const items = content.split('\n').filter(Boolean).map(li => `<li>${li}</li>`).join('');
       bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><ul style="margin: 0; padding-left: 18px; font-size: 14px; color: #333333; line-height: 1.8;">${items}</ul></td></tr>`;
     } else if (section.type === 'cta') {
-      const ctaUrl = section.url ? rt(section.url) : '#';
-      bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600;">${content}</a></td></tr>`;
+      const ctaUrl = section.url ? rt(section.url) : '';
+      if (ctaUrl) {
+        bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600;">${content}</a></td></tr>`;
+      }
     } else if (section.type === 'image' && content) {
       bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><img src="${content}" alt="" style="display: block; width: 100%; height: auto;" /></td></tr>`;
     }
@@ -110,8 +115,10 @@ function generateCampaignEmailHTML(
 
   let ctaHtml = '';
   if (template.cta_text) {
-    const ctaUrl = template.cta_url ? rt(template.cta_url) : '#';
-    ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600;">${rt(template.cta_text)}</a></td></tr>`;
+    const ctaUrl = template.cta_url ? rt(template.cta_url) : '';
+    if (ctaUrl) {
+      ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600;">${rt(template.cta_text)}</a></td></tr>`;
+    }
   }
 
   return `<!DOCTYPE html>

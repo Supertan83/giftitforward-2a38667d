@@ -13,6 +13,7 @@ interface VolunteerData {
   first_name?: string;
   last_name?: string;
   name?: string;
+  email?: string;
   phone?: string;
   password?: string;
   is_employee?: boolean;
@@ -636,19 +637,23 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
 
-  // Token replacement map
+  // Token replacement map — aligned with send-campaign-email
+  const volEmail = volunteerData?.email || '';
+  const volFullName = volunteerData?.name || `${volunteerData?.first_name || 'Volunteer'} ${volunteerData?.last_name || ''}`.trim();
   const tokens: Record<string, string> = {
-    '{{first_name}}': volunteerData?.first_name || 'Test',
-    '{{last_name}}': volunteerData?.last_name || 'Volunteer',
-    '{{full_name}}': volunteerData?.name || `${volunteerData?.first_name || 'Test'} ${volunteerData?.last_name || 'Volunteer'}`,
-    '{{email}}': volunteerData?.first_name ? `${volunteerData.first_name.toLowerCase()}@example.com` : 'test@example.com',
-    '{{password}}': volunteerData?.password || 'TestPass123',
-    '{{phone}}': volunteerData?.phone || '+971 50 123 4567',
-    '{{marketplace_name}}': volunteerData?.marketplace_name || 'GIF Marketplace',
-    '{{marketplace_date}}': volunteerData?.marketplace_date || 'TBD',
-    '{{marketplace_time}}': volunteerData?.marketplace_time || 'TBD',
-    '{{marketplace_location}}': volunteerData?.marketplace_location || 'TBD',
-    '{{qr_card_id}}': volunteerData?.qr_card_id || 'VOL-TEST-1234',
+    '{{first_name}}': volunteerData?.first_name || 'Volunteer',
+    '{{last_name}}': volunteerData?.last_name || '',
+    '{{full_name}}': volFullName,
+    '{{email}}': volEmail,
+    '{{username}}': volEmail, // alias
+    '{{password}}': volunteerData?.password || '',
+    '{{phone}}': volunteerData?.phone || '',
+    '{{marketplace_name}}': volunteerData?.marketplace_name || '',
+    '{{marketplace_date}}': volunteerData?.marketplace_date || '',
+    '{{marketplace_time}}': volunteerData?.marketplace_time || '',
+    '{{marketplace_location}}': volunteerData?.marketplace_location || '',
+    '{{qr_card_id}}': volunteerData?.qr_card_id || '',
+    '{{id}}': volunteerData?.qr_card_id || '', // alias
     '{{login_url}}': 'https://giftitforward.lovable.app/auth',
     '{{training_url}}': 'https://giftitforward.lovable.app/training',
     '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -672,18 +677,22 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
       const items = content.split('\n').filter(Boolean).map(li => `<li>${li}</li>`).join('');
       bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><ul style="margin: 0; padding-left: 18px; font-size: 14px; color: #333333; line-height: 1.8;">${items}</ul></td></tr>`;
     } else if (section.type === 'cta') {
-      const ctaUrl = section.url ? replaceTokens(section.url) : '#';
-      bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${content}</a></td></tr>`;
+      const ctaUrl = section.url ? replaceTokens(section.url) : '';
+      if (ctaUrl) {
+        bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${content}</a></td></tr>`;
+      }
     } else if (section.type === 'image' && content) {
       bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><img src="${content}" alt="" style="display: block; width: 100%; height: auto;" /></td></tr>`;
     }
   }
 
-  // Optional CTA button
+  // Optional CTA button — only render if URL resolves to something
   let ctaHtml = '';
   if (template.cta_text) {
-    const ctaUrl = template.cta_url ? replaceTokens(template.cta_url) : '#';
-    ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${replaceTokens(template.cta_text)}</a></td></tr>`;
+    const ctaUrl = template.cta_url ? replaceTokens(template.cta_url) : '';
+    if (ctaUrl) {
+      ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${replaceTokens(template.cta_text)}</a></td></tr>`;
+    }
   }
 
   return `<!DOCTYPE html>
@@ -815,7 +824,32 @@ const handler = async (req: Request): Promise<Response> => {
     if (email_type === 'custom_template' && custom_template) {
       // Render from custom template
       html = generateCustomTemplateHTML(custom_template, supabaseUrl, volunteer_data);
-      subject = `[TEST] ${custom_template.subject.replace(/\{\{[^}]+\}\}/g, 'Test')}`;
+      // Resolve tokens in subject instead of stripping them
+      const resolveSubjectTokens = (text: string): string => {
+        const volEmail = volunteer_data?.email || '';
+        const volFullName = volunteer_data?.name || `${volunteer_data?.first_name || 'Volunteer'} ${volunteer_data?.last_name || ''}`.trim();
+        const subjectTokens: Record<string, string> = {
+          '{{first_name}}': volunteer_data?.first_name || 'Volunteer',
+          '{{last_name}}': volunteer_data?.last_name || '',
+          '{{full_name}}': volFullName,
+          '{{email}}': volEmail,
+          '{{username}}': volEmail,
+          '{{password}}': volunteer_data?.password || '',
+          '{{marketplace_name}}': volunteer_data?.marketplace_name || '',
+          '{{marketplace_date}}': volunteer_data?.marketplace_date || '',
+          '{{qr_card_id}}': volunteer_data?.qr_card_id || '',
+          '{{id}}': volunteer_data?.qr_card_id || '',
+          '{{login_url}}': 'https://giftitforward.lovable.app/auth',
+          '{{training_url}}': 'https://giftitforward.lovable.app/training',
+          '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        };
+        let result = text;
+        for (const [token, value] of Object.entries(subjectTokens)) {
+          result = result.replaceAll(token, value);
+        }
+        return result;
+      };
+      subject = `[TEST] ${resolveSubjectTokens(custom_template.subject)}`;
       console.log("Using custom template for email");
     } else {
       const emailSubjects: Record<string, string> = {
