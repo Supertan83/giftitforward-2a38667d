@@ -104,10 +104,8 @@ function generateCampaignEmailHTML(
       const items = content.split('\n').filter(Boolean).map(li => `<li>${li}</li>`).join('');
       bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><ul style="margin: 0; padding-left: 18px; font-size: 14px; color: #333333; line-height: 1.8;">${items}</ul></td></tr>`;
     } else if (section.type === 'cta') {
-      const ctaUrl = section.url ? rt(section.url) : '';
-      if (ctaUrl) {
-        bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600;">${content}</a></td></tr>`;
-      }
+      const ctaUrl = section.url ? rt(section.url) : (content.startsWith('http') ? content : rt('{{login_url}}'));
+      bodySectionsHtml += `<tr><td style="padding: 10px 40px 15px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600;">${content.startsWith('http') ? 'Click Here' : content}</a></td></tr>`;
     } else if (section.type === 'image' && content) {
       bodySectionsHtml += `<tr><td style="padding: 0 40px 15px 40px;"><img src="${content}" alt="" style="display: block; width: 100%; height: auto;" /></td></tr>`;
     }
