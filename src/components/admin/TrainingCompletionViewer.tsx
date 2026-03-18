@@ -510,6 +510,58 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Send Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={(open) => { if (!isBulkSending) { setBulkDialogOpen(open); setSelectedTemplateId(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Send Training Reminder</DialogTitle>
+            <DialogDescription>
+              Send a reminder email to all <span className="font-semibold">{pendingCount}</span> volunteers who haven't completed training.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Email Template</label>
+              <Select value={selectedTemplateId || ''} onValueChange={setSelectedTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailTemplates.filter(t => t.is_active).map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/50 p-3 text-sm">
+              <p className="text-muted-foreground">
+                This will create a campaign and send emails to <span className="font-semibold text-foreground">{pendingCount}</span> pending volunteers using the selected template. Tokens like <code className="text-xs bg-muted px-1 rounded">{'{{full_name}}'}</code>, <code className="text-xs bg-muted px-1 rounded">{'{{email}}'}</code>, and <code className="text-xs bg-muted px-1 rounded">{'{{password}}'}</code> will be resolved per volunteer.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkDialogOpen(false); setSelectedTemplateId(null); }} disabled={isBulkSending}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkSend} disabled={!selectedTemplateId || isBulkSending}>
+              {isBulkSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Send to {pendingCount} Volunteers
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
