@@ -188,6 +188,69 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
     }
   };
 
+  const pendingVolunteers = volunteers.filter((v) => !v.training_completed);
+
+  const handleBulkSend = async () => {
+    if (!selectedTemplateId || pendingVolunteers.length === 0) return;
+    setIsBulkSending(true);
+    try {
+      const campaignName = `Training Reminder - ${format(new Date(), 'MMM d, yyyy h:mm a')}`;
+      
+      const { data: campaign, error: campaignError } = await supabase
+        .from('email_campaigns')
+        .insert({
+          name: campaignName,
+          template_id: selectedTemplateId,
+          status: 'sending',
+          total_recipients: pendingVolunteers.length,
+          recipient_filter: { type: 'training_pending' },
+        } as any)
+        .select()
+        .single();
+
+      if (campaignError) throw campaignError;
+
+      const recipients = pendingVolunteers.map((v) => ({
+        campaign_id: (campaign as any).id,
+        volunteer_id: v.id,
+        recipient_email: v.email,
+        recipient_name: `${v.first_name} ${v.last_name}`.trim(),
+        status: 'pending',
+      }));
+
+      const { error: recipientsError } = await supabase
+        .from('email_campaign_recipients')
+        .insert(recipients as any);
+
+      if (recipientsError) throw recipientsError;
+
+      const { data: result, error: sendError } = await supabase.functions.invoke('send-campaign-email', {
+        body: { campaign_id: (campaign as any).id },
+      });
+
+      if (sendError) throw sendError;
+
+      const sent = result?.sent_count || 0;
+      const failed = result?.failed_count || 0;
+
+      toast({
+        title: 'Bulk Reminder Sent',
+        description: `${sent} emails sent successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+      });
+      setBulkDialogOpen(false);
+      setSelectedTemplateId(null);
+    } catch (error: any) {
+      console.error('Bulk send error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send bulk reminders',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBulkSending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
