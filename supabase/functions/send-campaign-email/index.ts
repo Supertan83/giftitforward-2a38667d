@@ -388,7 +388,11 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       try {
-        const volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
+        let volunteer = recipient.volunteer_id ? volunteersMap[recipient.volunteer_id] || null : null;
+
+        if (!volunteer && recipient.recipient_email) {
+          volunteer = await getVolunteerByEmail(supabase, recipient.recipient_email);
+        }
 
         // Look up marketplace data and QR card for this volunteer
         let marketplaceData = null;
@@ -396,7 +400,7 @@ const handler = async (req: Request): Promise<Response> => {
 
         if (volunteer) {
           marketplaceData = await getVolunteerMarketplaceData(supabase, volunteer);
-          qrCardId = (recipient.volunteer_id && qrCardMap[recipient.volunteer_id]) || '';
+          qrCardId = volunteer.id ? ((qrCardMap[volunteer.id]) || await getVolunteerQrCardId(supabase, volunteer.id)) : '';
         }
 
         const html = generateCampaignEmailHTML(template as unknown as EmailTemplate, supabaseUrl, volunteer, marketplaceData, qrCardId);
