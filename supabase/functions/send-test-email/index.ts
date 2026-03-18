@@ -686,11 +686,13 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
     }
   }
 
-  // Optional CTA button
+  // Optional CTA button — only render if URL resolves to something
   let ctaHtml = '';
   if (template.cta_text) {
-    const ctaUrl = template.cta_url ? replaceTokens(template.cta_url) : '#';
-    ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${replaceTokens(template.cta_text)}</a></td></tr>`;
+    const ctaUrl = template.cta_url ? replaceTokens(template.cta_url) : '';
+    if (ctaUrl) {
+      ctaHtml = `<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><a href="${ctaUrl}" style="display: inline-block; background-color: #DA291C; color: #ffffff; padding: 12px 28px; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 0;">${replaceTokens(template.cta_text)}</a></td></tr>`;
+    }
   }
 
   return `<!DOCTYPE html>
