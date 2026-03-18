@@ -362,8 +362,18 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
               size="sm"
               onClick={() => setFilterStatus('pending')}
             >
-              Pending
+            Pending
             </Button>
+            {pendingCount > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setBulkDialogOpen(true)}
+                className="ml-auto"
+              >
+                <Users className="w-4 h-4 mr-1" />
+                Send Reminder to {pendingCount} Pending
+              </Button>
+            )}
           </div>
         </div>
 
