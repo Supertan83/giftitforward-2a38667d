@@ -464,7 +464,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         .insert({
           name: `Reminder: ${volunteer.first_name} ${volunteer.last_name}`,
           template_id: templateId,
-          status: 'sending',
+          status: 'draft',
           total_recipients: 1,
           created_by: userData.user?.id,
           recipient_filter: { type: 'individual_reminder' },
