@@ -1182,6 +1182,25 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         const primaryAttended = primaryCards?.some(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id));
         if (primaryAttended) totalAttended++;
 
+        // Determine survey status for attended volunteers
+        let surveyStatus = '';
+        if (primaryAttended) {
+          const cardWithSurvey = primaryCards?.find(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id) && c.survey_completed_at);
+          if (cardWithSurvey) {
+            surveyStatus = 'Yes';
+          } else {
+            const email = v.email?.toLowerCase();
+            const mktId = primaryCards?.find(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id))?.marketplace_id;
+            if (email && mktId && surveyCompletionSet.has(`${email}|${mktId}`)) {
+              surveyStatus = 'Yes';
+            } else if (email && surveyCompletionSet.has(`${email}|any`)) {
+              surveyStatus = 'Yes';
+            } else {
+              surveyStatus = 'No';
+            }
+          }
+        }
+
         rows.push([
           `${v.first_name} ${v.last_name}`,
           'Primary',
@@ -1194,6 +1213,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           v.events_list?.split(',').map((e: string) => formatEventName(e.trim())).join('; ') || '',
           primaryCards?.find(c => !/-F\d+/.test(c.unique_id))?.unique_id || '',
           primaryAttended ? 'Attended' : (primaryCards?.some(c => c.status === 'checked_in') ? 'Checked In' : 'Registered'),
+          surveyStatus,
           v.certificate_sent_at ? 'Yes' : 'No',
           v.training_completed ? 'Yes' : 'No',
           v.email_sent ? 'Yes' : 'No',
@@ -1208,6 +1228,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           const familyAttended = fc.status === 'checked_out';
           if (familyAttended) totalAttended++;
 
+          const familySurveyStatus = familyAttended ? (fc.survey_completed_at ? 'Yes' : 'No') : '';
+
           rows.push([
             memberName,
             'Family Member',
@@ -1220,6 +1242,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             '',
             fc.unique_id,
             familyAttended ? 'Attended' : (fc.status === 'checked_in' ? 'Checked In' : 'Registered'),
+            familySurveyStatus,
             fc.survey_completed_at ? 'Yes' : 'No',
             '',
             '',
