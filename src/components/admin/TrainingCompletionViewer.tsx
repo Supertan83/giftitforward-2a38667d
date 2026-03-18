@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2, Send, Users } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,9 +24,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 
 interface TrainingCompletionViewerProps {
   onBack: () => void;
@@ -50,7 +66,11 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
   const [selectedVolunteer, setSelectedVolunteer] = useState<VolunteerTrainingStatus | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [isBulkSending, setIsBulkSending] = useState(false);
   const { toast } = useToast();
+  const { data: emailTemplates = [] } = useEmailTemplates();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['volunteer-training-status'],
@@ -168,6 +188,69 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
     }
   };
 
+  const pendingVolunteers = volunteers.filter((v) => !v.training_completed);
+
+  const handleBulkSend = async () => {
+    if (!selectedTemplateId || pendingVolunteers.length === 0) return;
+    setIsBulkSending(true);
+    try {
+      const campaignName = `Training Reminder - ${format(new Date(), 'MMM d, yyyy h:mm a')}`;
+      
+      const { data: campaign, error: campaignError } = await supabase
+        .from('email_campaigns')
+        .insert({
+          name: campaignName,
+          template_id: selectedTemplateId,
+          status: 'sending',
+          total_recipients: pendingVolunteers.length,
+          recipient_filter: { type: 'training_pending' },
+        } as any)
+        .select()
+        .single();
+
+      if (campaignError) throw campaignError;
+
+      const recipients = pendingVolunteers.map((v) => ({
+        campaign_id: (campaign as any).id,
+        volunteer_id: v.id,
+        recipient_email: v.email,
+        recipient_name: `${v.first_name} ${v.last_name}`.trim(),
+        status: 'pending',
+      }));
+
+      const { error: recipientsError } = await supabase
+        .from('email_campaign_recipients')
+        .insert(recipients as any);
+
+      if (recipientsError) throw recipientsError;
+
+      const { data: result, error: sendError } = await supabase.functions.invoke('send-campaign-email', {
+        body: { campaign_id: (campaign as any).id },
+      });
+
+      if (sendError) throw sendError;
+
+      const sent = result?.sent_count || 0;
+      const failed = result?.failed_count || 0;
+
+      toast({
+        title: 'Bulk Reminder Sent',
+        description: `${sent} emails sent successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+      });
+      setBulkDialogOpen(false);
+      setSelectedTemplateId(null);
+    } catch (error: any) {
+      console.error('Bulk send error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send bulk reminders',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBulkSending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -279,8 +362,18 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
               size="sm"
               onClick={() => setFilterStatus('pending')}
             >
-              Pending
+            Pending
             </Button>
+            {pendingCount > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setBulkDialogOpen(true)}
+                className="ml-auto"
+              >
+                <Users className="w-4 h-4 mr-1" />
+                Send Reminder to {pendingCount} Pending
+              </Button>
+            )}
           </div>
         </div>
 
@@ -417,6 +510,58 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Send Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={(open) => { if (!isBulkSending) { setBulkDialogOpen(open); setSelectedTemplateId(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Send Training Reminder</DialogTitle>
+            <DialogDescription>
+              Send a reminder email to all <span className="font-semibold">{pendingCount}</span> volunteers who haven't completed training.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Email Template</label>
+              <Select value={selectedTemplateId || ''} onValueChange={setSelectedTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailTemplates.filter(t => t.is_active).map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/50 p-3 text-sm">
+              <p className="text-muted-foreground">
+                This will create a campaign and send emails to <span className="font-semibold text-foreground">{pendingCount}</span> pending volunteers using the selected template. Tokens like <code className="text-xs bg-muted px-1 rounded">{'{{full_name}}'}</code>, <code className="text-xs bg-muted px-1 rounded">{'{{email}}'}</code>, and <code className="text-xs bg-muted px-1 rounded">{'{{password}}'}</code> will be resolved per volunteer.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkDialogOpen(false); setSelectedTemplateId(null); }} disabled={isBulkSending}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkSend} disabled={!selectedTemplateId || isBulkSending}>
+              {isBulkSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Send to {pendingCount} Volunteers
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
