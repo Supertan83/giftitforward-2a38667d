@@ -639,6 +639,7 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
                   <SelectItem value="all">All Approved Volunteers</SelectItem>
                   <SelectItem value="marketplace">By Marketplace</SelectItem>
                   <SelectItem value="manual">Manual Email List</SelectItem>
+                  <SelectItem value="pending_training">Pending – CE Module Incomplete</SelectItem>
                 </SelectContent>
               </Select>
             </div>
