@@ -637,19 +637,23 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
 
-  // Token replacement map
+  // Token replacement map — aligned with send-campaign-email
+  const volEmail = volunteerData?.email || '';
+  const volFullName = volunteerData?.name || `${volunteerData?.first_name || 'Volunteer'} ${volunteerData?.last_name || ''}`.trim();
   const tokens: Record<string, string> = {
-    '{{first_name}}': volunteerData?.first_name || 'Test',
-    '{{last_name}}': volunteerData?.last_name || 'Volunteer',
-    '{{full_name}}': volunteerData?.name || `${volunteerData?.first_name || 'Test'} ${volunteerData?.last_name || 'Volunteer'}`,
-    '{{email}}': volunteerData?.first_name ? `${volunteerData.first_name.toLowerCase()}@example.com` : 'test@example.com',
-    '{{password}}': volunteerData?.password || 'TestPass123',
-    '{{phone}}': volunteerData?.phone || '+971 50 123 4567',
-    '{{marketplace_name}}': volunteerData?.marketplace_name || 'GIF Marketplace',
-    '{{marketplace_date}}': volunteerData?.marketplace_date || 'TBD',
-    '{{marketplace_time}}': volunteerData?.marketplace_time || 'TBD',
-    '{{marketplace_location}}': volunteerData?.marketplace_location || 'TBD',
-    '{{qr_card_id}}': volunteerData?.qr_card_id || 'VOL-TEST-1234',
+    '{{first_name}}': volunteerData?.first_name || 'Volunteer',
+    '{{last_name}}': volunteerData?.last_name || '',
+    '{{full_name}}': volFullName,
+    '{{email}}': volEmail,
+    '{{username}}': volEmail, // alias
+    '{{password}}': volunteerData?.password || '',
+    '{{phone}}': volunteerData?.phone || '',
+    '{{marketplace_name}}': volunteerData?.marketplace_name || '',
+    '{{marketplace_date}}': volunteerData?.marketplace_date || '',
+    '{{marketplace_time}}': volunteerData?.marketplace_time || '',
+    '{{marketplace_location}}': volunteerData?.marketplace_location || '',
+    '{{qr_card_id}}': volunteerData?.qr_card_id || '',
+    '{{id}}': volunteerData?.qr_card_id || '', // alias
     '{{login_url}}': 'https://giftitforward.lovable.app/auth',
     '{{training_url}}': 'https://giftitforward.lovable.app/training',
     '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
