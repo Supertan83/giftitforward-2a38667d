@@ -201,6 +201,17 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
           name: email.split('@')[0],
           volunteer_id: null,
         }));
+      } else if (formRecipientType === 'pending_training') {
+        const { data: volunteers } = await supabase
+          .from('pending_volunteers')
+          .select('id, first_name, last_name, email')
+          .eq('status', 'approved')
+          .or('training_completed.is.null,training_completed.eq.false');
+        recipientsList = (volunteers || []).map(v => ({
+          email: v.email,
+          name: `${v.first_name} ${v.last_name}`,
+          volunteer_id: v.id,
+        }));
       }
 
       if (recipientsList.length === 0) {
