@@ -1079,6 +1079,36 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         .in('volunteer_id', volunteerIds)
         .like('unique_id', '%-F%');
 
+      // Fetch completed surveys for survey status matching
+      const { data: completedSurveys } = await supabase
+        .from('volunteer_surveys')
+        .select('volunteer_email, marketplace_id, completed_at')
+        .not('completed_at', 'is', null);
+
+      const { data: externalSurveys } = await supabase
+        .from('external_survey_responses')
+        .select('volunteer_email, marketplace_id, completed_at')
+        .not('completed_at', 'is', null);
+
+      // Build a Set of "email|marketplace_id" keys for O(1) lookup
+      const surveyCompletionSet = new Set<string>();
+      for (const s of (completedSurveys || [])) {
+        if (s.volunteer_email && s.marketplace_id) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|${s.marketplace_id}`);
+        }
+        if (s.volunteer_email) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|any`);
+        }
+      }
+      for (const s of (externalSurveys || [])) {
+        if (s.volunteer_email && s.marketplace_id) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|${s.marketplace_id}`);
+        }
+        if (s.volunteer_email) {
+          surveyCompletionSet.add(`${s.volunteer_email.toLowerCase()}|any`);
+        }
+      }
+
       // Build a map of volunteer_id -> family cards
       const familyCardsByVolunteer = new Map<string, typeof familyCards>();
       for (const fc of (familyCards || [])) {
@@ -1133,6 +1163,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         'Events Registered',
         'QR Card ID',
         'Attendance Status',
+        'Survey Status',
         'Certificate Sent',
         'Training Completed',
         'Email Sent',
@@ -1151,6 +1182,25 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         const primaryAttended = primaryCards?.some(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id));
         if (primaryAttended) totalAttended++;
 
+        // Determine survey status for attended volunteers
+        let surveyStatus = '';
+        if (primaryAttended) {
+          const cardWithSurvey = primaryCards?.find(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id) && c.survey_completed_at);
+          if (cardWithSurvey) {
+            surveyStatus = 'Yes';
+          } else {
+            const email = v.email?.toLowerCase();
+            const mktId = primaryCards?.find(c => c.status === 'checked_out' && !/-F\d+/.test(c.unique_id))?.marketplace_id;
+            if (email && mktId && surveyCompletionSet.has(`${email}|${mktId}`)) {
+              surveyStatus = 'Yes';
+            } else if (email && surveyCompletionSet.has(`${email}|any`)) {
+              surveyStatus = 'Yes';
+            } else {
+              surveyStatus = 'No';
+            }
+          }
+        }
+
         rows.push([
           `${v.first_name} ${v.last_name}`,
           'Primary',
@@ -1163,6 +1213,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           v.events_list?.split(',').map((e: string) => formatEventName(e.trim())).join('; ') || '',
           primaryCards?.find(c => !/-F\d+/.test(c.unique_id))?.unique_id || '',
           primaryAttended ? 'Attended' : (primaryCards?.some(c => c.status === 'checked_in') ? 'Checked In' : 'Registered'),
+          surveyStatus,
           v.certificate_sent_at ? 'Yes' : 'No',
           v.training_completed ? 'Yes' : 'No',
           v.email_sent ? 'Yes' : 'No',
@@ -1177,6 +1228,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           const familyAttended = fc.status === 'checked_out';
           if (familyAttended) totalAttended++;
 
+          const familySurveyStatus = familyAttended ? (fc.survey_completed_at ? 'Yes' : 'No') : '';
+
           rows.push([
             memberName,
             'Family Member',
@@ -1189,6 +1242,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             '',
             fc.unique_id,
             familyAttended ? 'Attended' : (fc.status === 'checked_in' ? 'Checked In' : 'Registered'),
+            familySurveyStatus,
             fc.survey_completed_at ? 'Yes' : 'No',
             '',
             '',
@@ -1199,11 +1253,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       // Add summary rows
       rows.push(Array(headers.length).fill(''));
-      rows.push(['SUMMARY', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Total Registrations: ${totalPrimary + totalFamily}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Primary Volunteers: ${totalPrimary}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Family Members: ${totalFamily}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Actual Attendance (Checked Out): ${totalAttended}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['SUMMARY', ...Array(headers.length - 1).fill('')]);
+      rows.push([`Total Registrations: ${totalPrimary + totalFamily}`, ...Array(headers.length - 1).fill('')]);
+      rows.push([`Primary Volunteers: ${totalPrimary}`, ...Array(headers.length - 1).fill('')]);
+      rows.push([`Family Members: ${totalFamily}`, ...Array(headers.length - 1).fill('')]);
+      rows.push([`Actual Attendance (Checked Out): ${totalAttended}`, ...Array(headers.length - 1).fill('')]);
 
       const startStr = format(exportStartDate, 'yyyy-MM-dd');
       const endStr = format(exportEndDate, 'yyyy-MM-dd');
@@ -1226,6 +1280,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           { wch: 40 }, // Events
           { wch: 22 }, // QR Card ID
           { wch: 15 }, // Attendance Status
+          { wch: 15 }, // Survey Status
           { wch: 15 }, // Certificate Sent
           { wch: 15 }, // Training
           { wch: 12 }, // Email Sent
