@@ -211,6 +211,10 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [sendingCertForVolunteer, setSendingCertForVolunteer] = useState<string | null>(null);
   const [expandedVolunteers, setExpandedVolunteers] = useState<Set<string>>(new Set());
   
+  // Reminder dialog state
+  const [reminderDialogVolunteer, setReminderDialogVolunteer] = useState<PendingVolunteer | null>(null);
+  const [reminderTemplateId, setReminderTemplateId] = useState<string>('');
+  
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
