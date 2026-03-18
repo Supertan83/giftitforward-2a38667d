@@ -2024,8 +2024,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
                                             onClick={() => {
-                                              setSendingReminderId(volunteer.id);
-                                              sendReminderMutation.mutate(volunteer);
+                                              setReminderDialogVolunteer(volunteer);
+                                              setReminderTemplateId('');
                                             }}
                                             disabled={sendingReminderId === volunteer.id}
                                           >
