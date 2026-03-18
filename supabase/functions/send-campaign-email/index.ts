@@ -56,11 +56,13 @@ interface Volunteer {
 }
 
 function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceData?: any, qrCardId?: string): string {
+  const volEmail = volunteer?.email || '';
   const tokens: Record<string, string> = {
     '{{first_name}}': volunteer?.first_name || 'Volunteer',
     '{{last_name}}': volunteer?.last_name || '',
     '{{full_name}}': volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : 'Volunteer',
-    '{{email}}': volunteer?.email || '',
+    '{{email}}': volEmail,
+    '{{username}}': volEmail, // alias
     '{{password}}': volunteer?.temp_password || '',
     '{{phone}}': volunteer?.phone_number || '',
     '{{marketplace_name}}': marketplaceData?.name || '',
@@ -68,6 +70,7 @@ function replaceTokens(text: string, volunteer: Volunteer | null, marketplaceDat
     '{{marketplace_time}}': marketplaceData?.start_time ? `${marketplaceData.start_time} - ${marketplaceData.end_time || ''}` : '',
     '{{marketplace_location}}': marketplaceData?.location || '',
     '{{qr_card_id}}': qrCardId || '',
+    '{{id}}': qrCardId || '', // alias
     '{{login_url}}': 'https://giftitforward.lovable.app/auth',
     '{{training_url}}': 'https://giftitforward.lovable.app/training',
     '{{current_date}}': new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
