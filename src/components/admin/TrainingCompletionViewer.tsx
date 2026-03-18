@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Check, X, RefreshCw, Search, Mail, RotateCcw, Loader2, Send, Users } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,9 +24,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 
 interface TrainingCompletionViewerProps {
   onBack: () => void;
@@ -50,7 +66,11 @@ export const TrainingCompletionViewer = ({ onBack }: TrainingCompletionViewerPro
   const [selectedVolunteer, setSelectedVolunteer] = useState<VolunteerTrainingStatus | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [isBulkSending, setIsBulkSending] = useState(false);
   const { toast } = useToast();
+  const { data: emailTemplates = [] } = useEmailTemplates();
 
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['volunteer-training-status'],
