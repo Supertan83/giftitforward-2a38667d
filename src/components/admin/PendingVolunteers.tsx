@@ -1163,6 +1163,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         'Events Registered',
         'QR Card ID',
         'Attendance Status',
+        'Survey Status',
         'Certificate Sent',
         'Training Completed',
         'Email Sent',
