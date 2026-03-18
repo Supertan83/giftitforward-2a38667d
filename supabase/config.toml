@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.fix-category-mismatches]
 verify_jwt = false
+
+[functions.register-onsite-volunteer]
+verify_jwt = false
