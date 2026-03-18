@@ -11,6 +11,7 @@ import TrainingPage from "./pages/TrainingPage";
 import TrainingCompletePage from "./pages/TrainingCompletePage";
 import VolunteerSurveyPage from "./pages/VolunteerSurveyPage";
 import ExternalSurveyPage from "./pages/ExternalSurveyPage";
+import OnsiteRegistrationPage from "./pages/OnsiteRegistrationPage";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
