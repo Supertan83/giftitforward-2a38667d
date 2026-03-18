@@ -1280,6 +1280,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           { wch: 40 }, // Events
           { wch: 22 }, // QR Card ID
           { wch: 15 }, // Attendance Status
+          { wch: 15 }, // Survey Status
           { wch: 15 }, // Certificate Sent
           { wch: 15 }, // Training
           { wch: 12 }, // Email Sent
