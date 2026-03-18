@@ -1988,6 +1988,20 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
                                             onClick={() => {
+                                              setSendingReminderId(volunteer.id);
+                                              sendReminderMutation.mutate(volunteer);
+                                            }}
+                                            disabled={sendingReminderId === volunteer.id}
+                                          >
+                                            {sendingReminderId === volunteer.id ? (
+                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            ) : (
+                                              <RefreshCw className="w-4 h-4 mr-2" />
+                                            )}
+                                            Send Reminder
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => {
                                               setCertificatePreviewVolunteer(volunteer);
                                               setShowCertificatePreview(true);
                                             }}
