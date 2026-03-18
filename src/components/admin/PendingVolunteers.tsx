@@ -1253,11 +1253,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       // Add summary rows
       rows.push(Array(headers.length).fill(''));
-      rows.push(['SUMMARY', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Total Registrations: ${totalPrimary + totalFamily}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Primary Volunteers: ${totalPrimary}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Family Members: ${totalFamily}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push([`Actual Attendance (Checked Out): ${totalAttended}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['SUMMARY', ...Array(headers.length - 1).fill('')]);
+      rows.push([`Total Registrations: ${totalPrimary + totalFamily}`, ...Array(headers.length - 1).fill('')]);
+      rows.push([`Primary Volunteers: ${totalPrimary}`, ...Array(headers.length - 1).fill('')]);
+      rows.push([`Family Members: ${totalFamily}`, ...Array(headers.length - 1).fill('')]);
+      rows.push([`Actual Attendance (Checked Out): ${totalAttended}`, ...Array(headers.length - 1).fill('')]);
 
       const startStr = format(exportStartDate, 'yyyy-MM-dd');
       const endStr = format(exportEndDate, 'yyyy-MM-dd');
