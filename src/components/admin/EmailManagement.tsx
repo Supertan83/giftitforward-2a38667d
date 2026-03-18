@@ -482,6 +482,7 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
             first_name: volunteer.first_name,
             last_name: volunteer.last_name,
             name: `${volunteer.first_name} ${volunteer.last_name}`,
+            email: volunteer.email,
             phone: volunteer.phone_number || '',
             marketplace_name: marketplaceName,
             marketplace_date: marketplaceDate,
