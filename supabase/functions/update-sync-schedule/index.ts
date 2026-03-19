@@ -37,21 +37,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use Deno postgres to update the cron job
     const { Client } = await import('https://deno.land/x/postgres@v0.19.3/mod.ts');
     const client = new Client(dbUrl);
     await client.connect();
     
-    // Unschedule existing job
+    // Find and kill ALL sync-related cron jobs by name OR by command content
     try {
-      await client.queryObject(`SELECT cron.unschedule('sync-surpluss-allocations')`);
-    } catch (e) {
-      console.log('No existing job to unschedule:', e.message);
-      try {
-        await client.queryObject(`SELECT cron.unschedule(4)`);
-      } catch (_) {
-        console.log('No job with id 4 either');
+      const existingJobs = await client.queryObject<{ jobid: number; jobname: string }>(
+        `SELECT jobid, jobname FROM cron.job 
+         WHERE jobname = 'sync-surpluss-allocations' 
+         OR command LIKE '%sync-surpluss-event-allocations%'`
+      );
+      
+      for (const job of existingJobs.rows) {
+        try {
+          await client.queryObject(`SELECT cron.unschedule(${job.jobid})`);
+          console.log(`Unscheduled job ${job.jobid} (${job.jobname})`);
+        } catch (e) {
+          console.log(`Failed to unschedule job ${job.jobid}: ${e.message}`);
+        }
       }
+      
+      if (existingJobs.rows.length === 0) {
+        console.log('No existing sync cron jobs found');
+      }
+    } catch (e) {
+      console.log('Error querying cron.job:', e.message);
     }
 
     // If interval is 0 (off), just unschedule and don't create a new job
@@ -93,7 +104,6 @@ Deno.serve(async (req) => {
 
     await client.end();
 
-    // Log the schedule change to audit log so UI can read the current interval
     await supabase.from('surpluss_api_audit_log').insert({
       action: 'sync_schedule_updated',
       environment: 'production',
