@@ -1,63 +1,36 @@
 
 
-# Fix: Inventory Stock Mismatch — Wrong Quantity Field Used
+# Fix: Reverse Sync Deletion to Surpluss Platform
 
 ## Problem
+When an item allocation is deleted from a marketplace in the GIF app, the deletion is not synced back to the Surpluss platform. The item remains visible on Surpluss.
 
-The `sync-surpluss-allocations` edge function sets `total_stock` from the wrong Surpluss API field:
+There are **two places** where allocations get deleted:
 
-```typescript
-// Line 319 — current (WRONG)
-const totalQty = donation.quantity ?? donation.item_count ?? 0;
-```
+1. **AllocationManagement.tsx** (`handleDelete`) — already has reverse sync using `batch_update` with `amount: 0`, but this may not be working correctly
+2. **MarketplaceManualDataEditor.tsx** (`handleSave` → deletes via `deletedIds`) — has **no reverse sync at all**
 
-`donation.quantity` is the **remaining unallocated quantity on Surpluss** (or a KG-based figure), NOT the total donated piece count. `donation.item_count` is the actual piece count.
+## Root Cause
+- The `MarketplaceManualDataEditor` deletes allocations from the local database but never calls the Surpluss API
+- The `AllocationManagement` reverse sync uses `batch_update` which sets amount to 0 — this should work per the memory note about material-level operations, but we need to ensure the marketplace `external_id` and item `external_material_id` are available
 
-**Evidence from database:**
+## Fix
 
-| Material | `quantity` (wrong) | `item_count` (correct) | Current `total_stock` | Expected |
-|---|---|---|---|---|
-| #907 King Duvet | 429 | 208 | 429 | 208 |
-| #935 Men's Clothes | 1168 | 4088 | 1168 | 4088 |
-| #918 Kids Boys Perfume | 370 | 2000 | 730 (locked) | 2000 |
-| #775 Kids Swimwear | 88 | 818 | 730 (locked) | 818 or 175* |
+### 1. Add reverse sync to MarketplaceManualDataEditor.tsx
+When deleting allocations in `handleSave`, look up each deleted allocation's `item_type_id` → `external_material_id` and the marketplace's `external_id`, then call the `surpluss-allocations-api` edge function with `batch_update` action setting `amount: 0` for each deleted material.
 
-Additionally, Materials #907 and #935 have no allocations in GIF despite being allocated on Surpluss — this means the event-allocation sync hasn't picked them up (marketplace not linked or allocation not yet synced).
-
-## Fix (2 parts)
-
-### 1. Fix quantity priority in `sync-surpluss-allocations` edge function
-
-Change line 319 from:
-```typescript
-const totalQty = donation.quantity ?? donation.item_count ?? 0;
-```
-to:
-```typescript
-const totalQty = donation.item_count ?? donation.quantity ?? 0;
-```
-
-This prioritizes `item_count` (pieces) over `quantity` (which represents remaining/KG).
-
-### 2. Fix existing data for unlocked items
-
-Run a one-time data correction to update `total_stock` for unlocked items using `item_count` from `external_items`:
-
-```sql
-UPDATE item_types it
-SET total_stock = ei.item_count, updated_at = now()
-FROM external_items ei
-WHERE ei.external_id = it.external_material_id
-  AND it.stock_locked = false
-  AND ei.item_count > 0
-  AND ei.item_count != it.total_stock;
-```
-
-### Note on Surpluss "Remaining" values
-
-The "Remaining" numbers shown in the Surpluss platform screenshots (img1-4) are calculated on the Surpluss side (Total - all allocations across all events). This is a Surpluss platform calculation and cannot be fixed from GIF. The GIF system should show correct `total_stock` values and correct per-marketplace allocation breakdowns.
+### 2. Ensure AllocationManagement.tsx reverse sync is robust
+The existing logic looks correct. We'll verify it has proper error handling and doesn't block the UI on sync failure.
 
 ### Files to modify
-- `supabase/functions/sync-surpluss-allocations/index.ts` (line 319: swap priority)
-- One-time SQL data fix via migration tool
+- **`src/components/admin/MarketplaceManualDataEditor.tsx`**: Add reverse sync calls when deleting allocations (in the `handleSave` function, after deleting each allocation from GIF, call `surpluss-allocations-api` with `batch_update` / `amount: 0`)
+- **`src/components/admin/AllocationManagement.tsx`**: Minor review — existing logic should work, no changes expected
+
+### Technical approach
+For each deleted allocation in `MarketplaceManualDataEditor`:
+1. Before deleting, fetch the allocation's `item_type_id` from the local `editableRows` or query it
+2. Look up the `external_material_id` from `item_types` 
+3. Look up the marketplace's `external_id` from `marketplace_events`
+4. Call `surpluss-allocations-api` with `{ action: 'batch_update', marketplace_event_id, materials: [{ material_id, amount: 0 }], environment: 'production' }`
+5. Only the specific item is set to 0 — other allocations remain untouched
 
