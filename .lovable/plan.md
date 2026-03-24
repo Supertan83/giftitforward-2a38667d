@@ -1,45 +1,63 @@
 
 
-# Fix: Sync Monitor Auto-Sync Won't Stop
+# Fix: Inventory Stock Mismatch — Wrong Quantity Field Used
 
 ## Problem
-When you select "Off" from the auto-sync dropdown, it says disabled but the sync keeps running every 30 minutes. On page refresh, you can see new sync entries appearing.
 
-## Root Cause
-There is a **ghost cron job (jobid=8)** that was created earlier with a different job name. The current `update-sync-schedule` edge function tries to unschedule a job named `'sync-surpluss-allocations'`, but the actual running job has a different name (or was deleted from `cron.job` while pg_cron's internal scheduler still runs it). The unschedule silently fails every time, so the job keeps firing.
+The `sync-surpluss-allocations` edge function sets `total_stock` from the wrong Surpluss API field:
 
-Additionally, the ghost job uses an **old auth key** (`sb_publishable_...`) instead of the current anon key.
+```typescript
+// Line 319 — current (WRONG)
+const totalQty = donation.quantity ?? donation.item_count ?? 0;
+```
+
+`donation.quantity` is the **remaining unallocated quantity on Surpluss** (or a KG-based figure), NOT the total donated piece count. `donation.item_count` is the actual piece count.
+
+**Evidence from database:**
+
+| Material | `quantity` (wrong) | `item_count` (correct) | Current `total_stock` | Expected |
+|---|---|---|---|---|
+| #907 King Duvet | 429 | 208 | 429 | 208 |
+| #935 Men's Clothes | 1168 | 4088 | 1168 | 4088 |
+| #918 Kids Boys Perfume | 370 | 2000 | 730 (locked) | 2000 |
+| #775 Kids Swimwear | 88 | 818 | 730 (locked) | 818 or 175* |
+
+Additionally, Materials #907 and #935 have no allocations in GIF despite being allocated on Surpluss — this means the event-allocation sync hasn't picked them up (marketplace not linked or allocation not yet synced).
 
 ## Fix (2 parts)
 
-### 1. Kill the ghost cron job (one-time SQL)
-Run via the database migration tool:
-```sql
-SELECT cron.unschedule(8);
-```
-This directly unschedules by job ID, which will stop the ghost job immediately.
+### 1. Fix quantity priority in `sync-surpluss-allocations` edge function
 
-### 2. Update the edge function to be more robust
-Modify `supabase/functions/update-sync-schedule/index.ts` to:
-- **Unschedule by both name AND by scanning `cron.job_run_details`** for any job targeting the sync function
-- **Query `cron.job`** for any job whose command contains `sync-surpluss-event-allocations` and unschedule those too
-- Use a simpler, more reliable approach:
-
+Change line 319 from:
 ```typescript
-// Instead of just trying one name, find and kill ALL sync-related cron jobs
-const existingJobs = await client.queryObject(
-  `SELECT jobid, jobname FROM cron.job 
-   WHERE jobname = 'sync-surpluss-allocations' 
-   OR command LIKE '%sync-surpluss-event-allocations%'`
-);
-for (const job of existingJobs.rows) {
-  await client.queryObject(`SELECT cron.unschedule(${job.jobid})`);
-}
+const totalQty = donation.quantity ?? donation.item_count ?? 0;
+```
+to:
+```typescript
+const totalQty = donation.item_count ?? donation.quantity ?? 0;
 ```
 
-When scheduling a new job, use the **current anon key** (already working) and a consistent job name.
+This prioritizes `item_count` (pieces) over `quantity` (which represents remaining/KG).
+
+### 2. Fix existing data for unlocked items
+
+Run a one-time data correction to update `total_stock` for unlocked items using `item_count` from `external_items`:
+
+```sql
+UPDATE item_types it
+SET total_stock = ei.item_count, updated_at = now()
+FROM external_items ei
+WHERE ei.external_id = it.external_material_id
+  AND it.stock_locked = false
+  AND ei.item_count > 0
+  AND ei.item_count != it.total_stock;
+```
+
+### Note on Surpluss "Remaining" values
+
+The "Remaining" numbers shown in the Surpluss platform screenshots (img1-4) are calculated on the Surpluss side (Total - all allocations across all events). This is a Surpluss platform calculation and cannot be fixed from GIF. The GIF system should show correct `total_stock` values and correct per-marketplace allocation breakdowns.
 
 ### Files to modify
-- **One-time SQL migration**: `SELECT cron.unschedule(8)` to kill the ghost job
-- **`supabase/functions/update-sync-schedule/index.ts`**: More robust unschedule logic that finds jobs by command content, not just name
+- `supabase/functions/sync-surpluss-allocations/index.ts` (line 319: swap priority)
+- One-time SQL data fix via migration tool
 
