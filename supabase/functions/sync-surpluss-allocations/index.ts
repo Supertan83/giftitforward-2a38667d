@@ -308,15 +308,10 @@ serve(async (req) => {
           }
         }
 
-        // NOTE: donation.quantity from the Surpluss donations API represents the
-        // "remaining unallocated quantity" on the Surpluss platform — NOT the total
-        // donated or the amount allocated to GIF. We still store it here because
-        // there is no better field available from this endpoint. The actual GIF
-        // allocation quantities come from the donation-allocations endpoint and are
-        // synced via sync-surpluss-event-allocations. The total_stock value should
-        // be treated as an approximate upper-bound reference, not an exact figure.
-        // See: .lovable/plan.md — Inventory Reconciliation notes.
-        const totalQty = donation.quantity ?? donation.item_count ?? 0;
+        // NOTE: donation.item_count is the actual piece count (total donated).
+        // donation.quantity often represents remaining/KG on Surpluss, NOT the total.
+        // We prioritize item_count for accurate total_stock in GIF.
+        const totalQty = donation.item_count ?? donation.quantity ?? 0;
 
         const { data: existingItemType } = await supabase
           .from('item_types')
