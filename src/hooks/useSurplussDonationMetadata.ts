@@ -1,9 +1,9 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   fetchSurplussDonationMetadataForMaterial,
   type SurplussDonationMetadataRow,
   type SurplussEnv,
-} from '@/lib/surplussDonationMetadata';
+} from "@/lib/surplussDonationMetadata";
 
 function normalizeMaterialId(materialId: number | null | undefined): number | null {
   if (materialId == null) return null;
@@ -19,14 +19,14 @@ export function useSurplussDonationMetadata(
   opts?: { enabled?: boolean; environment?: SurplussEnv },
 ): UseQueryResult<SurplussDonationMetadataRow, Error> {
   const id = normalizeMaterialId(materialId);
-  const env = opts?.environment ?? 'production';
+  const env = opts?.environment ?? "production";
   const enabled = id != null && (opts?.enabled ?? true);
 
   return useQuery({
-    queryKey: ['surpluss-donation-metadata', id, env],
+    queryKey: ["surpluss-donation-metadata", id, env],
     queryFn: async () => {
       const r = await fetchSurplussDonationMetadataForMaterial(id!, env);
-      if (r.ok === false) throw new Error(r.error);
+      if (!r.ok) throw new Error(r.error);
       return r.metadata;
     },
     enabled,

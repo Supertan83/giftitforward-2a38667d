@@ -1,21 +1,14 @@
-import { useState, useMemo } from 'react';
-import { Search, Package, AlertTriangle, Loader2, Wrench } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableFooter,
-} from '@/components/ui/table';
-import { useItemTypes, useMarketplaces } from '@/hooks/useSupabaseData';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useState, useMemo } from "react";
+import { Search, Package, AlertTriangle, Loader2, Wrench } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { useItemTypes } from "@/hooks/useSupabaseData";
+import { useSurplussDonationMetadata } from "@/hooks/useSurplussDonationMetadata";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface MarketplaceBreakdown {
   marketplace_id: string;
@@ -54,7 +47,7 @@ interface FixReport {
 }
 
 export const MaterialBreakdownLookup = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const { data: itemTypes = [] } = useItemTypes();
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [fixLoading, setFixLoading] = useState(false);
@@ -62,35 +55,45 @@ export const MaterialBreakdownLookup = () => {
   const matchingItems = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
-    return itemTypes.filter(item =>
-      item.name.toLowerCase().includes(q) ||
-      (item.externalMaterialId && String(item.externalMaterialId).includes(q))
-    ).slice(0, 10);
+    return itemTypes
+      .filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          (item.externalMaterialId && String(item.externalMaterialId).includes(q)),
+      )
+      .slice(0, 10);
   }, [searchQuery, itemTypes]);
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const selectedItem = itemTypes.find(i => i.id === selectedItemId);
+  const selectedItem = itemTypes.find((i) => i.id === selectedItemId);
+
+  const tractorMetaLookup = useSurplussDonationMetadata(selectedItem?.externalMaterialId ?? null, {
+    enabled: !!selectedItemId && selectedItem?.externalMaterialId != null,
+    environment: "production",
+  });
 
   const { data: breakdownData, isLoading: loadingBreakdown } = useQuery({
-    queryKey: ['material-breakdown', selectedItemId],
+    queryKey: ["material-breakdown", selectedItemId],
     queryFn: async () => {
       if (!selectedItemId) return null;
       const { data, error } = await supabase
-        .from('marketplace_item_allocations')
-        .select(`
+        .from("marketplace_item_allocations")
+        .select(
+          `
           id,
           allocated_quantity,
           distributed_quantity,
           marketplace_id,
           marketplace_events!inner(name, event_date)
-        `)
-        .eq('item_type_id', selectedItemId);
+        `,
+        )
+        .eq("item_type_id", selectedItemId);
 
       if (error) throw error;
 
       return (data || []).map((row: any) => ({
         marketplace_id: row.marketplace_id,
-        marketplace_name: `${row.marketplace_events.name}${row.marketplace_events.event_date ? ` (${new Date(row.marketplace_events.event_date).toLocaleDateString()})` : ''}`,
+        marketplace_name: `${row.marketplace_events.name}${row.marketplace_events.event_date ? ` (${new Date(row.marketplace_events.event_date).toLocaleDateString()})` : ""}`,
         allocated: row.allocated_quantity,
         distributed: row.distributed_quantity,
         remaining: row.allocated_quantity - row.distributed_quantity,
@@ -107,12 +110,12 @@ export const MaterialBreakdownLookup = () => {
   const runFix = async (dryRun: boolean) => {
     setFixLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fix-allocation-data', {
+      const { data, error } = await supabase.functions.invoke("fix-allocation-data", {
         body: { dry_run: dryRun },
       });
       if (error) throw error;
       setFixReport(data);
-      toast.success(dryRun ? 'Dry run complete — review changes below' : 'Fixes applied successfully!');
+      toast.success(dryRun ? "Dry run complete — review changes below" : "Fixes applied successfully!");
     } catch (err: any) {
       toast.error(`Fix failed: ${err.message}`);
     } finally {
@@ -153,16 +156,11 @@ export const MaterialBreakdownLookup = () => {
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Wrench className="w-4 h-4" />
-                {fixReport.dry_run ? 'Dry Run Report' : 'Fix Applied Report'}
+                {fixReport.dry_run ? "Dry Run Report" : "Fix Applied Report"}
               </h3>
               <div className="flex gap-2">
                 {fixReport.dry_run && fixReport.summary.stock_changes_needed > 0 && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => runFix(false)}
-                    disabled={fixLoading}
-                  >
+                  <Button size="sm" variant="destructive" onClick={() => runFix(false)} disabled={fixLoading}>
                     {fixLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                     Apply {fixReport.summary.stock_changes_needed} Fixes
                   </Button>
@@ -199,7 +197,8 @@ export const MaterialBreakdownLookup = () => {
                 <p className="font-medium text-destructive mb-1">Distribution Corruptions:</p>
                 {fixReport.corruption_fixes.map((fix, i) => (
                   <p key={i} className="text-xs">
-                    #{fix.material_id} {fix.name}: distributed {fix.old_distributed.toLocaleString()} → capped to {fix.capped_to.toLocaleString()}
+                    #{fix.material_id} {fix.name}: distributed {fix.old_distributed.toLocaleString()} → capped to{" "}
+                    {fix.capped_to.toLocaleString()}
                   </p>
                 ))}
               </div>
@@ -213,7 +212,9 @@ export const MaterialBreakdownLookup = () => {
                 <div className="mt-2 max-h-48 overflow-y-auto text-xs space-y-0.5">
                   {fixReport.stock_changes.map((ch, i) => (
                     <p key={i}>
-                      #{ch.material_id} {ch.name}: {ch.old_total_stock.toLocaleString()} → {ch.new_total_stock.toLocaleString()} ({ch.delta > 0 ? '+' : ''}{ch.delta.toLocaleString()})
+                      #{ch.material_id} {ch.name}: {ch.old_total_stock.toLocaleString()} →{" "}
+                      {ch.new_total_stock.toLocaleString()} ({ch.delta > 0 ? "+" : ""}
+                      {ch.delta.toLocaleString()})
                     </p>
                   ))}
                 </div>
@@ -239,20 +240,20 @@ export const MaterialBreakdownLookup = () => {
         {/* Search Results */}
         {searchQuery.trim() && !selectedItemId && matchingItems.length > 0 && (
           <div className="border border-border rounded-lg divide-y divide-border max-h-60 overflow-y-auto">
-            {matchingItems.map(item => (
+            {matchingItems.map((item) => (
               <button
                 key={item.id}
                 className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors"
                 onClick={() => {
                   setSelectedItemId(item.id);
-                  setSearchQuery(`${item.externalMaterialId || ''} — ${item.name}`);
+                  setSearchQuery(`${item.externalMaterialId || ""} — ${item.name}`);
                 }}
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-medium">{item.name}</span>
                     <span className="text-sm text-muted-foreground ml-2">
-                      {item.externalMaterialId ? `#${item.externalMaterialId}` : ''}
+                      {item.externalMaterialId ? `#${item.externalMaterialId}` : ""}
                     </span>
                   </div>
                   <Badge variant="outline" className="text-xs">
@@ -287,11 +288,56 @@ export const MaterialBreakdownLookup = () => {
               )}
               <button
                 className="text-sm text-muted-foreground hover:text-foreground underline"
-                onClick={() => { setSelectedItemId(null); setSearchQuery(''); }}
+                onClick={() => {
+                  setSelectedItemId(null);
+                  setSearchQuery("");
+                }}
               >
                 Clear
               </button>
             </div>
+
+            {selectedItem.externalMaterialId != null && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm space-y-1">
+                <p className="font-semibold text-foreground flex items-center gap-2">
+                  <Package className="w-4 h-4" />
+                  Tractor / QR (donation_metadata)
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Compare with GIF totals above. Tractor remaining is what Surpluss Admin shows after Scan QR.
+                </p>
+                {tractorMetaLookup.isLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Loading…
+                  </div>
+                ) : tractorMetaLookup.isError ? (
+                  <p className="text-xs text-destructive">{tractorMetaLookup.error?.message ?? "Failed to load"}</p>
+                ) : (
+                  <>
+                    <p className="text-xs">
+                      <span className="font-medium">Total (item_count):</span>{" "}
+                      {tractorMetaLookup.data?.material?.item_count != null
+                        ? tractorMetaLookup.data.material.item_count.toLocaleString()
+                        : "—"}
+                    </p>
+                    <p className="text-xs">
+                      <span className="font-medium">Remaining (Tractor):</span>{" "}
+                      {tractorMetaLookup.data?.total_remaining_item_count != null
+                        ? tractorMetaLookup.data.total_remaining_item_count.toLocaleString()
+                        : "—"}
+                    </p>
+                    {tractorMetaLookup.data?.material?.item_count != null &&
+                    tractorMetaLookup.data.material.item_count !== selectedItem.totalStock ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-500">
+                        GIF total_stock ({selectedItem.totalStock.toLocaleString()}) ≠ Tractor item_count (
+                        {tractorMetaLookup.data.material.item_count.toLocaleString()}).
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            )}
 
             {loadingBreakdown ? (
               <div className="flex justify-center py-8">
@@ -317,8 +363,12 @@ export const MaterialBreakdownLookup = () => {
                       <TableRow key={row.marketplace_id}>
                         <TableCell className="font-medium">{row.marketplace_name}</TableCell>
                         <TableCell className="text-right">{row.allocated.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-emerald-600">{row.distributed.toLocaleString()}</TableCell>
-                        <TableCell className={`text-right font-medium ${row.remaining < 0 ? 'text-destructive' : 'text-amber-600'}`}>
+                        <TableCell className="text-right text-emerald-600">
+                          {row.distributed.toLocaleString()}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-medium ${row.remaining < 0 ? "text-destructive" : "text-amber-600"}`}
+                        >
                           {row.remaining.toLocaleString()}
                         </TableCell>
                       </TableRow>
@@ -329,7 +379,7 @@ export const MaterialBreakdownLookup = () => {
                       <TableCell>Total across all marketplaces</TableCell>
                       <TableCell className="text-right">{totalAllocated.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-emerald-600">{totalDistributed.toLocaleString()}</TableCell>
-                      <TableCell className={`text-right ${totalRemaining < 0 ? 'text-destructive' : 'text-amber-600'}`}>
+                      <TableCell className={`text-right ${totalRemaining < 0 ? "text-destructive" : "text-amber-600"}`}>
                         {totalRemaining.toLocaleString()}
                       </TableCell>
                     </TableRow>

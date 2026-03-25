@@ -1,6 +1,6 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 
-export type SurplussEnv = 'production' | 'staging';
+export type SurplussEnv = "production" | "staging";
 
 /** Material fields returned inside donation metadata from Tractor API */
 export interface SurplussDonationMaterial {
@@ -29,36 +29,32 @@ type EdgeEnvelope = {
  */
 export async function fetchSurplussDonationMetadataForMaterial(
   materialId: number,
-  environment: SurplussEnv = 'production',
-): Promise<
-  | { ok: true; metadata: SurplussDonationMetadataRow }
-  | { ok: false; error: string; httpStatus?: number }
-> {
-  const { data, error } = await supabase.functions.invoke('surpluss-allocations-api', {
+  environment: SurplussEnv = "production",
+): Promise<{ ok: true; metadata: SurplussDonationMetadataRow } | { ok: false; error: string; httpStatus?: number }> {
+  const { data, error } = await supabase.functions.invoke("surpluss-allocations-api", {
     body: {
-      action: 'get_donation_metadata_by_material',
+      action: "get_donation_metadata_by_material",
       material_id: materialId,
       environment,
     },
   });
 
   if (error) return { ok: false, error: error.message };
-  if (data == null) return { ok: false, error: 'No response from surpluss-allocations-api' };
+  if (data == null) return { ok: false, error: "No response from surpluss-allocations-api" };
 
   const envelope = data as EdgeEnvelope;
   if (!envelope.success) {
     const inner = envelope.data;
     const msg =
-      inner && typeof inner === 'object' && 'error' in inner && inner.error != null
+      inner && typeof inner === "object" && "error" in inner && inner.error != null
         ? String(inner.error)
-        : `Tractor request failed (HTTP ${envelope.status ?? '?'})`;
+        : `Tractor request failed (HTTP ${envelope.status ?? "?"})`;
     return { ok: false, error: msg, httpStatus: envelope.status };
   }
 
   const inner = envelope.data;
   if (!inner?.success || inner.data == null) {
-    const msg =
-      inner && typeof inner.error === 'string' ? inner.error : 'Invalid Tractor response';
+    const msg = inner && typeof inner.error === "string" ? inner.error : "Invalid Tractor response";
     return { ok: false, error: msg, httpStatus: envelope.status };
   }
 

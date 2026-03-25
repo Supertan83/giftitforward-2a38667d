@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useSurplussDonationMetadata } from "@/hooks/useSurplussDonationMetadata";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -88,6 +89,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     useAllocationOperations();
   const { toast } = useToast();
   const logEvent = useLogTraceabilityEvent();
+
+  const modalItemForTractor = useMemo(() => {
+    if (!showAllocateModal || !modalItemTypeId) return null;
+    return itemTypes.find((i) => i.id === modalItemTypeId) ?? null;
+  }, [showAllocateModal, modalItemTypeId, itemTypes]);
+
+  const tractorMaterialIdModal = modalItemForTractor?.externalMaterialId ?? null;
+
+  const tractorMetaModal = useSurplussDonationMetadata(tractorMaterialIdModal, {
+    enabled: showAllocateModal && modalItemForTractor != null && tractorMaterialIdModal != null,
+    environment: SURPLUSS_ENV,
+  });
 
   const activeMarketplaces = marketplaces
     .filter((m) => m.status === "active" || m.status === "upcoming")
@@ -860,30 +873,98 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               </Popover>
             </div>
 
-            {/* Selected item info */}
+            {/* Selected item info — GIF vs Tractor (QR) for reconcile */}
             {modalItemTypeId &&
               (() => {
                 const selectedItem = itemTypes.find((i) => i.id === modalItemTypeId);
                 if (!selectedItem) return null;
-                const remaining = selectedItem.totalStock - selectedItem.distributed;
+                const gifRemaining = selectedItem.totalStock - selectedItem.distributed;
+                const tTotal = tractorMetaModal.data?.material?.item_count;
+                const tRemaining = tractorMetaModal.data?.total_remaining_item_count;
                 return (
-                  <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-                    <p className="font-semibold text-foreground">Current Material:</p>
-                    <p>
-                      <span className="font-semibold">Title:</span> {selectedItem.name}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Category:</span> {selectedItem.category || "Uncategorized"}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Total Items:</span> {selectedItem.totalStock.toLocaleString()}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Remaining:</span>{" "}
-                      <span className={remaining > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>
-                        {remaining.toLocaleString()}
-                      </span>
-                    </p>
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                      <p className="font-semibold text-foreground">GIF warehouse (item_types)</p>
+                      <p>
+                        <span className="font-semibold">Title:</span> {selectedItem.name}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Category:</span> {selectedItem.category || "Uncategorized"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Total stock:</span> {selectedItem.totalStock.toLocaleString()}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Available (stock − allocated in GIF):</span>{" "}
+                        <span
+                          className={gifRemaining > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}
+                        >
+                          {gifRemaining.toLocaleString()}
+                        </span>
+                      </p>
+                    </div>
+                    {selectedItem.externalMaterialId != null ? (
+                      <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 space-y-2 text-sm">
+                        <p className="font-semibold text-foreground flex items-center gap-2">
+                          <Warehouse className="w-4 h-4 shrink-0" />
+                          Tractor / QR (donation_metadata)
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Same source as Surpluss Admin → Donations → Scan QR. Use this to reconcile when numbers differ
+                          from GIF.
+                        </p>
+                        {tractorMetaModal.isLoading ? (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Loading Tractor…
+                          </div>
+                        ) : tractorMetaModal.isError ? (
+                          <p className="text-destructive text-xs">
+                            {tractorMetaModal.error?.message ??
+                              "Could not load Tractor metadata (not a donation item or API error)."}
+                          </p>
+                        ) : (
+                          <>
+                            <p>
+                              <span className="font-semibold">Material ID:</span>{" "}
+                              {String(selectedItem.externalMaterialId)}
+                            </p>
+                            {tractorMetaModal.data?.material?.title != null && (
+                              <p>
+                                <span className="font-semibold">Tractor title:</span>{" "}
+                                {tractorMetaModal.data.material.title}
+                              </p>
+                            )}
+                            <p>
+                              <span className="font-semibold">Total (item_count):</span>{" "}
+                              {tTotal != null ? tTotal.toLocaleString() : "—"}
+                            </p>
+                            <p>
+                              <span className="font-semibold">Remaining (Tractor):</span>{" "}
+                              <span
+                                className={
+                                  typeof tRemaining === "number" && tRemaining > 0
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-foreground"
+                                }
+                              >
+                                {tRemaining != null ? tRemaining.toLocaleString() : "—"}
+                              </span>
+                            </p>
+                            {tTotal != null && tRemaining != null && tTotal !== selectedItem.totalStock ? (
+                              <p className="text-xs text-amber-600 dark:text-amber-500">
+                                GIF total stock ({selectedItem.totalStock.toLocaleString()}) differs from Tractor
+                                item_count ({tTotal.toLocaleString()}). Check units (e.g. pcs vs kg) or sync.
+                              </p>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No Material ID on this item type — Tractor totals are unavailable.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
