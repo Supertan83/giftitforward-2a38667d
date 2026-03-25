@@ -27,11 +27,10 @@ export function useSurplussDonationMetadata(): UseSurplussDonationMetadataReturn
         if (result.ok) {
           setMetadata(result.metadata);
           return result.metadata;
-        } else {
-          setError(result.error);
-          setMetadata(null);
-          return null;
         }
+        setError(result.error);
+        setMetadata(null);
+        return null;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         setError(msg);
