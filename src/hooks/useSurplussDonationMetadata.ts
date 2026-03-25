@@ -24,11 +24,13 @@ export function useSurplussDonationMetadata(): UseSurplussDonationMetadataReturn
       setError(null);
       try {
         const result = await fetchSurplussDonationMetadataForMaterial(materialId, environment);
-        if (result.ok) {
+        if (result.ok === true) {
           setMetadata(result.metadata);
           return result.metadata;
         }
-        setError(result.error);
+        if (result.ok === false) {
+          setError(result.error);
+        }
         setMetadata(null);
         return null;
       } catch (err) {
