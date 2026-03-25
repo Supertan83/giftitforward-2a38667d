@@ -1,55 +1,35 @@
-import { useState, useCallback } from 'react';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import {
   fetchSurplussDonationMetadataForMaterial,
-  SurplussDonationMetadataRow,
-  SurplussEnv,
+  type SurplussDonationMetadataRow,
+  type SurplussEnv,
 } from '@/lib/surplussDonationMetadata';
 
-export interface UseSurplussDonationMetadataReturn {
-  metadata: SurplussDonationMetadataRow | null;
-  isLoading: boolean;
-  error: string | null;
-  fetch: (materialId: number, environment?: SurplussEnv) => Promise<SurplussDonationMetadataRow | null>;
-  reset: () => void;
+function normalizeMaterialId(materialId: number | null | undefined): number | null {
+  if (materialId == null) return null;
+  const n = Number(materialId);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export function useSurplussDonationMetadata(): UseSurplussDonationMetadataReturn {
-  const [metadata, setMetadata] = useState<SurplussDonationMetadataRow | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * Read-only Tractor donation metadata for reconcile UI (Allocate modal, material lookup).
+ */
+export function useSurplussDonationMetadata(
+  materialId: number | null | undefined,
+  opts?: { enabled?: boolean; environment?: SurplussEnv },
+): UseQueryResult<SurplussDonationMetadataRow, Error> {
+  const id = normalizeMaterialId(materialId);
+  const env = opts?.environment ?? 'production';
+  const enabled = id != null && (opts?.enabled ?? true);
 
-  const fetch = useCallback(
-    async (materialId: number, environment: SurplussEnv = 'production') => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const result = await fetchSurplussDonationMetadataForMaterial(materialId, environment);
-        if (result.ok === true) {
-          setMetadata(result.metadata);
-          return result.metadata;
-        }
-        if (result.ok === false) {
-          setError(result.error);
-        }
-        setMetadata(null);
-        return null;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        setError(msg);
-        setMetadata(null);
-        return null;
-      } finally {
-        setIsLoading(false);
-      }
+  return useQuery({
+    queryKey: ['surpluss-donation-metadata', id, env],
+    queryFn: async () => {
+      const r = await fetchSurplussDonationMetadataForMaterial(id!, env);
+      if (!r.ok) throw new Error(r.error);
+      return r.metadata;
     },
-    [],
-  );
-
-  const reset = useCallback(() => {
-    setMetadata(null);
-    setError(null);
-    setIsLoading(false);
-  }, []);
-
-  return { metadata, isLoading, error, fetch, reset };
+    enabled,
+    staleTime: 30_000,
+  });
 }
