@@ -1,38 +1,51 @@
 
 
-# Direct API Delete Instead of Reverse Sync
+# Fix: Manually Created Volunteer Not Showing in Manage Users
 
-## What Changes
+## Problem
+The `create-user` edge function has a **variable scope bug** on line 207. The variable `mpData` is declared inside an `if (marketplaceId)` block (line 189) but referenced outside it (line 207). When a volunteer is created **without selecting a marketplace**, this causes a runtime crash.
 
-Replace the `batch_update` (amount: 0) reverse sync approach with a direct `delete_allocation` API call to Surpluss when items are deleted from a marketplace. This applies to **two files**:
+The crash happens AFTER the auth user and role are already created (lines 136-170), but BEFORE the `pending_volunteers` record is created (line 212). This means:
+- The function returns a 500 error
+- The frontend sees a failure, doesn't refresh the user list → user appears "not created"
+- The auth user and role DO exist in the database (partially created)
+- No `pending_volunteers` record → no name, no QR card
+- On page refresh, the user appears but with no name or volunteer details
 
-### 1. `src/components/admin/AllocationManagement.tsx` — `handleDelete` (line ~194)
+## Fix
 
-**Current**: Calls `batch_update` with `amount: 0` using `external_material_id` and marketplace `external_id`.
+### `supabase/functions/create-user/index.ts`
+Move the marketplace data lookup (`mpData`) outside the `if (marketplaceId)` block scope, or restructure so line 207 can safely access it:
 
-**New**: Use the `delete_allocation` action with the allocation's `surpluss_allocation_id` (already available via `alloc.surplussAllocationId` from the hook). If the allocation has a `surplussAllocationId`, call:
 ```typescript
-action: 'delete_allocation',
-allocation_id: alloc.surplussAllocationId,
-environment: 'production'
+// Line 184-209: restructure to keep mpData in scope
+if (role === 'volunteer') {
+  let eventsJson = null;
+  let mpData = null;  // ← declare in outer scope
+  
+  if (marketplaceId) {
+    const { data } = await supabaseAdmin
+      .from('marketplace_events')
+      .select('name, event_date, start_time, end_time, location')
+      .eq('id', marketplaceId)
+      .maybeSingle();
+    mpData = data;
+    
+    if (mpData) {
+      eventsJson = [{ ... }];
+    }
+  }
+
+  let derivedEventsList = eventName?.trim() || null;
+  if (!derivedEventsList && mpData) {  // ← now safe
+    derivedEventsList = mpData.name.toLowerCase().replace(/\s+/g, '-');
+  }
+  // ... rest unchanged
+}
 ```
-If no `surplussAllocationId` exists (locally-created allocation), skip the API call — nothing to delete on Surpluss.
 
-### 2. `src/components/admin/MarketplaceManualDataEditor.tsx` — `handleSave` deletion block (lines ~148-193)
-
-**Current**: Looks up `external_material_id` for deleted items and calls `batch_update` with `amount: 0`.
-
-**New**: Before deleting from GIF, fetch `surpluss_allocation_id` from `marketplace_item_allocations` for each deleted ID. For each allocation that has a `surpluss_allocation_id`, call:
-```typescript
-action: 'delete_allocation',
-allocation_id: surplussAllocationId,
-environment: 'production'
-```
-This simplifies the code — no need to look up `external_material_id` or marketplace `external_id`. Just use the `surpluss_allocation_id` directly.
+This is a one-line scoping fix in the edge function. No other files need changes.
 
 ### Files to modify
-- `src/components/admin/AllocationManagement.tsx`
-- `src/components/admin/MarketplaceManualDataEditor.tsx`
-
-No edge function changes needed — `delete_allocation` action already exists in `surpluss-allocations-api` and calls `DELETE /api/common/donation-allocations/{allocation_id}` on Surpluss.
+- `supabase/functions/create-user/index.ts` (fix `mpData` scope)
 
