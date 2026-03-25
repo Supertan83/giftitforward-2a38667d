@@ -263,18 +263,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
 
       // Filter by status and source based on active tab
       if (activeTab === 'pending_missing_email') {
-        // Only show records with placeholder emails that need the "Add Email" workflow
         query = query.eq('status', 'pending').like('email', '%@placeholder.invalid');
       } else if (activeTab === 'duplicates') {
         query = query.eq('status', 'duplicate');
       } else {
+        // For approved and bulk_uploaded tabs, fetch ALL approved volunteers
+        // so search can work across both tabs
         query = query.eq('status', 'approved');
-        if (activeTab === 'bulk_uploaded') {
-          query = query.eq('source', 'bulk_upload');
-        } else {
-          // Show webhook/manual (non-bulk) in the approved tab
-          query = query.or('source.is.null,source.neq.bulk_upload');
-        }
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -308,6 +303,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const filteredVolunteers = useMemo(() => {
     let result = volunteers;
     
+    // When searching, show results across approved + bulk_uploaded tabs (not duplicates)
+    const isSearching = searchQuery.trim().length > 0;
+    
+    // Apply source filter client-side only when NOT searching (and on approved/bulk tabs)
+    if (!isSearching && (activeTab === 'approved' || activeTab === 'bulk_uploaded')) {
+      if (activeTab === 'bulk_uploaded') {
+        result = result.filter(v => v.source === 'bulk_upload');
+      } else {
+        result = result.filter(v => !v.source || v.source !== 'bulk_upload');
+      }
+    }
+    
     // Event filter
     if (eventFilter !== 'all') {
       const filterNormalized = eventFilter.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -322,7 +329,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
     
     // Search filter
-    if (searchQuery.trim()) {
+    if (isSearching) {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter(v => {
         const fullName = `${v.first_name || ''} ${v.last_name || ''}`.toLowerCase();
@@ -338,7 +345,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     }
     
     return result;
-  }, [volunteers, eventFilter, searchQuery]);
+  }, [volunteers, eventFilter, searchQuery, activeTab]);
 
   const approveMutation = useMutation({
     mutationFn: async (pendingId: string) => {
