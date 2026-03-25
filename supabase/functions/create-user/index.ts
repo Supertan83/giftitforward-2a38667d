@@ -184,13 +184,15 @@ Deno.serve(async (req) => {
     if (role === 'volunteer') {
       // Build events_json from marketplace selection if provided
       let eventsJson = null;
+      let mpData = null;
       if (marketplaceId) {
         // Look up marketplace details
-        const { data: mpData } = await supabaseAdmin
+        const { data } = await supabaseAdmin
           .from('marketplace_events')
           .select('name, event_date, start_time, end_time, location')
           .eq('id', marketplaceId)
           .maybeSingle();
+        mpData = data;
         
         if (mpData) {
           eventsJson = [{
