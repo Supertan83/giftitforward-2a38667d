@@ -1,36 +1,38 @@
 
 
-# Fix: Reverse Sync Deletion to Surpluss Platform
+# Direct API Delete Instead of Reverse Sync
 
-## Problem
-When an item allocation is deleted from a marketplace in the GIF app, the deletion is not synced back to the Surpluss platform. The item remains visible on Surpluss.
+## What Changes
 
-There are **two places** where allocations get deleted:
+Replace the `batch_update` (amount: 0) reverse sync approach with a direct `delete_allocation` API call to Surpluss when items are deleted from a marketplace. This applies to **two files**:
 
-1. **AllocationManagement.tsx** (`handleDelete`) — already has reverse sync using `batch_update` with `amount: 0`, but this may not be working correctly
-2. **MarketplaceManualDataEditor.tsx** (`handleSave` → deletes via `deletedIds`) — has **no reverse sync at all**
+### 1. `src/components/admin/AllocationManagement.tsx` — `handleDelete` (line ~194)
 
-## Root Cause
-- The `MarketplaceManualDataEditor` deletes allocations from the local database but never calls the Surpluss API
-- The `AllocationManagement` reverse sync uses `batch_update` which sets amount to 0 — this should work per the memory note about material-level operations, but we need to ensure the marketplace `external_id` and item `external_material_id` are available
+**Current**: Calls `batch_update` with `amount: 0` using `external_material_id` and marketplace `external_id`.
 
-## Fix
+**New**: Use the `delete_allocation` action with the allocation's `surpluss_allocation_id` (already available via `alloc.surplussAllocationId` from the hook). If the allocation has a `surplussAllocationId`, call:
+```typescript
+action: 'delete_allocation',
+allocation_id: alloc.surplussAllocationId,
+environment: 'production'
+```
+If no `surplussAllocationId` exists (locally-created allocation), skip the API call — nothing to delete on Surpluss.
 
-### 1. Add reverse sync to MarketplaceManualDataEditor.tsx
-When deleting allocations in `handleSave`, look up each deleted allocation's `item_type_id` → `external_material_id` and the marketplace's `external_id`, then call the `surpluss-allocations-api` edge function with `batch_update` action setting `amount: 0` for each deleted material.
+### 2. `src/components/admin/MarketplaceManualDataEditor.tsx` — `handleSave` deletion block (lines ~148-193)
 
-### 2. Ensure AllocationManagement.tsx reverse sync is robust
-The existing logic looks correct. We'll verify it has proper error handling and doesn't block the UI on sync failure.
+**Current**: Looks up `external_material_id` for deleted items and calls `batch_update` with `amount: 0`.
+
+**New**: Before deleting from GIF, fetch `surpluss_allocation_id` from `marketplace_item_allocations` for each deleted ID. For each allocation that has a `surpluss_allocation_id`, call:
+```typescript
+action: 'delete_allocation',
+allocation_id: surplussAllocationId,
+environment: 'production'
+```
+This simplifies the code — no need to look up `external_material_id` or marketplace `external_id`. Just use the `surpluss_allocation_id` directly.
 
 ### Files to modify
-- **`src/components/admin/MarketplaceManualDataEditor.tsx`**: Add reverse sync calls when deleting allocations (in the `handleSave` function, after deleting each allocation from GIF, call `surpluss-allocations-api` with `batch_update` / `amount: 0`)
-- **`src/components/admin/AllocationManagement.tsx`**: Minor review — existing logic should work, no changes expected
+- `src/components/admin/AllocationManagement.tsx`
+- `src/components/admin/MarketplaceManualDataEditor.tsx`
 
-### Technical approach
-For each deleted allocation in `MarketplaceManualDataEditor`:
-1. Before deleting, fetch the allocation's `item_type_id` from the local `editableRows` or query it
-2. Look up the `external_material_id` from `item_types` 
-3. Look up the marketplace's `external_id` from `marketplace_events`
-4. Call `surpluss-allocations-api` with `{ action: 'batch_update', marketplace_event_id, materials: [{ material_id, amount: 0 }], environment: 'production' }`
-5. Only the specific item is set to 0 — other allocations remain untouched
+No edge function changes needed — `delete_allocation` action already exists in `surpluss-allocations-api` and calls `DELETE /api/common/donation-allocations/{allocation_id}` on Surpluss.
 
