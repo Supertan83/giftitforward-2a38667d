@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Package, Save, Edit2, X, Plus, Trash2, Loader2, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { supabase } from '@/integrations/supabase/client';
-import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
-import { useItemTypesExtended } from '@/hooks/useItemTypesExtended';
-import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from "react";
+import { motion } from "framer-motion";
+import { Package, Save, Edit2, X, Plus, Trash2, Loader2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { supabase } from "@/integrations/supabase/client";
+import { surplussBatchUpdateMaterials } from "@/lib/surplussReverseSync";
+import { useMarketplaceAllocations, useAllocationOperations } from "@/hooks/useMarketplaceAllocations";
+import { useItemTypesExtended } from "@/hooks/useItemTypesExtended";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface MarketplaceManualDataEditorProps {
   marketplaceId: string;
@@ -28,10 +29,7 @@ interface EditableRow {
   isNew?: boolean;
 }
 
-export const MarketplaceManualDataEditor = ({
-  marketplaceId,
-  marketplaceName,
-}: MarketplaceManualDataEditorProps) => {
+export const MarketplaceManualDataEditor = ({ marketplaceId, marketplaceName }: MarketplaceManualDataEditorProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [manualBeneficiaryCount, setManualBeneficiaryCount] = useState<number | null>(null);
@@ -51,9 +49,9 @@ export const MarketplaceManualDataEditor = ({
     const load = async () => {
       setIsLoadingBeneficiary(true);
       const { data } = await supabase
-        .from('marketplace_events')
-        .select('manual_beneficiary_count')
-        .eq('id', marketplaceId)
+        .from("marketplace_events")
+        .select("manual_beneficiary_count")
+        .eq("id", marketplaceId)
         .single();
       setManualBeneficiaryCount((data as any)?.manual_beneficiary_count ?? null);
       setIsLoadingBeneficiary(false);
@@ -66,15 +64,15 @@ export const MarketplaceManualDataEditor = ({
   const startEditing = () => {
     setEditBeneficiaryCount(manualBeneficiaryCount);
     setEditableRows(
-      allocations.map(a => ({
+      allocations.map((a) => ({
         id: a.id,
         itemTypeId: a.itemTypeId,
-        itemName: a.itemName || 'Unknown',
+        itemName: a.itemName || "Unknown",
         category: null,
         subcategory: null,
         allocatedQuantity: a.allocatedQuantity,
         distributedQuantity: a.distributedQuantity,
-      }))
+      })),
     );
     setDeletedIds([]);
     setIsEditing(true);
@@ -87,14 +85,14 @@ export const MarketplaceManualDataEditor = ({
   };
 
   const addItem = (itemTypeId: string) => {
-    const item = allItemTypes.find(i => i.id === itemTypeId);
+    const item = allItemTypes.find((i) => i.id === itemTypeId);
     if (!item) return;
     // Check if already in rows
-    if (editableRows.some(r => r.itemTypeId === itemTypeId)) {
-      toast.error('Item already added');
+    if (editableRows.some((r) => r.itemTypeId === itemTypeId)) {
+      toast.error("Item already added");
       return;
     }
-    setEditableRows(prev => [
+    setEditableRows((prev) => [
       ...prev,
       {
         id: null,
@@ -113,15 +111,13 @@ export const MarketplaceManualDataEditor = ({
   const removeRow = (index: number) => {
     const row = editableRows[index];
     if (row.id) {
-      setDeletedIds(prev => [...prev, row.id!]);
+      setDeletedIds((prev) => [...prev, row.id!]);
     }
-    setEditableRows(prev => prev.filter((_, i) => i !== index));
+    setEditableRows((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateRow = (index: number, field: 'allocatedQuantity' | 'distributedQuantity', value: number) => {
-    setEditableRows(prev =>
-      prev.map((r, i) => (i === index ? { ...r, [field]: value } : r))
-    );
+  const updateRow = (index: number, field: "allocatedQuantity" | "distributedQuantity", value: number) => {
+    setEditableRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
   };
 
   const handleSave = async () => {
@@ -129,40 +125,56 @@ export const MarketplaceManualDataEditor = ({
     try {
       // Save beneficiary count
       const { error: bErr } = await supabase
-        .from('marketplace_events')
+        .from("marketplace_events")
         .update({ manual_beneficiary_count: editBeneficiaryCount } as any)
-        .eq('id', marketplaceId);
+        .eq("id", marketplaceId);
       if (bErr) throw bErr;
 
-      // Delete removed allocations + direct delete on Surpluss
+      // Delete removed allocations + reverse sync to Surpluss
       if (deletedIds.length > 0) {
-        // Fetch surpluss_allocation_id for each deleted allocation before removing
-        const { data: deletedAllocData } = await supabase
-          .from('marketplace_item_allocations')
-          .select('id, surpluss_allocation_id')
-          .in('id', deletedIds);
+        // Look up marketplace external_id for Surpluss sync
+        const { data: mpData } = await supabase
+          .from("marketplace_events")
+          .select("external_id")
+          .eq("id", marketplaceId)
+          .single();
+        const marketplaceExternalId = mpData?.external_id;
 
-        // Delete from GIF
-        for (const id of deletedIds) {
-          await deleteAllocation.mutateAsync(id);
+        // Look up external_material_ids for deleted allocations
+        const { data: deletedAllocData } = await supabase
+          .from("marketplace_item_allocations")
+          .select("id, item_type_id")
+          .in("id", deletedIds);
+
+        const itemTypeIds = deletedAllocData?.map((a) => a.item_type_id).filter(Boolean) || [];
+        let materialIdMap: Record<string, number> = {};
+        if (itemTypeIds.length > 0) {
+          const { data: itemTypesData } = await supabase
+            .from("item_types")
+            .select("id, external_material_id")
+            .in("id", itemTypeIds);
+          materialIdMap = Object.fromEntries(
+            (itemTypesData || [])
+              .filter((it) => it.external_material_id != null)
+              .map((it) => [it.id, it.external_material_id!]),
+          );
         }
 
-        // Direct delete on Surpluss for each allocation that has a surpluss_allocation_id
-        for (const alloc of (deletedAllocData || [])) {
-          if (alloc.surpluss_allocation_id) {
-            try {
-              await supabase.functions.invoke('surpluss-allocations-api', {
-                body: {
-                  action: 'delete_allocation',
-                  allocation_id: alloc.surpluss_allocation_id,
-                  environment: 'production',
-                },
-              });
-              console.log(`[surpluss-delete] Deleted Surpluss allocation ${alloc.surpluss_allocation_id}`);
-            } catch (syncErr) {
-              console.error('[surpluss-delete] Failed to delete allocation on Surpluss:', syncErr);
-            }
+        const materialsToSync = (deletedAllocData || [])
+          .filter((a) => materialIdMap[a.item_type_id])
+          .map((a) => ({ material_id: materialIdMap[a.item_type_id], amount: 0 }));
+
+        // Tractor first: avoids GIF/Tractor drift and ensures batch_update errors block local delete
+        if (marketplaceExternalId && materialsToSync.length > 0) {
+          const sync = await surplussBatchUpdateMaterials(marketplaceExternalId, materialsToSync, "production");
+          if (!sync.ok) {
+            toast.error(sync.error ?? "Tractor (Surpluss) sync failed. Rows were not deleted in GIF.");
+            throw new Error(sync.error ?? "Surpluss batch_update failed");
           }
+        }
+
+        for (const id of deletedIds) {
+          await deleteAllocation.mutateAsync(id);
         }
       }
 
@@ -179,10 +191,10 @@ export const MarketplaceManualDataEditor = ({
           if (row.distributedQuantity > 0) {
             // Find the newly created allocation
             const { data: newAlloc } = await supabase
-              .from('marketplace_item_allocations')
-              .select('id')
-              .eq('marketplace_id', marketplaceId)
-              .eq('item_type_id', row.itemTypeId)
+              .from("marketplace_item_allocations")
+              .select("id")
+              .eq("marketplace_id", marketplaceId)
+              .eq("item_type_id", row.itemTypeId)
               .maybeSingle();
             if (newAlloc) {
               await updateAllocationQuantities.mutateAsync({
@@ -203,12 +215,12 @@ export const MarketplaceManualDataEditor = ({
       }
 
       setManualBeneficiaryCount(editBeneficiaryCount);
-      queryClient.invalidateQueries({ queryKey: ['marketplace_report', marketplaceId] });
-      toast.success('Marketplace data saved successfully');
+      queryClient.invalidateQueries({ queryKey: ["marketplace_report", marketplaceId] });
+      toast.success("Marketplace data saved successfully");
       setIsEditing(false);
     } catch (error) {
-      console.error('Error saving marketplace data:', error);
-      toast.error('Failed to save marketplace data');
+      console.error("Error saving marketplace data:", error);
+      toast.error("Failed to save marketplace data");
     } finally {
       setIsSaving(false);
     }
@@ -216,8 +228,8 @@ export const MarketplaceManualDataEditor = ({
 
   // Items available to add (not already in rows)
   const availableItems = useMemo(() => {
-    const usedIds = new Set(editableRows.map(r => r.itemTypeId));
-    return allItemTypes.filter(i => !usedIds.has(i.id));
+    const usedIds = new Set(editableRows.map((r) => r.itemTypeId));
+    return allItemTypes.filter((i) => !usedIds.has(i.id));
   }, [allItemTypes, editableRows]);
 
   // Compute totals for view mode
@@ -249,7 +261,7 @@ export const MarketplaceManualDataEditor = ({
         {!isEditing ? (
           <Button variant="outline" size="sm" onClick={startEditing}>
             <Edit2 className="w-4 h-4 mr-2" />
-            {hasData ? 'Edit' : 'Add Data'}
+            {hasData ? "Edit" : "Add Data"}
           </Button>
         ) : (
           <div className="flex gap-2">
@@ -272,7 +284,7 @@ export const MarketplaceManualDataEditor = ({
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-muted/50 rounded-lg p-4 text-center">
                 <Users className="w-5 h-5 mx-auto mb-2 text-purple-500" />
-                <p className="text-2xl font-bold">{manualBeneficiaryCount ?? '—'}</p>
+                <p className="text-2xl font-bold">{manualBeneficiaryCount ?? "—"}</p>
                 <p className="text-xs text-muted-foreground">Beneficiaries (Manual)</p>
               </div>
               <div className="bg-muted/50 rounded-lg p-4 text-center">
@@ -297,19 +309,33 @@ export const MarketplaceManualDataEditor = ({
                   </colgroup>
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Item</th>
-                      <th className="text-center py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Allocated</th>
-                      <th className="text-center py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Distributed</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remaining</th>
+                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Item
+                      </th>
+                      <th className="text-center py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Allocated
+                      </th>
+                      <th className="text-center py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Distributed
+                      </th>
+                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Remaining
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {allocations.map(a => (
+                    {allocations.map((a) => (
                       <tr key={a.id} className="border-b border-border/50 last:border-0">
                         <td className="py-3 px-4 font-medium">{a.itemName}</td>
-                        <td className="py-3 px-4 text-center text-muted-foreground">{a.allocatedQuantity.toLocaleString()}</td>
-                        <td className="py-3 px-4 text-center text-muted-foreground">{a.distributedQuantity.toLocaleString()}</td>
-                        <td className="py-3 px-4 text-right font-semibold text-primary">{(a.allocatedQuantity - a.distributedQuantity).toLocaleString()}</td>
+                        <td className="py-3 px-4 text-center text-muted-foreground">
+                          {a.allocatedQuantity.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-center text-muted-foreground">
+                          {a.distributedQuantity.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right font-semibold text-primary">
+                          {(a.allocatedQuantity - a.distributedQuantity).toLocaleString()}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -337,7 +363,7 @@ export const MarketplaceManualDataEditor = ({
                 type="number"
                 min="0"
                 placeholder="Enter total beneficiaries"
-                value={editBeneficiaryCount ?? ''}
+                value={editBeneficiaryCount ?? ""}
                 onChange={(e) => setEditBeneficiaryCount(e.target.value ? parseInt(e.target.value) : null)}
                 className="w-full md:w-64"
               />
@@ -351,9 +377,15 @@ export const MarketplaceManualDataEditor = ({
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/40">
-                        <th className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase">Item</th>
-                        <th className="text-center py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase w-32">Allocated</th>
-                        <th className="text-center py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase w-32">Distributed</th>
+                        <th className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase">
+                          Item
+                        </th>
+                        <th className="text-center py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase w-32">
+                          Allocated
+                        </th>
+                        <th className="text-center py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase w-32">
+                          Distributed
+                        </th>
                         <th className="w-12"></th>
                       </tr>
                     </thead>
@@ -366,7 +398,7 @@ export const MarketplaceManualDataEditor = ({
                               type="number"
                               min="0"
                               value={row.allocatedQuantity}
-                              onChange={(e) => updateRow(index, 'allocatedQuantity', parseInt(e.target.value) || 0)}
+                              onChange={(e) => updateRow(index, "allocatedQuantity", parseInt(e.target.value) || 0)}
                               className="w-full text-center h-8"
                             />
                           </td>
@@ -375,12 +407,17 @@ export const MarketplaceManualDataEditor = ({
                               type="number"
                               min="0"
                               value={row.distributedQuantity}
-                              onChange={(e) => updateRow(index, 'distributedQuantity', parseInt(e.target.value) || 0)}
+                              onChange={(e) => updateRow(index, "distributedQuantity", parseInt(e.target.value) || 0)}
                               className="w-full text-center h-8"
                             />
                           </td>
                           <td className="py-2 px-3">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRow(index)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => removeRow(index)}
+                            >
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </td>
@@ -404,10 +441,10 @@ export const MarketplaceManualDataEditor = ({
                     <CommandList>
                       <CommandEmpty>No items found.</CommandEmpty>
                       <CommandGroup>
-                        {availableItems.map(item => (
+                        {availableItems.map((item) => (
                           <CommandItem
                             key={item.id}
-                            value={`${item.name} ${item.externalMaterialId || ''} ${item.category || ''}`}
+                            value={`${item.name} ${item.externalMaterialId || ""} ${item.category || ""}`}
                             onSelect={() => addItem(item.id)}
                           >
                             <span>{item.name}</span>

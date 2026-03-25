@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  ArrowLeft, 
-  Package, 
-  Plus, 
-  Loader2, 
-  Trash2, 
+import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import {
+  ArrowLeft,
+  Package,
+  Plus,
+  Loader2,
+  Trash2,
   MapPin,
   Warehouse,
   Pencil,
@@ -16,53 +16,26 @@ import {
   Send,
   ChevronsUpDown,
   Search,
-  RefreshCw
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { cn } from '@/lib/utils';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { useItemTypes, useMarketplaces } from '@/hooks/useSupabaseData';
-import { useMarketplaceAllocations, useAllocationOperations } from '@/hooks/useMarketplaceAllocations';
-import { useToast } from '@/hooks/use-toast';
-import { useLogTraceabilityEvent } from '@/hooks/useTraceabilityLogs';
-import { supabase } from '@/integrations/supabase/client';
-import { MaterialBreakdownLookup } from './MaterialBreakdownLookup';
+  RefreshCw,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useItemTypes, useMarketplaces } from "@/hooks/useSupabaseData";
+import { useMarketplaceAllocations, useAllocationOperations } from "@/hooks/useMarketplaceAllocations";
+import { useToast } from "@/hooks/use-toast";
+import { useLogTraceabilityEvent } from "@/hooks/useTraceabilityLogs";
+import { supabase } from "@/integrations/supabase/client";
+import { surplussBatchUpdateMaterials } from "@/lib/surplussReverseSync";
+import { MaterialBreakdownLookup } from "./MaterialBreakdownLookup";
+
+const SURPLUSS_ENV = "production" as const;
 
 interface AllocationManagementProps {
   onBack: () => void;
@@ -70,11 +43,11 @@ interface AllocationManagementProps {
 
 export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [showAllocateModal, setShowAllocateModal] = useState(false);
-  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>('');
-  const [modalMarketplaceId, setModalMarketplaceId] = useState<string>('');
-  const [modalItemTypeId, setModalItemTypeId] = useState<string>('');
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string>("");
+  const [modalMarketplaceId, setModalMarketplaceId] = useState<string>("");
+  const [modalItemTypeId, setModalItemTypeId] = useState<string>("");
   const [itemComboOpen, setItemComboOpen] = useState(false);
-  const [quantity, setQuantity] = useState('');
+  const [quantity, setQuantity] = useState("");
 
   // Inline editing state
   const [editingAllocationId, setEditingAllocationId] = useState<string | null>(null);
@@ -82,30 +55,42 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const [editDistributed, setEditDistributed] = useState<number>(0);
 
   // Undo / return-to-warehouse state
-  const [undoAllocation, setUndoAllocation] = useState<{ id: string; allocated: number; distributed: number } | null>(null);
-  const [undoQuantity, setUndoQuantity] = useState('');
+  const [undoAllocation, setUndoAllocation] = useState<{ id: string; allocated: number; distributed: number } | null>(
+    null,
+  );
+  const [undoQuantity, setUndoQuantity] = useState("");
 
   // Re-allocate state
-  const [reallocAllocation, setReallocAllocation] = useState<{ id: string; allocated: number; distributed: number } | null>(null);
-  const [reallocTargetMarketplace, setReallocTargetMarketplace] = useState('');
-  const [reallocQuantity, setReallocQuantity] = useState('');
+  const [reallocAllocation, setReallocAllocation] = useState<{
+    id: string;
+    allocated: number;
+    distributed: number;
+  } | null>(null);
+  const [reallocTargetMarketplace, setReallocTargetMarketplace] = useState("");
+  const [reallocQuantity, setReallocQuantity] = useState("");
 
   // Distribute confirmation state
-  const [distributeAllocation, setDistributeAllocation] = useState<{ id: string; itemName: string; allocated: number; distributed: number } | null>(null);
+  const [distributeAllocation, setDistributeAllocation] = useState<{
+    id: string;
+    itemName: string;
+    allocated: number;
+    distributed: number;
+  } | null>(null);
 
   const [isSyncingFromSurpluss, setIsSyncingFromSurpluss] = useState(false);
 
   const { data: itemTypes = [], isLoading: loadingItems } = useItemTypes();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
   const { data: allocations = [], isLoading: loadingAllocations } = useMarketplaceAllocations(
-    selectedMarketplaceId || undefined
+    selectedMarketplaceId || undefined,
   );
-  const { allocateToMarketplace, deleteAllocation, updateAllocationQuantities, incrementDistributed } = useAllocationOperations();
+  const { allocateToMarketplace, deleteAllocation, updateAllocationQuantities, incrementDistributed } =
+    useAllocationOperations();
   const { toast } = useToast();
   const logEvent = useLogTraceabilityEvent();
 
   const activeMarketplaces = marketplaces
-    .filter(m => m.status === 'active' || m.status === 'upcoming')
+    .filter((m) => m.status === "active" || m.status === "upcoming")
     .sort((a, b) => {
       if (!a.event_date && !b.event_date) return 0;
       if (!a.event_date) return 1;
@@ -114,15 +99,15 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     });
 
   // All allocatable item types (those with external_material_id from Tractor)
-  const allocatableItems = itemTypes.filter(item => item.externalMaterialId != null);
+  const allocatableItems = itemTypes.filter((item) => item.externalMaterialId != null);
 
   const handleAllocate = async () => {
     const targetMarketplace = modalMarketplaceId || selectedMarketplaceId;
     if (!targetMarketplace || !modalItemTypeId || !quantity) {
       toast({
-        title: 'Missing Fields',
-        description: 'Please select a marketplace, item, and quantity',
-        variant: 'destructive',
+        title: "Missing Fields",
+        description: "Please select a marketplace, item, and quantity",
+        variant: "destructive",
       });
       return;
     }
@@ -130,17 +115,17 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     const qty = parseInt(quantity);
     if (isNaN(qty) || qty <= 0) {
       toast({
-        title: 'Invalid Quantity',
-        description: 'Please enter a valid quantity',
-        variant: 'destructive',
+        title: "Invalid Quantity",
+        description: "Please enter a valid quantity",
+        variant: "destructive",
       });
       return;
     }
 
     try {
-      const mp = marketplaces.find(m => m.id === targetMarketplace);
-      const item = itemTypes.find(i => i.id === modalItemTypeId);
-      const existingAlloc = allocations.find(a => a.itemTypeId === modalItemTypeId);
+      const mp = marketplaces.find((m) => m.id === targetMarketplace);
+      const item = itemTypes.find((i) => i.id === modalItemTypeId);
+      const existingAlloc = allocations.find((a) => a.itemTypeId === modalItemTypeId);
       const qtyBefore = existingAlloc?.allocatedQuantity || 0;
 
       await allocateToMarketplace.mutateAsync({
@@ -152,77 +137,86 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       logEvent.mutate({
         itemTypeId: modalItemTypeId,
         marketplaceId: targetMarketplace,
-        marketplaceName: mp?.name || 'Unknown',
-        actionType: 'allocated',
+        marketplaceName: mp?.name || "Unknown",
+        actionType: "allocated",
         quantityBefore: qtyBefore,
         quantityAfter: qtyBefore + qty,
-        description: `${qty.toLocaleString()} units of ${item?.name || 'item'} allocated to ${mp?.name || 'marketplace'}`,
+        description: `${qty.toLocaleString()} units of ${item?.name || "item"} allocated to ${mp?.name || "marketplace"}`,
       });
 
       toast({
-        title: 'Items Allocated',
+        title: "Items Allocated",
         description: `${qty.toLocaleString()} items allocated to marketplace`,
       });
       setShowAllocateModal(false);
-      setModalMarketplaceId('');
-      setModalItemTypeId('');
-      setQuantity('');
+      setModalMarketplaceId("");
+      setModalItemTypeId("");
+      setQuantity("");
     } catch (error) {
       toast({
-        title: 'Allocation Failed',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        title: "Allocation Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
       });
     }
   };
 
   const handleDelete = async (allocationId: string) => {
-    if (!confirm('Remove this allocation?')) return;
+    if (!confirm("Remove this allocation?")) return;
 
-    const alloc = allocations.find(a => a.id === allocationId);
-    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+    const alloc = allocations.find((a) => a.id === allocationId);
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
 
     try {
-      await deleteAllocation.mutateAsync(allocationId);
+      const itemType = alloc ? itemTypes.find((i) => i.id === alloc.itemTypeId) : undefined;
+      const marketplace = marketplaces.find((m) => m.id === selectedMarketplaceId);
 
-      // Direct delete on Surpluss via allocation ID
-      if (alloc?.surplussAllocationId) {
-        try {
-          await supabase.functions.invoke('surpluss-allocations-api', {
-            body: {
-              action: 'delete_allocation',
-              allocation_id: alloc.surplussAllocationId,
-              environment: 'production'
-            }
+      if (itemType?.externalMaterialId != null && marketplace?.external_id != null) {
+        const sync = await surplussBatchUpdateMaterials(
+          marketplace.external_id,
+          [{ material_id: itemType.externalMaterialId, amount: 0 }],
+          SURPLUSS_ENV,
+        );
+        if (!sync.ok) {
+          toast({
+            title: "Tractor sync failed",
+            description:
+              sync.error ?? "Could not update Surpluss. Allocation was not removed — fix the error or try again.",
+            variant: "destructive",
           });
-          console.log(`[surpluss-delete] Deleted Surpluss allocation ${alloc.surplussAllocationId}`);
-        } catch (syncErr) {
-          console.error('[surpluss-delete] Failed to delete allocation on Surpluss:', syncErr);
+          return;
         }
+      } else if (itemType && !itemType.externalMaterialId) {
+        toast({
+          title: "Removed in GIF only",
+          description: "This item type has no Tractor material ID; Surpluss was not updated.",
+        });
       }
+
+      await deleteAllocation.mutateAsync(allocationId);
 
       if (alloc) {
         logEvent.mutate({
           allocationId,
           itemTypeId: alloc.itemTypeId,
           marketplaceId: selectedMarketplaceId || undefined,
-          marketplaceName: mp?.name || 'Unknown',
-          actionType: 'removed',
+          marketplaceName: mp?.name || "Unknown",
+          actionType: "removed",
           quantityBefore: alloc.allocatedQuantity,
           quantityAfter: 0,
-          description: `Allocation of ${alloc.itemName || 'item'} removed from ${mp?.name || 'marketplace'}`,
+          description: `Allocation of ${alloc.itemName || "item"} removed from ${mp?.name || "marketplace"}`,
         });
       }
 
       toast({
-        title: 'Allocation Removed',
-        description: 'The allocation has been deleted',
+        title: "Allocation Removed",
+        description: "The allocation has been deleted",
       });
     } catch (error) {
       toast({
-        title: 'Delete Failed',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
       });
     }
   };
@@ -243,58 +237,56 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   const handleSaveEdit = async () => {
     if (!editingAllocationId) return;
 
-    const alloc = allocations.find(a => a.id === editingAllocationId);
-    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+    const alloc = allocations.find((a) => a.id === editingAllocationId);
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
 
     try {
+      const itemType = alloc ? itemTypes.find((i) => i.id === alloc.itemTypeId) : undefined;
+      const marketplace = marketplaces.find((m) => m.id === selectedMarketplaceId);
+
+      if (itemType?.externalMaterialId != null && marketplace?.external_id != null) {
+        const sync = await surplussBatchUpdateMaterials(
+          marketplace.external_id,
+          [{ material_id: itemType.externalMaterialId, amount: editAllocated }],
+          SURPLUSS_ENV,
+        );
+        if (!sync.ok) {
+          toast({
+            title: "Tractor sync failed",
+            description: sync.error ?? "Could not update Surpluss. Quantities were not saved.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       await updateAllocationQuantities.mutateAsync({
         allocationId: editingAllocationId,
         allocatedQuantity: editAllocated,
         distributedQuantity: editDistributed,
       });
 
-      // Reverse sync quantity update to Surpluss at material level
-      if (alloc) {
-        const itemType = itemTypes.find(i => i.id === alloc.itemTypeId);
-        const marketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
-        if (itemType?.externalMaterialId && marketplace?.external_id) {
-          try {
-            await supabase.functions.invoke('surpluss-allocations-api', {
-              body: {
-                action: 'batch_update',
-                marketplace_event_id: marketplace.external_id,
-                materials: [{ material_id: itemType.externalMaterialId, amount: editAllocated }],
-                environment: 'production'
-              }
-            });
-            console.log(`[reverse-sync] Updated material ${itemType.externalMaterialId} to ${editAllocated} on Surpluss event ${marketplace.external_id}`);
-          } catch (syncErr) {
-            console.error('[reverse-sync] Failed to update Surpluss:', syncErr);
-          }
-        }
-      }
-
       logEvent.mutate({
         allocationId: editingAllocationId,
         itemTypeId: alloc?.itemTypeId,
         marketplaceId: selectedMarketplaceId || undefined,
-        marketplaceName: mp?.name || 'Unknown',
-        actionType: 'edited',
+        marketplaceName: mp?.name || "Unknown",
+        actionType: "edited",
         quantityBefore: alloc?.allocatedQuantity || 0,
         quantityAfter: editAllocated,
-        description: `Allocation of ${alloc?.itemName || 'item'} edited: allocated ${alloc?.allocatedQuantity}→${editAllocated}, distributed ${alloc?.distributedQuantity}→${editDistributed}`,
+        description: `Allocation of ${alloc?.itemName || "item"} edited: allocated ${alloc?.allocatedQuantity}→${editAllocated}, distributed ${alloc?.distributedQuantity}→${editDistributed}`,
       });
 
       toast({
-        title: 'Allocation Updated',
-        description: 'Quantities have been saved',
+        title: "Allocation Updated",
+        description: "Quantities have been saved",
       });
       handleCancelEdit();
     } catch (error) {
       toast({
-        title: 'Update Failed',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
       });
     }
   };
@@ -302,7 +294,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   // Handle distribute (increment distributed by 1)
   const handleDistribute = async () => {
     if (!distributeAllocation) return;
-    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
 
     try {
       await incrementDistributed.mutateAsync(distributeAllocation.id);
@@ -310,23 +302,23 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       logEvent.mutate({
         allocationId: distributeAllocation.id,
         marketplaceId: selectedMarketplaceId || undefined,
-        marketplaceName: mp?.name || 'Unknown',
-        actionType: 'distributed',
+        marketplaceName: mp?.name || "Unknown",
+        actionType: "distributed",
         quantityBefore: distributeAllocation.distributed,
         quantityAfter: distributeAllocation.distributed + 1,
-        description: `1 unit of ${distributeAllocation.itemName} distributed at ${mp?.name || 'marketplace'}`,
+        description: `1 unit of ${distributeAllocation.itemName} distributed at ${mp?.name || "marketplace"}`,
       });
 
       toast({
-        title: 'Item Distributed',
+        title: "Item Distributed",
         description: `1 unit of ${distributeAllocation.itemName} marked as distributed`,
       });
       setDistributeAllocation(null);
     } catch (error) {
       toast({
-        title: 'Distribution Failed',
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: 'destructive',
+        title: "Distribution Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
       });
     }
   };
@@ -336,19 +328,43 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     if (!undoAllocation) return;
     const qty = parseInt(undoQuantity);
     if (isNaN(qty) || qty <= 0) {
-      toast({ title: 'Invalid Quantity', description: 'Enter a valid quantity to return', variant: 'destructive' });
+      toast({ title: "Invalid Quantity", description: "Enter a valid quantity to return", variant: "destructive" });
       return;
     }
     const maxReturnable = undoAllocation.allocated - undoAllocation.distributed;
     if (qty > maxReturnable) {
-      toast({ title: 'Too Many', description: `Only ${maxReturnable} undistributed items can be returned`, variant: 'destructive' });
+      toast({
+        title: "Too Many",
+        description: `Only ${maxReturnable} undistributed items can be returned`,
+        variant: "destructive",
+      });
       return;
     }
-    const alloc = allocations.find(a => a.id === undoAllocation.id);
-    const mp = marketplaces.find(m => m.id === selectedMarketplaceId);
+    const alloc = allocations.find((a) => a.id === undoAllocation.id);
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
 
     try {
       const newAllocated = undoAllocation.allocated - qty;
+      const itemType = alloc ? itemTypes.find((i) => i.id === alloc.itemTypeId) : undefined;
+      const marketplace = marketplaces.find((m) => m.id === selectedMarketplaceId);
+
+      if (itemType?.externalMaterialId != null && marketplace?.external_id != null) {
+        const surplussAmount = Math.max(newAllocated, 0);
+        const sync = await surplussBatchUpdateMaterials(
+          marketplace.external_id,
+          [{ material_id: itemType.externalMaterialId, amount: surplussAmount }],
+          SURPLUSS_ENV,
+        );
+        if (!sync.ok) {
+          toast({
+            title: "Tractor sync failed",
+            description: sync.error ?? "Could not update Surpluss. Return to warehouse was not applied.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       if (newAllocated <= 0 && undoAllocation.distributed <= 0) {
         await deleteAllocation.mutateAsync(undoAllocation.id);
       } else {
@@ -358,44 +374,26 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         });
       }
 
-      // Reverse sync return to Surpluss at material level
-      if (alloc) {
-        const itemType = itemTypes.find(i => i.id === alloc.itemTypeId);
-        const marketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
-        if (itemType?.externalMaterialId && marketplace?.external_id) {
-          try {
-            const surplussAmount = Math.max(newAllocated, 0);
-            await supabase.functions.invoke('surpluss-allocations-api', {
-              body: {
-                action: 'batch_update',
-                marketplace_event_id: marketplace.external_id,
-                materials: [{ material_id: itemType.externalMaterialId, amount: surplussAmount }],
-                environment: 'production'
-              }
-            });
-            console.log(`[reverse-sync] Returned ${qty} items: set material ${itemType.externalMaterialId} to ${surplussAmount} on Surpluss event ${marketplace.external_id}`);
-          } catch (syncErr) {
-            console.error('[reverse-sync] Failed to sync return to Surpluss:', syncErr);
-          }
-        }
-      }
-
       logEvent.mutate({
         allocationId: undoAllocation.id,
         itemTypeId: alloc?.itemTypeId,
         marketplaceId: selectedMarketplaceId || undefined,
-        marketplaceName: mp?.name || 'Unknown',
-        actionType: 'returned_to_warehouse',
+        marketplaceName: mp?.name || "Unknown",
+        actionType: "returned_to_warehouse",
         quantityBefore: undoAllocation.allocated,
         quantityAfter: newAllocated,
-        description: `${qty.toLocaleString()} units of ${alloc?.itemName || 'item'} returned to warehouse from ${mp?.name || 'marketplace'}`,
+        description: `${qty.toLocaleString()} units of ${alloc?.itemName || "item"} returned to warehouse from ${mp?.name || "marketplace"}`,
       });
 
-      toast({ title: 'Items Returned', description: `${qty.toLocaleString()} items returned to warehouse pool` });
+      toast({ title: "Items Returned", description: `${qty.toLocaleString()} items returned to warehouse pool` });
       setUndoAllocation(null);
-      setUndoQuantity('');
+      setUndoQuantity("");
     } catch (error) {
-      toast({ title: 'Undo Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+      toast({
+        title: "Undo Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
     }
   };
 
@@ -404,21 +402,25 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     if (!reallocAllocation || !reallocTargetMarketplace) return;
     const qty = parseInt(reallocQuantity);
     if (isNaN(qty) || qty <= 0) {
-      toast({ title: 'Invalid Quantity', description: 'Enter a valid quantity', variant: 'destructive' });
+      toast({ title: "Invalid Quantity", description: "Enter a valid quantity", variant: "destructive" });
       return;
     }
     const maxMovable = reallocAllocation.allocated - reallocAllocation.distributed;
     if (qty > maxMovable) {
-      toast({ title: 'Too Many', description: `Only ${maxMovable} undistributed items can be moved`, variant: 'destructive' });
+      toast({
+        title: "Too Many",
+        description: `Only ${maxMovable} undistributed items can be moved`,
+        variant: "destructive",
+      });
       return;
     }
-    const sourceMp = marketplaces.find(m => m.id === selectedMarketplaceId);
-    const targetMp = marketplaces.find(m => m.id === reallocTargetMarketplace);
+    const sourceMp = marketplaces.find((m) => m.id === selectedMarketplaceId);
+    const targetMp = marketplaces.find((m) => m.id === reallocTargetMarketplace);
 
     try {
-      const sourceAlloc = allocations.find(a => a.id === reallocAllocation.id);
+      const sourceAlloc = allocations.find((a) => a.id === reallocAllocation.id);
       const itemTypeId = sourceAlloc?.itemTypeId;
-      if (!itemTypeId) throw new Error('Could not determine item type');
+      if (!itemTypeId) throw new Error("Could not determine item type");
 
       const newAllocated = reallocAllocation.allocated - qty;
       if (newAllocated <= 0 && reallocAllocation.distributed <= 0) {
@@ -439,23 +441,27 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         allocationId: reallocAllocation.id,
         itemTypeId,
         marketplaceId: selectedMarketplaceId || undefined,
-        marketplaceName: sourceMp?.name || 'Unknown',
-        actionType: 're-allocated',
+        marketplaceName: sourceMp?.name || "Unknown",
+        actionType: "re-allocated",
         quantityBefore: reallocAllocation.allocated,
         quantityAfter: newAllocated,
-        description: `${qty.toLocaleString()} units of ${sourceAlloc?.itemName || 'item'} re-allocated from ${sourceMp?.name || 'source'} to ${targetMp?.name || 'target'}`,
+        description: `${qty.toLocaleString()} units of ${sourceAlloc?.itemName || "item"} re-allocated from ${sourceMp?.name || "source"} to ${targetMp?.name || "target"}`,
       });
 
-      toast({ title: 'Items Re-allocated', description: `${qty.toLocaleString()} items moved to new marketplace` });
+      toast({ title: "Items Re-allocated", description: `${qty.toLocaleString()} items moved to new marketplace` });
       setReallocAllocation(null);
-      setReallocTargetMarketplace('');
-      setReallocQuantity('');
+      setReallocTargetMarketplace("");
+      setReallocQuantity("");
     } catch (error) {
-      toast({ title: 'Re-allocation Failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+      toast({
+        title: "Re-allocation Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
     }
   };
 
-  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
+  const selectedMarketplace = marketplaces.find((m) => m.id === selectedMarketplaceId);
   const selectedHasExternalId = selectedMarketplace && (selectedMarketplace as any).external_id;
 
   // Sync allocations from Surpluss for selected marketplace
@@ -463,20 +469,20 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     if (!selectedMarketplaceId) return;
     setIsSyncingFromSurpluss(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
-        body: { marketplace_id: selectedMarketplaceId, environment: 'production' }
+      const { data, error } = await supabase.functions.invoke("sync-surpluss-event-allocations", {
+        body: { marketplace_id: selectedMarketplaceId, environment: "production" },
       });
       if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Sync failed');
+      if (!data.success) throw new Error(data.error || "Sync failed");
       toast({
-        title: 'Surpluss Sync Complete',
+        title: "Surpluss Sync Complete",
         description: `Synced ${data.synced} allocations (${data.created} created, ${data.updated} updated)`,
       });
     } catch (error) {
       toast({
-        title: 'Sync Failed',
-        description: error instanceof Error ? error.message : 'Failed to sync from Surpluss',
-        variant: 'destructive',
+        title: "Sync Failed",
+        description: error instanceof Error ? error.message : "Failed to sync from Surpluss",
+        variant: "destructive",
       });
     } finally {
       setIsSyncingFromSurpluss(false);
@@ -501,8 +507,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               <p className="text-xs md:text-sm text-muted-foreground">Allocate Tractor items to marketplaces</p>
             </div>
             {selectedHasExternalId && (
-              <Button onClick={handleSyncFromSurpluss} size="sm" variant="outline" className="shrink-0" disabled={isSyncingFromSurpluss}>
-                {isSyncingFromSurpluss ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+              <Button
+                onClick={handleSyncFromSurpluss}
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                disabled={isSyncingFromSurpluss}
+              >
+                {isSyncingFromSurpluss ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                )}
                 <span className="hidden sm:inline">Sync Surpluss</span>
               </Button>
             )}
@@ -526,9 +542,10 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               <SelectValue placeholder="Choose a marketplace..." />
             </SelectTrigger>
             <SelectContent>
-              {activeMarketplaces.map(mp => (
+              {activeMarketplaces.map((mp) => (
                 <SelectItem key={mp.id} value={mp.id}>
-                  {mp.name}{mp.event_date ? ` (${new Date(mp.event_date).toLocaleDateString()})` : ''}
+                  {mp.name}
+                  {mp.event_date ? ` (${new Date(mp.event_date).toLocaleDateString()})` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -563,9 +580,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             {/* Allocations Table */}
             <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
               <div className="p-4 md:p-6 border-b border-border">
-                <h2 className="font-display font-bold text-lg">
-                  Items for {selectedMarketplace?.name}
-                </h2>
+                <h2 className="font-display font-bold text-lg">Items for {selectedMarketplace?.name}</h2>
               </div>
 
               {loadingAllocations ? (
@@ -601,9 +616,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                             {isEditing ? (
                               <>
                                 <TableCell className="font-mono text-sm text-muted-foreground">
-                                  {alloc.externalMaterialId ?? '—'}
+                                  {alloc.externalMaterialId ?? "—"}
                                 </TableCell>
-                                <TableCell>{alloc.itemName || 'Unknown'}</TableCell>
+                                <TableCell>{alloc.itemName || "Unknown"}</TableCell>
                                 <TableCell className="text-right">
                                   <Input
                                     type="number"
@@ -628,12 +643,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex gap-1 justify-end">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={handleCancelEdit}
-                                    >
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancelEdit}>
                                       <X className="w-4 h-4" />
                                     </Button>
                                     <Button
@@ -655,12 +665,16 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                             ) : (
                               <>
                                 <TableCell className="font-mono text-sm text-muted-foreground">
-                                  {alloc.externalMaterialId ?? '—'}
+                                  {alloc.externalMaterialId ?? "—"}
                                 </TableCell>
-                                <TableCell className="font-medium">{alloc.itemName || 'Unknown'}</TableCell>
+                                <TableCell className="font-medium">{alloc.itemName || "Unknown"}</TableCell>
                                 <TableCell className="text-right">{alloc.allocatedQuantity.toLocaleString()}</TableCell>
-                                <TableCell className="text-right text-emerald-600">{alloc.distributedQuantity.toLocaleString()}</TableCell>
-                                <TableCell className={`text-right font-medium ${remaining < 0 ? 'text-destructive' : 'text-amber-600'}`}>
+                                <TableCell className="text-right text-emerald-600">
+                                  {alloc.distributedQuantity.toLocaleString()}
+                                </TableCell>
+                                <TableCell
+                                  className={`text-right font-medium ${remaining < 0 ? "text-destructive" : "text-amber-600"}`}
+                                >
                                   {remaining.toLocaleString()}
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -678,12 +692,14 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-muted-foreground hover:text-emerald-600"
-                                      onClick={() => setDistributeAllocation({
-                                        id: alloc.id,
-                                        itemName: alloc.itemName || 'Unknown',
-                                        allocated: alloc.allocatedQuantity,
-                                        distributed: alloc.distributedQuantity,
-                                      })}
+                                      onClick={() =>
+                                        setDistributeAllocation({
+                                          id: alloc.id,
+                                          itemName: alloc.itemName || "Unknown",
+                                          allocated: alloc.allocatedQuantity,
+                                          distributed: alloc.distributedQuantity,
+                                        })
+                                      }
                                       disabled={remaining <= 0}
                                       title="Distribute"
                                     >
@@ -695,8 +711,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                                       className="h-8 w-8 text-muted-foreground hover:text-amber-600"
                                       onClick={() => {
                                         const maxReturnable = alloc.allocatedQuantity - alloc.distributedQuantity;
-                                        setUndoAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
-                                        setUndoQuantity(maxReturnable > 0 ? String(maxReturnable) : '');
+                                        setUndoAllocation({
+                                          id: alloc.id,
+                                          allocated: alloc.allocatedQuantity,
+                                          distributed: alloc.distributedQuantity,
+                                        });
+                                        setUndoQuantity(maxReturnable > 0 ? String(maxReturnable) : "");
                                       }}
                                       disabled={remaining <= 0}
                                       title="Return to Warehouse"
@@ -709,8 +729,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                                       className="h-8 w-8 text-muted-foreground hover:text-blue-600"
                                       onClick={() => {
                                         const maxMovable = alloc.allocatedQuantity - alloc.distributedQuantity;
-                                        setReallocAllocation({ id: alloc.id, allocated: alloc.allocatedQuantity, distributed: alloc.distributedQuantity });
-                                        setReallocQuantity(maxMovable > 0 ? String(maxMovable) : '');
+                                        setReallocAllocation({
+                                          id: alloc.id,
+                                          allocated: alloc.allocatedQuantity,
+                                          distributed: alloc.distributedQuantity,
+                                        });
+                                        setReallocQuantity(maxMovable > 0 ? String(maxMovable) : "");
                                       }}
                                       disabled={remaining <= 0}
                                       title="Re-allocate"
@@ -753,26 +777,22 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Allocate Items</DialogTitle>
-            <DialogDescription>
-              Assign items to a marketplace by item ID
-            </DialogDescription>
+            <DialogDescription>Assign items to a marketplace by item ID</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             {/* Marketplace Selection */}
             <div className="space-y-2">
               <Label>Marketplace</Label>
-              <Select 
-                value={modalMarketplaceId || selectedMarketplaceId} 
-                onValueChange={setModalMarketplaceId}
-              >
+              <Select value={modalMarketplaceId || selectedMarketplaceId} onValueChange={setModalMarketplaceId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select marketplace..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeMarketplaces.map(mp => (
+                  {activeMarketplaces.map((mp) => (
                     <SelectItem key={mp.id} value={mp.id}>
-                      {mp.name}{mp.event_date ? ` (${new Date(mp.event_date).toLocaleDateString()})` : ''}
+                      {mp.name}
+                      {mp.event_date ? ` (${new Date(mp.event_date).toLocaleDateString()})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -792,12 +812,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                   >
                     {modalItemTypeId
                       ? (() => {
-                          const item = itemTypes.find(i => i.id === modalItemTypeId);
+                          const item = itemTypes.find((i) => i.id === modalItemTypeId);
                           return item
-                            ? `${item.externalMaterialId ? item.externalMaterialId + ' — ' : ''}${item.name}`
-                            : 'Select item...';
+                            ? `${item.externalMaterialId ? item.externalMaterialId + " — " : ""}${item.name}`
+                            : "Select item...";
                         })()
-                      : 'Select item...'}
+                      : "Select item..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -807,30 +827,32 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                     <CommandList>
                       <CommandEmpty>No items found.</CommandEmpty>
                       <CommandGroup>
-                        {[...allocatableItems, ...itemTypes.filter(item => item.externalMaterialId == null)].map(item => (
-                          <CommandItem
-                            key={item.id}
-                            value={`${item.externalMaterialId || ''} ${item.name} ${item.category || ''}`}
-                            onSelect={() => {
-                              setModalItemTypeId(item.id);
-                              setItemComboOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                modalItemTypeId === item.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{item.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {item.externalMaterialId ? `ID: ${item.externalMaterialId}` : 'No Material ID'}
-                                {item.category ? ` · ${item.category}` : ''}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
+                        {[...allocatableItems, ...itemTypes.filter((item) => item.externalMaterialId == null)].map(
+                          (item) => (
+                            <CommandItem
+                              key={item.id}
+                              value={`${item.externalMaterialId || ""} ${item.name} ${item.category || ""}`}
+                              onSelect={() => {
+                                setModalItemTypeId(item.id);
+                                setItemComboOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  modalItemTypeId === item.id ? "opacity-100" : "opacity-0",
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span className="font-medium">{item.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {item.externalMaterialId ? `ID: ${item.externalMaterialId}` : "No Material ID"}
+                                  {item.category ? ` · ${item.category}` : ""}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ),
+                        )}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -839,23 +861,32 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             </div>
 
             {/* Selected item info */}
-            {modalItemTypeId && (() => {
-              const selectedItem = itemTypes.find(i => i.id === modalItemTypeId);
-              if (!selectedItem) return null;
-              const remaining = selectedItem.totalStock - selectedItem.distributed;
-              return (
-                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-                  <p className="font-semibold text-foreground">Current Material:</p>
-                  <p><span className="font-semibold">Title:</span> {selectedItem.name}</p>
-                  <p><span className="font-semibold">Category:</span> {selectedItem.category || 'Uncategorized'}</p>
-                  <p><span className="font-semibold">Total Items:</span> {selectedItem.totalStock.toLocaleString()}</p>
-                  <p>
-                    <span className="font-semibold">Remaining:</span>{' '}
-                    <span className={remaining > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>{remaining.toLocaleString()}</span>
-                  </p>
-                </div>
-              );
-            })()}
+            {modalItemTypeId &&
+              (() => {
+                const selectedItem = itemTypes.find((i) => i.id === modalItemTypeId);
+                if (!selectedItem) return null;
+                const remaining = selectedItem.totalStock - selectedItem.distributed;
+                return (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                    <p className="font-semibold text-foreground">Current Material:</p>
+                    <p>
+                      <span className="font-semibold">Title:</span> {selectedItem.name}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Category:</span> {selectedItem.category || "Uncategorized"}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Total Items:</span> {selectedItem.totalStock.toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Remaining:</span>{" "}
+                      <span className={remaining > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>
+                        {remaining.toLocaleString()}
+                      </span>
+                    </p>
+                  </div>
+                );
+              })()}
 
             {/* Quantity */}
             <div className="space-y-2">
@@ -877,9 +908,14 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             <Button variant="outline" onClick={() => setShowAllocateModal(false)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleAllocate} 
-              disabled={allocateToMarketplace.isPending || !(modalMarketplaceId || selectedMarketplaceId) || !modalItemTypeId || !quantity}
+            <Button
+              onClick={handleAllocate}
+              disabled={
+                allocateToMarketplace.isPending ||
+                !(modalMarketplaceId || selectedMarketplaceId) ||
+                !modalItemTypeId ||
+                !quantity
+              }
             >
               {allocateToMarketplace.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Allocate Items
@@ -889,15 +925,18 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       </Dialog>
 
       {/* Distribute Confirmation Modal */}
-      <Dialog open={!!distributeAllocation} onOpenChange={(open) => { if (!open) setDistributeAllocation(null); }}>
+      <Dialog
+        open={!!distributeAllocation}
+        onOpenChange={(open) => {
+          if (!open) setDistributeAllocation(null);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl flex items-center gap-2">
               <Send className="w-5 h-5" /> Confirm Distribution
             </DialogTitle>
-            <DialogDescription>
-              Mark 1 unit as distributed
-            </DialogDescription>
+            <DialogDescription>Mark 1 unit as distributed</DialogDescription>
           </DialogHeader>
           {distributeAllocation && (
             <div className="space-y-4 py-4">
@@ -908,17 +947,25 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Currently Distributed</span>
-                  <span className="font-medium">{distributeAllocation.distributed.toLocaleString()} / {distributeAllocation.allocated.toLocaleString()}</span>
+                  <span className="font-medium">
+                    {distributeAllocation.distributed.toLocaleString()} /{" "}
+                    {distributeAllocation.allocated.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
                   <span className="text-muted-foreground">After Distribution</span>
-                  <span className="font-semibold text-emerald-600">{(distributeAllocation.distributed + 1).toLocaleString()} / {distributeAllocation.allocated.toLocaleString()}</span>
+                  <span className="font-semibold text-emerald-600">
+                    {(distributeAllocation.distributed + 1).toLocaleString()} /{" "}
+                    {distributeAllocation.allocated.toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
           )}
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setDistributeAllocation(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDistributeAllocation(null)}>
+              Cancel
+            </Button>
             <Button onClick={handleDistribute} disabled={incrementDistributed.isPending}>
               {incrementDistributed.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Confirm Distribute
@@ -928,15 +975,21 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       </Dialog>
 
       {/* Undo / Return to Warehouse Modal */}
-      <Dialog open={!!undoAllocation} onOpenChange={(open) => { if (!open) { setUndoAllocation(null); setUndoQuantity(''); } }}>
+      <Dialog
+        open={!!undoAllocation}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUndoAllocation(null);
+            setUndoQuantity("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl flex items-center gap-2">
               <Undo2 className="w-5 h-5" /> Return to Warehouse
             </DialogTitle>
-            <DialogDescription>
-              Return undistributed items back to the unallocated warehouse pool
-            </DialogDescription>
+            <DialogDescription>Return undistributed items back to the unallocated warehouse pool</DialogDescription>
           </DialogHeader>
           {undoAllocation && (
             <div className="space-y-4 py-4">
@@ -951,7 +1004,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 </div>
                 <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
                   <span className="text-muted-foreground">Max Returnable</span>
-                  <span className="font-semibold text-primary">{(undoAllocation.allocated - undoAllocation.distributed).toLocaleString()}</span>
+                  <span className="font-semibold text-primary">
+                    {(undoAllocation.allocated - undoAllocation.distributed).toLocaleString()}
+                  </span>
                 </div>
               </div>
               <div className="space-y-2">
@@ -967,9 +1022,23 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             </div>
           )}
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => { setUndoAllocation(null); setUndoQuantity(''); }}>Cancel</Button>
-            <Button variant="warning" onClick={handleUndo} disabled={updateAllocationQuantities.isPending || deleteAllocation.isPending}>
-              {(updateAllocationQuantities.isPending || deleteAllocation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setUndoAllocation(null);
+                setUndoQuantity("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="warning"
+              onClick={handleUndo}
+              disabled={updateAllocationQuantities.isPending || deleteAllocation.isPending}
+            >
+              {(updateAllocationQuantities.isPending || deleteAllocation.isPending) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Return Items
             </Button>
           </div>
@@ -977,15 +1046,22 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       </Dialog>
 
       {/* Re-allocate Modal */}
-      <Dialog open={!!reallocAllocation} onOpenChange={(open) => { if (!open) { setReallocAllocation(null); setReallocTargetMarketplace(''); setReallocQuantity(''); } }}>
+      <Dialog
+        open={!!reallocAllocation}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReallocAllocation(null);
+            setReallocTargetMarketplace("");
+            setReallocQuantity("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl flex items-center gap-2">
               <ArrowRightLeft className="w-5 h-5" /> Re-allocate Items
             </DialogTitle>
-            <DialogDescription>
-              Move undistributed items from this marketplace to another
-            </DialogDescription>
+            <DialogDescription>Move undistributed items from this marketplace to another</DialogDescription>
           </DialogHeader>
           {reallocAllocation && (
             <div className="space-y-4 py-4">
@@ -1000,7 +1076,9 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 </div>
                 <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
                   <span className="text-muted-foreground">Max Movable</span>
-                  <span className="font-semibold text-primary">{(reallocAllocation.allocated - reallocAllocation.distributed).toLocaleString()}</span>
+                  <span className="font-semibold text-primary">
+                    {(reallocAllocation.allocated - reallocAllocation.distributed).toLocaleString()}
+                  </span>
                 </div>
               </div>
               <div className="space-y-2">
@@ -1011,8 +1089,8 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                   </SelectTrigger>
                   <SelectContent>
                     {activeMarketplaces
-                      .filter(mp => mp.id !== selectedMarketplaceId)
-                      .map(mp => (
+                      .filter((mp) => mp.id !== selectedMarketplaceId)
+                      .map((mp) => (
                         <SelectItem key={mp.id} value={mp.id}>
                           {mp.name}
                         </SelectItem>
@@ -1033,9 +1111,25 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             </div>
           )}
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => { setReallocAllocation(null); setReallocTargetMarketplace(''); setReallocQuantity(''); }}>Cancel</Button>
-            <Button onClick={handleReallocate} disabled={allocateToMarketplace.isPending || updateAllocationQuantities.isPending || !reallocTargetMarketplace}>
-              {(allocateToMarketplace.isPending || updateAllocationQuantities.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReallocAllocation(null);
+                setReallocTargetMarketplace("");
+                setReallocQuantity("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReallocate}
+              disabled={
+                allocateToMarketplace.isPending || updateAllocationQuantities.isPending || !reallocTargetMarketplace
+              }
+            >
+              {(allocateToMarketplace.isPending || updateAllocationQuantities.isPending) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Move Items
             </Button>
           </div>
