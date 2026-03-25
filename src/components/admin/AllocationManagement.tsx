@@ -185,24 +185,19 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     try {
       await deleteAllocation.mutateAsync(allocationId);
 
-      // Reverse sync to Surpluss: set this specific material's amount to 0
-      if (alloc) {
-        const itemType = itemTypes.find(i => i.id === alloc.itemTypeId);
-        const marketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
-        if (itemType?.externalMaterialId && marketplace?.external_id) {
-          try {
-            await supabase.functions.invoke('surpluss-allocations-api', {
-              body: {
-                action: 'batch_update',
-                marketplace_event_id: marketplace.external_id,
-                materials: [{ material_id: itemType.externalMaterialId, amount: 0 }],
-                environment: 'production'
-              }
-            });
-            console.log(`[reverse-sync] Set material ${itemType.externalMaterialId} to 0 on Surpluss event ${marketplace.external_id}`);
-          } catch (syncErr) {
-            console.error('[reverse-sync] Failed to sync delete to Surpluss:', syncErr);
-          }
+      // Direct delete on Surpluss via allocation ID
+      if (alloc?.surplussAllocationId) {
+        try {
+          await supabase.functions.invoke('surpluss-allocations-api', {
+            body: {
+              action: 'delete_allocation',
+              allocation_id: alloc.surplussAllocationId,
+              environment: 'production'
+            }
+          });
+          console.log(`[surpluss-delete] Deleted Surpluss allocation ${alloc.surplussAllocationId}`);
+        } catch (syncErr) {
+          console.error('[surpluss-delete] Failed to delete allocation on Surpluss:', syncErr);
         }
       }
 
