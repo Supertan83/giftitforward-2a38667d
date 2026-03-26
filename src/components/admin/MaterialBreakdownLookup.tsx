@@ -126,10 +126,28 @@ export const MaterialBreakdownLookup = () => {
     }
   };
 
+  const runBulkReconcile = async (dryRun: boolean) => {
+    setBulkReconcileLoading(true);
+    try {
+      const result = await surplussBulkReconcileDonationRemaining({ dry_run: dryRun, environment: "production" });
+      if (!result.ok) throw new Error(result.error);
+      setBulkReconcileReport(result.data);
+      toast.success(
+        dryRun
+          ? `Dry run complete — ${result.data.drifted} discrepancies found across ${result.data.total} materials`
+          : `Applied fixes to ${result.data.drifted} materials`,
+      );
+    } catch (err: any) {
+      toast.error(`Bulk reconcile failed: ${err.message}`);
+    } finally {
+      setBulkReconcileLoading(false);
+    }
+  };
+
   return (
     <div className="bg-card rounded-xl border border-border shadow-card mb-6">
       <div className="p-4 md:p-6 border-b border-border">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="font-display font-bold text-lg flex items-center gap-2">
               <Search className="w-5 h-5" />
@@ -139,16 +157,28 @@ export const MaterialBreakdownLookup = () => {
               Search by Material ID or name to see allocation breakdown across all marketplaces
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => runFix(true)}
-            disabled={fixLoading}
-            className="flex items-center gap-2"
-          >
-            {fixLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-            Run Allocation Audit
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runBulkReconcile(true)}
+              disabled={bulkReconcileLoading}
+              className="flex items-center gap-2"
+            >
+              {bulkReconcileLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+              Bulk Reconcile Remaining
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runFix(true)}
+              disabled={fixLoading}
+              className="flex items-center gap-2"
+            >
+              {fixLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+              Run Allocation Audit
+            </Button>
+          </div>
         </div>
       </div>
 
