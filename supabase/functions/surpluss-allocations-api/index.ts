@@ -24,10 +24,12 @@ interface RequestPayload {
     | "list_marketplace_events"
     | "get_donation_metadata"
     | "get_donation_metadata_by_material"
+    | "reconcile_donation_remaining"
     | "get_donation_allocations"
     | "update_distribution";
   environment: "staging" | "production";
   material_id?: number;
+  dry_run?: boolean;
   marketplace_event_id?: number;
   amount?: number;
   materials?: Array<{ material_id: number; amount: number }>;
@@ -107,6 +109,16 @@ serve(async (req) => {
         }
         url = `${apiBase}/donation-metadata/${Number(payload.material_id)}`;
         method = "GET";
+        break;
+      }
+
+      case "reconcile_donation_remaining": {
+        if (payload.material_id == null || Number.isNaN(Number(payload.material_id))) {
+          return errorResponse("material_id is required");
+        }
+        url = `${apiBase}/donation-metadata/${Number(payload.material_id)}/reconcile-remaining`;
+        method = "POST";
+        body = JSON.stringify({ dry_run: payload.dry_run === true });
         break;
       }
 
@@ -223,6 +235,7 @@ serve(async (req) => {
       "batch_update",
       "return_remaining",
       "delete_allocation",
+      "reconcile_donation_remaining",
       "update_distribution",
     ];
     if (writeActions.includes(action)) {
