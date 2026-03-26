@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { VolunteerInterface } from '@/components/VolunteerInterface';
-import { AdminDashboard } from '@/components/admin/AdminDashboard';
-import { EmployeeDashboard } from '@/components/EmployeeDashboard';
-import { Loader2 } from 'lucide-react';
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { VolunteerInterface } from "@/components/VolunteerInterface";
+import { AdminDashboard } from "@/components/admin/AdminDashboard";
+import { EmployeeDashboard } from "@/components/EmployeeDashboard";
+import { Loader2 } from "lucide-react";
 
 const Index = () => {
   const { user, userRole, isLoading } = useAuth();
@@ -12,7 +12,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!isLoading && !user) {
-      navigate('/auth');
+      navigate("/auth");
     }
   }, [user, isLoading, navigate]);
 
@@ -38,11 +38,11 @@ const Index = () => {
     );
   }
 
-  if (userRole === 'admin') {
+  if (userRole === "admin") {
     return <AdminDashboard />;
   }
 
-  if (userRole === 'employee') {
+  if (userRole === "employee") {
     return <EmployeeDashboard />;
   }
 
