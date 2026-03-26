@@ -131,7 +131,7 @@ export const MaterialBreakdownLookup = () => {
     try {
       const result = await surplussBulkReconcileDonationRemaining({ dry_run: dryRun, environment: "production" });
       if (!result.ok) throw new Error(result.error);
-      const data = result.data;
+      setBulkReconcileReport(result.data);
       toast.success(
         dryRun
           ? `Dry run complete — ${result.data.drifted} discrepancies found across ${result.data.total} materials`
