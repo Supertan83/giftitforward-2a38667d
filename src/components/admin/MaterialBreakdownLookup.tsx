@@ -130,9 +130,7 @@ export const MaterialBreakdownLookup = () => {
     setBulkReconcileLoading(true);
     try {
       const result = await surplussBulkReconcileDonationRemaining({ dry_run: dryRun, environment: "production" });
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
+      if ("error" in result) throw new Error(result.error);
       setBulkReconcileReport(result.data);
       toast.success(
         dryRun
