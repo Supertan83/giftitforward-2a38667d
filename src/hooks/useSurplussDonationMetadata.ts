@@ -26,7 +26,7 @@ export function useSurplussDonationMetadata(
     queryKey: ["surpluss-donation-metadata", id, env],
     queryFn: async () => {
       const r = await fetchSurplussDonationMetadataForMaterial(id!, env);
-      if (!r.ok) throw new Error(r.error);
+      if (r.ok === false) throw new Error(r.error);
       return r.metadata;
     },
     enabled,
