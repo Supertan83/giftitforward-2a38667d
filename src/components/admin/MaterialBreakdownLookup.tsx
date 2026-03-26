@@ -52,6 +52,8 @@ export const MaterialBreakdownLookup = () => {
   const { data: itemTypes = [] } = useItemTypes();
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [fixLoading, setFixLoading] = useState(false);
+  const [bulkReconcileReport, setBulkReconcileReport] = useState<BulkReconcileResponse | null>(null);
+  const [bulkReconcileLoading, setBulkReconcileLoading] = useState(false);
 
   const matchingItems = useMemo(() => {
     if (!searchQuery.trim()) return [];
