@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { Search, Package, AlertTriangle, Loader2, Wrench } from "lucide-react";
+import { Search, Package, AlertTriangle, Loader2, Wrench, RefreshCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { useItemTypes } from "@/hooks/useSupabaseData";
 import { useSurplussDonationMetadata } from "@/hooks/useSurplussDonationMetadata";
+import { surplussBulkReconcileDonationRemaining, type BulkReconcileResponse } from "@/lib/surplussReconcileRemaining";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
