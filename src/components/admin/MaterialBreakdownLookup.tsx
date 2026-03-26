@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { Search, Package, AlertTriangle, Loader2, Wrench } from "lucide-react";
+import { Search, Package, AlertTriangle, Loader2, Wrench, RefreshCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { useItemTypes } from "@/hooks/useSupabaseData";
 import { useSurplussDonationMetadata } from "@/hooks/useSurplussDonationMetadata";
+import { surplussBulkReconcileDonationRemaining, type BulkReconcileResponse } from "@/lib/surplussReconcileRemaining";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -51,6 +52,8 @@ export const MaterialBreakdownLookup = () => {
   const { data: itemTypes = [] } = useItemTypes();
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const [fixLoading, setFixLoading] = useState(false);
+  const [bulkReconcileReport, setBulkReconcileReport] = useState<BulkReconcileResponse | null>(null);
+  const [bulkReconcileLoading, setBulkReconcileLoading] = useState(false);
 
   const matchingItems = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -123,10 +126,28 @@ export const MaterialBreakdownLookup = () => {
     }
   };
 
+  const runBulkReconcile = async (dryRun: boolean) => {
+    setBulkReconcileLoading(true);
+    try {
+      const result = await surplussBulkReconcileDonationRemaining({ dry_run: dryRun, environment: "production" });
+      if ("error" in result) throw new Error(result.error);
+      setBulkReconcileReport(result.data);
+      toast.success(
+        dryRun
+          ? `Dry run complete — ${result.data.drifted} discrepancies found across ${result.data.total} materials`
+          : `Applied fixes to ${result.data.drifted} materials`,
+      );
+    } catch (err: any) {
+      toast.error(`Bulk reconcile failed: ${err.message}`);
+    } finally {
+      setBulkReconcileLoading(false);
+    }
+  };
+
   return (
     <div className="bg-card rounded-xl border border-border shadow-card mb-6">
       <div className="p-4 md:p-6 border-b border-border">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="font-display font-bold text-lg flex items-center gap-2">
               <Search className="w-5 h-5" />
@@ -136,20 +157,122 @@ export const MaterialBreakdownLookup = () => {
               Search by Material ID or name to see allocation breakdown across all marketplaces
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => runFix(true)}
-            disabled={fixLoading}
-            className="flex items-center gap-2"
-          >
-            {fixLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-            Run Allocation Audit
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runBulkReconcile(true)}
+              disabled={bulkReconcileLoading}
+              className="flex items-center gap-2"
+            >
+              {bulkReconcileLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+              Bulk Reconcile Remaining
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runFix(true)}
+              disabled={fixLoading}
+              className="flex items-center gap-2"
+            >
+              {fixLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+              Run Allocation Audit
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="p-4 md:p-6 space-y-4">
+        {/* Bulk Reconcile Report */}
+        {bulkReconcileReport && (
+          <div className="border border-border rounded-lg p-4 bg-muted/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <RefreshCcw className="w-4 h-4" />
+                {bulkReconcileReport.dry_run ? "Bulk Reconcile — Dry Run" : "Bulk Reconcile — Applied"}
+              </h3>
+              <div className="flex gap-2">
+                {bulkReconcileReport.dry_run && bulkReconcileReport.drifted > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => runBulkReconcile(false)}
+                    disabled={bulkReconcileLoading}
+                  >
+                    {bulkReconcileLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                    Apply {bulkReconcileReport.drifted} Fixes
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setBulkReconcileReport(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Materials Checked</p>
+                <p className="font-bold">{bulkReconcileReport.total}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Discrepancies</p>
+                <p className="font-bold text-amber-600">{bulkReconcileReport.drifted}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Errors</p>
+                <p className="font-bold text-destructive">{bulkReconcileReport.errors}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Mode</p>
+                <p className="font-bold">{bulkReconcileReport.dry_run ? "Dry Run" : "Applied"}</p>
+              </div>
+            </div>
+
+            {bulkReconcileReport.results.filter((r) => r.changed || r.error).length > 0 && (
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Material ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Item Count</TableHead>
+                      <TableHead className="text-right">Before</TableHead>
+                      <TableHead className="text-right">After</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bulkReconcileReport.results
+                      .filter((r) => r.changed || r.error)
+                      .map((r) => (
+                        <TableRow key={r.material_id}>
+                          <TableCell>#{r.material_id}</TableCell>
+                          <TableCell className="font-medium">{r.name}</TableCell>
+                          <TableCell className="text-right">{r.item_count?.toLocaleString() ?? "—"}</TableCell>
+                          <TableCell className="text-right">{r.before?.toLocaleString() ?? "—"}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {r.after?.toLocaleString() ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            {r.error ? (
+                              <Badge variant="destructive" className="text-xs">{r.error}</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-amber-600">Drift fixed</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {bulkReconcileReport.drifted === 0 && bulkReconcileReport.errors === 0 && (
+              <p className="text-xs text-muted-foreground">✅ All materials have correct remaining counts.</p>
+            )}
+          </div>
+        )}
+
         {/* Fix Report */}
         {fixReport && (
           <div className="border border-border rounded-lg p-4 bg-muted/30 space-y-3">
