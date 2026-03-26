@@ -25,6 +25,7 @@ interface RequestPayload {
     | "get_donation_metadata"
     | "get_donation_metadata_by_material"
     | "reconcile_donation_remaining"
+    | "bulk_reconcile_remaining"
     | "get_donation_allocations"
     | "update_distribution";
   environment: "staging" | "production";
