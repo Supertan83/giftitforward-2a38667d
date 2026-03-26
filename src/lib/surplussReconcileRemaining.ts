@@ -57,3 +57,41 @@ export async function surplussReconcileDonationRemaining(
 
   return { ok: true, payload: inner.data };
 }
+
+/* ── Bulk reconcile ── */
+
+export interface BulkReconcileResult {
+  material_id: number;
+  name: string;
+  item_count: number | null;
+  before: number | null;
+  after: number | null;
+  changed: boolean;
+  error?: string;
+}
+
+export interface BulkReconcileResponse {
+  dry_run: boolean;
+  total: number;
+  drifted: number;
+  errors: number;
+  results: BulkReconcileResult[];
+}
+
+export async function surplussBulkReconcileDonationRemaining(
+  options?: { dry_run?: boolean; environment?: SurplussEnv },
+): Promise<{ ok: true; data: BulkReconcileResponse } | { ok: false; error: string }> {
+  const { data, error } = await supabase.functions.invoke("surpluss-allocations-api", {
+    body: {
+      action: "bulk_reconcile_remaining",
+      dry_run: options?.dry_run !== false,
+      environment: options?.environment ?? "production",
+    },
+  });
+
+  if (error) return { ok: false, error: error.message };
+  if (!data?.success) {
+    return { ok: false, error: data?.error ?? "Bulk reconcile failed" };
+  }
+  return { ok: true, data: data.data as BulkReconcileResponse };
+}

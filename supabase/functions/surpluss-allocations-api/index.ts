@@ -123,6 +123,118 @@ serve(async (req) => {
         break;
       }
 
+      case "bulk_reconcile_remaining": {
+        // Handle entirely inside the edge function — iterate all materials
+        const supabaseAdmin = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const { data: materials, error: matErr } = await supabaseAdmin
+          .from("item_types")
+          .select("id, name, external_material_id")
+          .not("external_material_id", "is", null)
+          .order("external_material_id");
+
+        if (matErr) return errorResponse(`Failed to fetch item_types: ${matErr.message}`);
+        if (!materials || materials.length === 0) {
+          return new Response(
+            JSON.stringify({ success: true, data: { total: 0, drifted: 0, results: [] } }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        const dryRun = payload.dry_run !== false; // default true
+        const results: Array<{
+          material_id: number;
+          name: string;
+          item_count: number | null;
+          before: number | null;
+          after: number | null;
+          changed: boolean;
+          error?: string;
+        }> = [];
+
+        for (const mat of materials) {
+          try {
+            const reconcileUrl = `${apiBase}/donation-metadata/${mat.external_material_id}/reconcile-remaining`;
+            const res = await fetch(reconcileUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ dry_run: dryRun }),
+            });
+            const resText = await res.text();
+            let resJson: any;
+            try { resJson = JSON.parse(resText); } catch { resJson = { raw: resText }; }
+
+            if (res.ok && resJson?.success && resJson.data) {
+              const d = resJson.data;
+              const changed = d.total_remaining_item_count_before !== d.total_remaining_item_count_after;
+              results.push({
+                material_id: mat.external_material_id,
+                name: mat.name,
+                item_count: d.item_count ?? null,
+                before: d.total_remaining_item_count_before,
+                after: d.total_remaining_item_count_after,
+                changed,
+              });
+            } else {
+              results.push({
+                material_id: mat.external_material_id,
+                name: mat.name,
+                item_count: null,
+                before: null,
+                after: null,
+                changed: false,
+                error: resJson?.error || `HTTP ${res.status}`,
+              });
+            }
+          } catch (e: any) {
+            results.push({
+              material_id: mat.external_material_id,
+              name: mat.name,
+              item_count: null,
+              before: null,
+              after: null,
+              changed: false,
+              error: e.message,
+            });
+          }
+          // Rate-limit: 200ms delay between calls
+          await new Promise((r) => setTimeout(r, 200));
+        }
+
+        const drifted = results.filter((r) => r.changed).length;
+        const errors = results.filter((r) => r.error).length;
+
+        // Audit log
+        try {
+          await supabaseAdmin.from("surpluss_api_audit_log").insert({
+            action: "bulk_reconcile_remaining",
+            environment,
+            request_payload: { dry_run: dryRun, material_count: materials.length },
+            response_status: 200,
+            response_body: { total: materials.length, drifted, errors },
+            success: true,
+          });
+        } catch (logErr) {
+          console.error("[surpluss-allocations-api] Failed to log bulk reconcile audit:", logErr);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              dry_run: dryRun,
+              total: materials.length,
+              drifted,
+              errors,
+              results,
+            },
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       case "get_donation_allocations": {
         const params = new URLSearchParams();
         if (payload.event_id) params.set("event_id", payload.event_id.toString());
