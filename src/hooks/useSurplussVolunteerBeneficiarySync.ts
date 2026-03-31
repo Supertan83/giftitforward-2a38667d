@@ -20,6 +20,9 @@ interface SyncResult {
   marketplace_events_updated: number;
   marketplace_events_failed: number;
   beneficiary_details: { unique_id: string; name: string; status: string; reason?: string }[];
+  distribution_reported: boolean;
+  distribution_error: string | null;
+  distribution_allocations_sent: number;
   errors: string[];
 }
 
