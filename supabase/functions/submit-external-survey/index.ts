@@ -64,6 +64,11 @@ serve(async (req: Request) => {
         insertData.answers = answers;
       }
 
+      // Company name
+      if (body.company_name) {
+        insertData.company_name = body.company_name.trim();
+      }
+
       // Legacy columns backward compat
       if (body.experience_word) {
         insertData.experience_word = body.experience_word.trim();

@@ -83,17 +83,18 @@ Deno.serve(async (req) => {
       .select("volunteer_name, volunteer_email, completed_at, answers, marketplace_id, experience_word, would_volunteer_again, improvement_suggestions, volunteer_card_id")
       .not("completed_at", "is", null);
 
-    // Batch lookup hours and marketplace fallback for internal surveys with volunteer_card_id
+    // Batch lookup hours, marketplace fallback, and volunteer_id for internal surveys
     const cardIds = (internalSurveys || [])
       .map((s: any) => s.volunteer_card_id)
       .filter(Boolean);
 
     const hoursMap: Record<string, number> = {};
     const cardMarketplaceMap: Record<string, string | null> = {};
+    const cardVolunteerIdMap: Record<string, string | null> = {};
     if (cardIds.length > 0) {
       const { data: cards } = await adminClient
         .from("volunteer_qr_cards")
-        .select("id, total_hours_worked, marketplace_id")
+        .select("id, total_hours_worked, marketplace_id, volunteer_id")
         .in("id", cardIds);
       (cards || []).forEach((c: any) => {
         if (c.total_hours_worked != null) {
@@ -101,6 +102,28 @@ Deno.serve(async (req) => {
         }
         if (c.marketplace_id) {
           cardMarketplaceMap[c.id] = c.marketplace_id;
+        }
+        if (c.volunteer_id) {
+          cardVolunteerIdMap[c.id] = c.volunteer_id;
+        }
+      });
+    }
+
+    // Batch lookup company info from pending_volunteers
+    const volunteerIds = [...new Set(Object.values(cardVolunteerIdMap).filter(Boolean))] as string[];
+    const volunteerCompanyMap: Record<string, string> = {};
+    if (volunteerIds.length > 0) {
+      const { data: volunteers } = await adminClient
+        .from("pending_volunteers")
+        .select("id, is_employee, external_company")
+        .in("id", volunteerIds);
+      (volunteers || []).forEach((v: any) => {
+        if (v.external_company) {
+          volunteerCompanyMap[v.id] = v.external_company;
+        } else if (v.is_employee) {
+          volunteerCompanyMap[v.id] = "Dubai Holding";
+        } else {
+          volunteerCompanyMap[v.id] = "";
         }
       });
     }
@@ -116,8 +139,10 @@ Deno.serve(async (req) => {
 
     (internalSurveys || []).forEach((s: any) => {
       if (search && !s.volunteer_name?.toLowerCase().includes(search)) return;
-      // Resolve marketplace: direct link first, then fallback via volunteer card
       const resolvedMarketplaceId = s.marketplace_id || (s.volunteer_card_id ? cardMarketplaceMap[s.volunteer_card_id] : null);
+      // Resolve company from pending_volunteers via card -> volunteer_id
+      const volId = s.volunteer_card_id ? cardVolunteerIdMap[s.volunteer_card_id] : null;
+      const resolvedCompany = volId ? (volunteerCompanyMap[volId] || "") : "";
       results.push({
         name: s.volunteer_name,
         email: s.volunteer_email || "",
@@ -128,11 +153,10 @@ Deno.serve(async (req) => {
         experienceWord: s.experience_word || "",
         wouldVolunteerAgain: s.would_volunteer_again,
         improvementSuggestions: s.improvement_suggestions || "",
-        company: "Dubai Holding",
+        company: resolvedCompany,
         totalHours: s.volunteer_card_id ? (hoursMap[s.volunteer_card_id] ?? null) : null,
       });
     });
-
     (externalSurveys || []).forEach((s: any) => {
       if (search && !s.volunteer_name?.toLowerCase().includes(search)) return;
       results.push({
