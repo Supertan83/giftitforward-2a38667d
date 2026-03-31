@@ -91,12 +91,20 @@ serve(async (req) => {
 
     console.log('API Payload:', JSON.stringify({ allocations: apiAllocations }, null, 2));
 
+    // Build headers with auth
+    const apiHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    const apiKey = Deno.env.get('SURPLUSS_API_KEY');
+    if (apiKey) {
+      apiHeaders['Authorization'] = `Bearer ${apiKey}`;
+    }
+
     // Make the API call
     const response = await fetch(apiUrl, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: apiHeaders,
       body: JSON.stringify({ allocations: apiAllocations }),
     });
 
