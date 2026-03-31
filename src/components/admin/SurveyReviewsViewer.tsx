@@ -76,6 +76,7 @@ export const SurveyReviewsViewer = ({ onBack }: SurveyReviewsViewerProps) => {
         'Marketplace Name': survey.marketplaceName,
         'Volunteer Name': survey.name,
         'Volunteer Email': survey.email,
+        'Company Name': survey.company || '',
         'Volunteer Hours': survey.totalHours != null ? Math.round(survey.totalHours * 100) / 100 : '',
       };
 
