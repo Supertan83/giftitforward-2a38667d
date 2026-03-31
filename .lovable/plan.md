@@ -1,45 +1,40 @@
 
 
-## Bulk Reconcile All Materials — Remaining Count Fix
+## Fix: Send Distribution Figures with "Send to Surpluss"
 
 ### Problem
-The `reconcile_donation_remaining` endpoint only accepts a single `material_id`. When drift occurs across many materials, each must be fixed individually.
+The "Send to Surpluss" button currently only syncs **volunteers** and **beneficiaries**. It never sends **distribution data** (total items, distributed, remaining). The `reportMarketplaceDistribution` function exists in `useSurplussDistributionReporting.ts` but is not wired into the sync flow.
 
 ### Solution
-Add a **bulk reconcile** action that iterates over all `item_types` with an `external_material_id` and calls the Tractor reconcile endpoint for each, collecting results. Expose this in the admin UI alongside the existing "Run Allocation Audit" button.
+Add distribution reporting as a third step in the `syncToSurpluss` flow, after volunteer and beneficiary syncs.
 
-### Implementation
+### Changes
 
-**1. New edge function action in `surpluss-allocations-api`**
+**1. `src/hooks/useSurplussVolunteerBeneficiarySync.ts`**
+- Import and call `reportMarketplaceDistribution` from `useSurplussDistributionReporting.ts` as a third sequential step after beneficiary sync
+- Add distribution result fields to `SyncResult` interface (distribution_reported, distribution_error)
+- Include distribution status in the toast summary
+- Handle distribution failures gracefully (don't block the overall sync)
 
-Add a `bulk_reconcile_remaining` action:
-- Queries all `item_types` where `external_material_id IS NOT NULL` from the database
-- For each material, calls the Tractor `POST /donation-metadata/{id}/reconcile-remaining` endpoint
-- Supports `dry_run` (default true)
-- Returns a summary: how many materials were checked, how many had drift, details of corrections
+**2. `src/components/admin/MarketplaceReports.tsx`**
+- Update the toast/UI to reflect that distribution data is also being sent
+- No structural changes needed since the button already calls `syncToSurpluss`
 
-**2. New client utility in `src/lib/surplussReconcileRemaining.ts`**
-
-Add a `surplussBulkReconcileDonationRemaining` function that invokes the new action and returns typed results.
-
-**3. UI button in `MaterialBreakdownLookup.tsx`**
-
-Add a "Bulk Reconcile Remaining" button next to the existing "Run Allocation Audit" button. It will:
-- Run dry_run first, show a summary of discrepancies found
-- Allow applying the fix with a confirmation dialog
-- Display results in a table showing material ID, title, old remaining, new remaining
-
-### Technical Details
-
-The edge function will:
-```
-case "bulk_reconcile_remaining": {
-  // 1. Fetch all item_types with external_material_id from DB
-  // 2. For each, POST to /donation-metadata/{material_id}/reconcile-remaining
-  // 3. Collect results: { material_id, title, before, after, changed }
-  // 4. Return summary + details
-}
+### Data Flow After Fix
+```text
+"Send to Surpluss" click
+  ├─ Step 1: sync-surpluss-volunteer-beneficiary (volunteers + demographics)
+  ├─ Step 2: sync-surpluss-beneficiaries (beneficiary records)
+  └─ Step 3: report-surpluss-distribution (allocation figures per material)
+       └─ Uses manual counts when available, falls back to allocation table
 ```
 
-Rate limiting: add a small delay (200ms) between API calls to avoid overwhelming the Tractor API. Log the bulk operation to `surpluss_api_audit_log`.
+### Technical Detail
+The `reportMarketplaceDistribution` function already correctly:
+- Groups materials by `surpluss_allocation_id`
+- Prefers manual counts (`marketplace_manual_counts`) over system-tracked `distributed_quantity`
+- Computes `allocated = distributed + remaining` from the correct source
+- Sends via `report-surpluss-distribution` edge function to the Tractor API
+
+The only missing piece is calling it from the sync flow.
 
