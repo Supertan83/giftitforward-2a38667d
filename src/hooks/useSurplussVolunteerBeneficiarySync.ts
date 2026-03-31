@@ -48,6 +48,90 @@ export const useSurplussVolunteerBeneficiarySync = () => {
       });
       if (benError) throw benError;
 
+      // 3. Report distribution figures
+      let distributionReported = false;
+      let distributionError: string | null = null;
+      let distributionAllocationsSent = 0;
+
+      try {
+        // Get marketplace external_id
+        const { data: marketplace, error: mpError } = await supabase
+          .from('marketplace_events')
+          .select('id, name, external_id')
+          .eq('id', marketplaceId)
+          .single();
+
+        if (mpError) throw mpError;
+        if (!marketplace?.external_id) {
+          throw new Error('Marketplace has no Surpluss external_id');
+        }
+
+        // Get allocations with material mappings
+        const { data: allocations, error: allocError } = await supabase
+          .from('marketplace_item_allocations')
+          .select(`
+            id, item_type_id, allocated_quantity, distributed_quantity, surpluss_allocation_id,
+            item_types ( external_material_id )
+          `)
+          .eq('marketplace_id', marketplaceId)
+          .not('surpluss_allocation_id', 'is', null);
+
+        if (allocError) throw allocError;
+
+        // Get manual counts if available
+        const { data: manualCounts } = await supabase
+          .from('marketplace_manual_counts')
+          .select('item_type_id, actual_distributed, actual_remaining')
+          .eq('marketplace_id', marketplaceId);
+
+        const manualMap = new Map((manualCounts || []).map((m: any) => [m.item_type_id, m]));
+
+        // Group by surpluss_allocation_id
+        const grouped = new Map<number, { material_id: number; distributed: number; allocated: number }[]>();
+
+        for (const alloc of allocations || []) {
+          const materialId = (alloc as any).item_types?.external_material_id;
+          const surplussAllocationId = alloc.surpluss_allocation_id;
+          if (!materialId || !surplussAllocationId) continue;
+
+          const manual = manualMap.get(alloc.item_type_id);
+          const distributed = manual ? Number(manual.actual_distributed || 0) : Number(alloc.distributed_quantity || 0);
+          const remaining = manual
+            ? Number(manual.actual_remaining || 0)
+            : Number((alloc.allocated_quantity || 0) - (alloc.distributed_quantity || 0));
+          const allocated = Math.max(distributed + remaining, 0);
+
+          if (!grouped.has(surplussAllocationId)) grouped.set(surplussAllocationId, []);
+          grouped.get(surplussAllocationId)!.push({
+            material_id: Number(materialId),
+            distributed,
+            allocated,
+          });
+        }
+
+        const payloadAllocations = Array.from(grouped.entries()).map(([allocationId, materials]) => ({
+          allocation_id: allocationId,
+          marketplace_external_id: Number(marketplace.external_id),
+          materials,
+        }));
+
+        if (payloadAllocations.length > 0) {
+          const { data: distData, error: distError } = await supabase.functions.invoke('report-surpluss-distribution', {
+            body: { environment, allocations: payloadAllocations },
+          });
+
+          if (distError) throw distError;
+          if (!distData?.success) throw new Error(distData?.error || 'Distribution report failed');
+
+          distributionReported = true;
+          distributionAllocationsSent = distData.reported_count || payloadAllocations.length;
+        } else {
+          distributionError = 'No synced allocation/material mapping found';
+        }
+      } catch (err) {
+        distributionError = err instanceof Error ? err.message : 'Distribution reporting failed';
+      }
+
       const result: SyncResult = {
         success: (volData?.success !== false) && (benData?.success !== false),
         volunteers_sent: volData?.volunteers_sent ?? 0,
@@ -66,18 +150,27 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         marketplace_events_updated: benData?.marketplace_events_updated ?? 0,
         marketplace_events_failed: benData?.marketplace_events_failed ?? 0,
         beneficiary_details: benData?.beneficiary_details ?? [],
-        errors: [...(volData?.errors ?? []), ...(benData?.errors ?? [])],
+        distribution_reported: distributionReported,
+        distribution_error: distributionError,
+        distribution_allocations_sent: distributionAllocationsSent,
+        errors: [...(volData?.errors ?? []), ...(benData?.errors ?? []), ...(distributionError ? [distributionError] : [])],
       };
+
+      const distStatus = distributionReported
+        ? `Distribution: ${distributionAllocationsSent} sent.`
+        : distributionError
+        ? `Distribution: failed (${distributionError}).`
+        : '';
 
       if (result.success) {
         toast({
           title: 'Sync Complete',
-          description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent, ${result.beneficiaries_skipped} skipped.`,
+          description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent, ${result.beneficiaries_skipped} skipped. ${distStatus}`,
         });
       } else {
         toast({
           title: 'Sync Completed with Issues',
-          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed.`,
+          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed. ${distStatus}`,
           variant: 'destructive',
         });
       }
