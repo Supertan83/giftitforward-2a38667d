@@ -413,50 +413,9 @@ serve(async (req) => {
 
         console.log(`✅ Marketplace found: ${marketplace.name}`);
 
-        // --- Volunteer hours from QR cards (total_hours_worked per pending_volunteer email) ---
-        try {
-          const { data: vCards } = await supabase
-            .from("volunteer_qr_cards")
-            .select("volunteer_id, total_hours_worked")
-            .eq("marketplace_id", mpId)
-            .not("volunteer_id", "is", null);
-
-          if (vCards && vCards.length > 0) {
-            const volIds = [...new Set(vCards.map((c) => c.volunteer_id).filter(Boolean))] as string[];
-            const { data: pvs } = await supabase.from("pending_volunteers").select("id, email").in("id", volIds);
-            const emailById = new Map((pvs || []).map((p) => [p.id as string, String(p.email || "").trim()]));
-            const hoursByEmail = new Map<string, { email: string; hours: number }>();
-            for (const c of vCards) {
-              const vid = c.volunteer_id as string;
-              const em = emailById.get(vid);
-              if (!em) continue;
-              const h = Number(c.total_hours_worked) || 0;
-              const key = em.toLowerCase();
-              const prev = hoursByEmail.get(key);
-              if (prev) prev.hours += h;
-              else hoursByEmail.set(key, { email: em, hours: h });
-            }
-            const eventTitle = marketplace.name as string;
-            for (const { email, hours } of hoursByEmail.values()) {
-              if (hours <= 0) continue;
-              volunteerHourRows.push({
-                volunteer_email: email,
-                marketplace_event_title: eventTitle,
-                hours_contributed: Math.round(hours * 100) / 100,
-              });
-            }
-          }
-        } catch (hoursCollectErr) {
-          console.error("Volunteer hours collection error:", hoursCollectErr);
-          allErrors.push(
-            `Volunteer hours collection: ${hoursCollectErr instanceof Error ? hoursCollectErr.message : "Unknown"}`,
-          );
-        }
-
-        // --- Demographics Update ---
+        // Resolve Surpluss marketplace event ID first (same logic as demographics) — hours sync uses this id so titles need not match exactly.
         let surplussEventId: number | null = null;
         const targetName = normalize(marketplace.name);
-
         if (surplussEventsMap.has(targetName)) {
           surplussEventId = surplussEventsMap.get(targetName)!;
         } else {
@@ -467,6 +426,72 @@ serve(async (req) => {
             }
           }
         }
+
+        // --- Volunteer hours from QR cards (+ attendance fallback if total_hours_worked is still 0) ---
+        try {
+          const { data: vCards } = await supabase
+            .from("volunteer_qr_cards")
+            .select("id, volunteer_id, total_hours_worked")
+            .eq("marketplace_id", mpId)
+            .not("volunteer_id", "is", null);
+
+          if (vCards && vCards.length > 0) {
+            const cardIds = vCards.map((c) => c.id as string).filter(Boolean);
+            const { data: attRows } = await supabase
+              .from("volunteer_attendance")
+              .select("volunteer_card_id, hours_worked")
+              .in("volunteer_card_id", cardIds);
+
+            const sumHoursByCard = new Map<string, number>();
+            for (const a of attRows || []) {
+              const cid = a.volunteer_card_id as string;
+              const hw = Number(a.hours_worked) || 0;
+              sumHoursByCard.set(cid, (sumHoursByCard.get(cid) || 0) + hw);
+            }
+
+            const volIds = [...new Set(vCards.map((c) => c.volunteer_id).filter(Boolean))] as string[];
+            const { data: pvs } = await supabase.from("pending_volunteers").select("id, email").in("id", volIds);
+            const emailById = new Map((pvs || []).map((p) => [p.id as string, String(p.email || "").trim()]));
+            const hoursByEmail = new Map<string, { email: string; hours: number }>();
+            for (const c of vCards) {
+              const vid = c.volunteer_id as string;
+              const em = emailById.get(vid);
+              if (!em) continue;
+              const fromCard = Number(c.total_hours_worked) || 0;
+              const fromAtt = sumHoursByCard.get(c.id as string) || 0;
+              const h = fromCard > 0 ? fromCard : fromAtt;
+              const key = em.toLowerCase();
+              const prev = hoursByEmail.get(key);
+              if (prev) prev.hours += h;
+              else hoursByEmail.set(key, { email: em, hours: h });
+            }
+            const eventTitle = marketplace.name as string;
+            for (const { email, hours } of hoursByEmail.values()) {
+              if (hours <= 0) continue;
+              const row: {
+                volunteer_email: string;
+                marketplace_event_title: string;
+                hours_contributed: number;
+                marketplace_event_id?: number;
+              } = {
+                volunteer_email: email,
+                marketplace_event_title: eventTitle,
+                hours_contributed: Math.round(hours * 100) / 100,
+              };
+              if (surplussEventId != null) {
+                row.marketplace_event_id = surplussEventId;
+              }
+              volunteerHourRows.push(row);
+            }
+          }
+        } catch (hoursCollectErr) {
+          console.error("Volunteer hours collection error:", hoursCollectErr);
+          allErrors.push(
+            `Volunteer hours collection: ${hoursCollectErr instanceof Error ? hoursCollectErr.message : "Unknown"}`,
+          );
+        }
+
+        // --- Demographics Update ---
 
         if (surplussEventId) {
           const demographicsPayload: Record<string, any> = {};
