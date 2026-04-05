@@ -457,9 +457,9 @@ serve(async (req) => {
               const vid = c.volunteer_id as string;
               const em = emailById.get(vid);
               if (!em) continue;
-              const fromCard = Number(c.total_hours_worked) || 0;
               const fromAtt = sumHoursByCard.get(c.id as string) || 0;
-              const h = fromCard > 0 ? fromCard : fromAtt;
+              const fromCard = Number(c.total_hours_worked) || 0;
+              const h = fromAtt > 0 ? fromAtt : fromCard;
               const key = em.toLowerCase();
               const prev = hoursByEmail.get(key);
               if (prev) prev.hours += h;
