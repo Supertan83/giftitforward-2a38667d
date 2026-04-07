@@ -79,6 +79,16 @@ function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<s
   const events = resolveEventSlugs(vol.events_list, slugMap);
   if (events) payload.events_registered = events;
 
+  // Volunteer QR card status (checked_in, checked_out, inactive)
+  if (vol._card_status) {
+    const statusMap: Record<string, string> = {
+      checked_in: "CHECKED_IN",
+      checked_out: "CHECKED_OUT",
+      inactive: "INACTIVE",
+    };
+    payload.status = statusMap[vol._card_status] || vol._card_status.toUpperCase();
+  }
+
   return payload;
 }
 
@@ -174,7 +184,30 @@ serve(async (req) => {
       throw new Error(`Failed to fetch volunteers: ${volError.message}`);
     }
 
-    const volunteers = allVolunteers || [];
+    // Fetch volunteer QR card statuses to enrich volunteer data
+    const { data: allVolCards } = await supabase
+      .from("volunteer_qr_cards")
+      .select("volunteer_id, status")
+      .not("volunteer_id", "is", null);
+
+    const cardStatusByVolunteerId = new Map<string, string>();
+    if (allVolCards) {
+      for (const vc of allVolCards) {
+        const vid = vc.volunteer_id as string;
+        const st = vc.status as string;
+        // Prioritize checked_out > checked_in > inactive
+        const existing = cardStatusByVolunteerId.get(vid);
+        if (!existing || st === "checked_out" || (st === "checked_in" && existing === "inactive")) {
+          cardStatusByVolunteerId.set(vid, st);
+        }
+      }
+    }
+    console.log(`Mapped ${cardStatusByVolunteerId.size} volunteer card statuses`);
+
+    const volunteers = (allVolunteers || []).map((v: any) => ({
+      ...v,
+      _card_status: cardStatusByVolunteerId.get(v.id) || "inactive",
+    }));
     console.log(`Fetched ${volunteers.length} volunteers from pending_volunteers`);
 
     // 4. Separate new vs already-synced volunteers
@@ -272,6 +305,7 @@ serve(async (req) => {
             ...(enriched.employed && { employed: enriched.employed }),
             ...(enriched.company_name && { company_name: enriched.company_name }),
             ...(enriched.events_registered && { events_registered: enriched.events_registered }),
+            ...(enriched.status && { status: enriched.status }),
           };
         });
 
