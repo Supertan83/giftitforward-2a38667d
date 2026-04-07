@@ -1,36 +1,59 @@
 
 
-## Fix: Same-Date Events Matching Wrong Name (Morning vs Afternoon)
+## Add Auto-Sync for Volunteers & Beneficiaries
 
 ### Problem
-Two "Taxi Drivers Marketplace" events exist on the same date (April 18) — one Morning, one Afternoon. The slug matching in `getMarketplacesBySlug` uses a threshold of ≥2 matching words and `break`s on the first hit. Since both DB entries match "taxi" + "drivers" (≥2), the loop always picks whichever comes first in the DESC-ordered list, ignoring whether "morning" or "afternoon" actually matches.
+Currently only allocation sync runs on a schedule (via `pg_cron`). Volunteer and beneficiary syncs are manual-only.
 
 ### Solution
 
-**File: `supabase/functions/webhook-receiver/index.ts`**
+**1. Update `update-sync-schedule` edge function** to create two additional cron jobs alongside the existing allocation sync:
 
-Change the matching logic in `getMarketplacesBySlug` (lines 430-458) from "break on first ≥2 match" to "score all candidates and pick the highest match count":
+- `sync-surpluss-volunteers` → calls `sync-surpluss-volunteer-beneficiary` with `{ "environment": "production" }` (no `marketplace_id` = processes all)
+- `sync-surpluss-beneficiaries-auto` → calls `sync-surpluss-beneficiaries` with `{ "environment": "production" }` — but this function requires marketplace IDs, so the cron body will first need to be handled
 
-1. Instead of `break` on first name+date match, track `bestMatchCount` alongside `bestMatch`
-2. Only update `bestMatch` when `matchCount > bestMatchCount`
-3. Continue iterating all marketplaces to find the most specific match
-4. This way, for the afternoon slug, "taxi"+"drivers"+"afternoon"+"event" will score 4 against "Taxi Drivers Marketplace Afternoon Event" vs 3 against "...Morning Event"
+**However**, `sync-surpluss-beneficiaries` requires explicit `marketplace_id` or `marketplace_ids`. Two options:
+
+**Option A (Recommended):** Add "ALL" marketplace support to `sync-surpluss-beneficiaries` — when no `marketplace_id` is provided, fetch all marketplace_events with an `external_id` and process them all. This mirrors how `sync-surpluss-volunteer-beneficiary` already works.
+
+**Option B:** Create a wrapper edge function. More complexity, less ideal.
+
+### Changes
+
+**File 1: `supabase/functions/sync-surpluss-beneficiaries/index.ts`**
+- When `targetMarketplaceIds` is empty (no marketplace_id/marketplace_ids provided), query all `marketplace_events` that have an `external_id` and use all their IDs
+- This enables calling it without parameters for auto-sync
+
+**File 2: `supabase/functions/update-sync-schedule/index.ts`**
+- Expand the unschedule query to also find jobs named `sync-surpluss-volunteers` or `sync-surpluss-beneficiaries-auto`, or whose command contains these function names
+- When scheduling (interval > 0), create 3 cron jobs:
+  1. `sync-surpluss-allocations` (existing) — allocation sync
+  2. `sync-surpluss-volunteers-auto` — volunteer+demographics sync
+  3. `sync-surpluss-beneficiaries-auto` — beneficiary sync
+- All three use the same interval
+- When disabling (interval = 0), unschedule all three
+
+**File 3: `src/components/admin/SurplussSyncMonitor.tsx`**
+- Update the Auto-Sync Status section to indicate that all three sync types (Allocations, Volunteers, Beneficiaries) are included in the scheduled sync
+- Minor label change: "Scheduled Auto-Sync" description updated to mention all sync types
+
+### Cron Job Details
 
 ```text
-Current logic (simplified):
-  for mp of marketplaces:
-    if matchCount >= 2 && dateMatches:
-      bestMatch = mp
-      break  ← picks first match, wrong for same-date events
+Job 1 (existing): sync-surpluss-allocations
+  → POST /functions/v1/sync-surpluss-event-allocations
+  → body: {"marketplace_id": "ALL", "environment": "production"}
 
-Fixed logic:
-  bestMatchCount = 0
-  for mp of marketplaces:
-    if matchCount >= 2 && dateMatches && matchCount > bestMatchCount:
-      bestMatch = mp
-      bestMatchCount = matchCount
-      // NO break — continue to find best match
+Job 2 (new): sync-surpluss-volunteers-auto  
+  → POST /functions/v1/sync-surpluss-volunteer-beneficiary
+  → body: {"environment": "production"}
+  (no marketplace_id = processes all marketplaces)
+
+Job 3 (new): sync-surpluss-beneficiaries-auto
+  → POST /functions/v1/sync-surpluss-beneficiaries
+  → body: {"environment": "production"}
+  (no marketplace_id = processes all marketplaces, after fix)
 ```
 
-This single change ensures "afternoon" in the slug only matches the Afternoon Event, not the Morning Event.
+All jobs use the same schedule interval and are managed together.
 
