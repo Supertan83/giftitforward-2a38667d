@@ -524,7 +524,8 @@ serve(async (req) => {
             const { data: attRows } = await supabase
               .from("volunteer_attendance")
               .select("volunteer_card_id, hours_worked")
-              .in("volunteer_card_id", cardIds);
+              .in("volunteer_card_id", cardIds)
+              .eq("marketplace_id", mpId);
 
             const sumHoursByCard = new Map<string, number>();
             for (const a of attRows || []) {
