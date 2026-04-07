@@ -50,6 +50,50 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
   return resolvedNames.length > 0 ? resolvedNames.join(";") : undefined;
 }
 
+/** Extract dependents from events_json for a given marketplace (by normalized name) */
+function extractDependentsForMarketplace(
+  eventsJson: any[] | null,
+  marketplaceName: string,
+): Array<{ name: string; type: string; gender?: string }> {
+  if (!eventsJson || !Array.isArray(eventsJson)) return [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const targetNorm = norm(marketplaceName);
+  const deps: Array<{ name: string; type: string; gender?: string }> = [];
+  const seenNames = new Set<string>();
+
+  for (const evt of eventsJson) {
+    const eventSlug = evt["event-slug"] || evt.event_slug || evt["event"] || evt.event || "";
+    const eventNorm = norm(eventSlug);
+    // Fuzzy match: either contains the other
+    if (!eventNorm || (!eventNorm.includes(targetNorm) && !targetNorm.includes(eventNorm))) continue;
+
+    const dependents = evt.dependents || [];
+    if (!Array.isArray(dependents)) continue;
+    for (const d of dependents) {
+      const dName = (d.name || "").trim();
+      if (!dName || seenNames.has(dName.toLowerCase())) continue;
+      seenNames.add(dName.toLowerCase());
+      deps.push({
+        name: dName,
+        type: d.type || "adult",
+        gender: d.gender || undefined,
+      });
+    }
+  }
+  return deps;
+}
+
+/** Count total dependents across all events for a volunteer */
+function countAllDependents(eventsJson: any[] | null): number {
+  if (!eventsJson || !Array.isArray(eventsJson)) return 0;
+  let total = 0;
+  for (const evt of eventsJson) {
+    total += Number(evt["number-of-adults"] || evt.number_of_adults || 0);
+    total += Number(evt["number-of-children"] || evt.number_of_children || 0);
+  }
+  return total;
+}
+
 /** Build the enriched volunteer payload for the Surpluss API */
 function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<string, any> {
   const name = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
@@ -87,6 +131,12 @@ function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<s
       inactive: "INACTIVE",
     };
     payload.status = statusMap[vol._card_status] || vol._card_status.toUpperCase();
+  }
+
+  // Number of dependents (family members)
+  const depCount = countAllDependents(vol.events_json);
+  if (depCount > 0) {
+    payload.number_of_dependents = depCount;
   }
 
   return payload;
