@@ -666,6 +666,104 @@ serve(async (req) => {
         }
 
         // Note: Individual beneficiary card sync is now handled by the dedicated sync-surpluss-beneficiaries function
+
+        // --- Family Members (Dependents) Sync ---
+        // Extract dependents from events_json for this marketplace and send as separate volunteer entries
+        try {
+          const marketplaceNameForDeps = marketplace.name as string;
+          let familySent = 0;
+          let familySkipped = 0;
+          let familyFailed = 0;
+
+          for (const vol of volunteers) {
+            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps);
+            if (deps.length === 0) continue;
+
+            const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
+
+            for (const dep of deps) {
+              const depPayload: Record<string, any> = {
+                name: dep.name,
+                type: "family_member",
+                parent_volunteer_email: vol.email,
+                parent_volunteer_name: volunteerName,
+              };
+
+              if (dep.gender) {
+                const g = dep.gender.toLowerCase();
+                if (g === "male" || g === "female") {
+                  depPayload.gender = g.toUpperCase();
+                }
+              }
+
+              if (dep.type === "children" || dep.type === "child") {
+                depPayload.age_group = "CHILD";
+              } else {
+                depPayload.age_group = "ADULT";
+              }
+
+              // Company from parent
+              const company = vol.external_company || vol.employee_vertical;
+              if (company) depPayload.company_name = company;
+
+              if (surplussEventId != null) {
+                depPayload.marketplace_event_id = surplussEventId;
+              }
+
+              try {
+                const apiUrl = `${baseUrl}/api/common/volunteers`;
+                const response = await fetch(apiUrl, {
+                  method: "POST",
+                  headers: apiHeaders,
+                  body: JSON.stringify(depPayload),
+                });
+
+                const responseBody = await response.text();
+                let responseJson: any;
+                try {
+                  responseJson = JSON.parse(responseBody);
+                } catch {
+                  responseJson = { raw: responseBody.substring(0, 500) };
+                }
+
+                await supabase.from("surpluss_api_audit_log").insert({
+                  action: "sync_family_member",
+                  environment,
+                  request_payload: depPayload,
+                  response_status: response.status,
+                  response_body: responseJson,
+                  success: response.ok,
+                });
+
+                if (response.ok) {
+                  familySent++;
+                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "sent" });
+                } else if (responseBody.includes("already exists") || responseBody.includes("already assigned")) {
+                  familySkipped++;
+                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "skipped", reason: "Already exists" });
+                } else {
+                  familyFailed++;
+                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "failed", reason: `${response.status}` });
+                }
+              } catch (depErr) {
+                familyFailed++;
+                allVolunteerDetails.push({
+                  name: `${dep.name} (family of ${volunteerName})`,
+                  status: "failed",
+                  reason: depErr instanceof Error ? depErr.message : "Unknown",
+                });
+              }
+            }
+          }
+
+          totalSent += familySent;
+          totalSkipped += familySkipped;
+          totalFailed += familyFailed;
+          console.log(`Family members for "${marketplaceNameForDeps}": sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
+        } catch (familyErr) {
+          console.error("Family member sync error:", familyErr);
+          allErrors.push(`Family member sync: ${familyErr instanceof Error ? familyErr.message : "Unknown"}`);
+        }
       }
 
       volunteerHoursRowCount = volunteerHourRows.length;
