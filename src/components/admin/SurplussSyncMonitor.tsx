@@ -507,7 +507,7 @@ export const SurplussSyncMonitor = ({
           <div>
             <h2 className="font-semibold">Scheduled Auto-Sync</h2>
             <p className="text-sm text-muted-foreground">
-              {syncInterval === 0 ? 'Auto-sync is currently disabled' : `Runs every ${syncInterval} minute(s)`}
+              {syncInterval === 0 ? 'Auto-sync is currently disabled' : `Allocations, Volunteers & Beneficiaries — every ${syncInterval} min`}
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
