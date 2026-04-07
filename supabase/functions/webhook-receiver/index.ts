@@ -376,28 +376,53 @@ function extractDateFromSlug(slug: string): { month: number; day: number } | nul
   return null;
 }
 
+// Helper to parse month/day from a form eventDate string like "April 11, 2026"
+function parseDateComponents(dateStr: string | null | undefined): { month: number; day: number } | null {
+  if (!dateStr) return null;
+  const months = ['january', 'february', 'march', 'april', 'may', 'june', 
+                  'july', 'august', 'september', 'october', 'november', 'december'];
+  const match = dateStr.toLowerCase().match(/(\w+)\s+(\d{1,2})/);
+  if (match) {
+    const monthIndex = months.indexOf(match[1]);
+    if (monthIndex !== -1) {
+      return { month: monthIndex + 1, day: parseInt(match[2]) };
+    }
+  }
+  // Try ISO format "2026-04-11"
+  const isoMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return { month: parseInt(isoMatch[2]), day: parseInt(isoMatch[3]) };
+  }
+  return null;
+}
+
 // Helper to look up marketplace events by slug/name pattern WITH date matching
 // deno-lint-ignore no-explicit-any
-async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promise<Map<string, MarketplaceEventDetails>> {
+async function getMarketplacesBySlug(supabase: any, eventSlugs: string[], slugDateMap?: Map<string, string>): Promise<Map<string, MarketplaceEventDetails>> {
   const result = new Map<string, MarketplaceEventDetails>();
   if (!eventSlugs.length) return result;
   
   try {
-    // Fetch all marketplace events and try to match by name pattern
+    // Fetch all marketplace events, newest first so recent events are preferred
     const { data: marketplaces, error } = await supabase
       .from('marketplace_events')
       .select('name, location, event_date, start_time, end_time')
-      .order('event_date', { ascending: true });
+      .order('event_date', { ascending: false });
     
     if (error || !marketplaces) return result;
     
     for (const slug of eventSlugs) {
       // Extract date from slug for precise matching
-      const slugDate = extractDateFromSlug(slug);
-      console.log(`Slug "${slug}" extracted date:`, slugDate);
+      let targetDate = extractDateFromSlug(slug);
+      console.log(`Slug "${slug}" extracted date from slug:`, targetDate);
+      
+      // If no date in slug, try the form's eventDate
+      if (!targetDate && slugDateMap?.has(slug)) {
+        targetDate = parseDateComponents(slugDateMap.get(slug));
+        console.log(`Slug "${slug}" using form eventDate "${slugDateMap.get(slug)}" -> parsed:`, targetDate);
+      }
       
       // Convert slug to searchable pattern
-      // e.g., "emirati-family-support-marketplace-february-22" -> "emirati", "family", "support"
       const slugParts = slug.toLowerCase().split('-').filter(p => 
         p.length > 2 && !['the', 'and', 'for', 'marketplace'].includes(p)
       );
@@ -412,23 +437,39 @@ async function getMarketplacesBySlug(supabase: any, eventSlugs: string[]): Promi
         
         if (!nameMatches) continue;
         
-        // If we extracted a date from the slug, require it to match the DB date
-        if (slugDate && mp.event_date) {
+        // If we have a target date (from slug OR form), require it to match the DB date
+        if (targetDate && mp.event_date) {
           const dbDate = new Date(mp.event_date);
-          const dateMatches = (dbDate.getMonth() + 1) === slugDate.month && 
-                              dbDate.getDate() === slugDate.day;
+          const dateMatches = (dbDate.getMonth() + 1) === targetDate.month && 
+                              dbDate.getDate() === targetDate.day;
           
           if (dateMatches) {
             console.log(`✓ Matched slug "${slug}" to "${mp.name}" (date ${mp.event_date})`);
             bestMatch = mp;
             break; // Exact name + date match found
           }
-          // Name matches but date doesn't - keep looking for exact match
-          console.log(`✗ Name match but date mismatch for slug "${slug}": DB has ${mp.event_date}, slug has month=${slugDate.month} day=${slugDate.day}`);
-        } else {
-          // No date in slug, use first name match (fallback to old behavior)
+          // Name matches but date doesn't - keep looking
+          console.log(`✗ Name match but date mismatch for slug "${slug}": DB has ${mp.event_date}, target month=${targetDate.month} day=${targetDate.day}`);
+        } else if (!targetDate) {
+          // No date available at all, use first name match (newest first due to DESC order)
           bestMatch = mp;
           break;
+        }
+      }
+      
+      if (bestMatch) {
+        // Final cross-validation: if form provided a date, verify the match
+        if (slugDateMap?.has(slug) && bestMatch.event_date) {
+          const formDate = parseDateComponents(slugDateMap.get(slug));
+          if (formDate) {
+            const dbDate = new Date(bestMatch.event_date);
+            const dbMonth = dbDate.getMonth() + 1;
+            const dbDay = dbDate.getDate();
+            if (dbMonth !== formDate.month || Math.abs(dbDay - formDate.day) > 1) {
+              console.log(`⚠ Cross-validation failed for slug "${slug}": DB date ${bestMatch.event_date} != form date "${slugDateMap.get(slug)}". Discarding DB match.`);
+              bestMatch = null;
+            }
+          }
         }
       }
       
@@ -879,10 +920,18 @@ async function sendWelcomeEmailWithQR(
         .map((e: RegisteredEvent) => e.event)
         .filter((slug): slug is string => !!slug);
       
+      // Build slug → eventDate map for cross-validation
+      const slugDateMap = new Map<string, string>();
+      for (const evt of eventsJson as RegisteredEvent[]) {
+        if (evt.event && evt.eventDate) {
+          slugDateMap.set(evt.event, evt.eventDate);
+        }
+      }
+      
       console.log(`Looking up marketplace times for ${eventSlugs.length} events:`, eventSlugs);
       
-      // Look up marketplace details from database
-      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
+      // Look up marketplace details from database, passing form dates for cross-validation
+      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs, slugDateMap);
       
       // Build registered events list with times from DB or form data
       // IMPORTANT: Prioritize form data for date/time/location as it's the source of truth
