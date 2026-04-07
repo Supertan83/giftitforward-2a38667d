@@ -46,7 +46,11 @@ Deno.serve(async (req) => {
       const existingJobs = await client.queryObject<{ jobid: number; jobname: string }>(
         `SELECT jobid, jobname FROM cron.job 
          WHERE jobname = 'sync-surpluss-allocations' 
-         OR command LIKE '%sync-surpluss-event-allocations%'`
+         OR jobname = 'sync-surpluss-volunteers-auto'
+         OR jobname = 'sync-surpluss-beneficiaries-auto'
+         OR command LIKE '%sync-surpluss-event-allocations%'
+         OR command LIKE '%sync-surpluss-volunteer-beneficiary%'
+         OR command LIKE '%sync-surpluss-beneficiaries%'`
       );
       
       for (const job of existingJobs.rows) {
@@ -65,7 +69,7 @@ Deno.serve(async (req) => {
       console.log('Error querying cron.job:', e.message);
     }
 
-    // If interval is 0 (off), just unschedule and don't create a new job
+    // If interval is 0 (off), just unschedule and don't create new jobs
     if (interval_minutes === 0) {
       await client.end();
 
@@ -74,7 +78,7 @@ Deno.serve(async (req) => {
         environment: 'production',
         request_payload: { interval_minutes: 0, schedule: 'disabled' },
         response_status: 200,
-        response_body: { message: 'Auto-sync has been disabled' },
+        response_body: { message: 'Auto-sync has been disabled (allocations, volunteers, beneficiaries)' },
         success: true,
       });
 
@@ -85,31 +89,66 @@ Deno.serve(async (req) => {
     }
 
     const schedule = `*/${interval_minutes} * * * *`;
-    const functionUrl = `${supabaseUrl}/functions/v1/sync-surpluss-event-allocations`;
 
-    // Schedule new job
+    // Job 1: Allocation sync (existing)
+    const allocationFnUrl = `${supabaseUrl}/functions/v1/sync-surpluss-event-allocations`;
     await client.queryObject(`
       SELECT cron.schedule(
         'sync-surpluss-allocations',
         '${schedule}',
         $CMD$
         SELECT net.http_post(
-          url := '${functionUrl}',
+          url := '${allocationFnUrl}',
           headers := '{"Content-Type": "application/json", "Authorization": "Bearer ${anonKey}"}'::jsonb,
           body := '{"marketplace_id": "ALL", "environment": "production"}'::jsonb
         ) AS request_id;
         $CMD$
       )
     `);
+    console.log(`Scheduled sync-surpluss-allocations: ${schedule}`);
+
+    // Job 2: Volunteer + demographics sync (new)
+    const volunteerFnUrl = `${supabaseUrl}/functions/v1/sync-surpluss-volunteer-beneficiary`;
+    await client.queryObject(`
+      SELECT cron.schedule(
+        'sync-surpluss-volunteers-auto',
+        '${schedule}',
+        $CMD$
+        SELECT net.http_post(
+          url := '${volunteerFnUrl}',
+          headers := '{"Content-Type": "application/json", "Authorization": "Bearer ${anonKey}"}'::jsonb,
+          body := '{"environment": "production"}'::jsonb
+        ) AS request_id;
+        $CMD$
+      )
+    `);
+    console.log(`Scheduled sync-surpluss-volunteers-auto: ${schedule}`);
+
+    // Job 3: Beneficiary sync (new)
+    const beneficiaryFnUrl = `${supabaseUrl}/functions/v1/sync-surpluss-beneficiaries`;
+    await client.queryObject(`
+      SELECT cron.schedule(
+        'sync-surpluss-beneficiaries-auto',
+        '${schedule}',
+        $CMD$
+        SELECT net.http_post(
+          url := '${beneficiaryFnUrl}',
+          headers := '{"Content-Type": "application/json", "Authorization": "Bearer ${anonKey}"}'::jsonb,
+          body := '{"environment": "production"}'::jsonb
+        ) AS request_id;
+        $CMD$
+      )
+    `);
+    console.log(`Scheduled sync-surpluss-beneficiaries-auto: ${schedule}`);
 
     await client.end();
 
     await supabase.from('surpluss_api_audit_log').insert({
       action: 'sync_schedule_updated',
       environment: 'production',
-      request_payload: { interval_minutes, schedule },
+      request_payload: { interval_minutes, schedule, jobs: ['allocations', 'volunteers', 'beneficiaries'] },
       response_status: 200,
-      response_body: { message: `Schedule updated to every ${interval_minutes} minute(s)` },
+      response_body: { message: `All 3 sync jobs scheduled every ${interval_minutes} minute(s)` },
       success: true,
     });
 
@@ -118,7 +157,8 @@ Deno.serve(async (req) => {
         success: true, 
         interval_minutes,
         schedule,
-        message: `Auto-sync schedule updated to every ${interval_minutes} minute(s)` 
+        jobs: ['sync-surpluss-allocations', 'sync-surpluss-volunteers-auto', 'sync-surpluss-beneficiaries-auto'],
+        message: `Auto-sync schedule updated to every ${interval_minutes} minute(s) for allocations, volunteers & beneficiaries` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
