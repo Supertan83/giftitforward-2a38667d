@@ -428,6 +428,7 @@ async function getMarketplacesBySlug(supabase: any, eventSlugs: string[], slugDa
       );
       
       let bestMatch: typeof marketplaces[0] | null = null;
+      let bestMatchCount = 0;
       
       for (const mp of marketplaces) {
         const mpNameLower = mp.name.toLowerCase();
@@ -443,17 +444,21 @@ async function getMarketplacesBySlug(supabase: any, eventSlugs: string[], slugDa
           const dateMatches = (dbDate.getMonth() + 1) === targetDate.month && 
                               dbDate.getDate() === targetDate.day;
           
-          if (dateMatches) {
-            console.log(`✓ Matched slug "${slug}" to "${mp.name}" (date ${mp.event_date})`);
+          if (dateMatches && matchCount > bestMatchCount) {
+            console.log(`✓ Matched slug "${slug}" to "${mp.name}" (date ${mp.event_date}, score ${matchCount})`);
             bestMatch = mp;
-            break; // Exact name + date match found
+            bestMatchCount = matchCount;
+            // Continue iterating to find the most specific match (e.g. morning vs afternoon)
+          } else if (!dateMatches) {
+            // Name matches but date doesn't - keep looking
+            console.log(`✗ Name match but date mismatch for slug "${slug}": DB has ${mp.event_date}, target month=${targetDate.month} day=${targetDate.day}`);
           }
-          // Name matches but date doesn't - keep looking
-          console.log(`✗ Name match but date mismatch for slug "${slug}": DB has ${mp.event_date}, target month=${targetDate.month} day=${targetDate.day}`);
         } else if (!targetDate) {
-          // No date available at all, use first name match (newest first due to DESC order)
-          bestMatch = mp;
-          break;
+          // No date available at all, use best name match
+          if (matchCount > bestMatchCount) {
+            bestMatch = mp;
+            bestMatchCount = matchCount;
+          }
         }
       }
       
