@@ -121,21 +121,34 @@ serve(async (req) => {
       ? marketplace_ids
       : marketplace_id ? [marketplace_id] : [];
 
+    // If no marketplace IDs provided, auto-fetch all marketplaces with an external_id
+    let resolvedMarketplaceIds = targetMarketplaceIds;
+    if (resolvedMarketplaceIds.length === 0) {
+      console.log('No marketplace_id provided — fetching all marketplaces with external_id for auto-sync');
+      const { data: allMarketplaces, error: mpErr } = await supabase
+        .from('marketplace_events')
+        .select('id')
+        .not('external_id', 'is', null);
+      if (mpErr) throw new Error(`Failed to fetch marketplace_events: ${mpErr.message}`);
+      resolvedMarketplaceIds = (allMarketplaces || []).map((mp: any) => mp.id);
+      console.log(`Auto-resolved ${resolvedMarketplaceIds.length} marketplaces for beneficiary sync`);
+    }
+
     let activeCards: any[] = [];
     let archivedCards: any[] = [];
 
-    if (targetMarketplaceIds.length > 0) {
+    if (resolvedMarketplaceIds.length > 0) {
       const { data: active, error: activeErr } = await supabase
         .from('qr_cards')
         .select('*')
-        .in('marketplace_id', targetMarketplaceIds);
+        .in('marketplace_id', resolvedMarketplaceIds);
       if (activeErr) throw new Error(`Failed to fetch qr_cards: ${activeErr.message}`);
       activeCards = active || [];
 
       const { data: archived, error: archivedErr } = await supabase
         .from('archived_card_data')
         .select('*')
-        .in('marketplace_id', targetMarketplaceIds);
+        .in('marketplace_id', resolvedMarketplaceIds);
       if (archivedErr) throw new Error(`Failed to fetch archived_card_data: ${archivedErr.message}`);
       archivedCards = archived || [];
     }
