@@ -79,6 +79,16 @@ function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<s
   const events = resolveEventSlugs(vol.events_list, slugMap);
   if (events) payload.events_registered = events;
 
+  // Volunteer QR card status (checked_in, checked_out, inactive)
+  if (vol._card_status) {
+    const statusMap: Record<string, string> = {
+      checked_in: "CHECKED_IN",
+      checked_out: "CHECKED_OUT",
+      inactive: "INACTIVE",
+    };
+    payload.status = statusMap[vol._card_status] || vol._card_status.toUpperCase();
+  }
+
   return payload;
 }
 
