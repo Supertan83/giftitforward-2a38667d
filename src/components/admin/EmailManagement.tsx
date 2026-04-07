@@ -574,9 +574,9 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
           {/* Hero Image */}
           <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
           
-          {/* Execution Partner Label */}
-          <div className="text-center py-4">
-            <p className="text-xs tracking-widest text-[#B8860B] font-semibold">EXECUTION PARTNER</p>
+          {/* Red Vertical Line */}
+          <div className="flex justify-center py-4">
+            <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           
           {/* Main Title */}
@@ -625,8 +625,8 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
           {/* Hero Image */}
           <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
           
-          <div className="text-center py-4">
-            <p className="text-xs tracking-widest text-[#B8860B] font-semibold">EXECUTION PARTNER</p>
+          <div className="flex justify-center py-4">
+            <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           
           <div className="text-center px-6 pb-4">
@@ -664,8 +664,8 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
           {/* Hero Image */}
           <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
           
-          <div className="text-center py-4">
-            <p className="text-xs tracking-widest text-[#B8860B] font-semibold">EXECUTION PARTNER</p>
+          <div className="flex justify-center py-4">
+            <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           
           <div className="text-center px-6 pb-4">

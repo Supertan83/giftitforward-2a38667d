@@ -239,10 +239,10 @@ async function sendViaResend(
                     </td>
                   </tr>
                   
-                  <!-- Execution Partner Label -->
+                  <!-- Red Vertical Line -->
                   <tr>
-                    <td style="padding: 20px 30px 10px 30px; text-align: center;">
-                      <p style="margin: 0; font-size: 11px; letter-spacing: 2px; color: #B8860B; font-weight: 600;">EXECUTION PARTNER</p>
+                    <td style="padding: 20px 0 10px 0; text-align: center;">
+                      <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
                     </td>
                   </tr>
                   

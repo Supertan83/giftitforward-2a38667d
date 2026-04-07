@@ -204,8 +204,8 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
   const renderBrandedPreview = (tpl: EmailTemplateInput) => (
     <div className="bg-white rounded-lg overflow-hidden shadow-sm border max-w-[600px] mx-auto text-left" style={{ fontFamily: "'Rubik', Arial, sans-serif" }}>
       <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
-      <div className="text-center py-3">
-        <p className="text-[10px] tracking-[3px] uppercase" style={{ color: '#B8860B' }}>EXECUTION PARTNER</p>
+      <div className="flex justify-center py-3">
+        <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
       </div>
       <div className="text-center px-6 pb-3">
         <h1 className="text-lg font-bold" style={{ color: '#101820' }}>{tpl.subject || 'Email Subject'}</h1>
