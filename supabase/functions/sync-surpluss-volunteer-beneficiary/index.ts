@@ -683,7 +683,7 @@ serve(async (req) => {
 
             for (const dep of deps) {
               const depPayload: Record<string, any> = {
-                name: dep.name,
+                name: `${dep.name} (Family)`,
                 type: "family_member",
                 parent_volunteer_email: vol.email,
                 parent_volunteer_name: volunteerName,
