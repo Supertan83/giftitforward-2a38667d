@@ -920,10 +920,18 @@ async function sendWelcomeEmailWithQR(
         .map((e: RegisteredEvent) => e.event)
         .filter((slug): slug is string => !!slug);
       
+      // Build slug → eventDate map for cross-validation
+      const slugDateMap = new Map<string, string>();
+      for (const evt of eventsJson as RegisteredEvent[]) {
+        if (evt.event && evt.eventDate) {
+          slugDateMap.set(evt.event, evt.eventDate);
+        }
+      }
+      
       console.log(`Looking up marketplace times for ${eventSlugs.length} events:`, eventSlugs);
       
-      // Look up marketplace details from database
-      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs);
+      // Look up marketplace details from database, passing form dates for cross-validation
+      const marketplaceDetails = await getMarketplacesBySlug(supabaseClient, eventSlugs, slugDateMap);
       
       // Build registered events list with times from DB or form data
       // IMPORTANT: Prioritize form data for date/time/location as it's the source of truth
