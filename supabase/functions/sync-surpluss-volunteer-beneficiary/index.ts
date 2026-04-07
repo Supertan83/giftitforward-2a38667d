@@ -50,6 +50,50 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
   return resolvedNames.length > 0 ? resolvedNames.join(";") : undefined;
 }
 
+/** Extract dependents from events_json for a given marketplace (by normalized name) */
+function extractDependentsForMarketplace(
+  eventsJson: any[] | null,
+  marketplaceName: string,
+): Array<{ name: string; type: string; gender?: string }> {
+  if (!eventsJson || !Array.isArray(eventsJson)) return [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const targetNorm = norm(marketplaceName);
+  const deps: Array<{ name: string; type: string; gender?: string }> = [];
+  const seenNames = new Set<string>();
+
+  for (const evt of eventsJson) {
+    const eventSlug = evt["event-slug"] || evt.event_slug || evt["event"] || evt.event || "";
+    const eventNorm = norm(eventSlug);
+    // Fuzzy match: either contains the other
+    if (!eventNorm || (!eventNorm.includes(targetNorm) && !targetNorm.includes(eventNorm))) continue;
+
+    const dependents = evt.dependents || [];
+    if (!Array.isArray(dependents)) continue;
+    for (const d of dependents) {
+      const dName = (d.name || "").trim();
+      if (!dName || seenNames.has(dName.toLowerCase())) continue;
+      seenNames.add(dName.toLowerCase());
+      deps.push({
+        name: dName,
+        type: d.type || "adult",
+        gender: d.gender || undefined,
+      });
+    }
+  }
+  return deps;
+}
+
+/** Count total dependents across all events for a volunteer */
+function countAllDependents(eventsJson: any[] | null): number {
+  if (!eventsJson || !Array.isArray(eventsJson)) return 0;
+  let total = 0;
+  for (const evt of eventsJson) {
+    total += Number(evt["number-of-adults"] || evt.number_of_adults || 0);
+    total += Number(evt["number-of-children"] || evt.number_of_children || 0);
+  }
+  return total;
+}
+
 /** Build the enriched volunteer payload for the Surpluss API */
 function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<string, any> {
   const name = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
@@ -87,6 +131,12 @@ function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<s
       inactive: "INACTIVE",
     };
     payload.status = statusMap[vol._card_status] || vol._card_status.toUpperCase();
+  }
+
+  // Number of dependents (family members)
+  const depCount = countAllDependents(vol.events_json);
+  if (depCount > 0) {
+    payload.number_of_dependents = depCount;
   }
 
   return payload;
@@ -177,7 +227,7 @@ serve(async (req) => {
     const { data: allVolunteers, error: volError } = await supabase
       .from("pending_volunteers")
       .select(
-        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical",
+        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json",
       );
 
     if (volError) {
@@ -616,6 +666,104 @@ serve(async (req) => {
         }
 
         // Note: Individual beneficiary card sync is now handled by the dedicated sync-surpluss-beneficiaries function
+
+        // --- Family Members (Dependents) Sync ---
+        // Extract dependents from events_json for this marketplace and send as separate volunteer entries
+        try {
+          const marketplaceNameForDeps = marketplace.name as string;
+          let familySent = 0;
+          let familySkipped = 0;
+          let familyFailed = 0;
+
+          for (const vol of volunteers) {
+            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps);
+            if (deps.length === 0) continue;
+
+            const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
+
+            for (const dep of deps) {
+              const depPayload: Record<string, any> = {
+                name: dep.name,
+                type: "family_member",
+                parent_volunteer_email: vol.email,
+                parent_volunteer_name: volunteerName,
+              };
+
+              if (dep.gender) {
+                const g = dep.gender.toLowerCase();
+                if (g === "male" || g === "female") {
+                  depPayload.gender = g.toUpperCase();
+                }
+              }
+
+              if (dep.type === "children" || dep.type === "child") {
+                depPayload.age_group = "CHILD";
+              } else {
+                depPayload.age_group = "ADULT";
+              }
+
+              // Company from parent
+              const company = vol.external_company || vol.employee_vertical;
+              if (company) depPayload.company_name = company;
+
+              if (surplussEventId != null) {
+                depPayload.marketplace_event_id = surplussEventId;
+              }
+
+              try {
+                const apiUrl = `${baseUrl}/api/common/volunteers`;
+                const response = await fetch(apiUrl, {
+                  method: "POST",
+                  headers: apiHeaders,
+                  body: JSON.stringify(depPayload),
+                });
+
+                const responseBody = await response.text();
+                let responseJson: any;
+                try {
+                  responseJson = JSON.parse(responseBody);
+                } catch {
+                  responseJson = { raw: responseBody.substring(0, 500) };
+                }
+
+                await supabase.from("surpluss_api_audit_log").insert({
+                  action: "sync_family_member",
+                  environment,
+                  request_payload: depPayload,
+                  response_status: response.status,
+                  response_body: responseJson,
+                  success: response.ok,
+                });
+
+                if (response.ok) {
+                  familySent++;
+                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "sent" });
+                } else if (responseBody.includes("already exists") || responseBody.includes("already assigned")) {
+                  familySkipped++;
+                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "skipped", reason: "Already exists" });
+                } else {
+                  familyFailed++;
+                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "failed", reason: `${response.status}` });
+                }
+              } catch (depErr) {
+                familyFailed++;
+                allVolunteerDetails.push({
+                  name: `${dep.name} (family of ${volunteerName})`,
+                  status: "failed",
+                  reason: depErr instanceof Error ? depErr.message : "Unknown",
+                });
+              }
+            }
+          }
+
+          totalSent += familySent;
+          totalSkipped += familySkipped;
+          totalFailed += familyFailed;
+          console.log(`Family members for "${marketplaceNameForDeps}": sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
+        } catch (familyErr) {
+          console.error("Family member sync error:", familyErr);
+          allErrors.push(`Family member sync: ${familyErr instanceof Error ? familyErr.message : "Unknown"}`);
+        }
       }
 
       volunteerHoursRowCount = volunteerHourRows.length;
