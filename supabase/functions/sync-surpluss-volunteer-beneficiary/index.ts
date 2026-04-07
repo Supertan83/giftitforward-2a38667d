@@ -305,6 +305,7 @@ serve(async (req) => {
             ...(enriched.employed && { employed: enriched.employed }),
             ...(enriched.company_name && { company_name: enriched.company_name }),
             ...(enriched.events_registered && { events_registered: enriched.events_registered }),
+            ...(enriched.status && { status: enriched.status }),
           };
         });
 
