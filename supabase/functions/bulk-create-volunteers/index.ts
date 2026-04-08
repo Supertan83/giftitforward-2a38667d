@@ -101,6 +101,7 @@ function buildEmailHtml(
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg?v=2`
   const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg?v=2`
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png?v=2`
+  const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`
 
   // Format marketplace details
   const eventDate = formatDate(marketplace?.event_date)
@@ -127,6 +128,20 @@ function buildEmailHtml(
               <tr>
                 <td>
                   <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                </td>
+              </tr>
+              
+              <!-- The Surpluss Logo -->
+              <tr>
+                <td style="padding: 20px 0 0 0; text-align: center;">
+                  <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                </td>
+              </tr>
+              
+              <!-- Red Vertical Line -->
+              <tr>
+                <td style="padding: 15px 0 10px 0; text-align: center;">
+                  <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
                 </td>
               </tr>
               

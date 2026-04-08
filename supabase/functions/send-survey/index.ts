@@ -188,6 +188,7 @@ async function sendViaResend(
   const firstName = cleanName.split(" ")[0];
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg?v=2`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+  const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
   // Format marketplace details
   const marketplaceName = marketplace?.name || 'Gift It Forward Marketplace';
@@ -232,19 +233,26 @@ async function sendViaResend(
               <td align="center" style="padding: 20px 0;">
                 <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
                   
-                  <!-- Hero Image -->
-                  <tr>
-                    <td>
-                      <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
-                    </td>
-                  </tr>
-                  
-                  <!-- Red Vertical Line -->
-                  <tr>
-                    <td style="padding: 20px 0 10px 0; text-align: center;">
-                      <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
-                    </td>
-                  </tr>
+                    <!-- Hero Image -->
+                    <tr>
+                      <td>
+                        <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                      </td>
+                    </tr>
+                    
+                    <!-- The Surpluss Logo -->
+                    <tr>
+                      <td style="padding: 20px 0 0 0; text-align: center;">
+                        <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                      </td>
+                    </tr>
+                    
+                    <!-- Red Vertical Line -->
+                    <tr>
+                      <td style="padding: 15px 0 10px 0; text-align: center;">
+                        <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
+                      </td>
+                    </tr>
                   
                   <!-- Main Title -->
                   <tr>
