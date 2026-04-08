@@ -1,60 +1,36 @@
 
 
-## Add The Surpluss Logo Between Hero Image and Red Vertical Line in All Emails
+## Update All Emails to Use Tahoma Font
 
 ### What's changing
-Adding The Surpluss logo (centered, with padding) between the hero banner image and the red vertical line separator in every email template and the admin email preview component.
+Replace `Arial, sans-serif` with `Tahoma, Arial, sans-serif` as the primary font-family across all email templates and admin UI email previews. Tahoma is a web-safe font available on virtually all email clients, so no font file embedding is needed.
 
-### Steps
+### Files to update (10 Edge Functions + 3 UI files)
 
-**Step 0: Upload logo to email-assets storage bucket**
-- Copy the uploaded Surpluss logo (`user-uploads://image-100.png`) to `public/images/email/surpluss-logo.png` for preview
-- Upload it to the `email-assets` storage bucket as `surpluss-logo.png` for use in actual emails
-
-**Step 1: Add logo row in all Edge Function email templates**
-
-Insert a new `<tr>` block between the hero image row and the red vertical line row in each file:
-
-```html
-<!-- The Surpluss Logo -->
-<tr>
-  <td style="padding: 20px 0 0 0; text-align: center;">
-    <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
-  </td>
-</tr>
-```
-
-Add `surplussLogoUrl` variable alongside existing asset URLs in each function.
-
-**Files to update (Edge Functions — 9 files):**
-1. `supabase/functions/send-campaign-email/index.ts`
-2. `supabase/functions/send-test-email/index.ts`
+**Edge Functions:**
+1. `supabase/functions/send-welcome-email/index.ts`
+2. `supabase/functions/send-survey/index.ts`
 3. `supabase/functions/send-certificate/index.ts`
-4. `supabase/functions/send-survey/index.ts`
-5. `supabase/functions/send-welcome-email/index.ts`
-6. `supabase/functions/webhook-receiver/index.ts`
-7. `supabase/functions/resend-welcome-email/index.ts`
-8. `supabase/functions/bulk-create-volunteers/index.ts`
-9. `supabase/functions/register-onsite-volunteer/index.ts`
+4. `supabase/functions/send-campaign-email/index.ts`
+5. `supabase/functions/send-test-email/index.ts`
+6. `supabase/functions/resend-welcome-email/index.ts`
+7. `supabase/functions/bulk-create-volunteers/index.ts`
+8. `supabase/functions/register-onsite-volunteer/index.ts`
+9. `supabase/functions/webhook-receiver/index.ts`
+10. `supabase/functions/send-retake-training/index.ts`
 
-**Step 2: Update admin UI preview components (2 files):**
-1. `src/components/admin/EmailPreviewDialog.tsx` — add logo `<img>` between hero and title
-2. `src/components/admin/EmailManagement.tsx` — add logo in preview section
-3. `src/components/admin/EmailTemplateCenter.tsx` — add logo in preview section
+**Admin UI previews:**
+1. `src/components/admin/EmailManagement.tsx`
+2. `src/components/admin/EmailTemplateCenter.tsx`
+3. `src/components/admin/EmailPreviewDialog.tsx`
 
-**Step 3: Deploy updated edge functions**
+### Change
+In each file, replace all occurrences of:
+- `font-family: Arial, sans-serif` → `font-family: Tahoma, Arial, sans-serif`
+- `font-family: Georgia, 'Times New Roman', serif` (heading fonts in some templates) → `font-family: Tahoma, Arial, sans-serif`
 
-### Logo placement (visual)
+This ensures consistent Tahoma font across all email content — body text, headings, and UI previews. The uploaded `.ttf` file is not needed since Tahoma is universally available as a system font in email clients.
 
-```text
-┌──────────────────────────┐
-│     Hero Banner Image     │
-├──────────────────────────┤
-│    [The Surpluss Logo]    │  ← NEW (centered, padding 20px top/bottom)
-├──────────────────────────┤
-│       Red Vertical Line   │
-├──────────────────────────┤
-│     Email Content...      │
-└──────────────────────────┘
-```
+### Deployment
+All updated edge functions will be deployed after changes.
 
