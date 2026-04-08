@@ -1,59 +1,60 @@
 
 
-## Add Auto-Sync for Volunteers & Beneficiaries
+## Add The Surpluss Logo Between Hero Image and Red Vertical Line in All Emails
 
-### Problem
-Currently only allocation sync runs on a schedule (via `pg_cron`). Volunteer and beneficiary syncs are manual-only.
+### What's changing
+Adding The Surpluss logo (centered, with padding) between the hero banner image and the red vertical line separator in every email template and the admin email preview component.
 
-### Solution
+### Steps
 
-**1. Update `update-sync-schedule` edge function** to create two additional cron jobs alongside the existing allocation sync:
+**Step 0: Upload logo to email-assets storage bucket**
+- Copy the uploaded Surpluss logo (`user-uploads://image-100.png`) to `public/images/email/surpluss-logo.png` for preview
+- Upload it to the `email-assets` storage bucket as `surpluss-logo.png` for use in actual emails
 
-- `sync-surpluss-volunteers` → calls `sync-surpluss-volunteer-beneficiary` with `{ "environment": "production" }` (no `marketplace_id` = processes all)
-- `sync-surpluss-beneficiaries-auto` → calls `sync-surpluss-beneficiaries` with `{ "environment": "production" }` — but this function requires marketplace IDs, so the cron body will first need to be handled
+**Step 1: Add logo row in all Edge Function email templates**
 
-**However**, `sync-surpluss-beneficiaries` requires explicit `marketplace_id` or `marketplace_ids`. Two options:
+Insert a new `<tr>` block between the hero image row and the red vertical line row in each file:
 
-**Option A (Recommended):** Add "ALL" marketplace support to `sync-surpluss-beneficiaries` — when no `marketplace_id` is provided, fetch all marketplace_events with an `external_id` and process them all. This mirrors how `sync-surpluss-volunteer-beneficiary` already works.
-
-**Option B:** Create a wrapper edge function. More complexity, less ideal.
-
-### Changes
-
-**File 1: `supabase/functions/sync-surpluss-beneficiaries/index.ts`**
-- When `targetMarketplaceIds` is empty (no marketplace_id/marketplace_ids provided), query all `marketplace_events` that have an `external_id` and use all their IDs
-- This enables calling it without parameters for auto-sync
-
-**File 2: `supabase/functions/update-sync-schedule/index.ts`**
-- Expand the unschedule query to also find jobs named `sync-surpluss-volunteers` or `sync-surpluss-beneficiaries-auto`, or whose command contains these function names
-- When scheduling (interval > 0), create 3 cron jobs:
-  1. `sync-surpluss-allocations` (existing) — allocation sync
-  2. `sync-surpluss-volunteers-auto` — volunteer+demographics sync
-  3. `sync-surpluss-beneficiaries-auto` — beneficiary sync
-- All three use the same interval
-- When disabling (interval = 0), unschedule all three
-
-**File 3: `src/components/admin/SurplussSyncMonitor.tsx`**
-- Update the Auto-Sync Status section to indicate that all three sync types (Allocations, Volunteers, Beneficiaries) are included in the scheduled sync
-- Minor label change: "Scheduled Auto-Sync" description updated to mention all sync types
-
-### Cron Job Details
-
-```text
-Job 1 (existing): sync-surpluss-allocations
-  → POST /functions/v1/sync-surpluss-event-allocations
-  → body: {"marketplace_id": "ALL", "environment": "production"}
-
-Job 2 (new): sync-surpluss-volunteers-auto  
-  → POST /functions/v1/sync-surpluss-volunteer-beneficiary
-  → body: {"environment": "production"}
-  (no marketplace_id = processes all marketplaces)
-
-Job 3 (new): sync-surpluss-beneficiaries-auto
-  → POST /functions/v1/sync-surpluss-beneficiaries
-  → body: {"environment": "production"}
-  (no marketplace_id = processes all marketplaces, after fix)
+```html
+<!-- The Surpluss Logo -->
+<tr>
+  <td style="padding: 20px 0 0 0; text-align: center;">
+    <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+  </td>
+</tr>
 ```
 
-All jobs use the same schedule interval and are managed together.
+Add `surplussLogoUrl` variable alongside existing asset URLs in each function.
+
+**Files to update (Edge Functions — 9 files):**
+1. `supabase/functions/send-campaign-email/index.ts`
+2. `supabase/functions/send-test-email/index.ts`
+3. `supabase/functions/send-certificate/index.ts`
+4. `supabase/functions/send-survey/index.ts`
+5. `supabase/functions/send-welcome-email/index.ts`
+6. `supabase/functions/webhook-receiver/index.ts`
+7. `supabase/functions/resend-welcome-email/index.ts`
+8. `supabase/functions/bulk-create-volunteers/index.ts`
+9. `supabase/functions/register-onsite-volunteer/index.ts`
+
+**Step 2: Update admin UI preview components (2 files):**
+1. `src/components/admin/EmailPreviewDialog.tsx` — add logo `<img>` between hero and title
+2. `src/components/admin/EmailManagement.tsx` — add logo in preview section
+3. `src/components/admin/EmailTemplateCenter.tsx` — add logo in preview section
+
+**Step 3: Deploy updated edge functions**
+
+### Logo placement (visual)
+
+```text
+┌──────────────────────────┐
+│     Hero Banner Image     │
+├──────────────────────────┤
+│    [The Surpluss Logo]    │  ← NEW (centered, padding 20px top/bottom)
+├──────────────────────────┤
+│       Red Vertical Line   │
+├──────────────────────────┤
+│     Email Content...      │
+└──────────────────────────┘
+```
 
