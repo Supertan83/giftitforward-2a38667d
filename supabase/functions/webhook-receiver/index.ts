@@ -1910,6 +1910,20 @@ async function sendEventAddedConfirmationEmail(
                     </td>
                   </tr>
                   
+                  <!-- The Surpluss Logo -->
+                  <tr>
+                    <td style="padding: 20px 0 0 0; text-align: center;">
+                      <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Red Vertical Line -->
+                  <tr>
+                    <td style="padding: 15px 0 10px 0; text-align: center;">
+                      <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
+                    </td>
+                  </tr>
+                  
                   <!-- Main Title -->
                   <tr>
                     <td style="padding: 30px 30px 20px 30px; text-align: center;">
