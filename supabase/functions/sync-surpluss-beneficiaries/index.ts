@@ -50,6 +50,12 @@ function buildBeneficiaryPayload(beneficiary: any): Record<string, any> {
     payload.items_collected = parseInt(beneficiary.items_collected) || 0;
   }
 
+  const linkedEventId = beneficiary.external_marketplace_event_id ?? beneficiary.marketplace_external_id;
+  if (linkedEventId != null) {
+    payload.marketplace_event_id = Number(linkedEventId);
+    payload.event_id = Number(linkedEventId);
+  }
+
   return payload;
 }
 
@@ -127,7 +133,7 @@ serve(async (req) => {
       console.log('No marketplace_id provided — fetching all marketplaces with external_id for auto-sync');
       const { data: allMarketplaces, error: mpErr } = await supabase
         .from('marketplace_events')
-        .select('id')
+        .select('id, external_id')
         .not('external_id', 'is', null);
       if (mpErr) throw new Error(`Failed to fetch marketplace_events: ${mpErr.message}`);
       resolvedMarketplaceIds = (allMarketplaces || []).map((mp: any) => mp.id);
@@ -154,9 +160,26 @@ serve(async (req) => {
     }
 
     // Combine and normalize — both tables share: unique_id, gender, nationality, marital_status, children_count, marketplace_id
+    const { data: marketplaceMappings } = await supabase
+      .from('marketplace_events')
+      .select('id, external_id, name')
+      .in('id', resolvedMarketplaceIds);
+
+    const marketplaceExternalIdById = new Map(
+      (marketplaceMappings || []).map((mp: any) => [mp.id, mp.external_id])
+    );
+
     const beneficiaries = [
-      ...activeCards.map(c => ({ ...c, marketplace_event_id: c.marketplace_id })),
-      ...archivedCards.map(c => ({ ...c, marketplace_event_id: c.marketplace_id })),
+      ...activeCards.map(c => ({
+        ...c,
+        marketplace_event_id: c.marketplace_id,
+        external_marketplace_event_id: marketplaceExternalIdById.get(c.marketplace_id) ?? null,
+      })),
+      ...archivedCards.map(c => ({
+        ...c,
+        marketplace_event_id: c.marketplace_id,
+        external_marketplace_event_id: marketplaceExternalIdById.get(c.marketplace_id) ?? null,
+      })),
     ];
     console.log(`Fetched ${activeCards.length} active + ${archivedCards.length} archived = ${beneficiaries.length} beneficiaries`);
 
@@ -332,8 +355,11 @@ serve(async (req) => {
       // Find matching Surpluss event
       const targetName = normalize(supabaseMarketplace.name);
       let surplussEventId: number | null = null;
-      
-      if (surplussEventsMap.has(targetName)) {
+      const localExternalId = marketplaceMappings?.find(mp => mp.id === supabaseEventId)?.external_id;
+
+      if (localExternalId != null) {
+        surplussEventId = Number(localExternalId);
+      } else if (surplussEventsMap.has(targetName)) {
         surplussEventId = surplussEventsMap.get(targetName)!;
       } else {
         // Try partial match
