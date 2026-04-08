@@ -1,36 +1,29 @@
 
 
-## Update All Emails to Use Tahoma Font
+## Add Missing April 2026 Marketplace Events
 
-### What's changing
-Replace `Arial, sans-serif` with `Tahoma, Arial, sans-serif` as the primary font-family across all email templates and admin UI email previews. Tahoma is a web-safe font available on virtually all email clients, so no font file embedding is needed.
+### Summary
+The PDF contains 10 marketplace events for April 2026. Five already exist in the database; five are missing. I will insert the missing events using the database insert tool.
 
-### Files to update (10 Edge Functions + 3 UI files)
+### Existing Events (no action needed)
+1. Women Community Workers Marketplace – Morning Event (Apr 11)
+2. Men's Construction & Facility Workers Marketplace – Afternoon Event (Apr 12)
+3. Men's Aviation Workers Marketplace – Morning Event (Apr 15)
+4. Taxi Drivers' Marketplace – Morning Event (Apr 18)
+5. Taxi Drivers' Marketplace – Afternoon Event Day 2 (Apr 19)
 
-**Edge Functions:**
-1. `supabase/functions/send-welcome-email/index.ts`
-2. `supabase/functions/send-survey/index.ts`
-3. `supabase/functions/send-certificate/index.ts`
-4. `supabase/functions/send-campaign-email/index.ts`
-5. `supabase/functions/send-test-email/index.ts`
-6. `supabase/functions/resend-welcome-email/index.ts`
-7. `supabase/functions/bulk-create-volunteers/index.ts`
-8. `supabase/functions/register-onsite-volunteer/index.ts`
-9. `supabase/functions/webhook-receiver/index.ts`
-10. `supabase/functions/send-retake-training/index.ts`
+### Events to Insert (5 missing)
 
-**Admin UI previews:**
-1. `src/components/admin/EmailManagement.tsx`
-2. `src/components/admin/EmailTemplateCenter.tsx`
-3. `src/components/admin/EmailPreviewDialog.tsx`
+| # | Name | Date | Time | Location |
+|---|------|------|------|----------|
+| 1 | Women Community Workers Marketplace Afternoon Event | 2026-04-11 | 17:30–21:00 | Dubai, Al Quoz |
+| 2 | Mens Construction Facility Workers Marketplace Morning Event | 2026-04-12 | 08:30–14:00 | Dubai, Jebel Ali Industrial Area |
+| 3 | Mens Aviation Workers Marketplace Afternoon Event | 2026-04-15 | 14:00–18:30 | Dubai, Muhaisnah |
+| 4 | Taxi Drivers Marketplace Afternoon Event | 2026-04-18 | 15:00–20:30 | Dubai, Muhaisnah 4, Gate 4 |
+| 5 | Taxi Drivers Marketplace Morning Event Day 2 | 2026-04-19 | 08:30–14:30 | Dubai, Muhaisnah 4, Gate 4 |
 
-### Change
-In each file, replace all occurrences of:
-- `font-family: Arial, sans-serif` → `font-family: Tahoma, Arial, sans-serif`
-- `font-family: Georgia, 'Times New Roman', serif` (heading fonts in some templates) → `font-family: Tahoma, Arial, sans-serif`
-
-This ensures consistent Tahoma font across all email content — body text, headings, and UI previews. The uploaded `.ttf` file is not needed since Tahoma is universally available as a system font in email clients.
-
-### Deployment
-All updated edge functions will be deployed after changes.
+### Technical Details
+- Use the Supabase insert tool to run a single `INSERT INTO marketplace_events` statement with all 5 rows
+- Set `status = 'upcoming'`, `beneficiary_credit_limit = 15` (default), `max_items_per_scan = 1` (default)
+- Match naming conventions of existing events (no apostrophes/special chars, consistent formatting)
 
