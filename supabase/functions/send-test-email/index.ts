@@ -146,6 +146,7 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+  const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=VOL-TEST-1234`;
   const loginUrl = "https://giftitforward.lovable.app/auth";
   const trainingUrl = "https://giftitforward.lovable.app/training";
@@ -164,9 +165,16 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
       </td>
     </tr>
     
+    <!-- The Surpluss Logo -->
+    <tr>
+      <td style="padding: 20px 0 0 0; text-align: center;">
+        <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+      </td>
+    </tr>
+    
     <!-- Red Vertical Line -->
     <tr>
-      <td style="padding: 20px 0 10px 0; text-align: center;">
+      <td style="padding: 15px 0 10px 0; text-align: center;">
         <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
       </td>
     </tr>
@@ -220,9 +228,16 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
                   </td>
                 </tr>
                 
+                <!-- The Surpluss Logo -->
+                <tr>
+                  <td style="padding: 20px 0 0 0; text-align: center;">
+                    <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                  </td>
+                </tr>
+                
                 <!-- Red Vertical Line -->
                 <tr>
-                  <td style="padding: 25px 0 0 0; text-align: center;">
+                  <td style="padding: 15px 0 0 0; text-align: center;">
                     <div style="width: 2px; height: 30px; background-color: #DA291C; margin: 0 auto;"></div>
                   </td>
                 </tr>
