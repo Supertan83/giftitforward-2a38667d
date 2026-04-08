@@ -122,15 +122,15 @@ function generateCampaignEmailHTML(
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>body { margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }</style>
-</head><body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+<style>body { margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif; }</style>
+</head><body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
 <tr><td align="center" style="padding: 20px 0;">
 <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
 <tr><td><img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" /></td></tr>
 <tr><td style="padding: 20px 0 0 0; text-align: center;"><img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" /></td></tr>
 <tr><td style="padding: 15px 0 10px 0; text-align: center;"><div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div></td></tr>
-<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><h1 style="margin: 0; font-size: 24px; color: #5D5348; font-weight: normal; line-height: 1.4; font-family: Georgia, 'Times New Roman', serif;">${rt(template.subject)}</h1></td></tr>
+<tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><h1 style="margin: 0; font-size: 24px; color: #5D5348; font-weight: normal; line-height: 1.4; font-family: Tahoma, Arial, sans-serif;">${rt(template.subject)}</h1></td></tr>
 <tr><td style="padding: 0 40px 15px 40px;"><p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">${rt(template.greeting)}</p></td></tr>
 ${bodySectionsHtml}
 ${ctaHtml}
