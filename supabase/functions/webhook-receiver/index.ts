@@ -1231,7 +1231,7 @@ async function sendWelcomeEmailWithQR(
       return `
         <tr>
           <td style="padding: 10px; text-align: center;">
-            <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Arial, sans-serif;">${fam.name}</p>
+            <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Tahoma, Arial, sans-serif;">${fam.name}</p>
             <p style="font-size: 12px; color: #6b7280; margin: 0 0 10px 0;">${typeLabel}${fam.gender ? ` • ${fam.gender}` : ''}</p>
             <img src="${famQrUrl}" alt="QR Code for ${fam.name}" width="120" height="120" style="display: block; margin: 0 auto;" />
             <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280;">${fam.qrCardId}</p>
@@ -1246,7 +1246,7 @@ async function sendWelcomeEmailWithQR(
           <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;">
             <tr>
               <td style="padding: 20px;">
-                <h3 style="margin: 0 0 10px 0; color: #166534; font-family: Arial, sans-serif;">Family Member QR Cards (${familyQRs.length})</h3>
+                <h3 style="margin: 0 0 10px 0; color: #166534; font-family: Tahoma, Arial, sans-serif;">Family Member QR Cards (${familyQRs.length})</h3>
                 <p style="color: #15803d; font-size: 13px; margin: 0 0 15px 0;">These QR codes are for your registered family members. Each person should present their own QR code at the marketplace.</p>
                 <table width="100%" cellpadding="0" cellspacing="0">
                   ${familyQRSections}
@@ -1315,7 +1315,7 @@ async function sendWelcomeEmailWithQR(
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
             <tr>
               <td align="center" style="padding: 20px 0;">
@@ -1571,7 +1571,7 @@ async function sendWelcomeEmailWithQR(
             <!DOCTYPE html>
             <html>
             <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-            <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+            <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
                 <tr>
                   <td align="center" style="padding: 20px 0;">
@@ -1687,7 +1687,7 @@ async function sendDuplicateNotificationEmail(
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
             <tr>
               <td align="center" style="padding: 20px 0;">
@@ -1897,7 +1897,7 @@ async function sendEventAddedConfirmationEmail(
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
             <tr>
               <td align="center" style="padding: 20px 0;">

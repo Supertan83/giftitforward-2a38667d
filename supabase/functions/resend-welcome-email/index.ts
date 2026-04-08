@@ -331,7 +331,7 @@ serve(async (req: Request) => {
         return `
           <tr>
             <td style="padding: 10px; text-align: center;">
-              <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Arial, sans-serif;">${depName}</p>
+              <p style="font-weight: 600; margin: 0 0 5px 0; color: #374151; font-family: Tahoma, Arial, sans-serif;">${depName}</p>
               <img src="${famQrUrl}" alt="QR Code" width="120" height="120" style="display: block; margin: 0 auto;" />
               <p style="font-family: monospace; font-size: 11px; margin-top: 8px; color: #6b7280;">${fam.unique_id}</p>
             </td>
@@ -345,7 +345,7 @@ serve(async (req: Request) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;">
               <tr>
                 <td style="padding: 20px;">
-                  <h3 style="margin: 0 0 15px 0; color: #166534; font-family: Arial, sans-serif;">Family Member QR Cards (${familyQRs.length})</h3>
+                  <h3 style="margin: 0 0 15px 0; color: #166534; font-family: Tahoma, Arial, sans-serif;">Family Member QR Cards (${familyQRs.length})</h3>
                   <table width="100%" cellpadding="0" cellspacing="0">
                     ${familyQRSections}
                   </table>
@@ -372,7 +372,7 @@ serve(async (req: Request) => {
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
           </head>
-          <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+          <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
             <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
               <tr>
                 <td align="center" style="padding: 20px 0;">

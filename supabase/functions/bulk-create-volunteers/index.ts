@@ -118,7 +118,7 @@ function buildEmailHtml(
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+    <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Tahoma, Arial, sans-serif;">
       <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5;">
         <tr>
           <td align="center" style="padding: 20px 0;">
