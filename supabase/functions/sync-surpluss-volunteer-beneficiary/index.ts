@@ -95,7 +95,11 @@ function countAllDependents(eventsJson: any[] | null): number {
 }
 
 /** Build the enriched volunteer payload for the Surpluss API */
-function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<string, any> {
+function buildVolunteerPayload(
+  vol: any,
+  slugMap: Map<string, string>,
+  linkedMarketplaceEventId?: number | null,
+): Record<string, any> {
   const name = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
   const payload: Record<string, any> = { name };
 
@@ -137,6 +141,11 @@ function buildVolunteerPayload(vol: any, slugMap: Map<string, string>): Record<s
   const depCount = countAllDependents(vol.events_json);
   if (depCount > 0) {
     payload.number_of_dependents = depCount;
+  }
+
+  if (linkedMarketplaceEventId != null) {
+    payload.marketplace_event_id = linkedMarketplaceEventId;
+    payload.event_id = linkedMarketplaceEventId;
   }
 
   return payload;
@@ -201,7 +210,7 @@ serve(async (req) => {
     let volunteerHoursSync: Record<string, unknown> | null = null;
 
     // 1. Fetch marketplace events for slug resolution
-    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name");
+    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name, external_id");
     const slugMap = buildEventSlugMap(marketplaceEvents || []);
     console.log(`Built slug map with ${slugMap.size} marketplace events`);
 
@@ -222,6 +231,14 @@ serve(async (req) => {
       }
       console.log(`Will filter volunteers for marketplaces: ${marketplaceNamesForFilter.join(", ")}`);
     }
+
+    const singleMarketplaceForSync =
+      marketplaceIdsToProcess.length === 1
+        ? (marketplaceEvents || []).find((m: any) => m.id === marketplaceIdsToProcess[0])
+        : null;
+    const linkedMarketplaceEventId = singleMarketplaceForSync?.external_id != null
+      ? Number(singleMarketplaceForSync.external_id)
+      : null;
 
     // 2. Fetch all previously synced emails for deduplication
     const { data: previousSyncs } = await supabase
@@ -330,7 +347,7 @@ serve(async (req) => {
     // 5. Create new volunteers with enriched payload
     for (const vol of newVolunteers) {
       const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
-      const volunteerPayload = buildVolunteerPayload(vol, slugMap);
+      const volunteerPayload = buildVolunteerPayload(vol, slugMap, linkedMarketplaceEventId);
 
       try {
         const apiUrl = `${baseUrl}/api/common/volunteers`;
@@ -396,10 +413,14 @@ serve(async (req) => {
       const bulkPayload = previouslySyncedVolunteers
         .filter((vol) => vol.email)
         .map((vol) => {
-          const enriched = buildVolunteerPayload(vol, slugMap);
+          const enriched = buildVolunteerPayload(vol, slugMap, linkedMarketplaceEventId);
           // bulk-update uses email as identifier, keep only updatable fields
           return {
             email: vol.email,
+            ...(linkedMarketplaceEventId != null && {
+              marketplace_event_id: linkedMarketplaceEventId,
+              event_id: linkedMarketplaceEventId,
+            }),
             ...(enriched.gender && { gender: enriched.gender }),
             ...(enriched.employed && { employed: enriched.employed }),
             ...(enriched.company_name && { company_name: enriched.company_name }),
@@ -542,15 +563,19 @@ serve(async (req) => {
         console.log(`✅ Marketplace found: ${marketplace.name}`);
 
         // Resolve Surpluss marketplace event ID first (same logic as demographics) — hours sync uses this id so titles need not match exactly.
-        let surplussEventId: number | null = null;
-        const targetName = normalize(marketplace.name);
-        if (surplussEventsMap.has(targetName)) {
-          surplussEventId = surplussEventsMap.get(targetName)!;
-        } else {
-          for (const [eventName, eventId] of surplussEventsMap) {
-            if (eventName.includes(targetName) || targetName.includes(eventName)) {
-              surplussEventId = eventId;
-              break;
+        let surplussEventId: number | null = marketplace.external_id != null
+          ? Number(marketplace.external_id)
+          : null;
+        if (surplussEventId == null) {
+          const targetName = normalize(marketplace.name);
+          if (surplussEventsMap.has(targetName)) {
+            surplussEventId = surplussEventsMap.get(targetName)!;
+          } else {
+            for (const [eventName, eventId] of surplussEventsMap) {
+              if (eventName.includes(targetName) || targetName.includes(eventName)) {
+                surplussEventId = eventId;
+                break;
+              }
             }
           }
         }
@@ -753,6 +778,7 @@ serve(async (req) => {
 
               if (surplussEventId != null) {
                 depPayload.marketplace_event_id = surplussEventId;
+                depPayload.event_id = surplussEventId;
               }
 
               try {
