@@ -567,15 +567,21 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
     const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
     const trainingImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
     const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
     if (selectedEmailType === 'welcome') {
       return (
         <div className="bg-white">
-          {/* Hero Image */}
+           {/* Hero Image */}
           <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
           
+          {/* The Surpluss Logo */}
+          <div className="flex justify-center pt-5">
+            <img src={surplussLogoUrl} alt="The Surpluss" className="h-[45px]" />
+          </div>
+          
           {/* Red Vertical Line */}
-          <div className="flex justify-center py-4">
+          <div className="flex justify-center py-3">
             <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           
@@ -625,7 +631,12 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
           {/* Hero Image */}
           <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
           
-          <div className="flex justify-center py-4">
+          {/* The Surpluss Logo */}
+          <div className="flex justify-center pt-5">
+            <img src={surplussLogoUrl} alt="The Surpluss" className="h-[45px]" />
+          </div>
+          
+          <div className="flex justify-center py-3">
             <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           
@@ -664,7 +675,12 @@ export const EmailManagement = ({ onBack }: EmailManagementProps) => {
           {/* Hero Image */}
           <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
           
-          <div className="flex justify-center py-4">
+          {/* The Surpluss Logo */}
+          <div className="flex justify-center pt-5">
+            <img src={surplussLogoUrl} alt="The Surpluss" className="h-[45px]" />
+          </div>
+          
+          <div className="flex justify-center py-3">
             <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           

@@ -200,10 +200,14 @@ export const EmailTemplateCenter = ({ onBack }: EmailTemplateCenterProps) => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+  const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
   const renderBrandedPreview = (tpl: EmailTemplateInput) => (
     <div className="bg-white rounded-lg overflow-hidden shadow-sm border max-w-[600px] mx-auto text-left" style={{ fontFamily: "'Rubik', Arial, sans-serif" }}>
       <img src={heroImageUrl} alt="Gift It Forward" className="w-full h-auto" />
+      <div className="flex justify-center pt-5">
+        <img src={surplussLogoUrl} alt="The Surpluss" className="h-[45px]" />
+      </div>
       <div className="flex justify-center py-3">
         <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
       </div>

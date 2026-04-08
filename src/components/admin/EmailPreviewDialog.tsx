@@ -40,6 +40,7 @@ export const EmailPreviewDialog = ({
   const heroImageUrl = '/images/email/gif-hero-banner.jpg';
   const trainingImageUrl = '/images/email/training-module-banner.jpg';
   const dubaiHoldingLogoUrl = '/images/email/dubai-holding-logo.png';
+  const surplussLogoUrl = '/images/email/surpluss-logo.png';
 
   return (
     <Dialog>
@@ -65,6 +66,16 @@ export const EmailPreviewDialog = ({
               className="w-full h-auto"
               style={{ display: 'block', maxHeight: '200px', objectFit: 'cover', objectPosition: 'center' }}
             />
+          </div>
+          
+          {/* The Surpluss Logo */}
+          <div className="flex justify-center pt-5">
+            <img src={surplussLogoUrl} alt="The Surpluss" className="h-[45px]" />
+          </div>
+          
+          {/* Red Vertical Line */}
+          <div className="flex justify-center py-3">
+            <div className="w-[2px] h-[50px] bg-[#DA291C]"></div>
           </div>
           
           {/* Main Title */}

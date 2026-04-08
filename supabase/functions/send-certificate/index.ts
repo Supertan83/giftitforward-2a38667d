@@ -103,6 +103,7 @@ function getCompletionEmailHtml(
   cleanFirstName: string,
   heroImageUrl: string,
   dubaiHoldingLogoUrl: string,
+  surplussLogoUrl: string,
   participationDetails: string
 ): string {
   return `
@@ -125,9 +126,16 @@ function getCompletionEmailHtml(
                 </td>
               </tr>
               
+              <!-- The Surpluss Logo -->
+              <tr>
+                <td style="padding: 20px 0 0 0; text-align: center;">
+                  <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                </td>
+              </tr>
+              
               <!-- Red Vertical Line -->
               <tr>
-                <td style="padding: 20px 0 10px 0; text-align: center;">
+                <td style="padding: 15px 0 10px 0; text-align: center;">
                   <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
                 </td>
               </tr>
@@ -214,6 +222,7 @@ function getAttendanceEmailHtml(
   cleanFirstName: string,
   heroImageUrl: string,
   dubaiHoldingLogoUrl: string,
+  surplussLogoUrl: string,
   participationDetails: string
 ): string {
   return `
@@ -236,9 +245,16 @@ function getAttendanceEmailHtml(
                 </td>
               </tr>
               
+              <!-- The Surpluss Logo -->
+              <tr>
+                <td style="padding: 20px 0 0 0; text-align: center;">
+                  <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                </td>
+              </tr>
+              
               <!-- Red Vertical Line -->
               <tr>
-                <td style="padding: 20px 0 10px 0; text-align: center;">
+                <td style="padding: 15px 0 10px 0; text-align: center;">
                   <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
                 </td>
               </tr>
@@ -376,6 +392,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
     const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
     // Format marketplace details
     const marketplaceName = marketplace?.name || 'Gift It Forward Marketplace';
@@ -399,8 +416,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Get email HTML based on certificate type
     const emailHtml = certificateType === 'attendance'
-      ? getAttendanceEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails)
-      : getCompletionEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails);
+      ? getAttendanceEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, surplussLogoUrl, participationDetails)
+      : getCompletionEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, surplussLogoUrl, participationDetails);
 
     // Email subject based on certificate type and family member flag
     const emailSubject = certificateType === 'attendance'
