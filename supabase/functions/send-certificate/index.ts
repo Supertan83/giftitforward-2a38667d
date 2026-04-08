@@ -392,6 +392,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
     const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
     // Format marketplace details
     const marketplaceName = marketplace?.name || 'Gift It Forward Marketplace';
@@ -415,8 +416,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Get email HTML based on certificate type
     const emailHtml = certificateType === 'attendance'
-      ? getAttendanceEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails)
-      : getCompletionEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, participationDetails);
+      ? getAttendanceEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, surplussLogoUrl, participationDetails)
+      : getCompletionEmailHtml(cleanFirstName, heroImageUrl, dubaiHoldingLogoUrl, surplussLogoUrl, participationDetails);
 
     // Email subject based on certificate type and family member flag
     const emailSubject = certificateType === 'attendance'
