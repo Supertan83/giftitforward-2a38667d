@@ -1222,6 +1222,7 @@ async function sendWelcomeEmailWithQR(
     const heroImageUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
     const trainingImageUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/training-module-banner.jpg`;
     const dubaiHoldingLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    const surplussLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
     // Generate family member QR sections for Resend HTML (table-based)
     const familyQRSections = familyQRs.map((fam, index) => {
@@ -1324,6 +1325,20 @@ async function sendWelcomeEmailWithQR(
                   <tr>
                     <td>
                       <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- The Surpluss Logo -->
+                  <tr>
+                    <td style="padding: 20px 0 0 0; text-align: center;">
+                      <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Red Vertical Line -->
+                  <tr>
+                    <td style="padding: 15px 0 10px 0; text-align: center;">
+                      <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
                     </td>
                   </tr>
                   
@@ -1562,6 +1577,8 @@ async function sendWelcomeEmailWithQR(
                   <td align="center" style="padding: 20px 0;">
                     <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
                       <tr><td><img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" /></td></tr>
+                      <tr><td style="padding: 20px 0 0 0; text-align: center;"><img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" /></td></tr>
+                      <tr><td style="padding: 15px 0 10px 0; text-align: center;"><div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div></td></tr>
                       <tr><td style="padding: 30px 30px 20px 30px; text-align: center;"><h1 style="margin: 0; font-size: 28px; color: #1a1a1a; font-weight: normal;">Thank you for registering<br>as a Gift It Forward volunteer</h1></td></tr>
                       <tr><td style="padding: 0 30px 15px 30px;"><p style="margin: 0; font-size: 15px; color: #333333;"><strong>Dear ${firstName},</strong></p></td></tr>
                       <tr><td style="padding: 0 30px 15px 30px;"><p style="margin: 0; font-size: 14px; color: #333333; line-height: 1.6;">Your volunteer registration has been <strong>successfully confirmed</strong> for the <strong>Gift It Forward marketplace</strong>.</p></td></tr>
@@ -1652,6 +1669,7 @@ async function sendDuplicateNotificationEmail(
     const supabaseProjectUrl = Deno.env.get('SUPABASE_URL') || '';
     const heroImageUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
     const dubaiHoldingLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    const surplussLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
     
     const emailSubject = "Gift It Forward - Registration Update";
     
@@ -1679,6 +1697,20 @@ async function sendDuplicateNotificationEmail(
                   <tr>
                     <td>
                       <img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- The Surpluss Logo -->
+                  <tr>
+                    <td style="padding: 20px 0 0 0; text-align: center;">
+                      <img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" />
+                    </td>
+                  </tr>
+                  
+                  <!-- Red Vertical Line -->
+                  <tr>
+                    <td style="padding: 15px 0 10px 0; text-align: center;">
+                      <div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div>
                     </td>
                   </tr>
                   
@@ -1828,6 +1860,7 @@ async function sendEventAddedConfirmationEmail(
     const supabaseProjectUrl = Deno.env.get('SUPABASE_URL') || '';
     const heroImageUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
     const dubaiHoldingLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+    const surplussLogoUrl = `${supabaseProjectUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
     
     const emailSubject = "Gift It Forward - New Event Registration Confirmed";
     
