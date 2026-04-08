@@ -103,6 +103,7 @@ function getCompletionEmailHtml(
   cleanFirstName: string,
   heroImageUrl: string,
   dubaiHoldingLogoUrl: string,
+  surplussLogoUrl: string,
   participationDetails: string
 ): string {
   return `
@@ -221,6 +222,7 @@ function getAttendanceEmailHtml(
   cleanFirstName: string,
   heroImageUrl: string,
   dubaiHoldingLogoUrl: string,
+  surplussLogoUrl: string,
   participationDetails: string
 ): string {
   return `
