@@ -651,6 +651,7 @@ function generateEmailHTML(emailType: string, firstName: string, supabaseUrl: st
 function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: string, volunteerData?: VolunteerData): string {
   const heroImageUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/gif-hero-banner.jpg`;
   const dubaiHoldingLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/dubai-holding-logo.png`;
+  const surplussLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/surpluss-logo.png`;
 
   // Token replacement map — aligned with send-campaign-email
   const volEmail = volunteerData?.email || '';
@@ -718,7 +719,8 @@ function generateCustomTemplateHTML(template: CustomTemplateData, supabaseUrl: s
 <tr><td align="center" style="padding: 20px 0;">
 <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; max-width: 600px;">
 <tr><td><img src="${heroImageUrl}" alt="Gift It Forward" width="600" style="display: block; width: 100%; height: auto;" /></td></tr>
-<tr><td style="padding: 20px 0 10px 0; text-align: center;"><div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div></td></tr>
+<tr><td style="padding: 20px 0 0 0; text-align: center;"><img src="${surplussLogoUrl}" alt="The Surpluss" height="45" style="display: block; margin: 0 auto;" /></td></tr>
+<tr><td style="padding: 15px 0 10px 0; text-align: center;"><div style="width: 2px; height: 50px; background-color: #DA291C; margin: 0 auto;"></div></td></tr>
 <tr><td style="padding: 10px 40px 20px 40px; text-align: center;"><h1 style="margin: 0; font-size: 24px; color: #5D5348; font-weight: normal; line-height: 1.4; font-family: Georgia, 'Times New Roman', serif;">${replaceTokens(template.subject)}</h1></td></tr>
 <tr><td style="padding: 0 40px 15px 40px;"><p style="margin: 0; font-size: 14px; color: #1a1a1a; font-weight: bold;">${replaceTokens(template.greeting)}</p></td></tr>
 ${bodySectionsHtml}
