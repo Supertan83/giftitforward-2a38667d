@@ -201,9 +201,27 @@ serve(async (req) => {
     let volunteerHoursSync: Record<string, unknown> | null = null;
 
     // 1. Fetch marketplace events for slug resolution
-    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("name");
+    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name");
     const slugMap = buildEventSlugMap(marketplaceEvents || []);
     console.log(`Built slug map with ${slugMap.size} marketplace events`);
+
+    // 1b. Determine marketplace IDs early so we can filter volunteers
+    let marketplaceIdsToProcess: string[] = [];
+    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
+      marketplaceIdsToProcess = marketplace_ids;
+    } else if (marketplace_id) {
+      marketplaceIdsToProcess = [marketplace_id];
+    }
+
+    // 1c. Resolve marketplace names for filtering volunteers by events_list
+    const marketplaceNamesForFilter: string[] = [];
+    if (marketplaceIdsToProcess.length > 0) {
+      for (const mpId of marketplaceIdsToProcess) {
+        const mp = (marketplaceEvents || []).find((m: any) => m.id === mpId);
+        if (mp) marketplaceNamesForFilter.push(mp.name);
+      }
+      console.log(`Will filter volunteers for marketplaces: ${marketplaceNamesForFilter.join(", ")}`);
+    }
 
     // 2. Fetch all previously synced emails for deduplication
     const { data: previousSyncs } = await supabase
@@ -237,28 +255,59 @@ serve(async (req) => {
     // Fetch volunteer QR card statuses to enrich volunteer data
     const { data: allVolCards } = await supabase
       .from("volunteer_qr_cards")
-      .select("volunteer_id, status")
+      .select("volunteer_id, status, marketplace_id")
       .not("volunteer_id", "is", null);
 
     const cardStatusByVolunteerId = new Map<string, string>();
+    // When marketplace filtering, use marketplace-specific card status
+    const cardStatusByVolunteerForMarketplace = new Map<string, string>();
     if (allVolCards) {
       for (const vc of allVolCards) {
         const vid = vc.volunteer_id as string;
         const st = vc.status as string;
-        // Prioritize checked_out > checked_in > inactive
+        // Global: Prioritize checked_out > checked_in > inactive
         const existing = cardStatusByVolunteerId.get(vid);
         if (!existing || st === "checked_out" || (st === "checked_in" && existing === "inactive")) {
           cardStatusByVolunteerId.set(vid, st);
+        }
+        // Marketplace-specific status
+        if (marketplaceIdsToProcess.length > 0 && marketplaceIdsToProcess.includes(vc.marketplace_id as string)) {
+          const existingMp = cardStatusByVolunteerForMarketplace.get(vid);
+          if (!existingMp || st === "checked_out" || (st === "checked_in" && existingMp === "inactive")) {
+            cardStatusByVolunteerForMarketplace.set(vid, st);
+          }
         }
       }
     }
     console.log(`Mapped ${cardStatusByVolunteerId.size} volunteer card statuses`);
 
-    const volunteers = (allVolunteers || []).map((v: any) => ({
+    // Use marketplace-specific card status when filtering by marketplace
+    const statusMap = marketplaceIdsToProcess.length > 0 ? cardStatusByVolunteerForMarketplace : cardStatusByVolunteerId;
+
+    let allEnrichedVolunteers = (allVolunteers || []).map((v: any) => ({
       ...v,
-      _card_status: cardStatusByVolunteerId.get(v.id) || "inactive",
+      _card_status: statusMap.get(v.id) || cardStatusByVolunteerId.get(v.id) || "inactive",
     }));
-    console.log(`Fetched ${volunteers.length} volunteers from pending_volunteers`);
+
+    // 3b. Filter volunteers by marketplace events_list when marketplace IDs are provided
+    if (marketplaceNamesForFilter.length > 0) {
+      const normalizedMarketplaceNames = marketplaceNamesForFilter.map((n) => normalizeSlug(n));
+      const beforeCount = allEnrichedVolunteers.length;
+
+      allEnrichedVolunteers = allEnrichedVolunteers.filter((v: any) => {
+        if (!v.events_list) return false;
+        const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim()));
+        return slugs.some((slug: string) =>
+          normalizedMarketplaceNames.some(
+            (mpName) => mpName.includes(slug) || slug.includes(mpName),
+          ),
+        );
+      });
+      console.log(`Filtered volunteers: ${beforeCount} → ${allEnrichedVolunteers.length} (for ${marketplaceNamesForFilter.join(", ")})`);
+    }
+
+    const volunteers = allEnrichedVolunteers;
+    console.log(`Processing ${volunteers.length} volunteers`);
 
     // 4. Separate new vs already-synced volunteers
     const newVolunteers: any[] = [];
@@ -409,12 +458,7 @@ serve(async (req) => {
     }
 
     // 7. Demographics update (optional, only if marketplace IDs provided)
-    let marketplaceIdsToProcess: string[] = [];
-    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
-      marketplaceIdsToProcess = marketplace_ids;
-    } else if (marketplace_id) {
-      marketplaceIdsToProcess = [marketplace_id];
-    }
+    // marketplaceIdsToProcess was already determined in step 1b
 
     if (marketplaceIdsToProcess.length > 0) {
       const volunteerHourRows: {
