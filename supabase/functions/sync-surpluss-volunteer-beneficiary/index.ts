@@ -458,12 +458,7 @@ serve(async (req) => {
     }
 
     // 7. Demographics update (optional, only if marketplace IDs provided)
-    let marketplaceIdsToProcess: string[] = [];
-    if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
-      marketplaceIdsToProcess = marketplace_ids;
-    } else if (marketplace_id) {
-      marketplaceIdsToProcess = [marketplace_id];
-    }
+    // marketplaceIdsToProcess was already determined in step 1b
 
     if (marketplaceIdsToProcess.length > 0) {
       const volunteerHourRows: {
