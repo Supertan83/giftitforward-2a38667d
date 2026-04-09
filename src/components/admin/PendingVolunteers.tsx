@@ -1116,16 +1116,13 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       if (exportMarketplace !== 'all') {
         const selectedMkt = marketplaces.find(m => m.id === exportMarketplace);
         if (selectedMkt) {
-          const mktSlug = selectedMkt.name.toLowerCase().replace(/\s+/g, '-');
-          const mktNormalized = selectedMkt.name.toLowerCase().replace(/\s+/g, ' ').trim();
+          const mktNormalized = selectedMkt.name.toLowerCase().replace(/[^a-z0-9]/g, '');
           data = data.filter(v => {
             if (!v.events_list) return false;
             return v.events_list.split(',').some((e: string) => {
-              const trimmed = e.trim();
-              // Match by slug substring or formatted name
-              if (trimmed === mktSlug || trimmed.includes(mktSlug)) return true;
-              const formatted = formatEventName(trimmed).toLowerCase().replace(/\s+/g, ' ').trim();
-              return formatted === mktNormalized;
+              const formatted = formatEventName(e.trim());
+              const normalizedKey = formatted.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return normalizedKey === mktNormalized;
             });
           });
         }
