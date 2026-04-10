@@ -1,48 +1,42 @@
 
+Issue confirmed
 
-## Fix: Allocation Numbers Mismatch (36,662 vs 37,225)
+- The Sync Monitor button calls `sync-surpluss-event-allocations`, not `allocate-donations-to-marketplace`.
+  - `src/components/admin/SurplussSyncMonitor.tsx:200,228`
+- The earlier duplicate-material fix exists in `supabase/functions/allocate-donations-to-marketplace/index.ts`, but `sync-surpluss-event-allocations` still has the old overwrite behavior.
+  - `supabase/functions/sync-surpluss-event-allocations/index.ts:340-399`
+- That function loops through each `allocated_materials` entry and updates the same marketplace allocation row repeatedly. If the same material appears twice, the last amount wins instead of the summed total.
 
-### Root Cause
+Why it shows 37k+ for 1 second, then drops
 
-The Surpluss API returns duplicate material IDs within the same allocation container. For example, event 33 (Construction Morning) has:
+- The marketplace starts from the corrected totals.
+- During sync, rows are updated one by one.
+- The UI listens to realtime changes on `marketplace_item_allocations` and refetches on every update (`src/hooks/useMarketplaceAllocations.ts:195-205`), so you briefly see intermediate totals before the final bad overwrite settles back to `36,662`.
 
-| Material | Surpluss entries | Our DB | Correct total |
-|---|---|---|---|
-| #987 Blankets | 107 + 120 | 120 (last write wins) | 227 |
-| #658 Pillows | 100 + 123 | 123 | 223 |
-| #621 Napkins | 356 + 1700 | 1700 | 2056 |
+Plan
 
-The `allocate-donations-to-marketplace` edge function processes each material entry individually, and when it encounters a duplicate material_id, the `upsertAllocation` function **overwrites** the previous amount instead of **summing** them. This causes a 563-item shortfall (36,662 vs 37,225).
+1. Fix `supabase/functions/sync-surpluss-event-allocations/index.ts`
+   - Add the same aggregation logic already used in `allocate-donations-to-marketplace`.
+   - Build a per-marketplace material map before calling `syncMaterial`.
+   - Sum duplicate `material_id` / `donation_metadata_id` entries.
+   - Aggregate both allocated and distributed amounts.
+   - Preserve title/category/subcategory and keep `surpluss_allocation_id` on the final upsert.
 
-### Fix
+2. Align all sync entry points
+   - Sync Monitor, Allocation Management, and scheduled auto-sync all use `sync-surpluss-event-allocations`, so fixing this one function will stop manual and automatic resyncs from undoing the totals.
+   - If needed, factor the shared aggregation logic so the two allocation-sync functions cannot drift again.
 
-**1. Code fix** — `allocate-donations-to-marketplace/index.ts`: Before calling `upsertAllocation`, aggregate all amounts per material_id per marketplace. Build a map of `materialId → {title, totalAmount, category, subcategory}` and sum duplicate entries, then upsert once per material with the correct total.
+3. Re-run the sync after the fix
+   - Re-sync Construction Morning specifically first.
+   - Confirm the duplicate-material rows stay at the summed values and the marketplace total remains `37,225`.
 
-**2. Database fix** — Re-run the sync after deploying the code fix. Or manually correct the 3 affected allocations:
+4. Verify end to end
+   - Check the database total for event `33` / marketplace `6ed111b0-f003-46e8-a719-d76cc1800431`.
+   - Confirm the UI no longer drops from `37k+` to `36,662`.
+   - Confirm a later scheduled sync also keeps the correct total.
 
-```sql
--- Blankets #987: 120 → 227
--- Pillows #658: 123 → 223  
--- Napkins #621: 1700 → 2056
-UPDATE marketplace_item_allocations SET allocated_quantity = 227
-WHERE item_type_id = (SELECT id FROM item_types WHERE external_material_id = 987)
-  AND marketplace_id = '6ed111b0-f003-46e8-a719-d76cc1800431';
+Technical details
 
-UPDATE marketplace_item_allocations SET allocated_quantity = 223
-WHERE item_type_id = (SELECT id FROM item_types WHERE external_material_id = 658)
-  AND marketplace_id = '6ed111b0-f003-46e8-a719-d76cc1800431';
-
-UPDATE marketplace_item_allocations SET allocated_quantity = 2056
-WHERE item_type_id = (SELECT id FROM item_types WHERE external_material_id = 621)
-  AND marketplace_id = '6ed111b0-f003-46e8-a719-d76cc1800431';
-```
-
-After this fix, Construction Morning will show **37,225** — matching Surpluss exactly.
-
-### Changes
-
-| Action | Type |
-|---|---|
-| Aggregate duplicate material amounts before upserting in `allocate-donations-to-marketplace` | Code fix (edge function) |
-| Correct 3 allocation quantities for Construction Morning | Database fix |
-
+- No database schema or RLS changes are needed.
+- The bug is in the sync function, not the display layer.
+- The previous fix was applied to a different edge function than the one used by the Sync Monitor flow.
