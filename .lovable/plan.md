@@ -1,57 +1,31 @@
 
 
-## Fix: Reset 1,161 Stuck QR Cards from She Thrives (Feb 28)
+## Fix: Beneficiary Count Shows 16 Instead of 1,183 for She Thrives
 
-### The Problem
+### What Happened
 
-The earlier "Archive & Reset" failed at the reset step (before the batching fix was applied). As a result:
-- **1,161 cards** are still in `checked_out` status linked to She Thrives (marketplace `ff0d8005-7c85-4a8d-9e0c-147475e7b0eb`)
-- The activation code (line 227) blocks any `checked_out` card with "This card has already been used today"
-- Card `QR-MLTC4HWO-5FWJ` is one of these 1,161 stuck cards
-- **These cards will not work at tomorrow's marketplace** unless reset
+When we reset the 1,161 stuck cards earlier, their `marketplace_id` was cleared (set to NULL). This was necessary to make the cards reusable for tomorrow's events. However, the "Beneficiaries" stat card counts cards currently linked to a marketplace (`qr_cards` + `archived_card_data`). Since almost all cards were unlinked, only the 16 still-active cards are counted.
 
-The good news: the duplicate archived records were already cleaned up (0 records in `archived_card_data` for She Thrives), so there's no double-counting risk.
+The demographics section below correctly shows 1,183 because that data is stored separately in the `demographics_reach` field on the marketplace record.
 
-### Current Card Status Summary
+### Fix
 
-| Status | Count |
-|---|---|
-| inactive (ready to use) | 907 |
-| checked_out (stuck from Feb 28) | 1,169 |
-| active (currently in use) | 24 |
-
-### Fix (database update only)
-
-Reset all 1,161 checked_out cards linked to the She Thrives marketplace back to `inactive` so they can be used tomorrow:
+**Database fix**: Set `manual_beneficiary_count = 1183` for the She Thrives marketplace. This field already exists and the reports UI already prefers it when set (line 210 of MarketplaceReports.tsx).
 
 ```sql
-UPDATE qr_cards
-SET status = 'inactive',
-    credit_balance = 0,
-    total_items_collected = 0,
-    collected_items = '[]'::jsonb,
-    gender = NULL,
-    marital_status = NULL,
-    nationality = NULL,
-    children_count = 0,
-    marketplace_id = NULL,
-    activated_at = NULL
-WHERE marketplace_id = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb'
-  AND status = 'checked_out';
+UPDATE marketplace_events 
+SET manual_beneficiary_count = 1183 
+WHERE id = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb';
 ```
 
-This will:
-- Reset 1,161 cards to `inactive` (usable at tomorrow's marketplace)
-- Clear all old demographic data from Feb 28
-- Remove the She Thrives marketplace link
-- **Not** affect the 8 checked_out cards linked to other marketplaces
-- **Not** create any archived records (the beneficiary data for She Thrives is already captured in demographics and Surpluss sync)
+**Code fix**: Update the single-marketplace detail view in `useMarketplaceAllocations.ts` to also prefer `manual_beneficiary_count` or `demographics_reach` over the card count for completed marketplaces. Currently only the reports list view does this — the detail view always uses `allBeneficiaries.length`.
 
-After this fix, you'll have **2,068 inactive cards** ready for tomorrow's events.
+### Changes
 
-### Why this is safe
+| Action | Type |
+|---|---|
+| Set `manual_beneficiary_count = 1183` for She Thrives | Database fix |
+| Use `manual_beneficiary_count ?? demographics_reach` as beneficiary total for completed events in the detail view | Code fix in `useMarketplaceAllocations.ts` |
 
-- The `archived_card_data` table has 0 records for She Thrives (we deleted the duplicates earlier), so no double-counting
-- The She Thrives beneficiary data is already preserved in the marketplace demographics editor and was synced to Surpluss — card-level data is not needed
-- The batching fix from the previous update ensures future Archive & Reset operations will work correctly for large card volumes
+This ensures that completed marketplaces whose cards have been reset still show the correct historical beneficiary count.
 
