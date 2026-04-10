@@ -1,37 +1,49 @@
 
 
-## Fix Incorrect External ID Mappings for April Marketplace Events
+## Diagnosis: Archive & Reset Partially Failed — Causing Double-Counted Beneficiaries
 
-### Root Cause
-**6 out of 10 upcoming marketplace events have wrong `external_id` values** in the database. When the auto-sync runs, it queries the Surpluss API using these incorrect IDs, which return 0 allocations because they point to different events on the Surpluss platform.
+### What happened
 
-For example, "Mens Construction Facility Workers Marketplace - Morning Event" has `external_id: 34` in GIF, but on the Surpluss platform, ID 34 is actually the **Afternoon** Event. The Morning Event is ID 33.
+1. **"Archive & Reset Cards"** was pressed for the **She Thrives Women Workers Marketplace February 28**.
+2. The **archive step succeeded**: 1,000 card records were copied into the `archived_card_data` table.
+3. The **reset step failed** (visible in the screenshot as "Reset Failed — An error occurred"): the 1,000+ cards were NOT cleared — they still have `marketplace_id` pointing to She Thrives and `status = checked_out`.
+4. The beneficiary count formula is `archived_card_data count + qr_cards count` for a marketplace (line 920 of `useMarketplaceAllocations.ts`). So now it shows **1,000 (archived) + 1,177 (still-linked cards) = 2,177** instead of the original ~1,183.
 
-### Correct Mappings (verified from Surpluss API)
+**The archive should not have been run on a completed past marketplace that still had 1,169 stuck cards.** It created duplicate records.
 
-| Marketplace Name | Current ext_id (WRONG) | Correct ext_id |
-|---|---|---|
-| Mens Construction Facility Workers Marketplace - Morning Event | 34 | **33** |
-| Mens Construction Facility Workers Marketplace - Afternoon Event | 36 | **34** |
-| Mens Aviation Workers Marketplace - Morning Event | 33 | **35** |
-| Mens Aviation Workers Marketplace - Afternoon Event | NULL | **36** |
-| Taxi Drivers Marketplace - Morning Event | 39 | **37** |
-| Taxi Drivers Marketplace - Morning Event Day 2 | 37 | **39** |
+### What are "Stuck Cards"?
 
-4 events already have the correct mapping (Women Community Workers Morning/Afternoon, Taxi Drivers Afternoon, Taxi Drivers Afternoon Day 2).
+Cards in `checked_out` status from the Feb 28 She Thrives event. These are cards that were used by beneficiaries and checked out normally — they are NOT errors. They simply weren't reset after that event ended. The system labels them "stuck" because they can't be reused until reset.
 
-### Fix (database only, no code changes)
-Run a single SQL migration to correct all 6 external_id values:
+### Fix Plan (database corrections, no code changes)
+
+**Step 1 — Remove the duplicate archived records**
+The 1,000 archived records were created by the failed archive-and-reset. Delete them to restore the correct count:
 
 ```sql
-UPDATE marketplace_events SET external_id = 33 WHERE id = '6ed111b0-f003-46e8-a719-d76cc1800431'; -- Construction Morning
-UPDATE marketplace_events SET external_id = 34 WHERE id = '3e0ddc6e-5e20-4ab4-9e81-51f2ae2dbd63'; -- Construction Afternoon
-UPDATE marketplace_events SET external_id = 35 WHERE id = '3f44eb86-f1c5-48a4-8bf3-5b70b41c5bfd'; -- Aviation Morning
-UPDATE marketplace_events SET external_id = 36 WHERE id = 'accc4d0e-de1f-4625-90e1-79c810f7d1fe'; -- Aviation Afternoon
-UPDATE marketplace_events SET external_id = 37 WHERE id = 'fa2ad5be-cf2c-4fd4-89f3-2a41d93b2cf5'; -- Taxi Morning
-UPDATE marketplace_events SET external_id = 39 WHERE id = '5404f771-ef88-41d0-a05d-584c36699e67'; -- Taxi Morning Day 2
+DELETE FROM archived_card_data 
+WHERE marketplace_id = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb';
 ```
 
-### After the Fix
-Once the external_ids are corrected, the auto-sync will immediately start pulling the correct allocations from the Surpluss platform. I will trigger a manual sync to verify everything works.
+This restores the beneficiary count to the original ~1,177 (16 active + 1,161 checked_out cards still linked).
+
+**Step 2 — Understand the correct workflow going forward**
+
+The "Archive & Reset" button is designed for **end-of-event cleanup**: after a marketplace is fully complete and you want to free up QR cards for the next event. It archives the beneficiary data for historical records and then wipes the cards clean.
+
+For the She Thrives Feb 28 event (which is already completed), the correct action depends on whether you still need those cards for upcoming April events:
+
+- **If you need the physical QR cards for April events**: Use "Reset All Cards" (which clears them without archiving). The beneficiary data for She Thrives is already captured in the demographics editor and Surpluss sync — you don't need the card-level archive.
+- **If you want to preserve card-level data AND free cards**: First fix the archived data, then run Archive & Reset again (but this time the reset should succeed since we'll have fewer cards).
+
+**Step 3 (recommended) — Fix the reset failure root cause**
+
+The reset likely failed because the `.in('id', cardIds)` query had too many IDs (1,177+). The Supabase/PostgREST URL length limit can cause failures with large `IN` clauses. I will update the `archiveAndResetCards` and `resetAllCardsForMarketplace` mutations to batch the reset into chunks of 200 IDs at a time.
+
+### Summary of changes
+
+| Action | Type |
+|---|---|
+| Delete 1,000 duplicate archived records for She Thrives | Database fix |
+| Batch the reset operation into chunks of 200 | Code fix in `useSupabaseData.ts` |
 
