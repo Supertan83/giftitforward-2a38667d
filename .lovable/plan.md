@@ -1,31 +1,58 @@
 
 
-## Fix: Beneficiary Count Shows 16 Instead of 1,183 for She Thrives
+## Fix: Marketplace External IDs Are Swapped — Items Landing in Wrong Marketplace
 
 ### What Happened
 
-When we reset the 1,161 stuck cards earlier, their `marketplace_id` was cleared (set to NULL). This was necessary to make the cards reusable for tomorrow's events. However, the "Beneficiaries" stat card counts cards currently linked to a marketplace (`qr_cards` + `archived_card_data`). Since almost all cards were unlinked, only the 16 still-active cards are counted.
+The Surpluss sync created 51 item allocations (36,662 total qty) and placed them in **"Mens Aviation Workers Marketplace - Morning Event"** (`3f44eb86`), but these items actually belong to **"Mens Construction Facility Workers Marketplace - Morning Event"** (`6ed111b0`).
 
-The demographics section below correctly shows 1,183 because that data is stored separately in the `demographics_reach` field on the marketplace record.
+The root cause: during the initial auto-link/sync, the `external_id` values were assigned before the correct marketplace names existed (or the fuzzy name matching confused "Construction" and "Aviation" since they share many words like "Mens", "Workers", "Marketplace", "Morning Event"). The sync log confirms `external_id: 33` was used to sync data into the Aviation marketplace instead of Construction.
 
-### Fix
+Additionally, `external_id = 35` is assigned to TWO marketplaces ("Dry Run Friday" and "Aviation Morning"), which will cause future sync conflicts.
 
-**Database fix**: Set `manual_beneficiary_count = 1183` for the She Thrives marketplace. This field already exists and the reports UI already prefers it when set (line 210 of MarketplaceReports.tsx).
+### Current (Wrong) State
+
+| Marketplace | external_id | Has Allocations? |
+|---|---|---|
+| Mens Construction Morning | 33 | 0 items (should have ~37K) |
+| Mens Construction Afternoon | 34 | 0 items |
+| Mens Aviation Morning | 35 (duplicate!) | 51 allocations, 36,662 qty (wrong!) |
+| Dry Run Friday | 35 (duplicate!) | 1 allocation |
+| Mens Aviation Afternoon | 36 | 0 items |
+
+### Fix Plan
+
+**Step 1 — Move all 51 allocations from Aviation Morning to Construction Morning**
 
 ```sql
-UPDATE marketplace_events 
-SET manual_beneficiary_count = 1183 
-WHERE id = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb';
+UPDATE marketplace_item_allocations
+SET marketplace_id = '6ed111b0-f003-46e8-a719-d76cc1800431'
+WHERE marketplace_id = '3f44eb86-f1c5-48a4-8bf3-5b70b41c5bfd';
 ```
 
-**Code fix**: Update the single-marketplace detail view in `useMarketplaceAllocations.ts` to also prefer `manual_beneficiary_count` or `demographics_reach` over the card count for completed marketplaces. Currently only the reports list view does this — the detail view always uses `allBeneficiaries.length`.
+This moves the 36,662 items to the correct Construction marketplace without losing any data.
 
-### Changes
+**Step 2 — Fix the duplicate external_id = 35**
+
+Remove `external_id` from "Dry Run Friday Marketplace" (it's an old test marketplace that shouldn't be linked to a current Surpluss event):
+
+```sql
+UPDATE marketplace_events
+SET external_id = NULL
+WHERE id = 'd21fba59-2bf2-4a47-bd10-f88278d4c95e';
+```
+
+**Step 3 — Verify correct external_id assignments**
+
+After the fix, we need to confirm that the Surpluss event IDs (33, 34, 35, 36) match the correct marketplace names on the Surpluss platform. I'll call the Surpluss API via the edge function to verify the event-to-name mapping and correct any remaining mismatches.
+
+### Summary
 
 | Action | Type |
 |---|---|
-| Set `manual_beneficiary_count = 1183` for She Thrives | Database fix |
-| Use `manual_beneficiary_count ?? demographics_reach` as beneficiary total for completed events in the detail view | Code fix in `useMarketplaceAllocations.ts` |
+| Move 51 allocations from Aviation to Construction marketplace | Database fix |
+| Remove duplicate `external_id = 35` from Dry Run marketplace | Database fix |
+| Verify Surpluss event ID → name mapping via API | Verification |
 
-This ensures that completed marketplaces whose cards have been reset still show the correct historical beneficiary count.
+No code changes needed — this is a data correction caused by incorrect auto-linking.
 
