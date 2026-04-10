@@ -10,8 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import gifLogo from '@/assets/gift-it-forward-logo.png';
 
 const ORGANIZATIONS = [
-  'Nabdh El Emarat',
+  'Nabdh Al Emarat',
   'ACKAF',
+  'FSC',
   'Volunteers.ae',
   'CDA',
   'Venue Volunteers',
