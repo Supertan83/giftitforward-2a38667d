@@ -1,49 +1,57 @@
 
 
-## Diagnosis: Archive & Reset Partially Failed — Causing Double-Counted Beneficiaries
+## Fix: Reset 1,161 Stuck QR Cards from She Thrives (Feb 28)
 
-### What happened
+### The Problem
 
-1. **"Archive & Reset Cards"** was pressed for the **She Thrives Women Workers Marketplace February 28**.
-2. The **archive step succeeded**: 1,000 card records were copied into the `archived_card_data` table.
-3. The **reset step failed** (visible in the screenshot as "Reset Failed — An error occurred"): the 1,000+ cards were NOT cleared — they still have `marketplace_id` pointing to She Thrives and `status = checked_out`.
-4. The beneficiary count formula is `archived_card_data count + qr_cards count` for a marketplace (line 920 of `useMarketplaceAllocations.ts`). So now it shows **1,000 (archived) + 1,177 (still-linked cards) = 2,177** instead of the original ~1,183.
+The earlier "Archive & Reset" failed at the reset step (before the batching fix was applied). As a result:
+- **1,161 cards** are still in `checked_out` status linked to She Thrives (marketplace `ff0d8005-7c85-4a8d-9e0c-147475e7b0eb`)
+- The activation code (line 227) blocks any `checked_out` card with "This card has already been used today"
+- Card `QR-MLTC4HWO-5FWJ` is one of these 1,161 stuck cards
+- **These cards will not work at tomorrow's marketplace** unless reset
 
-**The archive should not have been run on a completed past marketplace that still had 1,169 stuck cards.** It created duplicate records.
+The good news: the duplicate archived records were already cleaned up (0 records in `archived_card_data` for She Thrives), so there's no double-counting risk.
 
-### What are "Stuck Cards"?
+### Current Card Status Summary
 
-Cards in `checked_out` status from the Feb 28 She Thrives event. These are cards that were used by beneficiaries and checked out normally — they are NOT errors. They simply weren't reset after that event ended. The system labels them "stuck" because they can't be reused until reset.
+| Status | Count |
+|---|---|
+| inactive (ready to use) | 907 |
+| checked_out (stuck from Feb 28) | 1,169 |
+| active (currently in use) | 24 |
 
-### Fix Plan (database corrections, no code changes)
+### Fix (database update only)
 
-**Step 1 — Remove the duplicate archived records**
-The 1,000 archived records were created by the failed archive-and-reset. Delete them to restore the correct count:
+Reset all 1,161 checked_out cards linked to the She Thrives marketplace back to `inactive` so they can be used tomorrow:
 
 ```sql
-DELETE FROM archived_card_data 
-WHERE marketplace_id = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb';
+UPDATE qr_cards
+SET status = 'inactive',
+    credit_balance = 0,
+    total_items_collected = 0,
+    collected_items = '[]'::jsonb,
+    gender = NULL,
+    marital_status = NULL,
+    nationality = NULL,
+    children_count = 0,
+    marketplace_id = NULL,
+    activated_at = NULL
+WHERE marketplace_id = 'ff0d8005-7c85-4a8d-9e0c-147475e7b0eb'
+  AND status = 'checked_out';
 ```
 
-This restores the beneficiary count to the original ~1,177 (16 active + 1,161 checked_out cards still linked).
+This will:
+- Reset 1,161 cards to `inactive` (usable at tomorrow's marketplace)
+- Clear all old demographic data from Feb 28
+- Remove the She Thrives marketplace link
+- **Not** affect the 8 checked_out cards linked to other marketplaces
+- **Not** create any archived records (the beneficiary data for She Thrives is already captured in demographics and Surpluss sync)
 
-**Step 2 — Understand the correct workflow going forward**
+After this fix, you'll have **2,068 inactive cards** ready for tomorrow's events.
 
-The "Archive & Reset" button is designed for **end-of-event cleanup**: after a marketplace is fully complete and you want to free up QR cards for the next event. It archives the beneficiary data for historical records and then wipes the cards clean.
+### Why this is safe
 
-For the She Thrives Feb 28 event (which is already completed), the correct action depends on whether you still need those cards for upcoming April events:
-
-- **If you need the physical QR cards for April events**: Use "Reset All Cards" (which clears them without archiving). The beneficiary data for She Thrives is already captured in the demographics editor and Surpluss sync — you don't need the card-level archive.
-- **If you want to preserve card-level data AND free cards**: First fix the archived data, then run Archive & Reset again (but this time the reset should succeed since we'll have fewer cards).
-
-**Step 3 (recommended) — Fix the reset failure root cause**
-
-The reset likely failed because the `.in('id', cardIds)` query had too many IDs (1,177+). The Supabase/PostgREST URL length limit can cause failures with large `IN` clauses. I will update the `archiveAndResetCards` and `resetAllCardsForMarketplace` mutations to batch the reset into chunks of 200 IDs at a time.
-
-### Summary of changes
-
-| Action | Type |
-|---|---|
-| Delete 1,000 duplicate archived records for She Thrives | Database fix |
-| Batch the reset operation into chunks of 200 | Code fix in `useSupabaseData.ts` |
+- The `archived_card_data` table has 0 records for She Thrives (we deleted the duplicates earlier), so no double-counting
+- The She Thrives beneficiary data is already preserved in the marketplace demographics editor and was synced to Surpluss — card-level data is not needed
+- The batching fix from the previous update ensures future Archive & Reset operations will work correctly for large card volumes
 
