@@ -337,6 +337,16 @@ async function syncSingleMarketplace(
   const stats: AllocationStats = { created: 0, updated: 0 };
   const errors: string[] = [];
 
+  // Aggregate materials by materialId to handle duplicates across allocation containers
+  const materialMap = new Map<number, {
+    title: string;
+    totalAllocated: number;
+    totalDistributed: number;
+    category: string | null;
+    subcategory: string | null;
+    surplussAllocId: number | undefined;
+  }>();
+
   for (const alloc of surplussAllocations as Array<Record<string, unknown>>) {
     try {
       const allocatedMaterials = (alloc.allocated_materials as Array<Record<string, unknown>>) ?? [];
@@ -356,20 +366,21 @@ async function syncSingleMarketplace(
             continue;
           }
 
-          await syncMaterial(
-            supabase,
-            marketplace,
-            materialId,
-            materialTitle,
-            allocatedAmount,
-            distributedAmount,
-            category,
-            subcategory,
-            errors,
-            stats,
-            surplussAllocId,
-          );
-          synced++;
+          const existing = materialMap.get(materialId);
+          if (existing) {
+            existing.totalAllocated += allocatedAmount;
+            existing.totalDistributed += distributedAmount;
+            if (!existing.surplussAllocId && surplussAllocId) existing.surplussAllocId = surplussAllocId;
+          } else {
+            materialMap.set(materialId, {
+              title: materialTitle,
+              totalAllocated: allocatedAmount,
+              totalDistributed: distributedAmount,
+              category,
+              subcategory,
+              surplussAllocId,
+            });
+          }
         }
       } else {
         const donationMeta = alloc.donation_metadata as Record<string, unknown> | undefined;
@@ -383,21 +394,46 @@ async function syncSingleMarketplace(
           continue;
         }
 
-        await syncMaterial(
-          supabase,
-          marketplace,
-          materialId,
-          materialTitle,
-          allocatedAmount,
-          distributedAmount,
-          null,
-          null,
-          errors,
-          stats,
-          surplussAllocId,
-        );
-        synced++;
+        const existing = materialMap.get(materialId);
+        if (existing) {
+          existing.totalAllocated += allocatedAmount;
+          existing.totalDistributed += distributedAmount;
+          if (!existing.surplussAllocId && surplussAllocId) existing.surplussAllocId = surplussAllocId;
+        } else {
+          materialMap.set(materialId, {
+            title: materialTitle,
+            totalAllocated: allocatedAmount,
+            totalDistributed: distributedAmount,
+            category: null,
+            subcategory: null,
+            surplussAllocId,
+          });
+        }
       }
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  console.log(`[sync] Event ${marketplace.external_id}: ${materialMap.size} unique materials after aggregation`);
+
+  // Now sync once per unique material with the correct totals
+  for (const [materialId, { title, totalAllocated, totalDistributed, category, subcategory, surplussAllocId }] of materialMap) {
+    try {
+      await syncMaterial(
+        supabase,
+        marketplace,
+        materialId,
+        title,
+        totalAllocated,
+        totalDistributed,
+        category,
+        subcategory,
+        errors,
+        stats,
+        surplussAllocId,
+      );
+      synced++;
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
     }
