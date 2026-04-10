@@ -1696,23 +1696,27 @@ export const useMarketplaceSyncOperations = () => {
       }
 
       const cardIds = cards.map(c => c.id);
-      const { error: resetError } = await supabase
-        .from('qr_cards')
-        .update({
-          status: 'inactive',
-          credit_balance: 0,
-          total_items_collected: 0,
-          collected_items: [],
-          gender: null,
-          marital_status: null,
-          nationality: null,
-          children_count: 0,
-          marketplace_id: null,
-          activated_at: null
-        })
-        .in('id', cardIds);
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+        const batch = cardIds.slice(i, i + BATCH_SIZE);
+        const { error: resetError } = await supabase
+          .from('qr_cards')
+          .update({
+            status: 'inactive',
+            credit_balance: 0,
+            total_items_collected: 0,
+            collected_items: [],
+            gender: null,
+            marital_status: null,
+            nationality: null,
+            children_count: 0,
+            marketplace_id: null,
+            activated_at: null
+          })
+          .in('id', batch);
 
-      if (resetError) throw new SafeError(mapDatabaseError(resetError), resetError);
+        if (resetError) throw new SafeError(mapDatabaseError(resetError), resetError);
+      }
 
       return { resetCount: cards.length };
     },
