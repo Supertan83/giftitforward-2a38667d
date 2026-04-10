@@ -71,6 +71,9 @@ Deno.serve(async (req) => {
 
       console.log(`Event ${marketplace.external_id}: ${allocations.length} allocation records`)
 
+      // Aggregate materials by materialId to handle duplicates
+      const materialMap = new Map<number, { title: string; totalAmount: number; category: string | null; subcategory: string | null }>()
+
       for (const alloc of allocations) {
         const materials = alloc.allocated_materials || []
 
@@ -84,8 +87,12 @@ Deno.serve(async (req) => {
 
             if (!materialId || amount <= 0) continue
 
-            const result = await upsertAllocation(supabase, marketplace, materialId, title, amount, category, subcategory)
-            allResults.push(result)
+            const existing = materialMap.get(materialId)
+            if (existing) {
+              existing.totalAmount += amount
+            } else {
+              materialMap.set(materialId, { title, totalAmount: amount, category, subcategory })
+            }
           }
         } else {
           // Fallback: legacy format
@@ -95,9 +102,21 @@ Deno.serve(async (req) => {
 
           if (!materialId || amount <= 0) continue
 
-          const result = await upsertAllocation(supabase, marketplace, materialId, title, amount, null, null)
-          allResults.push(result)
+          const existing = materialMap.get(materialId)
+          if (existing) {
+            existing.totalAmount += amount
+          } else {
+            materialMap.set(materialId, { title, totalAmount: amount, category: null, subcategory: null })
+          }
         }
+      }
+
+      console.log(`Event ${marketplace.external_id}: ${materialMap.size} unique materials after aggregation`)
+
+      // Now upsert once per material with the correct total
+      for (const [materialId, { title, totalAmount, category, subcategory }] of materialMap) {
+        const result = await upsertAllocation(supabase, marketplace, materialId, title, totalAmount, category, subcategory)
+        allResults.push(result)
       }
     }
 
@@ -139,7 +158,7 @@ async function upsertAllocation(
       name: title,
       external_material_id: materialId,
       icon: 'Package',
-      total_stock: 0, // Safe default — real total set by donations sync
+      total_stock: 0,
       surpluss_url: `https://platform.thesurpluss.com/material/${materialId}`,
     }
     if (category) insertData.category = category
