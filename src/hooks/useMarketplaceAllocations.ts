@@ -917,7 +917,7 @@ export const useAllMarketplaceReports = () => {
             location: mp.location,
             eventDate: mp.event_date,
             status: computeDisplayStatus(mp),
-            beneficiaryCount: (archivedCount || 0) + (activeCount || 0),
+            beneficiaryCount: mp.manual_beneficiary_count ?? mp.demographics_reach ?? ((archivedCount || 0) + (activeCount || 0)),
             totalAllocated,
             totalDistributed,
             totalRemaining,
