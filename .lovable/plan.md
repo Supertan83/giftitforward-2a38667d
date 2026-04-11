@@ -1,43 +1,31 @@
 
 
-## Reset 147 Morning Cards for Evening Reuse
+## Fix Live Statistics Dashboard UI
 
-### Current State
-- **145 cards**: `active` status, Morning Event, 0 items collected — activated but never used
-- **2 cards**: `active` status, Morning Event, 17 and 18 items collected — these were actually used
-- **Afternoon Event** (`ed3f1dfc-...`) is already set up and active
+### Problems identified
+1. The "Items by Category" pie chart renders inline labels for dozens of items, causing massive text overlap
+2. The horizontal bar chart has a narrow Y-axis (80px) that truncates long item names like "Food Storage & Carrying Products"
+3. Too many data points crammed into both charts without any limit
 
-### Fix (data correction via insert tool)
+### Fix approach
 
-**Step 1: Reset 145 unused cards to reusable state**
-```sql
-UPDATE qr_cards
-SET status = 'inactive',
-    marketplace_id = NULL,
-    activated_at = NULL,
-    credit_balance = 0,
-    total_items_collected = 0,
-    collected_items = '[]'::jsonb,
-    updated_at = now()
-WHERE activated_at::date = CURRENT_DATE
-  AND status = 'active'
-  AND marketplace_id = 'f06dc413-2953-469f-9e07-cb9fddac9bba'
-  AND total_items_collected = 0
-  AND credit_balance = 0;
-```
+**File: `src/components/admin/StatisticsDashboard.tsx`**
 
-**Step 2: Check out the 2 actually-used cards** (so they don't block reuse either)
-```sql
-UPDATE qr_cards
-SET status = 'checked_out', updated_at = now()
-WHERE activated_at::date = CURRENT_DATE
-  AND status = 'active'
-  AND marketplace_id = 'f06dc413-2953-469f-9e07-cb9fddac9bba'
-  AND total_items_collected > 0;
-```
+**1. Fix the Pie Chart (Items by Category)**
+- Remove the `label` prop from the Pie component — no more inline text labels
+- Limit data to top 10 categories to keep the legend readable
+- Add `wrapperStyle={{ fontSize: 12 }}` to Legend for readability
+- Keep the Tooltip for hover details
+
+**2. Fix the Bar Chart (Distribution by Item Type)**
+- Limit to top 10 items
+- Increase Y-axis `width` from 80 to 120
+- Truncate long names in the tick with an ellipsis (max ~18 chars)
+- Increase chart height from 300px to 400px to give more vertical space
+
+**3. Add a "remaining" aggregation**
+- For both charts, if there are more than 10 categories, sum the rest into an "Others" bucket so data isn't lost
 
 ### Result
-- 145 cards become `inactive` with no marketplace — ready to scan for the Afternoon Event
-- 2 used cards get properly checked out
-- No schema changes needed, just data updates
+Clean, readable charts with no overlapping text. All data still accessible via tooltips and a consolidated "Others" category.
 
