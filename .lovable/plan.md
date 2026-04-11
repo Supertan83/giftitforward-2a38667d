@@ -1,31 +1,16 @@
 
 
-## Fix Live Statistics Dashboard UI
+## Fix Credits Used Calculation
 
-### Problems identified
-1. The "Items by Category" pie chart renders inline labels for dozens of items, causing massive text overlap
-2. The horizontal bar chart has a narrow Y-axis (80px) that truncates long item names like "Food Storage & Carrying Products"
-3. Too many data points crammed into both charts without any limit
+### Problem
+"Credits Used" uses `sum(credit_limit - remaining_balance)` per card. When cards are checked out, `credit_balance` resets to 0, so the entire credit limit counts as "used" — massively inflating the number (7575 vs 4304 actual items).
 
-### Fix approach
+### Fix
+**File: `src/components/zones/StatsDashboardZone.tsx`**
 
-**File: `src/components/admin/StatisticsDashboard.tsx`**
+Replace the `totalCreditsUsed` calculation with `totalItemsDistributed` (which already comes from `marketplace_item_allocations.distributed_quantity` — the accurate count).
 
-**1. Fix the Pie Chart (Items by Category)**
-- Remove the `label` prop from the Pie component — no more inline text labels
-- Limit data to top 10 categories to keep the legend readable
-- Add `wrapperStyle={{ fontSize: 12 }}` to Legend for readability
-- Keep the Tooltip for hover details
+Remove the `marketplaceLimitMap` and `totalCreditsUsed` loop (~10 lines). Change the "Credits Used" display to show `beneficiaryStats.totalItemsDistributed` with label "Total Credits Used", since each item distributed = 1 credit used.
 
-**2. Fix the Bar Chart (Distribution by Item Type)**
-- Limit to top 10 items
-- Increase Y-axis `width` from 80 to 120
-- Truncate long names in the tick with an ellipsis (max ~18 chars)
-- Increase chart height from 300px to 400px to give more vertical space
-
-**3. Add a "remaining" aggregation**
-- For both charts, if there are more than 10 categories, sum the rest into an "Others" bucket so data isn't lost
-
-### Result
-Clean, readable charts with no overlapping text. All data still accessible via tooltips and a consolidated "Others" category.
+This is a ~5-line change in the `beneficiaryStats` memo and 1 line in the JSX.
 
