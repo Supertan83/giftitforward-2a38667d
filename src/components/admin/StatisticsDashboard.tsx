@@ -107,8 +107,7 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
   }, [volunteerCards]);
 
   const categoryData = useMemo(() => {
-    // Use allocations for distributed item data
-    return allocations
+    const sorted = allocations
       .filter(alloc => alloc.distributedQuantity > 0)
       .map(alloc => ({
         name: alloc.itemName || 'Unknown',
@@ -116,6 +115,15 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
         icon: alloc.itemIcon || '📦'
       }))
       .sort((a, b) => b.value - a.value);
+
+    if (sorted.length <= 10) return sorted;
+
+    const top = sorted.slice(0, 10);
+    const othersValue = sorted.slice(10).reduce((sum, d) => sum + d.value, 0);
+    if (othersValue > 0) {
+      top.push({ name: 'Others', value: othersValue, icon: '📦' });
+    }
+    return top;
   }, [allocations]);
 
   const genderData = useMemo(() => {
@@ -301,19 +309,17 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
               </CardHeader>
               <CardContent>
                 {categoryData.length > 0 ? (
-                  <div className="h-[300px]">
+                  <div className="h-[350px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={categoryData}
                           cx="50%"
-                          cy="50%"
+                          cy="45%"
                           innerRadius={60}
                           outerRadius={100}
                           paddingAngle={2}
                           dataKey="value"
-                          label={({ name, value }) => `${name}: ${value}`}
-                          labelLine={false}
                         >
                           {categoryData.map((_, index) => (
                             <Cell 
@@ -329,7 +335,7 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
                             borderRadius: '8px'
                           }}
                         />
-                        <Legend />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -357,7 +363,7 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
               </CardHeader>
               <CardContent>
                 {categoryData.length > 0 ? (
-                  <div className="h-[300px]">
+                  <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={categoryData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -365,9 +371,10 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
                         <YAxis 
                           dataKey="name" 
                           type="category" 
-                          width={80}
+                          width={130}
                           stroke="hsl(var(--muted-foreground))"
-                          tick={{ fontSize: 12 }}
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value: string) => value.length > 20 ? `${value.slice(0, 18)}…` : value}
                         />
                         <Tooltip 
                           contentStyle={{ 
@@ -385,7 +392,7 @@ export const StatisticsDashboard = ({ onBack }: StatisticsDashboardProps) => {
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  <div className="h-[400px] flex items-center justify-center text-muted-foreground">
                     No distribution data yet
                   </div>
                 )}
