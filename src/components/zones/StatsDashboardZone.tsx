@@ -86,7 +86,7 @@ export const StatsDashboardZone = () => {
       genderBreakdown,
       totalChildren,
     };
-  }, [qrCards, selectedMarketplaceId, allocations, marketplaces]);
+  }, [qrCards, selectedMarketplaceId, allocations]);
 
   // Calculate volunteer statistics
   const volunteerStats = useMemo(() => {
