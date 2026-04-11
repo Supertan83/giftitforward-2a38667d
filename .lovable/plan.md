@@ -1,32 +1,43 @@
 
 
-## Fix Wrongly-Assigned Volunteer Check-ins
+## Reset 147 Morning Cards for Evening Reuse
 
-### What happened
-3 volunteers were scanned today but their check-in landed on the old "Dry Run Friday Marketplace" (which is `completed`) instead of today's active "Women Community Workers Marketplace - Morning Event". They show as `checked_in` but on the wrong marketplace, so the admin view for today's event shows them as inactive.
+### Current State
+- **145 cards**: `active` status, Morning Event, 0 items collected — activated but never used
+- **2 cards**: `active` status, Morning Event, 17 and 18 items collected — these were actually used
+- **Afternoon Event** (`ed3f1dfc-...`) is already set up and active
 
-### Fix (immediate data correction + attendance records)
+### Fix (data correction via insert tool)
 
-**1. Create a one-time fix edge function** (`supabase/functions/fix-volunteer-marketplace/index.ts`)
+**Step 1: Reset 145 unused cards to reusable state**
+```sql
+UPDATE qr_cards
+SET status = 'inactive',
+    marketplace_id = NULL,
+    activated_at = NULL,
+    credit_balance = 0,
+    total_items_collected = 0,
+    collected_items = '[]'::jsonb,
+    updated_at = now()
+WHERE activated_at::date = CURRENT_DATE
+  AND status = 'active'
+  AND marketplace_id = 'f06dc413-2953-469f-9e07-cb9fddac9bba'
+  AND total_items_collected = 0
+  AND credit_balance = 0;
+```
 
-This function will:
-- UPDATE the 3 volunteer_qr_cards to point `marketplace_id` to the Morning Event (`f06dc413-2953-469f-9e07-cb9fddac9bba`)
-- UPDATE or INSERT matching `volunteer_attendance` records to reference the correct marketplace
-- Return a summary of what was fixed
+**Step 2: Check out the 2 actually-used cards** (so they don't block reuse either)
+```sql
+UPDATE qr_cards
+SET status = 'checked_out', updated_at = now()
+WHERE activated_at::date = CURRENT_DATE
+  AND status = 'active'
+  AND marketplace_id = 'f06dc413-2953-469f-9e07-cb9fddac9bba'
+  AND total_items_collected > 0;
+```
 
-**2. Deploy and invoke it** to apply the fix immediately
-
-**3. Delete the function** after use (it's a one-time fix)
-
-### Prevents future recurrence
-The root cause is that when volunteers scan in, the system uses whatever marketplace was last associated with their card. If a volunteer's card still points to an old marketplace and the scanner doesn't explicitly set the new one, it stays wrong.
-
-No code changes needed beyond the one-time data fix — the VolunteerZone check-in flow already assigns the selected marketplace. The issue was an operational one (wrong marketplace was still `active` when these 3 were scanned early this morning).
-
-### Summary
-| Step | Action |
-|---|---|
-| Create edge function | One-time UPDATE for 3 cards + attendance |
-| Deploy & call | Fix applied in seconds |
-| Clean up | Delete the function |
+### Result
+- 145 cards become `inactive` with no marketplace — ready to scan for the Afternoon Event
+- 2 used cards get properly checked out
+- No schema changes needed, just data updates
 
