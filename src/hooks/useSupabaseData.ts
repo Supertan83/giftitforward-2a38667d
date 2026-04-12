@@ -125,6 +125,45 @@ export const useQRCards = () => {
   return query;
 };
 
+// Lightweight card stats (counts only) for zone components
+export const useCardStats = (marketplaceId: string) => {
+  return useQuery({
+    queryKey: ['card_stats', marketplaceId],
+    staleTime: 15000,
+    queryFn: async () => {
+      const [activeRes, checkedOutRes, readyRes, todayCheckInsRes] = await Promise.all([
+        supabase
+          .from('qr_cards')
+          .select('*', { count: 'exact', head: true })
+          .eq('marketplace_id', marketplaceId)
+          .eq('status', 'active'),
+        supabase
+          .from('qr_cards')
+          .select('*', { count: 'exact', head: true })
+          .eq('marketplace_id', marketplaceId)
+          .eq('status', 'checked_out'),
+        supabase
+          .from('qr_cards')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'inactive'),
+        supabase
+          .from('qr_cards')
+          .select('*', { count: 'exact', head: true })
+          .eq('marketplace_id', marketplaceId)
+          .gte('activated_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      ]);
+
+      return {
+        active: activeRes.count ?? 0,
+        checkedOut: checkedOutRes.count ?? 0,
+        ready: readyRes.count ?? 0,
+        todayCheckIns: todayCheckInsRes.count ?? 0,
+      };
+    },
+    enabled: !!marketplaceId,
+  });
+};
+
 // Item Types
 export const useItemTypes = () => {
   const queryClient = useQueryClient();

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogIn, QrCode, Users, Scan, Loader2, MapPin, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,8 +6,10 @@ import { QRScanner } from '@/components/QRScanner';
 import { CardStatusDisplay } from '@/components/CardStatusDisplay';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useCardStats, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useQueryClient } from '@tanstack/react-query';
 import { QRCard } from '@/types';
+
 interface EntranceZoneProps {
   selectedMarketplaceId: string;
 }
@@ -25,51 +27,18 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
   const [lastCreditLimit, setLastCreditLimit] = useState<number>(15);
   const [isProcessing, setIsProcessing] = useState(false);
   const lastScanRef = useRef<{ code: string; timestamp: number } | null>(null);
+  const queryClient = useQueryClient();
 
-  const { data: qrCards = [], isLoading } = useQRCards();
+  const { data: cardStats, isLoading } = useCardStats(selectedMarketplaceId);
   const { activateCard } = useCardOperations();
   const { data: marketplaces = [] } = useMarketplaces();
 
-  // Get selected marketplace details
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
   const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
-
-  // Calculate stats - all cards and marketplace-specific
-  const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const activeCards = qrCards.filter(c => c.status === 'active').length;
-    const readyCards = qrCards.filter(c => c.status === 'ready').length;
-
-    // Cards activated today for selected marketplace
-    const cardsActivatedTodayForMarketplace = selectedMarketplaceId 
-      ? qrCards.filter(c => {
-          if (c.marketplaceId !== selectedMarketplaceId) return false;
-          if (!c.activatedAt) return false;
-          const activatedDate = new Date(c.activatedAt);
-          activatedDate.setHours(0, 0, 0, 0);
-          return activatedDate.getTime() === today.getTime();
-        }).length
-      : 0;
-
-    // Total cards for selected marketplace
-    const totalForMarketplace = selectedMarketplaceId
-      ? qrCards.filter(c => c.marketplaceId === selectedMarketplaceId).length
-      : 0;
-
-    return {
-      activeCards,
-      readyCards,
-      cardsActivatedTodayForMarketplace,
-      totalForMarketplace,
-    };
-  }, [qrCards, selectedMarketplaceId]);
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
 
-    // Duplicate scan guard: ignore same card within 5 seconds
     const now = Date.now();
     if (lastScanRef.current && lastScanRef.current.code === code && now - lastScanRef.current.timestamp < 5000) {
       setFeedback({
@@ -107,6 +76,8 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
           credits: 0,
           creditLimit,
         });
+        // Invalidate only lightweight stats
+        queryClient.invalidateQueries({ queryKey: ['card_stats', selectedMarketplaceId] });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Please check the QR code and try again';
@@ -119,7 +90,7 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [activateCard, selectedMarketplaceId]);
+  }, [activateCard, selectedMarketplaceId, creditLimit, queryClient]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -146,13 +117,13 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
         <StatCard
           icon={Users}
           label="Active Cards"
-          value={isLoading ? '-' : stats.activeCards}
+          value={isLoading ? '-' : cardStats?.active ?? 0}
           variant="success"
         />
         <StatCard
           icon={QrCode}
           label="Cards Ready"
-          value={isLoading ? '-' : stats.readyCards}
+          value={isLoading ? '-' : cardStats?.ready ?? 0}
           variant="default"
         />
       </div>
@@ -167,15 +138,15 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
           <StatCard
             icon={CalendarCheck}
             label="Today's Check-ins"
-            value={isLoading ? '-' : stats.cardsActivatedTodayForMarketplace}
+            value={isLoading ? '-' : cardStats?.todayCheckIns ?? 0}
             subValue={selectedMarketplace?.name}
             variant="primary"
           />
           <StatCard
             icon={MapPin}
-            label="Total for Marketplace"
-            value={isLoading ? '-' : stats.totalForMarketplace}
-            subValue="All time"
+            label="Checked Out"
+            value={isLoading ? '-' : cardStats?.checkedOut ?? 0}
+            subValue="This marketplace"
             variant="warning"
           />
         </motion.div>
