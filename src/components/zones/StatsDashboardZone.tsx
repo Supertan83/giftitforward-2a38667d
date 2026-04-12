@@ -45,9 +45,9 @@ export const StatsDashboardZone = () => {
 
   const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
-  // Filter marketplaces for selector
-  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
-  const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
+  // Filter marketplaces for selector - show upcoming, active, and completed
+  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active' || m.status === 'completed');
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
   // Calculate beneficiary statistics
   const beneficiaryStats = useMemo(() => {
