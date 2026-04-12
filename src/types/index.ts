@@ -74,6 +74,8 @@ export interface MarketplaceEvent {
   end_time?: string | null;
   beneficiary_credit_limit?: number;
   max_items_per_scan?: number;
+  manual_beneficiary_count?: number | null;
+  demographics_reach?: number | null;
 }
 
 export interface VolunteerQRCard {
