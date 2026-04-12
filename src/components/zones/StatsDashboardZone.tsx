@@ -62,6 +62,8 @@ export const StatsDashboardZone = () => {
     const checkedOutCards = filteredCards.filter(c => c.status === 'checked_out');
     const allProcessedCards = [...activeCards, ...checkedOutCards];
 
+    const hasLiveCards = allProcessedCards.length > 0;
+
     // Cards activated today
     const activatedToday = filteredCards.filter(c => {
       if (!c.activatedAt) return false;
@@ -70,39 +72,58 @@ export const StatsDashboardZone = () => {
       return activatedDate.getTime() === today.getTime();
     }).length;
 
-    // Total items distributed from marketplace allocations (accurate count)
+    // Total items distributed from marketplace allocations
     const totalItemsDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
 
+    // Fallback beneficiary count for completed/recycled events
+    const manualCount = selectedMarketplace?.manual_beneficiary_count;
+    const fallbackTotal = manualCount ?? (archivedCards.length > 0 ? archivedCards.length : 0);
+
+    const totalBeneficiaries = hasLiveCards ? allProcessedCards.length : fallbackTotal;
+
     // Average items per beneficiary
-    const avgItemsPerBeneficiary = allProcessedCards.length > 0 
-      ? Math.round((totalItemsDistributed / allProcessedCards.length) * 10) / 10
+    const avgItemsPerBeneficiary = totalBeneficiaries > 0 
+      ? Math.round((totalItemsDistributed / totalBeneficiaries) * 10) / 10
       : 0;
 
-    // Credits used = actual items distributed (accurate count from allocations)
+    // Credits used = actual items distributed
     const totalCreditsUsed = totalItemsDistributed;
 
-    // Gender breakdown
-    const genderBreakdown = {
-      male: allProcessedCards.filter(c => c.gender === 'male').length,
-      female: allProcessedCards.filter(c => c.gender === 'female').length,
-      other: allProcessedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
-    };
+    // Gender breakdown - use live cards or fall back to archived
+    let genderBreakdown;
+    if (hasLiveCards) {
+      genderBreakdown = {
+        male: allProcessedCards.filter(c => c.gender === 'male').length,
+        female: allProcessedCards.filter(c => c.gender === 'female').length,
+        other: allProcessedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
+      };
+    } else if (archivedCards.length > 0) {
+      genderBreakdown = {
+        male: archivedCards.filter(c => c.gender === 'male').length,
+        female: archivedCards.filter(c => c.gender === 'female').length,
+        other: archivedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
+      };
+    } else {
+      genderBreakdown = { male: 0, female: 0, other: 0 };
+    }
 
-    // Total children
-    const totalChildren = allProcessedCards.reduce((sum, c) => sum + (c.childrenCount || 0), 0);
+    // Total children - use live cards or fall back to archived
+    const totalChildren = hasLiveCards
+      ? allProcessedCards.reduce((sum, c) => sum + (c.childrenCount || 0), 0)
+      : archivedCards.reduce((sum, c) => sum + (c.children_count || 0), 0);
 
     return {
-      totalBeneficiaries: allProcessedCards.length,
+      totalBeneficiaries,
       activatedToday,
       currentlyActive: activeCards.length,
-      checkedOut: checkedOutCards.length,
+      checkedOut: hasLiveCards ? checkedOutCards.length : fallbackTotal,
       totalItemsDistributed,
       avgItemsPerBeneficiary,
       totalCreditsUsed,
       genderBreakdown,
       totalChildren,
     };
-  }, [qrCards, selectedMarketplaceId, allocations]);
+  }, [qrCards, selectedMarketplaceId, allocations, selectedMarketplace, archivedCards]);
 
   // Calculate volunteer statistics
   const volunteerStats = useMemo(() => {
