@@ -76,7 +76,7 @@ export const StatsDashboardZone = () => {
     const totalItemsDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
 
     // Fallback beneficiary count for completed/recycled events
-    const manualCount = selectedMarketplace?.manual_beneficiary_count;
+    const manualCount = (selectedMarketplace as any)?.manual_beneficiary_count as number | null | undefined;
     const fallbackTotal = manualCount ?? (archivedCards.length > 0 ? archivedCards.length : 0);
 
     const totalBeneficiaries = hasLiveCards ? allProcessedCards.length : fallbackTotal;
