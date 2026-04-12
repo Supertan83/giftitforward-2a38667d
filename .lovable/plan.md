@@ -1,49 +1,30 @@
 
 
-## Recycle Morning Cards for Afternoon Event
+## Fix Morning Event Beneficiary Count Showing "0"
 
-### Current State
-- **33 cards** still `active` on Morning Event — need to be checked out first
-- **1,074 cards** already `checked_out` on Morning Event
-- **Afternoon Event** (`3e0ddc6e-5e20-4ab4-9e81-51f2ae2dbd63`) exists with `upcoming` status
+### Problem
+When we recycled the 1,107 morning cards for the afternoon event, all cards were reset and unlinked from the morning marketplace. Since there's no `manual_beneficiary_count` or `demographics_reach` saved, and no `archived_card_data`, the morning event now shows 0 beneficiaries.
 
-### Steps (all data operations via insert tool)
+### Root Cause
+The card recycling cleared `marketplace_id` on all cards but didn't preserve a historical beneficiary count. The system memory note confirms the priority: `manual_beneficiary_count` → `demographics_reach` → live card count. All three are currently 0/null for the morning event.
 
-**Step 1: Check out the 33 still-active cards**
-```sql
-UPDATE qr_cards
-SET status = 'checked_out', credit_balance = 0, total_items_collected = 0,
-    collected_items = '[]'::jsonb, updated_at = now()
-WHERE marketplace_id = '6ed111b0-f003-46e8-a719-d76cc1800431'
-  AND status = 'active';
-```
+### Fix
+**Set `manual_beneficiary_count = 1082`** on the Morning Event. This number comes from actual transaction data (1,082 unique cards that had Distribution or CheckOut transactions on that marketplace).
 
-**Step 2: Reset all 1,107 cards to inactive (ready for reuse)**
-```sql
-UPDATE qr_cards
-SET status = 'inactive', marketplace_id = NULL, credit_balance = 0,
-    total_items_collected = 0, collected_items = '[]'::jsonb,
-    activated_at = NULL, updated_at = now()
-WHERE marketplace_id = '6ed111b0-f003-46e8-a719-d76cc1800431'
-  AND status = 'checked_out';
-```
-
-**Step 3: Set Afternoon Event to active**
 ```sql
 UPDATE marketplace_events
-SET status = 'active', updated_at = now()
-WHERE id = '3e0ddc6e-5e20-4ab4-9e81-51f2ae2dbd63';
-```
-
-**Step 4: Set Morning Event to completed**
-```sql
-UPDATE marketplace_events
-SET status = 'completed', updated_at = now()
+SET manual_beneficiary_count = 1082
 WHERE id = '6ed111b0-f003-46e8-a719-d76cc1800431';
 ```
 
-### Result
-- All 1,107 cards become `inactive` with no marketplace — ready to scan into the Afternoon Event
-- Morning Event marked completed, Afternoon Event marked active
-- Volunteers can scan cards at entrance to activate them for the afternoon
+Also set `demographics_reach = 1082` so the demographics editor shows the correct reach:
+
+```sql
+UPDATE marketplace_events
+SET demographics_reach = 1082,
+    demographics_updated_at = now()
+WHERE id = '6ed111b0-f003-46e8-a719-d76cc1800431';
+```
+
+This is a data-only fix — no code changes needed. The stats dashboard already reads `manual_beneficiary_count` as the primary source.
 
