@@ -29,6 +29,20 @@ export const StatsDashboardZone = () => {
     selectedMarketplaceId === 'all' ? undefined : selectedMarketplaceId
   );
 
+  // Fetch archived card data for completed events where live cards were recycled
+  const { data: archivedCards = [] } = useQuery({
+    queryKey: ['archived_card_data', selectedMarketplaceId],
+    queryFn: async () => {
+      if (selectedMarketplaceId === 'all') return [];
+      const { data } = await supabase
+        .from('archived_card_data')
+        .select('gender, children_count')
+        .eq('marketplace_id', selectedMarketplaceId);
+      return data || [];
+    },
+    enabled: selectedMarketplaceId !== 'all',
+  });
+
   const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
   // Filter marketplaces for selector
