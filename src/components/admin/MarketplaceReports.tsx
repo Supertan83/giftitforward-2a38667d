@@ -209,7 +209,7 @@ export const MarketplaceReports = ({
                       <div>
                         <p className="text-2xl font-bold">{(report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries.total}</p>
                         <p className="text-xs text-muted-foreground">
-                          {(report.marketplace as any).manualBeneficiaryCount != null ? 'Beneficiaries (Manual)' : 'Beneficiaries'}
+                        <p className="text-xs text-muted-foreground">Beneficiaries</p>
                         </p>
                       </div>
                     </div>
