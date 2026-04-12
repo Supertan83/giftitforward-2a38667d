@@ -4,6 +4,8 @@ import {
   BarChart3, Users, UserCheck, Package, Clock, MapPin, 
   TrendingUp, ShoppingBag, DoorOpen, LogOut, CreditCard
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/StatCard';
 import { useQRCards, useVolunteerQRCards, useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceAllocations } from '@/hooks/useMarketplaceAllocations';
@@ -27,11 +29,25 @@ export const StatsDashboardZone = () => {
     selectedMarketplaceId === 'all' ? undefined : selectedMarketplaceId
   );
 
+  // Fetch archived card data for completed events where live cards were recycled
+  const { data: archivedCards = [] } = useQuery({
+    queryKey: ['archived_card_data', selectedMarketplaceId],
+    queryFn: async () => {
+      if (selectedMarketplaceId === 'all') return [];
+      const { data } = await supabase
+        .from('archived_card_data')
+        .select('gender, children_count')
+        .eq('marketplace_id', selectedMarketplaceId);
+      return data || [];
+    },
+    enabled: selectedMarketplaceId !== 'all',
+  });
+
   const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
-  // Filter marketplaces for selector
-  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
-  const selectedMarketplace = availableMarketplaces.find(m => m.id === selectedMarketplaceId);
+  // Filter marketplaces for selector - show upcoming, active, and completed
+  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active' || m.status === 'completed');
+  const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
   // Calculate beneficiary statistics
   const beneficiaryStats = useMemo(() => {
@@ -46,6 +62,8 @@ export const StatsDashboardZone = () => {
     const checkedOutCards = filteredCards.filter(c => c.status === 'checked_out');
     const allProcessedCards = [...activeCards, ...checkedOutCards];
 
+    const hasLiveCards = allProcessedCards.length > 0;
+
     // Cards activated today
     const activatedToday = filteredCards.filter(c => {
       if (!c.activatedAt) return false;
@@ -54,39 +72,58 @@ export const StatsDashboardZone = () => {
       return activatedDate.getTime() === today.getTime();
     }).length;
 
-    // Total items distributed from marketplace allocations (accurate count)
+    // Total items distributed from marketplace allocations
     const totalItemsDistributed = allocations.reduce((sum, a) => sum + a.distributedQuantity, 0);
 
+    // Fallback beneficiary count for completed/recycled events
+    const manualCount = selectedMarketplace?.manual_beneficiary_count;
+    const fallbackTotal = manualCount ?? (archivedCards.length > 0 ? archivedCards.length : 0);
+
+    const totalBeneficiaries = hasLiveCards ? allProcessedCards.length : fallbackTotal;
+
     // Average items per beneficiary
-    const avgItemsPerBeneficiary = allProcessedCards.length > 0 
-      ? Math.round((totalItemsDistributed / allProcessedCards.length) * 10) / 10
+    const avgItemsPerBeneficiary = totalBeneficiaries > 0 
+      ? Math.round((totalItemsDistributed / totalBeneficiaries) * 10) / 10
       : 0;
 
-    // Credits used = actual items distributed (accurate count from allocations)
+    // Credits used = actual items distributed
     const totalCreditsUsed = totalItemsDistributed;
 
-    // Gender breakdown
-    const genderBreakdown = {
-      male: allProcessedCards.filter(c => c.gender === 'male').length,
-      female: allProcessedCards.filter(c => c.gender === 'female').length,
-      other: allProcessedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
-    };
+    // Gender breakdown - use live cards or fall back to archived
+    let genderBreakdown;
+    if (hasLiveCards) {
+      genderBreakdown = {
+        male: allProcessedCards.filter(c => c.gender === 'male').length,
+        female: allProcessedCards.filter(c => c.gender === 'female').length,
+        other: allProcessedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
+      };
+    } else if (archivedCards.length > 0) {
+      genderBreakdown = {
+        male: archivedCards.filter(c => c.gender === 'male').length,
+        female: archivedCards.filter(c => c.gender === 'female').length,
+        other: archivedCards.filter(c => c.gender && c.gender !== 'male' && c.gender !== 'female').length,
+      };
+    } else {
+      genderBreakdown = { male: 0, female: 0, other: 0 };
+    }
 
-    // Total children
-    const totalChildren = allProcessedCards.reduce((sum, c) => sum + (c.childrenCount || 0), 0);
+    // Total children - use live cards or fall back to archived
+    const totalChildren = hasLiveCards
+      ? allProcessedCards.reduce((sum, c) => sum + (c.childrenCount || 0), 0)
+      : archivedCards.reduce((sum, c) => sum + (c.children_count || 0), 0);
 
     return {
-      totalBeneficiaries: allProcessedCards.length,
+      totalBeneficiaries,
       activatedToday,
       currentlyActive: activeCards.length,
-      checkedOut: checkedOutCards.length,
+      checkedOut: hasLiveCards ? checkedOutCards.length : fallbackTotal,
       totalItemsDistributed,
       avgItemsPerBeneficiary,
       totalCreditsUsed,
       genderBreakdown,
       totalChildren,
     };
-  }, [qrCards, selectedMarketplaceId, allocations]);
+  }, [qrCards, selectedMarketplaceId, allocations, selectedMarketplace, archivedCards]);
 
   // Calculate volunteer statistics
   const volunteerStats = useMemo(() => {
