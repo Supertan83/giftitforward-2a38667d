@@ -285,7 +285,7 @@ export const MarketplaceManualDataEditor = ({ marketplaceId, marketplaceName }: 
               <div className="bg-muted/50 rounded-lg p-4 text-center">
                 <Users className="w-5 h-5 mx-auto mb-2 text-purple-500" />
                 <p className="text-2xl font-bold">{manualBeneficiaryCount ?? "—"}</p>
-                <p className="text-xs text-muted-foreground">Beneficiaries (Manual)</p>
+                <p className="text-xs text-muted-foreground"><p className="text-xs text-muted-foreground">Beneficiaries</p></p>
               </div>
               <div className="bg-muted/50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold">{totalAllocated}</p>
