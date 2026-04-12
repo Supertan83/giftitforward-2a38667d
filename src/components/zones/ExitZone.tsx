@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { QRScanner } from '@/components/QRScanner';
 import { FeedbackOverlay } from '@/components/FeedbackOverlay';
 import { StatCard } from '@/components/StatCard';
-import { useQRCards, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useCardStats, useCardOperations, useMarketplaces } from '@/hooks/useSupabaseData';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ExitZoneProps {
   selectedMarketplaceId: string;
@@ -23,20 +24,14 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
     itemsCollected: number;
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const queryClient = useQueryClient();
 
-  const { data: qrCards = [], isLoading } = useQRCards();
+  const { data: cardStats, isLoading } = useCardStats(selectedMarketplaceId);
   const { checkoutCard } = useCardOperations();
   const { data: marketplaces = [] } = useMarketplaces();
 
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
   const creditLimit = selectedMarketplace?.beneficiary_credit_limit ?? 15;
-
-  // Filter stats by marketplace if selected
-  const filteredCards = selectedMarketplaceId 
-    ? qrCards.filter(c => c.marketplaceId === selectedMarketplaceId)
-    : qrCards;
-  const checkedOutToday = filteredCards.filter(c => c.status === 'checked_out').length;
-  const activeCards = filteredCards.filter(c => c.status === 'active').length;
 
   const handleScan = useCallback(async (code: string) => {
     setShowScanner(false);
@@ -55,6 +50,8 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
         title: 'Check-Out Complete!',
         subtitle: `Collected ${itemsCollected}/${creditLimit} items. Card is locked until tomorrow.`,
       });
+      // Invalidate only lightweight stats
+      queryClient.invalidateQueries({ queryKey: ['card_stats', selectedMarketplaceId] });
     } catch (error) {
       setFeedback({
         type: 'error',
@@ -64,7 +61,7 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [checkoutCard, creditLimit]);
+  }, [checkoutCard, creditLimit, queryClient, selectedMarketplaceId]);
 
   return (
     <div className="min-h-full p-4 pb-24 max-w-2xl mx-auto">
@@ -91,13 +88,13 @@ export const ExitZone = ({ selectedMarketplaceId }: ExitZoneProps) => {
         <StatCard
           icon={CheckCircle}
           label="Checked Out"
-          value={isLoading ? '-' : checkedOutToday}
+          value={isLoading ? '-' : cardStats?.checkedOut ?? 0}
           variant="success"
         />
         <StatCard
           icon={Package}
           label="Still Active"
-          value={isLoading ? '-' : activeCards}
+          value={isLoading ? '-' : cardStats?.active ?? 0}
           variant="warning"
         />
       </div>
