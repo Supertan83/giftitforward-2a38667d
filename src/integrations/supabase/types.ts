@@ -20,6 +20,7 @@ export type Database = {
           allocation_id: string | null
           card_unique_id: string | null
           created_at: string
+          deleted_at: string | null
           description: string
           id: string
           item_type_id: string | null
@@ -35,6 +36,7 @@ export type Database = {
           allocation_id?: string | null
           card_unique_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           description: string
           id?: string
           item_type_id?: string | null
@@ -50,6 +52,7 @@ export type Database = {
           allocation_id?: string | null
           card_unique_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string
           id?: string
           item_type_id?: string | null
@@ -71,6 +74,7 @@ export type Database = {
           collected_items: Json | null
           created_at: string
           credit_balance: number | null
+          deleted_at: string | null
           gender: string | null
           id: string
           marital_status: string | null
@@ -88,6 +92,7 @@ export type Database = {
           collected_items?: Json | null
           created_at?: string
           credit_balance?: number | null
+          deleted_at?: string | null
           gender?: string | null
           id?: string
           marital_status?: string | null
@@ -105,6 +110,7 @@ export type Database = {
           collected_items?: Json | null
           created_at?: string
           credit_balance?: number | null
+          deleted_at?: string | null
           gender?: string | null
           id?: string
           marital_status?: string | null
@@ -129,6 +135,7 @@ export type Database = {
           archive_batch_id: string | null
           archived_at: string
           archived_by: string | null
+          deleted_at: string | null
           id: string
           original_id: string
           record_data: Json
@@ -138,6 +145,7 @@ export type Database = {
           archive_batch_id?: string | null
           archived_at?: string
           archived_by?: string | null
+          deleted_at?: string | null
           id?: string
           original_id: string
           record_data: Json
@@ -147,6 +155,7 @@ export type Database = {
           archive_batch_id?: string | null
           archived_at?: string
           archived_by?: string | null
+          deleted_at?: string | null
           id?: string
           original_id?: string
           record_data?: Json
@@ -158,6 +167,7 @@ export type Database = {
         Row: {
           automation_id: string
           campaign_id: string | null
+          deleted_at: string | null
           id: string
           notes: string | null
           recipients_count: number
@@ -167,6 +177,7 @@ export type Database = {
         Insert: {
           automation_id: string
           campaign_id?: string | null
+          deleted_at?: string | null
           id?: string
           notes?: string | null
           recipients_count?: number
@@ -176,6 +187,7 @@ export type Database = {
         Update: {
           automation_id?: string
           campaign_id?: string | null
+          deleted_at?: string | null
           id?: string
           notes?: string | null
           recipients_count?: number
@@ -203,6 +215,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           id: string
           is_active: boolean
           last_run_at: string | null
@@ -217,6 +230,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           id?: string
           is_active?: boolean
           last_run_at?: string | null
@@ -231,6 +245,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           id?: string
           is_active?: boolean
           last_run_at?: string | null
@@ -256,6 +271,7 @@ export type Database = {
         Row: {
           campaign_id: string
           created_at: string
+          deleted_at: string | null
           error_message: string | null
           id: string
           recipient_email: string
@@ -267,6 +283,7 @@ export type Database = {
         Insert: {
           campaign_id: string
           created_at?: string
+          deleted_at?: string | null
           error_message?: string | null
           id?: string
           recipient_email: string
@@ -278,6 +295,7 @@ export type Database = {
         Update: {
           campaign_id?: string
           created_at?: string
+          deleted_at?: string | null
           error_message?: string | null
           id?: string
           recipient_email?: string
@@ -307,6 +325,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           failed_count: number
           id: string
           name: string
@@ -322,6 +341,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           failed_count?: number
           id?: string
           name: string
@@ -337,6 +357,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           failed_count?: number
           id?: string
           name?: string
@@ -362,6 +383,7 @@ export type Database = {
       email_provider_config: {
         Row: {
           created_at: string
+          deleted_at: string | null
           email_type: string
           fallback_enabled: boolean
           id: string
@@ -371,6 +393,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           email_type: string
           fallback_enabled?: boolean
           id?: string
@@ -380,6 +403,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           email_type?: string
           fallback_enabled?: boolean
           id?: string
@@ -392,6 +416,7 @@ export type Database = {
       email_send_logs: {
         Row: {
           created_at: string
+          deleted_at: string | null
           email_type: string
           error_message: string | null
           id: string
@@ -404,6 +429,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           email_type: string
           error_message?: string | null
           id?: string
@@ -416,6 +442,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           email_type?: string
           error_message?: string | null
           id?: string
@@ -444,6 +471,7 @@ export type Database = {
           created_by: string | null
           cta_text: string | null
           cta_url: string | null
+          deleted_at: string | null
           greeting: string
           id: string
           is_active: boolean
@@ -458,6 +486,7 @@ export type Database = {
           created_by?: string | null
           cta_text?: string | null
           cta_url?: string | null
+          deleted_at?: string | null
           greeting?: string
           id?: string
           is_active?: boolean
@@ -472,6 +501,7 @@ export type Database = {
           created_by?: string | null
           cta_text?: string | null
           cta_url?: string | null
+          deleted_at?: string | null
           greeting?: string
           id?: string
           is_active?: boolean
@@ -484,6 +514,7 @@ export type Database = {
       event_dependents: {
         Row: {
           created_at: string
+          deleted_at: string | null
           dependent_index: number | null
           dependent_type: string
           gender: string | null
@@ -493,6 +524,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           dependent_index?: number | null
           dependent_type: string
           gender?: string | null
@@ -502,6 +534,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           dependent_index?: number | null
           dependent_type?: string
           gender?: string | null
@@ -526,6 +559,7 @@ export type Database = {
           company_id: string | null
           country: string | null
           created_at: string
+          deleted_at: string | null
           external_id: number
           id: string
           is_primary: boolean | null
@@ -541,6 +575,7 @@ export type Database = {
           company_id?: string | null
           country?: string | null
           created_at?: string
+          deleted_at?: string | null
           external_id: number
           id?: string
           is_primary?: boolean | null
@@ -556,6 +591,7 @@ export type Database = {
           company_id?: string | null
           country?: string | null
           created_at?: string
+          deleted_at?: string | null
           external_id?: number
           id?: string
           is_primary?: boolean | null
@@ -582,6 +618,7 @@ export type Database = {
           company_size: string | null
           created_at: string
           currency: string | null
+          deleted_at: string | null
           designation: string | null
           external_id: number
           id: string
@@ -600,6 +637,7 @@ export type Database = {
           company_size?: string | null
           created_at?: string
           currency?: string | null
+          deleted_at?: string | null
           designation?: string | null
           external_id: number
           id?: string
@@ -618,6 +656,7 @@ export type Database = {
           company_size?: string | null
           created_at?: string
           currency?: string | null
+          deleted_at?: string | null
           designation?: string | null
           external_id?: number
           id?: string
@@ -635,18 +674,21 @@ export type Database = {
       external_item_sdg_goals: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
           item_id: string
           sdg_goal_id: string
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           item_id: string
           sdg_goal_id: string
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           item_id?: string
           sdg_goal_id?: string
@@ -676,6 +718,7 @@ export type Database = {
           company_id: string | null
           condition_id: number | null
           created_at: string
+          deleted_at: string | null
           description: string | null
           external_id: number
           frequency: Json | null
@@ -700,6 +743,7 @@ export type Database = {
           company_id?: string | null
           condition_id?: number | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           external_id: number
           frequency?: Json | null
@@ -724,6 +768,7 @@ export type Database = {
           company_id?: string | null
           condition_id?: number | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           external_id?: number
           frequency?: Json | null
@@ -769,6 +814,7 @@ export type Database = {
         Row: {
           code: string | null
           created_at: string
+          deleted_at: string | null
           external_id: number
           id: string
           name: string
@@ -778,6 +824,7 @@ export type Database = {
         Insert: {
           code?: string | null
           created_at?: string
+          deleted_at?: string | null
           external_id: number
           id?: string
           name: string
@@ -787,6 +834,7 @@ export type Database = {
         Update: {
           code?: string | null
           created_at?: string
+          deleted_at?: string | null
           external_id?: number
           id?: string
           name?: string
@@ -799,6 +847,7 @@ export type Database = {
         Row: {
           code: string | null
           created_at: string
+          deleted_at: string | null
           description: string | null
           external_id: number
           id: string
@@ -809,6 +858,7 @@ export type Database = {
         Insert: {
           code?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           external_id: number
           id?: string
@@ -819,6 +869,7 @@ export type Database = {
         Update: {
           code?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           external_id?: number
           id?: string
@@ -835,6 +886,7 @@ export type Database = {
           company_name: string | null
           completed_at: string | null
           created_at: string
+          deleted_at: string | null
           experience_word: string | null
           id: string
           improvement_suggestions: string | null
@@ -850,6 +902,7 @@ export type Database = {
           company_name?: string | null
           completed_at?: string | null
           created_at?: string
+          deleted_at?: string | null
           experience_word?: string | null
           id?: string
           improvement_suggestions?: string | null
@@ -865,6 +918,7 @@ export type Database = {
           company_name?: string | null
           completed_at?: string | null
           created_at?: string
+          deleted_at?: string | null
           experience_word?: string | null
           id?: string
           improvement_suggestions?: string | null
@@ -879,6 +933,7 @@ export type Database = {
       hubspot_email_config: {
         Row: {
           created_at: string
+          deleted_at: string | null
           email_type: string
           enabled: boolean | null
           id: string
@@ -887,6 +942,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           email_type: string
           enabled?: boolean | null
           id?: string
@@ -895,6 +951,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           email_type?: string
           enabled?: boolean | null
           id?: string
@@ -908,6 +965,7 @@ export type Database = {
           allocated_to_marketplace: number
           category: string | null
           created_at: string
+          deleted_at: string | null
           distributed: number
           external_material_id: number | null
           icon: string
@@ -923,6 +981,7 @@ export type Database = {
           allocated_to_marketplace?: number
           category?: string | null
           created_at?: string
+          deleted_at?: string | null
           distributed?: number
           external_material_id?: number | null
           icon?: string
@@ -938,6 +997,7 @@ export type Database = {
           allocated_to_marketplace?: number
           category?: string | null
           created_at?: string
+          deleted_at?: string | null
           distributed?: number
           external_material_id?: number | null
           icon?: string
@@ -955,6 +1015,7 @@ export type Database = {
         Row: {
           beneficiary_credit_limit: number
           created_at: string
+          deleted_at: string | null
           demographics_female_adults: number | null
           demographics_female_children: number | null
           demographics_male_adults: number | null
@@ -984,6 +1045,7 @@ export type Database = {
         Insert: {
           beneficiary_credit_limit?: number
           created_at?: string
+          deleted_at?: string | null
           demographics_female_adults?: number | null
           demographics_female_children?: number | null
           demographics_male_adults?: number | null
@@ -1013,6 +1075,7 @@ export type Database = {
         Update: {
           beneficiary_credit_limit?: number
           created_at?: string
+          deleted_at?: string | null
           demographics_female_adults?: number | null
           demographics_female_children?: number | null
           demographics_male_adults?: number | null
@@ -1045,6 +1108,7 @@ export type Database = {
         Row: {
           allocated_quantity: number
           created_at: string
+          deleted_at: string | null
           distributed_quantity: number
           id: string
           item_type_id: string
@@ -1055,6 +1119,7 @@ export type Database = {
         Insert: {
           allocated_quantity?: number
           created_at?: string
+          deleted_at?: string | null
           distributed_quantity?: number
           id?: string
           item_type_id: string
@@ -1065,6 +1130,7 @@ export type Database = {
         Update: {
           allocated_quantity?: number
           created_at?: string
+          deleted_at?: string | null
           distributed_quantity?: number
           id?: string
           item_type_id?: string
@@ -1097,6 +1163,7 @@ export type Database = {
           counted_at: string
           counted_by: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           item_type_id: string
           marketplace_id: string
@@ -1110,6 +1177,7 @@ export type Database = {
           counted_at?: string
           counted_by?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           item_type_id: string
           marketplace_id: string
@@ -1123,6 +1191,7 @@ export type Database = {
           counted_at?: string
           counted_by?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           item_type_id?: string
           marketplace_id?: string
@@ -1156,18 +1225,21 @@ export type Database = {
       outreach_partners: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
           id: string
           is_active: boolean | null
           name: string
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           is_active?: boolean | null
           name: string
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
@@ -1177,6 +1249,7 @@ export type Database = {
       partner_registrations: {
         Row: {
           created_at: string
+          deleted_at: string | null
           emergency_contact_name: string | null
           emergency_contact_number: string | null
           emergency_contact_relationship: string | null
@@ -1206,6 +1279,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           emergency_contact_name?: string | null
           emergency_contact_number?: string | null
           emergency_contact_relationship?: string | null
@@ -1235,6 +1309,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           emergency_contact_name?: string | null
           emergency_contact_number?: string | null
           emergency_contact_relationship?: string | null
@@ -1283,6 +1358,7 @@ export type Database = {
           beneficiary_type_id: number | null
           children_count: number | null
           created_at: string
+          deleted_at: string | null
           gender: string | null
           id: string
           items_collected: number | null
@@ -1304,6 +1380,7 @@ export type Database = {
           beneficiary_type_id?: number | null
           children_count?: number | null
           created_at?: string
+          deleted_at?: string | null
           gender?: string | null
           id?: string
           items_collected?: number | null
@@ -1325,6 +1402,7 @@ export type Database = {
           beneficiary_type_id?: number | null
           children_count?: number | null
           created_at?: string
+          deleted_at?: string | null
           gender?: string | null
           id?: string
           items_collected?: number | null
@@ -1353,6 +1431,7 @@ export type Database = {
           certificate_sent_at: string | null
           created_at: string
           created_user_id: string | null
+          deleted_at: string | null
           email: string
           email_opened: boolean | null
           email_opened_at: string | null
@@ -1393,6 +1472,7 @@ export type Database = {
           certificate_sent_at?: string | null
           created_at?: string
           created_user_id?: string | null
+          deleted_at?: string | null
           email: string
           email_opened?: boolean | null
           email_opened_at?: string | null
@@ -1433,6 +1513,7 @@ export type Database = {
           certificate_sent_at?: string | null
           created_at?: string
           created_user_id?: string | null
+          deleted_at?: string | null
           email?: string
           email_opened?: boolean | null
           email_opened_at?: string | null
@@ -1484,6 +1565,7 @@ export type Database = {
           collected_items: Json
           created_at: string
           credit_balance: number
+          deleted_at: string | null
           gender: string | null
           id: string
           marital_status: string | null
@@ -1501,6 +1583,7 @@ export type Database = {
           collected_items?: Json
           created_at?: string
           credit_balance?: number
+          deleted_at?: string | null
           gender?: string | null
           id?: string
           marital_status?: string | null
@@ -1518,6 +1601,7 @@ export type Database = {
           collected_items?: Json
           created_at?: string
           credit_balance?: number
+          deleted_at?: string | null
           gender?: string | null
           id?: string
           marital_status?: string | null
@@ -1542,6 +1626,7 @@ export type Database = {
       registration_events: {
         Row: {
           created_at: string
+          deleted_at: string | null
           event_date: string | null
           event_slug: string
           family_members_joining: boolean | null
@@ -1553,6 +1638,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           event_date?: string | null
           event_slug: string
           family_members_joining?: boolean | null
@@ -1564,6 +1650,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           event_date?: string | null
           event_slug?: string
           family_members_joining?: boolean | null
@@ -1587,6 +1674,7 @@ export type Database = {
         Row: {
           allocation_id: number
           created_at: string
+          deleted_at: string | null
           environment: string
           id: string
           marketplace_external_id: number | null
@@ -1597,6 +1685,7 @@ export type Database = {
         Insert: {
           allocation_id: number
           created_at?: string
+          deleted_at?: string | null
           environment?: string
           id?: string
           marketplace_external_id?: number | null
@@ -1607,6 +1696,7 @@ export type Database = {
         Update: {
           allocation_id?: number
           created_at?: string
+          deleted_at?: string | null
           environment?: string
           id?: string
           marketplace_external_id?: number | null
@@ -1620,6 +1710,7 @@ export type Database = {
         Row: {
           action: string
           created_at: string
+          deleted_at: string | null
           environment: string
           id: string
           request_payload: Json | null
@@ -1630,6 +1721,7 @@ export type Database = {
         Insert: {
           action: string
           created_at?: string
+          deleted_at?: string | null
           environment?: string
           id?: string
           request_payload?: Json | null
@@ -1640,6 +1732,7 @@ export type Database = {
         Update: {
           action?: string
           created_at?: string
+          deleted_at?: string | null
           environment?: string
           id?: string
           request_payload?: Json | null
@@ -1656,6 +1749,7 @@ export type Database = {
           api_response_body: Json | null
           api_response_status: number | null
           created_at: string
+          deleted_at: string | null
           distributed_total: number
           environment: string
           id: string
@@ -1670,6 +1764,7 @@ export type Database = {
           api_response_body?: Json | null
           api_response_status?: number | null
           created_at?: string
+          deleted_at?: string | null
           distributed_total?: number
           environment?: string
           id?: string
@@ -1684,6 +1779,7 @@ export type Database = {
           api_response_body?: Json | null
           api_response_status?: number | null
           created_at?: string
+          deleted_at?: string | null
           distributed_total?: number
           environment?: string
           id?: string
@@ -1697,6 +1793,7 @@ export type Database = {
       survey_questions: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
           is_active: boolean
           is_required: boolean
@@ -1710,6 +1807,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           is_active?: boolean
           is_required?: boolean
@@ -1723,6 +1821,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           is_active?: boolean
           is_required?: boolean
@@ -1740,6 +1839,7 @@ export type Database = {
         Row: {
           card_id: string
           credit_change: number
+          deleted_at: string | null
           id: string
           item_type: string | null
           marketplace_id: string | null
@@ -1750,6 +1850,7 @@ export type Database = {
         Insert: {
           card_id: string
           credit_change?: number
+          deleted_at?: string | null
           id?: string
           item_type?: string | null
           marketplace_id?: string | null
@@ -1760,6 +1861,7 @@ export type Database = {
         Update: {
           card_id?: string
           credit_change?: number
+          deleted_at?: string | null
           id?: string
           item_type?: string | null
           marketplace_id?: string | null
@@ -1803,6 +1905,7 @@ export type Database = {
           check_in_time: string
           check_out_time: string | null
           created_at: string
+          deleted_at: string | null
           hours_worked: number | null
           id: string
           marketplace_id: string | null
@@ -1812,6 +1915,7 @@ export type Database = {
           check_in_time?: string
           check_out_time?: string | null
           created_at?: string
+          deleted_at?: string | null
           hours_worked?: number | null
           id?: string
           marketplace_id?: string | null
@@ -1821,6 +1925,7 @@ export type Database = {
           check_in_time?: string
           check_out_time?: string | null
           created_at?: string
+          deleted_at?: string | null
           hours_worked?: number | null
           id?: string
           marketplace_id?: string | null
@@ -1849,6 +1954,7 @@ export type Database = {
           checked_in_at: string | null
           checked_out_at: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           marketplace_id: string | null
           status: string
@@ -1864,6 +1970,7 @@ export type Database = {
           checked_in_at?: string | null
           checked_out_at?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           marketplace_id?: string | null
           status?: string
@@ -1879,6 +1986,7 @@ export type Database = {
           checked_in_at?: string | null
           checked_out_at?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           marketplace_id?: string | null
           status?: string

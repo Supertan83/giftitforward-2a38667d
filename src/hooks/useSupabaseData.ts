@@ -1263,6 +1263,7 @@ export const useMarketplaces = () => {
       const { data, error } = await supabase
         .from('marketplace_events')
         .select('*')
+        .is('deleted_at', null)
         .order('event_date', { ascending: true });
 
       if (error) throw new SafeError(mapDatabaseError(error), error);

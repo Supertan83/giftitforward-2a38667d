@@ -113,3 +113,6 @@ verify_jwt = false
 
 [functions.register-onsite-volunteer]
 verify_jwt = false
+
+[functions.soft-delete-marketplace]
+verify_jwt = false

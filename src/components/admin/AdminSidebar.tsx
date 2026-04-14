@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards' | 'marketplace-deletion';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -61,6 +61,7 @@ const adminItems = [
   { view: 'survey-questions' as AdminView, label: 'Survey Questions', icon: FileQuestion, color: 'text-pink-500' },
   { view: 'data-cleanup' as AdminView, label: 'Data Cleanup', icon: Trash2, color: 'text-destructive' },
   { view: 'database-backup' as AdminView, label: 'Database Backup', icon: Database, color: 'text-cyan-500' },
+  { view: 'marketplace-deletion' as AdminView, label: 'Marketplace Deletion', icon: Trash2, color: 'text-destructive' },
 ];
 
 const emailItems = [
