@@ -1,68 +1,77 @@
 
 
-## Fix Morning Event Stats Showing Zero
+## Marketplace Soft Delete System
 
-### Problem
-After recycling cards for the afternoon event, the Stats Dashboard shows all zeros for the morning event because it only counts live `qr_cards` filtered by `marketplace_id`. All cards were unlinked during recycling, and the component never reads `manual_beneficiary_count` or `archived_card_data`.
+### Overview
+Add a `deleted_at` column to all relevant tables, create a new "Marketplace Deletion" admin page accessible from the sidebar, and build a UI that lets the admin select a marketplace, preview impacted data stats, confirm, and soft-delete the marketplace along with all related records.
 
-### Data Fix
-**Set morning event status to `completed`** (it's still `active` in the database despite our earlier update):
-```sql
-UPDATE marketplace_events SET status = 'completed', status_locked_by_admin = true
-WHERE id = '6ed111b0-f003-46e8-a719-d76cc1800431';
-```
+### Step 1 — Database Migration: Add `deleted_at` to all tables
 
-### Code Changes
+Add a `deleted_at TIMESTAMPTZ DEFAULT NULL` column to every public table that holds user/event data. Tables to update:
 
-**File: `src/components/zones/StatsDashboardZone.tsx`**
+`marketplace_events`, `qr_cards`, `transactions`, `marketplace_item_allocations`, `marketplace_manual_counts`, `archived_card_data`, `allocation_traceability_logs`, `volunteer_qr_cards`, `volunteer_attendance`, `pending_volunteers`, `pending_beneficiaries`, `item_types`, `partner_registrations`, `registration_events`, `event_dependents`, `external_survey_responses`, `volunteer_surveys`, `email_send_logs`, `email_campaigns`, `email_campaign_recipients`, `email_automations`, `email_automation_logs`, `email_templates`, `outreach_partners`, `warehouse_returns`, `surpluss_allocation_sync`, `surpluss_distribution_reports`, `surpluss_api_audit_log`, `cleanup_archive`, `survey_questions`, `hubspot_email_config`, `email_provider_config`, `external_items`, `external_companies`, `external_addresses`, `external_material_groups`, `external_sdg_goals`, `external_item_sdg_goals`, `webhook_events`, `webhook_mapping_templates`
 
-Update the beneficiary stats calculation to use a fallback hierarchy when a specific marketplace is selected:
+Single migration with one `ALTER TABLE ... ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL` per table.
 
-1. **Fetch marketplace metadata** — the component already has `selectedMarketplace` from the `useMarketplaces()` hook, which includes `manual_beneficiary_count` and `demographics_reach`.
+### Step 2 — Edge Function: `soft-delete-marketplace`
 
-2. **Add archived card data query** — add a new query using `useQuery` to fetch `archived_card_data` for the selected marketplace when live card count is 0.
+New edge function that:
+1. Validates admin role
+2. Accepts `{ marketplace_id: string }`
+3. Uses service role client to set `deleted_at = now()` on:
+   - `marketplace_events` where `id = marketplace_id`
+   - `qr_cards` where `marketplace_id = marketplace_id`
+   - `transactions` where `marketplace_id = marketplace_id`
+   - `marketplace_item_allocations` where `marketplace_id = marketplace_id`
+   - `marketplace_manual_counts` where `marketplace_id = marketplace_id`
+   - `archived_card_data` where `marketplace_id = marketplace_id`
+   - `allocation_traceability_logs` where `marketplace_id = marketplace_id`
+   - `volunteer_qr_cards` where `marketplace_id = marketplace_id`
+   - `volunteer_attendance` where `marketplace_id = marketplace_id`
+   - `external_survey_responses` where `marketplace_id = marketplace_id`
+   - `warehouse_returns` where `marketplace_id = marketplace_id` (if column exists)
+4. Returns counts of affected rows per table
 
-3. **Fallback logic for beneficiary count**:
-   - If live cards exist for this marketplace → use them (current behavior)
-   - Else if `manual_beneficiary_count` is set → use that as "Total Served"
-   - Else if `archived_card_data` exists → count those records
+### Step 3 — Edge Function: `marketplace-deletion-preview`
 
-4. **Fallback for demographics** (gender, children):
-   - If live cards have data → use them
-   - Else if `archived_card_data` exists → compute gender/children from archived records
+New edge function (or combine into the same function with `mode: 'preview'`) that:
+1. Accepts `{ marketplace_id: string }`
+2. Counts rows per related table (without modifying)
+3. Returns stats like `{ qr_cards: 1107, transactions: 5420, allocations: 12, ... }`
 
-5. **Items Distributed / Credits Used** — these already come from `marketplace_item_allocations` which were NOT reset, so they correctly show 19,896. No change needed.
+### Step 4 — New Component: `MarketplaceDeletion.tsx`
 
-6. **Activated Today / In Queue / Checked Out** — for completed events with no live cards, show 0 for "In Queue" and "Activated Today", but show `manual_beneficiary_count` for "Checked Out (Exit)" and "Total Served" since all beneficiaries were processed.
+Located at `src/components/admin/MarketplaceDeletion.tsx`:
+- Dropdown to select a marketplace (from `marketplace_events` where `deleted_at IS NULL`)
+- On selection, calls preview endpoint and shows a stats card:
+  - QR Cards count
+  - Transactions count
+  - Allocations count
+  - Archived cards count
+  - Traceability logs count
+  - Volunteer cards/attendance count
+  - Survey responses count
+- "Delete Marketplace" button → confirmation dialog requiring typing marketplace name
+- On confirm, calls soft-delete endpoint
+- Success toast with summary
 
-### Technical Details
+### Step 5 — Sidebar & Dashboard Wiring
 
-The `MarketplaceEvent` type from `useMarketplaces()` already returns `manual_beneficiary_count` and `demographics_reach`. We just need to access `selectedMarketplace?.manual_beneficiary_count` in the `beneficiaryStats` computation.
+- Add `'marketplace-deletion'` to the `AdminView` type in both `AdminSidebar.tsx` and `AdminDashboard.tsx`
+- Add menu item under **Admin Apps** section with a `Trash2` icon and label "Marketplace Deletion"
+- Add the component render case in the dashboard's view switcher
 
-For archived demographics, add a small query:
-```typescript
-const { data: archivedCards = [] } = useQuery({
-  queryKey: ['archived_card_data', selectedMarketplaceId],
-  queryFn: async () => {
-    if (selectedMarketplaceId === 'all') return [];
-    const { data } = await supabase
-      .from('archived_card_data')
-      .select('gender, children_count')
-      .eq('marketplace_id', selectedMarketplaceId);
-    return data || [];
-  },
-  enabled: selectedMarketplaceId !== 'all',
-});
-```
+### Step 6 — Update Existing Queries
 
-Then in `beneficiaryStats` memo, when `allProcessedCards.length === 0`:
-- Use `selectedMarketplace?.manual_beneficiary_count ?? archivedCards.length` for total
-- Use archived cards for gender/children breakdowns if available
-- Show the manual count for "Checked Out" and "Total Served"
+Update key data-fetching hooks to filter `deleted_at IS NULL`:
+- `useMarketplaces()` in `useSupabaseData.ts` — add `.is('deleted_at', null)` to marketplace queries
+- Other hooks that list marketplaces for dropdowns
 
-### Result
-- Morning event will show 1,082 beneficiaries (from `manual_beneficiary_count`)
-- Items Distributed and Credits Used already show 19,896 correctly
-- Afternoon event continues working with live card data
-- Future recycled events will also display correctly
+This ensures soft-deleted marketplaces disappear from the UI without being permanently removed from the database.
+
+### Technical Notes
+- The `deleted_at` column approach keeps data in place; no data moves between tables
+- All existing RLS policies continue to work — `deleted_at` is just a filter
+- Future: a "Recycle Bin" view could list soft-deleted marketplaces with a restore option
+- The `transactions` table currently has no UPDATE RLS policy, so the edge function uses the service role client to bypass this
 
