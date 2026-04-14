@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Trash2, Loader2, AlertTriangle, Store, CreditCard, ArrowRightLeft, Package, ScrollText, Users, FileText } from 'lucide-react';
+import { ArrowLeft, Trash2, Loader2, AlertTriangle, Store, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,26 +14,12 @@ interface MarketplaceDeletionProps {
   onBack: () => void;
 }
 
-const TABLE_LABELS: Record<string, { label: string; icon: React.ElementType }> = {
-  marketplace_events: { label: 'Marketplace', icon: Store },
-  qr_cards: { label: 'QR Cards', icon: CreditCard },
-  transactions: { label: 'Transactions', icon: ArrowRightLeft },
-  marketplace_item_allocations: { label: 'Item Allocations', icon: Package },
-  marketplace_manual_counts: { label: 'Manual Counts', icon: FileText },
-  archived_card_data: { label: 'Archived Cards', icon: CreditCard },
-  allocation_traceability_logs: { label: 'Traceability Logs', icon: ScrollText },
-  volunteer_qr_cards: { label: 'Volunteer QR Cards', icon: Users },
-  volunteer_attendance: { label: 'Volunteer Attendance', icon: Users },
-  external_survey_responses: { label: 'Survey Responses', icon: FileText },
-  pending_beneficiaries: { label: 'Pending Beneficiaries', icon: Users },
-};
-
 export const MarketplaceDeletion = ({ onBack }: MarketplaceDeletionProps) => {
   const { toast } = useToast();
   const { data: marketplaces = [] } = useMarketplaces();
   const [selectedId, setSelectedId] = useState<string>('');
-  const [stats, setStats] = useState<Record<string, number> | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [allocations, setAllocations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmInput, setConfirmInput] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -42,43 +28,48 @@ export const MarketplaceDeletion = ({ onBack }: MarketplaceDeletionProps) => {
 
   useEffect(() => {
     if (!selectedId) {
-      setStats(null);
+      setAllocations([]);
       return;
     }
-    const fetchPreview = async () => {
-      setLoadingPreview(true);
+    const fetch = async () => {
+      setLoading(true);
       try {
-        const { data, error } = await supabase.functions.invoke('soft-delete-marketplace', {
-          body: { marketplace_id: selectedId, mode: 'preview' },
-        });
+        const { data, error } = await supabase
+          .from('marketplace_item_allocations')
+          .select('*, item_types(name, icon)')
+          .eq('marketplace_id', selectedId)
+          .is('deleted_at', null);
         if (error) throw error;
-        setStats(data.stats);
+        setAllocations(data || []);
       } catch (err: any) {
-        toast({ title: 'Preview failed', description: err.message, variant: 'destructive' });
+        toast({ title: 'Failed to load allocations', description: err.message, variant: 'destructive' });
       } finally {
-        setLoadingPreview(false);
+        setLoading(false);
       }
     };
-    fetchPreview();
+    fetch();
   }, [selectedId]);
 
-  const totalRecords = stats ? Object.values(stats).reduce((sum, v) => sum + v, 0) : 0;
+  const totalAllocated = allocations.reduce((s, a) => s + (a.allocated_quantity || 0), 0);
+  const totalDistributed = allocations.reduce((s, a) => s + (a.distributed_quantity || 0), 0);
 
   const handleDelete = async () => {
-    if (!selectedId || !selectedMarketplace) return;
+    if (!selectedId) return;
     setDeleting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('soft-delete-marketplace', {
-        body: { marketplace_id: selectedId, mode: 'delete' },
-      });
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('marketplace_item_allocations')
+        .update({ deleted_at: now })
+        .eq('marketplace_id', selectedId)
+        .is('deleted_at', null);
       if (error) throw error;
-      const deletedCount = Object.values(data.results as Record<string, number>).reduce((s, v) => s + v, 0);
+
       toast({
-        title: 'Marketplace soft-deleted',
-        description: `${selectedMarketplace.name}: ${deletedCount} records marked as deleted.`,
+        title: 'Allocations soft-deleted',
+        description: `${allocations.length} allocation(s) for ${selectedMarketplace?.name} marked as deleted.`,
       });
-      setSelectedId('');
-      setStats(null);
+      setAllocations([]);
       setShowConfirm(false);
       setConfirmInput('');
     } catch (err: any) {
@@ -95,15 +86,15 @@ export const MarketplaceDeletion = ({ onBack }: MarketplaceDeletionProps) => {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h2 className="text-2xl font-display font-bold">Marketplace Deletion</h2>
-          <p className="text-sm text-muted-foreground">Soft delete a marketplace and all related data</p>
+          <h2 className="text-2xl font-display font-bold">Allocation Deletion</h2>
+          <p className="text-sm text-muted-foreground">Soft delete item allocations for a marketplace (marketplace itself is kept)</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Select Marketplace</CardTitle>
-          <CardDescription>Choose the marketplace you want to remove. This will NOT permanently delete data — it will be hidden from the UI.</CardDescription>
+          <CardDescription>Choose the marketplace whose allocations you want to remove.</CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={selectedId} onValueChange={setSelectedId}>
@@ -125,97 +116,90 @@ export const MarketplaceDeletion = ({ onBack }: MarketplaceDeletionProps) => {
         </CardContent>
       </Card>
 
-      {loadingPreview && (
+      {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       )}
 
-      {stats && !loadingPreview && (
+      {!loading && selectedId && (
         <>
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-warning" />
-                Impact Preview — {selectedMarketplace?.name}
+                <Package className="h-5 w-5 text-primary" />
+                Allocations — {selectedMarketplace?.name}
               </CardTitle>
               <CardDescription>
-                The following records will be soft-deleted (marked with a timestamp, not permanently removed).
+                {allocations.length === 0
+                  ? 'No active allocations found for this marketplace.'
+                  : `${allocations.length} allocation(s) will be soft-deleted.`}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Object.entries(stats).map(([table, count]) => {
-                  const meta = TABLE_LABELS[table] || { label: table, icon: FileText };
-                  const Icon = meta.icon;
-                  return (
-                    <div key={table} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                      <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{meta.label}</p>
-                        <p className="text-xl font-bold text-foreground">{count.toLocaleString()}</p>
+            {allocations.length > 0 && (
+              <CardContent>
+                <div className="space-y-2">
+                  {allocations.map(a => (
+                    <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{a.item_types?.name || 'Unknown'}</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Allocated: <strong>{a.allocated_quantity}</strong> · Distributed: <strong>{a.distributed_quantity}</strong>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-              <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                <p className="text-sm font-semibold text-destructive">
-                  Total: {totalRecords.toLocaleString()} records will be soft-deleted
-                </p>
-              </div>
-            </CardContent>
+                  ))}
+                </div>
+                <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <p className="text-sm font-semibold text-destructive">
+                    Total: {totalAllocated} allocated, {totalDistributed} distributed across {allocations.length} item(s)
+                  </p>
+                </div>
+              </CardContent>
+            )}
           </Card>
 
-          <div className="flex justify-end">
-            <Button
-              variant="destructive"
-              size="lg"
-              onClick={() => setShowConfirm(true)}
-              disabled={totalRecords === 0}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Marketplace
-            </Button>
-          </div>
+          {allocations.length > 0 && (
+            <div className="flex justify-end">
+              <Button variant="destructive" size="lg" onClick={() => setShowConfirm(true)}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Allocations
+              </Button>
+            </div>
+          )}
         </>
       )}
 
       <AlertDialog open={showConfirm} onOpenChange={open => { if (!open) { setShowConfirm(false); setConfirmInput(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Soft Delete</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Allocation Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              You are about to soft-delete <strong>{selectedMarketplace?.name}</strong> and {totalRecords.toLocaleString()} related records.
+              You are about to soft-delete <strong>{allocations.length}</strong> allocation(s) for <strong>{selectedMarketplace?.name}</strong>.
+              The marketplace itself will NOT be affected.
               <br /><br />
-              Type the marketplace name to confirm:
+              Type <strong>DELETE</strong> to confirm:
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
-            <Label htmlFor="confirm-name">Marketplace Name</Label>
+            <Label htmlFor="confirm-delete">Confirmation</Label>
             <Input
-              id="confirm-name"
+              id="confirm-delete"
               value={confirmInput}
               onChange={e => setConfirmInput(e.target.value)}
-              placeholder={selectedMarketplace?.name}
+              placeholder="DELETE"
               className="mt-1"
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setShowConfirm(false); setConfirmInput(''); }}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={confirmInput !== selectedMarketplace?.name || deleting}
+              disabled={confirmInput !== 'DELETE' || deleting}
             >
-              {deleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Confirm Delete'
-              )}
+              {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting...</> : 'Confirm Delete'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
