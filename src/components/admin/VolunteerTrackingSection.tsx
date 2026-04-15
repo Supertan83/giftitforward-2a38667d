@@ -79,7 +79,7 @@ export const VolunteerTrackingSection = ({
           )
         `)
         .eq('marketplace_id', marketplaceId)
-        .not('checked_in_at', 'is', null);
+        .in('status', ['checked_in', 'checked_out']);
 
       if (vcError) throw vcError;
 
