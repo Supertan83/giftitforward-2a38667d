@@ -15,6 +15,7 @@ export interface VolunteerCategoryBreakdown {
 export interface VolunteerDetailsData {
   totalRegistered: number;
   totalAttended: number;
+  totalWithQRCards: number;
   dropoutRate: number;
   familyMembers: number;
   categoryBreakdown: VolunteerCategoryBreakdown[];
@@ -92,6 +93,10 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
 
       // Calculate totals
       const totalRegistered = vols.length;
+      const totalWithQRCards = vols.filter(v => {
+        const cards = v.volunteer_qr_cards || [];
+        return cards.length > 0;
+      }).length;
       const totalAttended = vols.filter(v => {
         const cards = v.volunteer_qr_cards || [];
         if (marketplaceId) {
@@ -183,6 +188,7 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
       return {
         totalRegistered,
         totalAttended,
+        totalWithQRCards,
         dropoutRate,
         familyMembers: totalFamilyMembers,
         categoryBreakdown,

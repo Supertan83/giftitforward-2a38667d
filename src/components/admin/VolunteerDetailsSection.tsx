@@ -36,14 +36,14 @@ export const VolunteerDetailsSection = ({ marketplaceName, marketplaceId }: Volu
     {
       label: 'Total Registered',
       value: data.totalRegistered.toLocaleString(),
-      sub: 'Volunteers',
+      sub: `QR Cards: ${data.totalWithQRCards}`,
       color: 'text-primary',
       bgColor: 'bg-primary/5 border-primary/20',
     },
     {
       label: 'Total Attended',
       value: data.totalAttended.toLocaleString(),
-      sub: 'Volunteers',
+      sub: 'Checked in / out',
       color: 'text-success',
       bgColor: 'bg-success/5 border-success/20',
     },
@@ -57,7 +57,7 @@ export const VolunteerDetailsSection = ({ marketplaceName, marketplaceId }: Volu
     {
       label: 'Drop-out Rate',
       value: `${data.dropoutRate}%`,
-      sub: `${data.totalRegistered - data.totalAttended} volunteers`,
+      sub: `${data.totalRegistered - data.totalAttended} did not attend`,
       color: 'text-destructive',
       bgColor: 'bg-destructive/5 border-destructive/20',
     },
