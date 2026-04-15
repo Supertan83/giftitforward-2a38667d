@@ -1,38 +1,33 @@
 
 
-## Extend Morning Marketplace — Data-Safe Plan
+## Fix: Checked Out Count Shows 0 Instead of 891
 
-### Current State (confirmed from database)
-- **Morning Event** (`3f44eb86`): Active, ends 13:30, admin-locked — 72 active cards, 891 checked-out cards
-- **Afternoon Event** (`accc4d0e`): Already `completed` — no action needed
-- **Existing data**: 16,072 distribution transactions, 891 checkout transactions — all safely stored in `transactions` table
+### Root Cause
+When we extended the morning marketplace and reset the 891 checked-out cards back to `inactive`, those cards lost their `checked_out` status and `marketplace_id`. The Stats Dashboard counts checked-out beneficiaries by filtering `qr_cards` with `status === 'checked_out'` — which now returns 0.
 
-### Data Preservation Strategy
-The `transactions` table already holds a permanent, immutable record of every distribution and checkout from this morning. That data is never deleted or modified by any card reset.
+However, the data is safe:
+- 891 archived records exist in `archived_card_data`
+- 891 CheckOut transactions exist in `transactions`
 
-Additionally, before resetting the 891 checked-out cards, we will **archive them** to `archived_card_data` — this creates a snapshot of each card's state (unique_id, marketplace_id, activated_at, checked_out timing) so you have a full audit trail even after cards are recycled.
+### Fix (1 file change)
 
-### Actions (3 SQL statements via insert tool)
+**`src/components/zones/StatsDashboardZone.tsx`** — Update the `checkedOut` calculation to combine live checked-out cards with archived cards for the same marketplace. Since the morning event is still active with 120 live active cards (`hasLiveCards = true`), the current logic only looks at live `checked_out` cards and ignores the archive.
 
-**Step 1 — Archive checked-out cards** (preserves snapshot in `archived_card_data`)
-- Insert all 891 checked-out cards into `archived_card_data` with their current marketplace_id, activated_at, unique_id, and demographics
-- This is the same archive process used after every completed marketplace
+Change line 119 from:
+```
+checkedOut: hasLiveCards ? checkedOutCards.length : fallbackTotal,
+```
+To:
+```
+checkedOut: checkedOutCards.length + archivedCards.length,
+```
 
-**Step 2 — Reset checked-out cards to inactive** (frees them for re-entry)
-- Set status → `inactive`, clear credit_balance, total_items_collected, collected_items, marketplace_id, activated_at
-- These cards can now be scanned again for the continued distribution
+This way, the 891 archived cards are counted alongside any currently checked-out cards, giving the correct total regardless of whether cards have been recycled mid-event.
 
-**Step 3 — Remove end_time on morning marketplace**
-- Set `end_time` to NULL so the auto-unblock cron won't close the session
-- The marketplace continues until items run out
+The same pattern already exists for `totalBeneficiaries`, `genderBreakdown`, and `totalChildren` where archived data supplements live data. This makes `checkedOut` consistent.
 
-### What is preserved
-- All 16,072 distribution transactions ✓
-- All 891 checkout transactions ✓  
-- Archived card snapshots in `archived_card_data` ✓
-- Morning marketplace stays active with `status_locked_by_admin = true` ✓
-- Afternoon event stays `completed` — untouched ✓
-
-### No code changes needed
-All three steps are data operations only.
+### What stays the same
+- All other stats (Activated, In Queue, Items Distributed, etc.) are unaffected
+- No database changes needed
+- No edge function changes needed
 
