@@ -2080,8 +2080,24 @@ async function sendWelcomeEmail(
   loginUrl: string,
   pendingId: string
 ): Promise<{ success: boolean; error?: string; provider?: string }> {
-  // Call new function without QR
-  return sendWelcomeEmailWithQR(supabaseClient, email, firstName, lastName, tempPassword, loginUrl, loginUrl + '/training', 'N/A', pendingId, [], undefined, undefined, undefined);
+  // Look up the volunteer's real QR card ID instead of hardcoding 'N/A'
+  let qrCardId = 'N/A';
+  try {
+    const { data: qrCard } = await supabaseClient
+      .from('volunteer_qr_cards')
+      .select('unique_id')
+      .eq('volunteer_id', pendingId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (qrCard?.unique_id) {
+      qrCardId = qrCard.unique_id;
+    }
+  } catch (e) {
+    console.error('Failed to look up QR card for volunteer:', pendingId, e);
+  }
+  return sendWelcomeEmailWithQR(supabaseClient, email, firstName, lastName, tempPassword, loginUrl, loginUrl + '/training', qrCardId, pendingId, [], undefined, undefined, undefined);
 }
 
 interface VolunteerData {

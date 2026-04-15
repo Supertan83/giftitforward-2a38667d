@@ -203,15 +203,8 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from('user_roles').delete().eq('user_id', newUser.user.id)
     await supabaseAdmin.from('user_roles').insert({ user_id: newUser.user.id, role: 'volunteer' })
 
-    // Create QR card
-    await supabaseAdmin.from('volunteer_qr_cards').insert({
-      unique_id: qrCodeId,
-      volunteer_id: null,
-      status: 'inactive',
-    })
-
-    // Create pending volunteer record
-    await supabaseAdmin.from('pending_volunteers').insert({
+    // Create pending volunteer record FIRST so we have the ID to link the QR card
+    const { data: volunteerRecord, error: volunteerError } = await supabaseAdmin.from('pending_volunteers').insert({
       email: cleanEmail,
       first_name: cleanFirstName,
       last_name: cleanLastName,
@@ -224,7 +217,25 @@ Deno.serve(async (req) => {
       external_company: company_name?.trim() || null,
       is_employee: false,
       events_list: marketplace?.name || null,
+    }).select('id').single()
+
+    if (volunteerError || !volunteerRecord) {
+      console.error('Failed to create pending volunteer record:', volunteerError)
+      throw new Error('Failed to create volunteer record')
+    }
+
+    // Create QR card linked to the volunteer and marketplace
+    const { error: qrError } = await supabaseAdmin.from('volunteer_qr_cards').insert({
+      unique_id: qrCodeId,
+      volunteer_id: volunteerRecord.id,
+      marketplace_id: marketplace_id,
+      status: 'inactive',
     })
+
+    if (qrError) {
+      console.error('Failed to create volunteer QR card:', qrError)
+      throw new Error('Failed to create QR card')
+    }
 
     // Build and send email
     const htmlContent = buildEmailHtml(cleanFirstName, cleanLastName, cleanEmail, tempPassword, qrCodeId, marketplace)
