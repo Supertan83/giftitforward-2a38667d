@@ -1,33 +1,44 @@
 
 
-## Fix: Checked Out Count Shows 0 Instead of 891
+## Fix: Auto-Reset Not Working for Admin-Locked Extended Marketplaces
 
 ### Root Cause
-When we extended the morning marketplace and reset the 891 checked-out cards back to `inactive`, those cards lost their `checked_out` status and `marketplace_id`. The Stats Dashboard counts checked-out beneficiaries by filtering `qr_cards` with `status === 'checked_out'` — which now returns 0.
+When we extended the morning marketplace earlier today, we set `status_locked_by_admin = true` and `end_time = NULL`. The `auto-unblock-cards` edge function explicitly skips admin-locked events (`if (mp.status_locked_by_admin) continue;`), so the April 15 morning marketplace will stay `active` forever.
 
-However, the data is safe:
-- 891 archived records exist in `archived_card_data`
-- 891 CheckOut transactions exist in `transactions`
+### Actions
 
-### Fix (1 file change)
+**1. Immediately complete the April 15 morning marketplace** (data operation)
+- Set status to `completed`, restore a reasonable end_time, unlock admin lock
+- This is safe because all cards are already inactive and all data is archived
 
-**`src/components/zones/StatsDashboardZone.tsx`** — Update the `checkedOut` calculation to combine live checked-out cards with archived cards for the same marketplace. Since the morning event is still active with 120 live active cards (`hasLiveCards = true`), the current logic only looks at live `checked_out` cards and ignores the archive.
+**2. Update `auto-unblock-cards` edge function logic**
+- Change the admin-lock skip logic: instead of skipping entirely, only skip events whose `event_date` is today
+- If the event_date has **passed** (is before today), auto-complete it regardless of admin lock
+- This way, admin-locking protects a marketplace during the day of the event, but doesn't prevent overnight cleanup
 
-Change line 119 from:
+Updated logic:
+```typescript
+for (const mp of activeMarketplaces) {
+  if (!mp.event_date) continue;
+  const eventDate = new Date(mp.event_date);
+  const eventEnd = new Date(mp.event_date);
+  // ... set hours from end_time ...
+  
+  // If admin-locked AND event is today, skip (respect the lock during the event day)
+  if (mp.status_locked_by_admin && eventDate.toDateString() === now.toDateString()) continue;
+  
+  // If event has ended (or event_date is in the past), auto-complete
+  if (now > eventEnd) {
+    idsToComplete.push(mp.id);
+  }
+}
 ```
-checkedOut: hasLiveCards ? checkedOutCards.length : fallbackTotal,
-```
-To:
-```
-checkedOut: checkedOutCards.length + archivedCards.length,
-```
 
-This way, the 891 archived cards are counted alongside any currently checked-out cards, giving the correct total regardless of whether cards have been recycled mid-event.
+**3. Deploy updated function**
 
-The same pattern already exists for `totalBeneficiaries`, `genderBreakdown`, and `totalChildren` where archived data supplements live data. This makes `checkedOut` consistent.
+### Files changed
+- `supabase/functions/auto-unblock-cards/index.ts` — update admin-lock logic
 
-### What stays the same
-- All other stats (Activated, In Queue, Items Distributed, etc.) are unaffected
-- No database changes needed
-- No edge function changes needed
+### Data operation
+- UPDATE `marketplace_events` SET status='completed', status_locked_by_admin=false, end_time='23:59' WHERE id='3f44eb86-f1c5-48a4-8bf3-5b70b41c5bfd'
 
