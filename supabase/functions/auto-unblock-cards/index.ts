@@ -33,13 +33,18 @@ Deno.serve(async (req) => {
 
       for (const mp of activeMarketplaces) {
         if (!mp.event_date) continue;
-        if (mp.status_locked_by_admin) continue; // Skip admin-locked events
+        const eventDate = new Date(mp.event_date);
         const eventEnd = new Date(mp.event_date);
         if (mp.end_time) {
           const [h, m] = mp.end_time.split(":").map(Number);
           eventEnd.setHours(h, m, 0, 0);
         } else {
           eventEnd.setHours(23, 59, 59, 999);
+        }
+        // Respect admin lock only on the event day itself
+        if (mp.status_locked_by_admin && eventDate.toDateString() === now.toDateString()) {
+          console.log(`Marketplace "${mp.name}" is admin-locked today, skipping`);
+          continue;
         }
         if (now > eventEnd) {
           idsToComplete.push(mp.id);
