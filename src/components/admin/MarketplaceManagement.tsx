@@ -220,6 +220,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         }
       });
       setErrors(fieldErrors);
+      toast({
+        title: 'Please fix the highlighted fields',
+        description: Object.values(fieldErrors)[0] || 'Some fields are invalid',
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -289,6 +294,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         }
       });
       setErrors(fieldErrors);
+      toast({
+        title: 'Please fix the highlighted fields',
+        description: Object.values(fieldErrors)[0] || 'Some fields are invalid',
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -886,7 +896,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   </div>
                   <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
+                <p className="text-xs text-muted-foreground">Default: 15, Range: 1-100</p>
               </div>
 
               
