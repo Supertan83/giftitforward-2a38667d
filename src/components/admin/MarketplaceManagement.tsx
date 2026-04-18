@@ -50,7 +50,7 @@ const createMarketplaceSchema = z.object({
   outreach_partner: z.string().max(200).optional(),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
-  beneficiary_credit_limit: z.number().min(15).max(25).optional()
+  beneficiary_credit_limit: z.number().int().min(1).max(100).optional()
 });
 
 // Helper to format time for display
@@ -220,6 +220,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         }
       });
       setErrors(fieldErrors);
+      toast({
+        title: 'Please fix the highlighted fields',
+        description: Object.values(fieldErrors)[0] || 'Some fields are invalid',
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -289,6 +294,11 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
         }
       });
       setErrors(fieldErrors);
+      toast({
+        title: 'Please fix the highlighted fields',
+        description: Object.values(fieldErrors)[0] || 'Some fields are invalid',
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -726,7 +736,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 </div>
                 <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
               </div>
-              <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
+              <p className="text-xs text-muted-foreground">Default: 15, Range: 1-100</p>
             </div>
 
             <div className="space-y-2">
@@ -886,7 +896,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   </div>
                   <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
+                <p className="text-xs text-muted-foreground">Default: 15, Range: 1-100</p>
               </div>
 
               
