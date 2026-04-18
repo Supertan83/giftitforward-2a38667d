@@ -1,12 +1,9 @@
 
-Admin couldn't save via UI earlier. They want me to directly update today's Taxi Drivers morning marketplace credit limit to 29 in the database.
-
-Need to: find today's Taxi Drivers morning marketplace and update `beneficiary_credit_limit = 29`.
+Update today's Taxi Drivers Afternoon Event `beneficiary_credit_limit` from 15 → 29 via direct DB update, matching what we already did for the morning event.
 
 ## Plan
 
-1. Query `marketplace_events` to find today's Taxi Drivers morning event (filter by name ILIKE '%taxi%' AND event_date = today AND morning time slot).
-2. Update that row: `beneficiary_credit_limit = 29`.
-3. Confirm to admin so distributions can continue with the new limit.
+1. UPDATE `marketplace_events` SET `beneficiary_credit_limit = 29`, `updated_at = now()` WHERE name ILIKE '%taxi%' AND event_date = today AND it's the afternoon slot.
+2. Confirm to admin.
 
-No code or schema changes — pure data update via insert tool.
+No code or schema changes.
