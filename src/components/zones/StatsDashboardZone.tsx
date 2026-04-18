@@ -45,8 +45,8 @@ export const StatsDashboardZone = () => {
 
   const isLoading = isLoadingCards || isLoadingVolunteers || isLoadingMarketplaces || isLoadingAllocations;
 
-  // Filter marketplaces for selector - show upcoming, active, and completed
-  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active' || m.status === 'completed');
+  // Filter marketplaces for selector - show only upcoming and active (hide completed)
+  const availableMarketplaces = marketplaces.filter(m => m.status === 'upcoming' || m.status === 'active');
   const selectedMarketplace = marketplaces.find(m => m.id === selectedMarketplaceId);
 
   // Calculate beneficiary statistics
