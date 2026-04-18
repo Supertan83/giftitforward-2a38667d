@@ -727,8 +727,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                   <Input
                     id="beneficiary_credit_limit"
                     type="number"
-                    min={15}
-                    max={25}
+                    min={1}
+                    max={100}
                     value={beneficiaryCreditLimit}
                     onChange={(e) => setBeneficiaryCreditLimit(parseInt(e.target.value) || 15)}
                     className="pl-10" />
@@ -887,8 +887,8 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                     <Input
                     id="edit-beneficiary_credit_limit"
                     type="number"
-                    min={15}
-                    max={25}
+                    min={1}
+                    max={100}
                     value={editingMarketplace.beneficiaryCreditLimit}
                     onChange={(e) => setEditingMarketplace({ ...editingMarketplace, beneficiaryCreditLimit: parseInt(e.target.value) || 15 })}
                     className="pl-10" />
