@@ -50,7 +50,7 @@ const createMarketplaceSchema = z.object({
   outreach_partner: z.string().max(200).optional(),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
-  beneficiary_credit_limit: z.number().min(15).max(25).optional()
+  beneficiary_credit_limit: z.number().int().min(1).max(100).optional()
 });
 
 // Helper to format time for display
