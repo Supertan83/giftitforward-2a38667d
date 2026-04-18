@@ -726,7 +726,7 @@ export const MarketplaceManagement = ({ onBack }: MarketplaceManagementProps) =>
                 </div>
                 <span className="text-sm text-muted-foreground whitespace-nowrap">items/person</span>
               </div>
-              <p className="text-xs text-muted-foreground">Default: 15, Range: 15-25</p>
+              <p className="text-xs text-muted-foreground">Default: 15, Range: 1-100</p>
             </div>
 
             <div className="space-y-2">
