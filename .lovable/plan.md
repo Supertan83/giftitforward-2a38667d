@@ -1,44 +1,34 @@
 
 
-## Fix: Auto-Reset Not Working for Admin-Locked Extended Marketplaces
+## Fix: "Save Changes" silently fails when Beneficiary Credit Limit > 25
 
-### Root Cause
-When we extended the morning marketplace earlier today, we set `status_locked_by_admin = true` and `end_time = NULL`. The `auto-unblock-cards` edge function explicitly skips admin-locked events (`if (mp.status_locked_by_admin) continue;`), so the April 15 morning marketplace will stay `active` forever.
-
-### Actions
-
-**1. Immediately complete the April 15 morning marketplace** (data operation)
-- Set status to `completed`, restore a reasonable end_time, unlock admin lock
-- This is safe because all cards are already inactive and all data is archived
-
-**2. Update `auto-unblock-cards` edge function logic**
-- Change the admin-lock skip logic: instead of skipping entirely, only skip events whose `event_date` is today
-- If the event_date has **passed** (is before today), auto-complete it regardless of admin lock
-- This way, admin-locking protects a marketplace during the day of the event, but doesn't prevent overnight cleanup
-
-Updated logic:
-```typescript
-for (const mp of activeMarketplaces) {
-  if (!mp.event_date) continue;
-  const eventDate = new Date(mp.event_date);
-  const eventEnd = new Date(mp.event_date);
-  // ... set hours from end_time ...
-  
-  // If admin-locked AND event is today, skip (respect the lock during the event day)
-  if (mp.status_locked_by_admin && eventDate.toDateString() === now.toDateString()) continue;
-  
-  // If event has ended (or event_date is in the past), auto-complete
-  if (now > eventEnd) {
-    idsToComplete.push(mp.id);
-  }
-}
+### Root cause (confirmed)
+`src/components/admin/MarketplaceManagement.tsx` line 53:
+```ts
+beneficiary_credit_limit: z.number().min(15).max(25).optional()
 ```
+The screenshot shows the admin entered **29 items/person**. Zod validation fails, `setErrors` is called, and `handleSaveEdit` returns early — no toast, no save, "nothing happens". The error message is rendered next to the field but is easy to miss; meanwhile the help text still says "Default: 15, Range: 15-25" so admins don't know 29 is rejected.
 
-**3. Deploy updated function**
+The DB column has no such constraint (`beneficiary_credit_limit integer NOT NULL DEFAULT 15`), so this is purely a frontend cap that no longer matches operational reality (admins now need higher per-person limits when extending marketplaces or for special distributions).
 
-### Files changed
-- `supabase/functions/auto-unblock-cards/index.ts` — update admin-lock logic
+### Fix (1 file)
 
-### Data operation
-- UPDATE `marketplace_events` SET status='completed', status_locked_by_admin=false, end_time='23:59' WHERE id='3f44eb86-f1c5-48a4-8bf3-5b70b41c5bfd'
+**`src/components/admin/MarketplaceManagement.tsx`**
+1. Loosen the Zod rule to a sane operational range:
+   ```ts
+   beneficiary_credit_limit: z.number().int().min(1).max(100).optional()
+   ```
+2. Update both helper-text labels (create form ~line 729 and edit form ~line 889):
+   - From: `Default: 15, Range: 15-25`
+   - To: `Default: 15, Range: 1-100`
+3. Add a fallback toast in `handleSaveEdit` / `handleCreate` so that if validation ever fails again, the admin sees a clear "Please fix the highlighted fields" destructive toast instead of nothing happening.
+
+### What stays the same
+- DB schema, RLS policies, edge functions — untouched
+- Default value remains 15
+- All other validation rules unchanged
+- No data migration needed
+
+### Outcome
+Admins can save any reasonable per-person limit (e.g. 29), and if they ever enter an invalid value they'll get a visible toast instead of a silent no-op.
 
