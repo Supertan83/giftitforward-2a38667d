@@ -1,21 +1,37 @@
 
-User reports yesterday's (4/18/2026) Taxi Drivers Afternoon marketplace shows 0 beneficiaries on the dashboard. Admin needs the correct number for calculations.
+Yesterday's (4/18/2026) marketplace beneficiary counts — verified against transactions table.
 
-Likely cause: After the morning event, admin clicked "Archive & Reset Cards" which moved 844 checked_out cards to `archived_card_data` and reset `qr_cards`. Then the 82 active cards were transferred to Afternoon. After Afternoon ended, those cards were also likely archived/reset — so now `qr_cards` shows 0 for Afternoon, and the dashboard's "Total Served" falls back to `manual_beneficiary_count` (which is null) or `archived_card_data` count.
+## Current state
 
-Need to investigate:
-1. Count `archived_card_data` rows for Afternoon marketplace ID `a5a856a1-097b-42b0-a68f-a24c629f9e58`.
-2. Count distinct cards in `transactions` for that marketplace (CheckIn type) — this is the true attendance.
-3. Check current `manual_beneficiary_count` on the marketplace row.
-4. Check current marketplace status (probably 'completed').
+| Marketplace | Stored count | Archived | Live cards | Distinct cards in transactions |
+|---|---|---|---|---|
+| Morning Event | **470** | 0 | 0 | 470 ✅ |
+| Afternoon Event | **418** | 400 | 17 | 422 ⚠️ |
+
+## Findings
+
+**Morning (470)** — perfectly matches the 470 distinct cards that have transactions for this event. ✅ Correct, no action needed.
+
+**Afternoon (418)** — slightly off. Transactions table shows **422 distinct cards** were used at this event (400 archived + 17 live + 5 cards that have transactions but are no longer linked because they got reset/reused). Current stored value is 418 = 400 archived + 18 live (one live card was likely re-archived since yesterday's fix).
+
+The most accurate number = **422** (distinct cards from immutable transactions table — the ground truth).
 
 ## Plan
 
-1. Query DB to confirm:
-   - Distinct beneficiary cards that checked in to Afternoon (from `transactions` where `marketplace_id = afternoon_id` and type = CheckIn).
-   - Existing archived rows for Afternoon.
-   - Current `manual_beneficiary_count` value.
-2. Set `manual_beneficiary_count` on the Afternoon marketplace row to the verified attendance number, so dashboard falls back to it correctly (the StatsDashboardZone already reads `manual_beneficiary_count` when no live cards exist).
-3. Confirm to admin: the number now displays on the dashboard and Marketplace Reports.
+Update the Afternoon Event to reflect the verified 422 figure:
 
-No code changes — pure data fix on `marketplace_events.manual_beneficiary_count`.
+```sql
+UPDATE marketplace_events 
+SET manual_beneficiary_count = 422, 
+    demographics_reach = 422,
+    updated_at = now()
+WHERE id = 'a5a856a1-097b-42b0-a68f-a24c629f9e58';
+```
+
+Morning event stays at **470** (already correct).
+
+After this fix:
+- Morning: **470 beneficiaries** ✅
+- Afternoon: **422 beneficiaries** ✅
+
+No code changes — pure data correction.
