@@ -1,30 +1,21 @@
 
-User concern: admin clicked "Archive & Reset Cards" for today's morning event (Taxi Drivers Morning) on 844 stuck "checked_out" cards. She's worried this will duplicate distribution numbers in reports.
+User reports yesterday's (4/18/2026) Taxi Drivers Afternoon marketplace shows 0 beneficiaries on the dashboard. Admin needs the correct number for calculations.
 
-Need to investigate what "Archive & Reset Cards" actually does and confirm whether it's safe.
+Likely cause: After the morning event, admin clicked "Archive & Reset Cards" which moved 844 checked_out cards to `archived_card_data` and reset `qr_cards`. Then the 82 active cards were transferred to Afternoon. After Afternoon ended, those cards were also likely archived/reset — so now `qr_cards` shows 0 for Afternoon, and the dashboard's "Total Served" falls back to `manual_beneficiary_count` (which is null) or `archived_card_data` count.
 
-## Investigation needed
-
-1. Find the component handling Archive & Reset Cards (likely `src/components/admin/ActiveBeneficiaryCards.tsx` or similar — based on the screenshot showing "Sync & Reset Cards" page).
-2. Check the underlying logic — does it:
-   - Copy cards to `archived_card_data` (preserves history)?
-   - Reset the `qr_cards` row (clear `total_items_collected`, `collected_items`, `marketplace_id`, status → inactive)?
-   - Delete or modify any `transactions` rows?
-3. Verify reports source — `transactions` table is the source of truth for distribution counts. As long as transactions remain untouched, archiving + resetting cards does NOT duplicate or affect numbers.
-
-## Expected answer (based on memory `mem://system/qr-card-lifecycle-management`)
-
-The QR card lifecycle is designed exactly for this: archived data goes to `archived_card_data` for history, the physical card row resets so it can be reused at the next event, and reports pull from `transactions` (which are immutable and tied to the original marketplace_id). So **no duplication**.
-
-But I need to confirm by reading the actual reset code + checking that today's morning event distribution counts are still intact.
+Need to investigate:
+1. Count `archived_card_data` rows for Afternoon marketplace ID `a5a856a1-097b-42b0-a68f-a24c629f9e58`.
+2. Count distinct cards in `transactions` for that marketplace (CheckIn type) — this is the true attendance.
+3. Check current `manual_beneficiary_count` on the marketplace row.
+4. Check current marketplace status (probably 'completed').
 
 ## Plan
 
-1. Read `ActiveBeneficiaryCards.tsx` to see exact archive + reset logic.
-2. Query DB:
-   - Count transactions for Taxi Drivers Morning event today (distribution count) — should match what was reported before reset.
-   - Count rows in `archived_card_data` created today for that marketplace.
-   - Count `qr_cards` that were reset (status now 'inactive', no marketplace_id).
-3. Confirm to admin with concrete before/after numbers that nothing was duplicated and reports are safe.
+1. Query DB to confirm:
+   - Distinct beneficiary cards that checked in to Afternoon (from `transactions` where `marketplace_id = afternoon_id` and type = CheckIn).
+   - Existing archived rows for Afternoon.
+   - Current `manual_beneficiary_count` value.
+2. Set `manual_beneficiary_count` on the Afternoon marketplace row to the verified attendance number, so dashboard falls back to it correctly (the StatsDashboardZone already reads `manual_beneficiary_count` when no live cards exist).
+3. Confirm to admin: the number now displays on the dashboard and Marketplace Reports.
 
-No code changes — pure investigation + reassurance with data.
+No code changes — pure data fix on `marketplace_events.manual_beneficiary_count`.
