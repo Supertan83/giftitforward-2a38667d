@@ -117,6 +117,8 @@ export const StatsDashboardZone = () => {
       activatedToday,
       currentlyActive: activeCards.length,
       checkedOut: checkedOutCards.length + archivedCards.length,
+      checkedOutToday: checkedOutCards.length,
+      checkedOutArchived: archivedCards.length,
       totalItemsDistributed,
       avgItemsPerBeneficiary,
       totalCreditsUsed,
