@@ -244,8 +244,13 @@ export const StatsDashboardZone = () => {
           />
           <StatCard
             icon={LogOut}
-            label="Checked Out (Exit)"
+            label="Checked Out (Total)"
             value={isLoading ? '-' : beneficiaryStats.checkedOut}
+            subValue={
+              beneficiaryStats.checkedOutArchived > 0
+                ? `${beneficiaryStats.checkedOutToday} today + ${beneficiaryStats.checkedOutArchived} prior`
+                : 'Today'
+            }
             variant="default"
           />
           <StatCard
