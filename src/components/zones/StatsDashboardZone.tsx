@@ -117,6 +117,8 @@ export const StatsDashboardZone = () => {
       activatedToday,
       currentlyActive: activeCards.length,
       checkedOut: checkedOutCards.length + archivedCards.length,
+      checkedOutToday: checkedOutCards.length,
+      checkedOutArchived: archivedCards.length,
       totalItemsDistributed,
       avgItemsPerBeneficiary,
       totalCreditsUsed,
@@ -242,8 +244,13 @@ export const StatsDashboardZone = () => {
           />
           <StatCard
             icon={LogOut}
-            label="Checked Out (Exit)"
+            label="Checked Out (Total)"
             value={isLoading ? '-' : beneficiaryStats.checkedOut}
+            subValue={
+              beneficiaryStats.checkedOutArchived > 0
+                ? `${beneficiaryStats.checkedOutToday} today + ${beneficiaryStats.checkedOutArchived} prior`
+                : 'Today'
+            }
             variant="default"
           />
           <StatCard
