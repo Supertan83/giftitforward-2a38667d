@@ -1,68 +1,87 @@
 
-## What's happening
+User needs to recycle today's Morning event QR cards (the checked-out ones) so they can be reused for this Afternoon's marketplace. Running low on physical cards.
 
-You're trying to reallocate items from yesterday afternoon (Taxi Drivers Afternoon, external_id `38`, **status: completed**) to today's morning (Day 2 Morning, external_id `39`, **status: active**).
+Let me check what's there.
+<lov-tool-use id="toolu_vrtx_01Vpto1gQ3XvXwt4fBJdG5pV" name="tool_search" data="{\"target\": \"supabase--read_query\"}">
+</lov-tool-use>
 
-The error is from the **Tractor/Surpluss API**, not our app. From edge logs:
-```
-PUT batch-allocation marketplace_event_id: 38, material_id: 782, amount: 1223
-→ 404 "Allocation not found for marketplace event"
-```
+<lov-tool-use id="toolu_vrtx_01FY9hPefEopyLGaXsgdtz4h" name="supabase--read_query" integration-id="supabase" data="{\"query\": \"SELECT id, name, status, event_date, start_time, end_time FROM marketplace_events WHERE event_date = CURRENT_DATE AND deleted_at IS NULL ORDER BY start_time;\"}">
+</lov-tool-use>
 
-## Root cause
+<lov-tool-use id="toolu_vrtx_01TPU99g8r86MWxFBArrjVT7" name="supabase--read_query" integration-id="supabase" data="{\"query\": \"SELECT status, COUNT(*) FROM qr_cards WHERE marketplace_id = '5404f771-ef88-41d0-a05d-584c36699e67' AND deleted_at IS NULL GROUP BY status;\"}">
+</lov-tool-use>
 
-The Surpluss-side allocation for yesterday afternoon (event 38) **no longer exists on Tractor** — likely because:
-1. Yesterday's event was already closed/reported on Surpluss after distribution, so the allocation record was finalized/removed there.
-2. Our local DB still has the row but `surpluss_allocation_id` is **NULL** for both items (Napkins #621 = 3000, Storage Containers #782 = 1223), meaning we never had a confirmed link.
-3. There is **also corrupt data**: Storage Containers shows `distributed_quantity = 12355` against `allocated_quantity = 1223` — that's clearly broken (more distributed than allocated).
+<lov-tool-use id="toolu_vrtx_012xryDapTsx2Y9CBPVeE9ZY" name="supabase--read_query" integration-id="supabase" data="{\"query\": \"SELECT status, COUNT(*) FROM qr_cards WHERE deleted_at IS NULL GROUP BY status;\"}">
+</lov-tool-use>
+<lov-plan>
+Today's events:
+- Morning (`5404f771...`): 808 checked_out, 35 active
+- Afternoon (`12ec567f...`): starts 15:00, needs cards
+- Total inactive (free) pool: 729
 
-So the reverse-sync push to Tractor for event 38 will keep failing — there's nothing on their side to update.
+The 808 checked_out cards from the morning event need to be reset to `inactive` so they're available for reuse at the afternoon event. Morning data must be archived first to preserve the report.
 
-## Plan (data fix only, no code changes)
+## Plan (data-only, no code changes)
 
-Two-step correction directly in the database for yesterday's Afternoon event allocations:
+**Step 1 — Archive morning checked_out cards** into `archived_card_data` (preserves demographics, items collected, timestamps for reporting).
 
-1. **Cap the corrupt distributed_quantity** on Storage Containers:
-   - `distributed_quantity` 12355 → 1223 (cannot exceed allocated)
-   - Log entry in `allocation_traceability_logs`
+**Step 2 — Reset those 808 cards** to a clean reusable state:
+- `status` → `inactive`
+- `marketplace_id` → NULL
+- `credit_balance` → 0
+- `total_items_collected` → 0
+- `collected_items` → `[]`
+- `gender`, `nationality`, `marital_status`, `children_count` → cleared
+- `activated_at` → NULL
 
-2. **Soft-delete** the two leftover Afternoon allocations (Napkins + Storage Containers for marketplace `a5a856a1...`) so they:
-   - Stop triggering failed Tractor sync attempts
-   - Free up the stock for reallocation to today's Morning Day 2
-
-3. After cleanup, you can re-allocate freely from today's Morning event in the UI — that will create fresh allocation rows and push them to Tractor cleanly (event 39 is active and unallocated).
+**Step 3 — Log** a traceability entry documenting the bulk reset.
 
 ```sql
--- Fix corrupt distribution
-UPDATE marketplace_item_allocations
-SET distributed_quantity = 1223, updated_at = now()
-WHERE id = '021085ae-dedf-448c-9731-6494bfe41701';
+-- 1. Archive
+INSERT INTO archived_card_data
+  (original_card_id, unique_id, marketplace_id, gender, marital_status, nationality,
+   children_count, credit_balance, total_items_collected, collected_items,
+   activated_at, checked_out_at, archived_at)
+SELECT id, unique_id, marketplace_id, gender, marital_status, nationality,
+       children_count, credit_balance, total_items_collected, collected_items,
+       activated_at, updated_at, now()
+FROM qr_cards
+WHERE marketplace_id = '5404f771-ef88-41d0-a05d-584c36699e67'
+  AND status = 'checked_out'
+  AND deleted_at IS NULL;
 
--- Soft-delete the two stuck Afternoon allocations
-UPDATE marketplace_item_allocations
-SET deleted_at = now()
-WHERE id IN (
-  '021085ae-dedf-448c-9731-6494bfe41701', -- Storage containers
-  'eb0af2e6-78bc-4459-8842-6d7081976f19'  -- Napkins
-);
+-- 2. Reset for reuse
+UPDATE qr_cards
+SET status = 'inactive',
+    marketplace_id = NULL,
+    credit_balance = 0,
+    total_items_collected = 0,
+    collected_items = '[]'::jsonb,
+    gender = NULL,
+    nationality = NULL,
+    marital_status = NULL,
+    children_count = 0,
+    activated_at = NULL,
+    updated_at = now()
+WHERE marketplace_id = '5404f771-ef88-41d0-a05d-584c36699e67'
+  AND status = 'checked_out'
+  AND deleted_at IS NULL;
 
--- Audit trail
+-- 3. Audit log
 INSERT INTO allocation_traceability_logs
-  (item_type_id, marketplace_id, marketplace_name, action_type,
+  (marketplace_id, marketplace_name, action_type,
    quantity_before, quantity_after, description, performed_by_email)
 VALUES
-  ('239cfaf4-7d97-4e17-9f70-ac7c9c9bb1a1', 'a5a856a1-097b-42b0-a68f-a24c629f9e58',
-   'Taxi Drivers Afternoon', 'cleanup_for_reallocation',
-   1223, 0,
-   'Soft-deleted stuck Storage Containers allocation (Surpluss returned 404). Distributed capped from 12355 to 1223. Frees stock for Day 2 Morning.',
-   'system@manual-fix'),
-  ('71c818a2-a200-4a38-a0ea-bd7e018db41a', 'a5a856a1-097b-42b0-a68f-a24c629f9e58',
-   'Taxi Drivers Afternoon', 'cleanup_for_reallocation',
-   3000, 0,
-   'Soft-deleted stuck Napkins allocation (Surpluss returned 404). Frees stock for Day 2 Morning.',
+  ('5404f771-ef88-41d0-a05d-584c36699e67',
+   'Taxi Drivers Marketplace - Morning Event Day 2',
+   'bulk_card_reset',
+   808, 0,
+   '808 checked_out cards archived and reset to inactive to free pool for Afternoon Event Day 2.',
    'system@manual-fix');
 ```
 
-After this runs, retry the allocation to today's Morning event — it should sync to Tractor successfully.
-
-**Note:** Yesterday's beneficiary counts (469/375) and reports stay untouched — this only cleans up the two unfinished allocation rows that never made it to Tractor.
+## After this runs
+- Available inactive cards: **729 + 808 = 1,537** ready for the afternoon
+- Morning beneficiary report stays intact (data preserved in `archived_card_data`)
+- 35 still-active morning cards left untouched (still in use — they'll naturally check out)
+- No code, no workflow changes
