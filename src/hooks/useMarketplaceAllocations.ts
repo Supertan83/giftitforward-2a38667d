@@ -167,6 +167,7 @@ export const useMarketplaceAllocations = (marketplaceId?: string) => {
           *,
           item_types (name, icon, external_material_id)
         `)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (marketplaceId) {
@@ -244,6 +245,7 @@ export const useAllocationOperations = () => {
         .select('*')
         .eq('marketplace_id', marketplaceId)
         .eq('item_type_id', itemTypeId)
+        .is('deleted_at', null)
         .maybeSingle();
 
       if (existing) {
@@ -439,7 +441,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           *,
           item_types (id, name, icon, category, subcategory, external_material_id)
         `)
-        .eq('marketplace_id', marketplaceId);
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null);
 
       // Fetch manual counts for this marketplace
       const { data: manualCounts } = await supabase
