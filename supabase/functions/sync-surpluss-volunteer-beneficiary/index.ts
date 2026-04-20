@@ -148,6 +148,16 @@ function buildVolunteerPayload(
     payload.event_id = linkedMarketplaceEventId;
   }
 
+  // Sustainability training completion
+  if (vol.training_completed === true) {
+    payload.training_completed = true;
+    payload.sustainability_module_completed = true;
+    if (vol.training_completed_at) {
+      payload.training_completed_at = vol.training_completed_at;
+      payload.sustainability_module_completed_at = vol.training_completed_at;
+    }
+  }
+
   return payload;
 }
 
@@ -262,7 +272,7 @@ serve(async (req) => {
     const { data: allVolunteers, error: volError } = await supabase
       .from("pending_volunteers")
       .select(
-        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json",
+        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json, training_completed, training_completed_at",
       );
 
     if (volError) {
@@ -426,6 +436,14 @@ serve(async (req) => {
             ...(enriched.company_name && { company_name: enriched.company_name }),
             ...(enriched.events_registered && { events_registered: enriched.events_registered }),
             ...(enriched.status && { status: enriched.status }),
+            ...(enriched.training_completed && {
+              training_completed: enriched.training_completed,
+              sustainability_module_completed: enriched.sustainability_module_completed,
+            }),
+            ...(enriched.training_completed_at && {
+              training_completed_at: enriched.training_completed_at,
+              sustainability_module_completed_at: enriched.sustainability_module_completed_at,
+            }),
           };
         });
 
