@@ -148,6 +148,16 @@ function buildVolunteerPayload(
     payload.event_id = linkedMarketplaceEventId;
   }
 
+  // Sustainability training completion
+  if (vol.training_completed === true) {
+    payload.training_completed = true;
+    payload.sustainability_module_completed = true;
+    if (vol.training_completed_at) {
+      payload.training_completed_at = vol.training_completed_at;
+      payload.sustainability_module_completed_at = vol.training_completed_at;
+    }
+  }
+
   return payload;
 }
 
