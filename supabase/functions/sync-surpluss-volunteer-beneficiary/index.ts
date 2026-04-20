@@ -272,7 +272,7 @@ serve(async (req) => {
     const { data: allVolunteers, error: volError } = await supabase
       .from("pending_volunteers")
       .select(
-        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json",
+        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json, training_completed, training_completed_at",
       );
 
     if (volError) {
