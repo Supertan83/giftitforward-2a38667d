@@ -436,6 +436,14 @@ serve(async (req) => {
             ...(enriched.company_name && { company_name: enriched.company_name }),
             ...(enriched.events_registered && { events_registered: enriched.events_registered }),
             ...(enriched.status && { status: enriched.status }),
+            ...(enriched.training_completed && {
+              training_completed: enriched.training_completed,
+              sustainability_module_completed: enriched.sustainability_module_completed,
+            }),
+            ...(enriched.training_completed_at && {
+              training_completed_at: enriched.training_completed_at,
+              sustainability_module_completed_at: enriched.sustainability_module_completed_at,
+            }),
           };
         });
 
