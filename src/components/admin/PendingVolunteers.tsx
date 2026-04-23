@@ -306,13 +306,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     // When searching, show results across approved + bulk_uploaded tabs (not duplicates)
     const isSearching = searchQuery.trim().length > 0;
     
-    // Apply source filter client-side only when NOT searching (and on approved/bulk tabs)
-    if (!isSearching && (activeTab === 'approved' || activeTab === 'bulk_uploaded')) {
-      if (activeTab === 'bulk_uploaded') {
-        result = result.filter(v => v.source === 'bulk_upload');
-      } else {
-        result = result.filter(v => !v.source || v.source !== 'bulk_upload');
-      }
+    // Apply source filter client-side only when NOT searching
+    // - bulk_uploaded tab: only bulk-upload rows
+    // - approved tab: ALL approved rows (partner submissions + bulk uploads)
+    if (!isSearching && activeTab === 'bulk_uploaded') {
+      result = result.filter(v => v.source === 'bulk_upload');
     }
     
     // Event filter
