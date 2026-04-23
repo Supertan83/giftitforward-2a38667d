@@ -1,28 +1,42 @@
 
-User wants a fresh, comprehensive read-out of all live numbers — check-ins, check-outs, items distributed, transactions — for today's events, combining live `qr_cards` + `archived_card_data` + `transactions` + `marketplace_item_allocations`.
 
-## Plan
+## Plan: Add/update April 25–26 marketplace events
 
-Run a single read-only audit query pass against today's two events (Morning Day 2 `5404f771...` and Afternoon Day 2 `12ec567f...`) and present a clean breakdown.
+Two events are partially in the database (Morning only, with old generic names). I'll align them with the official names from the screenshots and add the missing Afternoon counterparts.
 
-### Metrics per event
+### Changes
 
-1. **Check-ins (Activated)** = live `active` + live `checked_out` + `archived_card_data` (every archived card was a check-in)
-2. **Currently in queue** = live `active`
-3. **Checked-out** = live `checked_out` + `archived_card_data`
-4. **Items distributed (allocations)** = `SUM(distributed_quantity)` from `marketplace_item_allocations`
-5. **Items distributed (transactions cross-check)** = `COUNT(*)` from `transactions` where `type='Distribution'` scoped to event
-6. **Returns** = `COUNT(*)` from `transactions` where `type='Return'`
-7. **Net items** = Distribution − Return
-8. **Avg items per beneficiary**
-9. **Volunteer check-ins / check-outs / hours** for the event
+**1. Update existing Morning events (rename to official titles)**
 
-### Cross-checks
+| ID | New name | Date | Times |
+|---|---|---|---|
+| `cedfb6a2-…` | Inclusive Community: Family and People of Determination Marketplace - Morning Event | 2026-04-25 | 09:30 – 14:30 |
+| `a2d85409-…` | She Thrives: Women Workers Marketplace - Morning Event | 2026-04-26 | 09:30 – 14:30 |
 
-- Allocations total vs transactions total → flag any drift
-- Archived + live counts vs prior reported (913 morning / 632 afternoon)
-- Day 2 combined totals
+Also fix locations to match photos:
+- April 25 → `Dubai, Al Qusais 1` (already correct)
+- April 26 → `Dubai, Al Quoz` (already correct)
 
-### Output
+**2. Insert two new Afternoon events**
 
-Clean per-event table + combined Day 2 row + one-line summary suitable to send to DH manager. No code, no DB writes — pure SQL read.
+| Name | Date | Location | Times |
+|---|---|---|---|
+| Inclusive Community: Family and People of Determination Marketplace - Afternoon Event | 2026-04-25 | Dubai, Al Qusais 1 | 14:30 – 20:00 |
+| She Thrives: Women Workers Marketplace - Afternoon Event | 2026-04-26 | Dubai, Al Quoz | 14:30 – 20:00 |
+
+Both inserted with:
+- `status = 'upcoming'`
+- `beneficiary_credit_limit = 15` (default, matches existing Morning rows)
+- `max_items_per_scan = 1`
+- `outreach_partner = NULL` (consistent with the Morning rows; can be set later)
+
+### How
+
+Single migration with two `UPDATE` statements + two `INSERT` statements into `marketplace_events`. No code changes, no impact on existing data, distributions, or QR cards.
+
+### Notes
+
+- Event naming follows the project convention of using ` - ` as the separator (the photos use an en-dash `–`; we normalize to ` - ` to match every other marketplace in the system, e.g. "Taxi Drivers Marketplace - Morning Event").
+- Afternoon end time set to 20:00 per the photos (08.00 pm), even though existing Morning rows have an unusual `end_time = 02:00:00` — those Morning rows will be corrected to 14:30 to match the photos (09.30 am – 02.30 pm).
+- Surpluss `external_id` left null on the new Afternoon rows; can be linked later via the existing "Fetch Surpluss Marketplaces" flow.
+
