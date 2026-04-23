@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { VolunteerBulkHoursEditDialog, type BulkVolunteerEditTarget } from './VolunteerBulkHoursEditDialog';
 import { motion } from 'framer-motion';
 import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,6 +30,22 @@ export const MarketplaceReports = ({
   const [editingVolunteer, setEditingVolunteer] = useState<{
     cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number; marketplaceId?: string;
   } | null>(null);
+  const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+
+  // Clear selection when marketplace changes
+  useEffect(() => {
+    setSelectedCardIds(new Set());
+  }, [selectedMarketplaceId]);
+
+  const toggleCard = (cardId: string) => {
+    setSelectedCardIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
+  };
   const {
     data: marketplaces = [],
     isLoading: loadingMarketplaces
@@ -461,20 +479,59 @@ export const MarketplaceReports = ({
                       </>}
 
                       {/* Individual Volunteer List */}
-                      {report.volunteers?.volunteerList && report.volunteers.volunteerList.length > 0 && <div>
-                        <h4 className="font-display font-semibold text-sm mb-3">Volunteer List</h4>
+                      {report.volunteers?.volunteerList && report.volunteers.volunteerList.length > 0 && (() => {
+                        const list = report.volunteers.volunteerList;
+                        const selectableIds: string[] = list.map((v: any) => v.cardId).filter(Boolean);
+                        const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedCardIds.has(id));
+                        const someSelected = selectableIds.some(id => selectedCardIds.has(id));
+                        const toggleAll = () => {
+                          setSelectedCardIds(prev => {
+                            if (allSelected) {
+                              const next = new Set(prev);
+                              selectableIds.forEach(id => next.delete(id));
+                              return next;
+                            }
+                            const next = new Set(prev);
+                            selectableIds.forEach(id => next.add(id));
+                            return next;
+                          });
+                        };
+                        const selectedTargets: BulkVolunteerEditTarget[] = list
+                          .filter((v: any) => v.cardId && selectedCardIds.has(v.cardId))
+                          .map((v: any) => ({ cardId: v.cardId, name: v.name }));
+
+                        return (
+                        <div>
+                          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                            <h4 className="font-display font-semibold text-sm">Volunteer List</h4>
+                            {selectedCardIds.size > 0 && (
+                              <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-3 py-1.5">
+                                <span className="text-xs font-medium">{selectedCardIds.size} selected</span>
+                                <Button size="sm" variant="default" className="h-7" onClick={() => setBulkEditOpen(true)}>
+                                  <Pencil className="w-3.5 h-3.5 mr-1" /> Edit Hours
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelectedCardIds(new Set())}>
+                                  Clear
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         <div className="hidden md:block overflow-x-auto">
                           <table className="w-full text-sm table-fixed">
                             <colgroup>
-                              <col className="w-[25%]" />
-                              <col className="w-[16%]" />
-                              <col className="w-[16%]" />
-                              <col className="w-[16%]" />
+                              <col className="w-[5%]" />
+                              <col className="w-[22%]" />
+                              <col className="w-[15%]" />
+                              <col className="w-[15%]" />
+                              <col className="w-[15%]" />
                               <col className="w-[14%]" />
-                              <col className="w-[13%]" />
+                              <col className="w-[14%]" />
                             </colgroup>
                             <thead>
                               <tr className="border-b border-border text-muted-foreground">
+                                <th className="py-3 px-2">
+                                  <Checkbox checked={allSelected ? true : (someSelected ? 'indeterminate' : false)} onCheckedChange={toggleAll} aria-label="Select all" />
+                                </th>
                                 <th className="text-left py-3 px-2 font-medium">Name</th>
                                 <th className="text-left py-3 px-2 font-medium">Category</th>
                                 <th className="text-left py-3 px-2 font-medium">Company</th>
@@ -484,8 +541,16 @@ export const MarketplaceReports = ({
                               </tr>
                             </thead>
                             <tbody>
-                              {report.volunteers.volunteerList.map((vol, idx) => (
+                              {list.map((vol: any, idx: number) => {
+                                const cid = vol.cardId as string | undefined;
+                                const checked = cid ? selectedCardIds.has(cid) : false;
+                                return (
                                 <tr key={idx} className="border-b border-border/50 last:border-0">
+                                  <td className="py-2.5 px-2">
+                                    {cid && (
+                                      <Checkbox checked={checked} onCheckedChange={() => toggleCard(cid)} aria-label={`Select ${vol.name}`} />
+                                    )}
+                                  </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
                                   <td className="py-2.5 px-2 text-muted-foreground text-xs">{vol.category}</td>
                                   <td className="py-2.5 px-2 text-muted-foreground text-xs truncate">{vol.company}</td>
@@ -501,10 +566,10 @@ export const MarketplaceReports = ({
                                   <td className="py-2.5 px-2 text-right font-medium">{vol.hoursWorked > 0 ? `${vol.hoursWorked.toFixed(1)}h` : '—'}</td>
                                   <td className="py-2.5 px-2 text-center">
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingVolunteer({
-                                      cardId: (vol as any).cardId,
+                                      cardId: vol.cardId,
                                       name: vol.name,
-                                      checkedInAt: (vol as any).checkedInAt,
-                                      checkedOutAt: (vol as any).checkedOutAt,
+                                      checkedInAt: vol.checkedInAt,
+                                      checkedOutAt: vol.checkedOutAt,
                                       hoursWorked: vol.hoursWorked,
                                       marketplaceId: selectedMarketplaceId || undefined,
                                     })}>
@@ -512,17 +577,26 @@ export const MarketplaceReports = ({
                                     </Button>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
                         {/* Mobile */}
                         <div className="space-y-2 md:hidden">
-                          {report.volunteers.volunteerList.map((vol, idx) => (
+                          {list.map((vol: any, idx: number) => {
+                            const cid = vol.cardId as string | undefined;
+                            const checked = cid ? selectedCardIds.has(cid) : false;
+                            return (
                             <div key={idx} className="border border-border rounded-lg p-3">
-                              <div className="flex justify-between items-start mb-1">
-                                <p className="font-medium text-sm text-foreground">{vol.name}</p>
-                                <div className="flex items-center gap-1">
+                              <div className="flex justify-between items-start mb-1 gap-2">
+                                <div className="flex items-start gap-2 min-w-0">
+                                  {cid && (
+                                    <Checkbox checked={checked} onCheckedChange={() => toggleCard(cid)} className="mt-0.5" aria-label={`Select ${vol.name}`} />
+                                  )}
+                                  <p className="font-medium text-sm text-foreground truncate">{vol.name}</p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
                                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                                     vol.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
                                     vol.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
@@ -531,10 +605,10 @@ export const MarketplaceReports = ({
                                     {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
                                   </span>
                                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingVolunteer({
-                                    cardId: (vol as any).cardId,
+                                    cardId: vol.cardId,
                                     name: vol.name,
-                                    checkedInAt: (vol as any).checkedInAt,
-                                    checkedOutAt: (vol as any).checkedOutAt,
+                                    checkedInAt: vol.checkedInAt,
+                                    checkedOutAt: vol.checkedOutAt,
                                     hoursWorked: vol.hoursWorked,
                                     marketplaceId: selectedMarketplaceId || undefined,
                                   })}>
@@ -542,12 +616,22 @@ export const MarketplaceReports = ({
                                   </Button>
                                 </div>
                               </div>
-                              <p className="text-xs text-muted-foreground">{vol.category} · {vol.company}</p>
-                              {vol.hoursWorked > 0 && <p className="text-xs text-muted-foreground mt-1">{vol.hoursWorked.toFixed(1)} hours</p>}
+                              <p className="text-xs text-muted-foreground pl-6">{vol.category} · {vol.company}</p>
+                              {vol.hoursWorked > 0 && <p className="text-xs text-muted-foreground mt-1 pl-6">{vol.hoursWorked.toFixed(1)} hours</p>}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                      </div>}
+                        <VolunteerBulkHoursEditDialog
+                          volunteers={selectedTargets}
+                          marketplaceId={selectedMarketplaceId || undefined}
+                          open={bulkEditOpen}
+                          onOpenChange={setBulkEditOpen}
+                          onCompleted={() => setSelectedCardIds(new Set())}
+                        />
+                      </div>
+                        );
+                      })()}
                     </div>}
                 </div>
               </> : <div className="text-center py-12 text-muted-foreground">
