@@ -1,59 +1,59 @@
 
 
-## Plan: Show bulk-uploaded volunteers in the Partner Volunteers tab as well
+## Plan: Classify Ejadah as Internal (Dubai Holding subsidiary)
 
-### Current behavior
+### Issue
+Volunteers from **Ejadah** (a Dubai Holding subsidiary) currently appear under "Corporate External" because they have `is_employee = false` and `external_company = 'Ejadah'`. The classification logic only checks `is_employee` to decide internal vs. external.
 
-In `PendingVolunteers.tsx` the "Volunteers Added" view has two main tabs:
+Live DB confirms 9 Ejadah volunteers (8 with `is_employee=false`, 1 with `is_employee=true`).
 
-- **Partner Volunteers** (`approved`) → shows ONLY rows where `source` is null or `source != 'bulk_upload'`
-- **Bulk Uploaded** (`bulk_uploaded`) → shows ONLY rows where `source = 'bulk_upload'`
+### Approach
 
-Filtering happens in two places:
-1. Client-side filter (lines 309–316): `result.filter(v => !v.source || v.source !== 'bulk_upload')` for the Partner tab.
-2. Server-side `.or('source.is.null,source.neq.bulk_upload')` in the count/pagination query (line 1107).
+Treat a configurable list of "Dubai Holding family" company names as **internal** regardless of the `is_employee` flag. Start with:
+- `Ejadah`
 
-So today bulk-uploaded volunteers are **invisible** from the Partner Volunteers tab.
+### Changes
 
-### Desired behavior
+**1. Shared helper** — new file `src/lib/volunteerClassification.ts`
+```ts
+export const DH_INTERNAL_COMPANIES = ['ejadah']; // lowercase
 
-- **Partner Volunteers tab** = ALL approved volunteers (partner + bulk-uploaded together), so admins have a single combined "all approved" list.
-- **Bulk Uploaded tab** = unchanged — keeps showing only `source = 'bulk_upload'` for focused bulk management.
-- Counts, pagination, search, event filter, and bulk actions continue to work in both tabs.
+export const isInternalCompany = (companyName?: string | null): boolean => {
+  if (!companyName) return false;
+  return DH_INTERNAL_COMPANIES.includes(companyName.trim().toLowerCase());
+};
 
-### Changes (single file: `src/components/admin/PendingVolunteers.tsx`)
+export const classifyVolunteer = (vol: { is_employee?: boolean; external_company?: string | null }) => {
+  if (vol.is_employee || isInternalCompany(vol.external_company)) {
+    return { categoryKey: 'Corporate Internal', classification: 'internal' as const };
+  }
+  if (vol.external_company) {
+    return { categoryKey: 'Corporate External', classification: 'external' as const };
+  }
+  return { categoryKey: 'Outreach Partners', classification: 'outreach' as const };
+};
 
-1. **Client-side filter (~lines 309–316)**  
-   Remove the `source != 'bulk_upload'` exclusion on the `approved` tab. Keep the bulk filter for the `bulk_uploaded` tab only:
-   ```ts
-   if (!isSearching && activeTab === 'bulk_uploaded') {
-     result = result.filter(v => v.source === 'bulk_upload');
-   }
-   // approved tab: no source filter — show everything approved
-   ```
+export const resolveCompanyName = (vol: { is_employee?: boolean; external_company?: string | null }) => {
+  if (vol.is_employee && !vol.external_company) return 'Dubai Holding';
+  return vol.external_company || 'Other';
+};
+```
 
-2. **Server-side query (~lines 1102–1108)**  
-   Drop the `.or('source.is.null,source.neq.bulk_upload')` branch for the approved tab so the paginated query returns all approved rows:
-   ```ts
-   if (activeTab === 'bulk_uploaded') {
-     query = query.eq('source', 'bulk_upload');
-   }
-   // approved: no extra source filter
-   ```
+**2. Use the helper in the 3 places that classify volunteers:**
+- `src/hooks/useVolunteerDetails.ts` (lines 124–164) — replace inline `if (vol.is_employee)` block.
+- `src/hooks/useMarketplaceAllocations.ts` (lines 628–637 and 696–704) — replace both inline blocks.
+- `src/components/admin/PendingVolunteers.tsx` (lines 1275, 1901, 2366) — display "Dubai Holding" for Ejadah rows too via `resolveCompanyName` (optional polish; keeps the Company column showing "Ejadah" if preferred — see Open question below).
 
-3. **Visual indicator (small UX add)**  
-   In the row rendering for the Partner Volunteers tab, when a row has `source === 'bulk_upload'`, show a small `Bulk` badge next to the name so admins can still tell at a glance which entries came from a bulk upload. The existing `Bulk Uploaded` tab still gives a filtered view.
-
-4. **Counts** — no change needed. `bulkUploadedCount` and the existing approved count already query independently.
-
-### Out of scope
-
-- `PartnerRegistrations.tsx` (the "Dubai Holdings Registrations" view) reads from a different table (`partner_registrations`) — that's the raw form-submission feed, not the volunteers list. No change there.
-- No DB or edge function changes — pure UI filter adjustment.
+**3. No DB change.** The fix is purely classification logic; we don't mutate `is_employee` or `external_company` so the original company name stays visible/exportable.
 
 ### Result
+- Ejadah volunteers move from "Corporate External" → "Corporate Internal" in:
+  - Volunteer Details stats (registered/attended/dropout per category)
+  - Marketplace Reports volunteer breakdown
+  - Statistics dashboard category counts
+- CSV exports and tooltips keep the literal company name "Ejadah" so the source is still traceable.
+- Adding more DH subsidiaries later = one-line change in `DH_INTERNAL_COMPANIES`.
 
-- "Partner Volunteers" tab → unified list of ALL approved volunteers (partner submissions + bulk uploads), with a small "Bulk" badge on bulk-origin rows.
-- "Bulk Uploaded" tab → still a focused view of bulk-only entries.
-- Search, event filter, pagination, and bulk-action selection behavior preserved.
+### Open question (optional)
+Should the **Company column** for Ejadah rows display "Ejadah" (current) or "Dubai Holding — Ejadah"? Default plan = keep "Ejadah" so admins still see the subsidiary name; only the *category* moves to Internal.
 
