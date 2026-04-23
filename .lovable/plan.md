@@ -1,42 +1,70 @@
 
 
-## Plan: Add/update April 25–26 marketplace events
+## Fix: Bulk-uploaded Volunteer QR Cards Show as "Unassigned"
 
-Two events are partially in the database (Morning only, with old generic names). I'll align them with the official names from the screenshots and add the missing Afternoon counterparts.
+### Root cause
 
-### Changes
+In `supabase/functions/bulk-create-volunteers/index.ts` (lines 617–627), the QR card is inserted into `volunteer_qr_cards` **before** the `pending_volunteers` row is created, and the `volunteer_id` field is never set:
 
-**1. Update existing Morning events (rename to official titles)**
+```ts
+await supabaseAdmin
+  .from('volunteer_qr_cards')
+  .insert({
+    unique_id: qrCodeId,
+    status: 'inactive',
+    // ❌ volunteer_id missing
+  })
+```
 
-| ID | New name | Date | Times |
-|---|---|---|---|
-| `cedfb6a2-…` | Inclusive Community: Family and People of Determination Marketplace - Morning Event | 2026-04-25 | 09:30 – 14:30 |
-| `a2d85409-…` | She Thrives: Women Workers Marketplace - Morning Event | 2026-04-26 | 09:30 – 14:30 |
+Because `VolunteerQRCardsViewer` joins `volunteer_qr_cards.volunteer_id → pending_volunteers(id)` to display the volunteer name, every bulk-created card with a NULL `volunteer_id` renders as "Unassigned".
 
-Also fix locations to match photos:
-- April 25 → `Dubai, Al Qusais 1` (already correct)
-- April 26 → `Dubai, Al Quoz` (already correct)
+Confirmed in the live database:
+- **117 orphan cards** total (`volunteer_id IS NULL`), all created by this code path
+- **37 of them** were created on April 21 alone during the most recent bulk upload
+- All real bulk_upload `pending_volunteers` rows DO have a properly-linked card from another path, so the orphans are pure duplicates (one stray per bulk-uploaded volunteer)
 
-**2. Insert two new Afternoon events**
+### Plan
 
-| Name | Date | Location | Times |
-|---|---|---|---|
-| Inclusive Community: Family and People of Determination Marketplace - Afternoon Event | 2026-04-25 | Dubai, Al Qusais 1 | 14:30 – 20:00 |
-| She Thrives: Women Workers Marketplace - Afternoon Event | 2026-04-26 | Dubai, Al Quoz | 14:30 – 20:00 |
+**1. Code fix** — `supabase/functions/bulk-create-volunteers/index.ts`
 
-Both inserted with:
-- `status = 'upcoming'`
-- `beneficiary_credit_limit = 15` (default, matches existing Morning rows)
-- `max_items_per_scan = 1`
-- `outreach_partner = NULL` (consistent with the Morning rows; can be set later)
+Reorder the inserts so `pending_volunteers` is created first, then attach its `id` to the QR card:
 
-### How
+```ts
+// Insert pending_volunteers FIRST and capture its id
+const { data: pvRow, error: pvError } = await supabaseAdmin
+  .from('pending_volunteers')
+  .insert({ /* same fields as today */ })
+  .select('id')
+  .single()
 
-Single migration with two `UPDATE` statements + two `INSERT` statements into `marketplace_events`. No code changes, no impact on existing data, distributions, or QR cards.
+// Then create QR card linked to that volunteer + pass marketplace if known
+await supabaseAdmin
+  .from('volunteer_qr_cards')
+  .insert({
+    unique_id: qrCodeId,
+    status: 'inactive',
+    volunteer_id: pvRow?.id ?? null,
+    marketplace_id: <resolved marketplace id if any>,
+  })
+```
 
-### Notes
+This matches the pattern already used in `register-onsite-volunteer` (line 230) and `create-test-volunteers` (line 72), which both link `volunteer_id` correctly.
 
-- Event naming follows the project convention of using ` - ` as the separator (the photos use an en-dash `–`; we normalize to ` - ` to match every other marketplace in the system, e.g. "Taxi Drivers Marketplace - Morning Event").
-- Afternoon end time set to 20:00 per the photos (08.00 pm), even though existing Morning rows have an unusual `end_time = 02:00:00` — those Morning rows will be corrected to 14:30 to match the photos (09.30 am – 02.30 pm).
-- Surpluss `external_id` left null on the new Afternoon rows; can be linked later via the existing "Fetch Surpluss Marketplaces" flow.
+**2. Data backfill (one-time)** — clean up the 117 existing orphan cards
+
+For every `volunteer_qr_cards` row where `volunteer_id IS NULL` and `status = 'inactive'` (never used), soft-delete it (`deleted_at = now()`). They are duplicates — every bulk-uploaded volunteer already has a properly-linked card, so deleting the orphans is safe. Any orphan that somehow has activity (`status != 'inactive'` or has attendance records) will be skipped and listed for manual review.
+
+Pre-check before delete:
+```sql
+SELECT COUNT(*) FROM volunteer_qr_cards
+WHERE volunteer_id IS NULL AND deleted_at IS NULL AND status != 'inactive';
+```
+
+If that returns 0, all 117 are safe to soft-delete.
+
+### Result
+
+- New bulk uploads → cards immediately show the correct volunteer name in the "Volunteer QR Cards" tab.
+- Existing 117 stray "Unassigned" entries removed from the list.
+- No impact on existing assigned cards, attendance records, or sync flows.
 
