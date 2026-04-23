@@ -1098,11 +1098,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         query = query.gte('created_at', exportStartDate.toISOString()).lte('created_at', endOfDay.toISOString());
       }
 
-      // Apply tab filter
+      // Apply tab filter (approved tab exports ALL approved rows, including bulk uploads)
       if (activeTab === 'bulk_uploaded') {
         query = query.eq('source', 'bulk_upload');
-      } else if (activeTab === 'approved') {
-        query = query.or('source.is.null,source.neq.bulk_upload');
       }
 
       const { data: rawData, error } = await query;
