@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { classifyVolunteer, resolveCompanyName } from '@/lib/volunteerClassification';
 
 export interface VolunteerCategoryBreakdown {
   category: string;
@@ -122,19 +123,7 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
       }>();
 
       for (const vol of vols) {
-        let categoryKey: string;
-        let classification: 'internal' | 'external' | 'outreach';
-
-        if (vol.is_employee) {
-          categoryKey = 'Corporate Internal';
-          classification = 'internal';
-        } else if (vol.external_company) {
-          categoryKey = 'Corporate External';
-          classification = 'external';
-        } else {
-          categoryKey = 'Outreach Partners';
-          classification = 'outreach';
-        }
+        const { categoryKey, classification } = classifyVolunteer(vol);
 
         if (!categoryMap.has(categoryKey)) {
           categoryMap.set(categoryKey, {
@@ -159,7 +148,7 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
         if (vol.gender?.toLowerCase() === 'male') cat.male++;
         if (vol.gender?.toLowerCase() === 'female') cat.female++;
 
-        const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
+        const company = resolveCompanyName(vol);
         cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
       }
 

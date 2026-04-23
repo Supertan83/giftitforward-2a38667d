@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
 import { mapDatabaseError, SafeError } from '@/lib/errorUtils';
+import { classifyVolunteer, resolveCompanyName } from '@/lib/volunteerClassification';
 
 // Paginated fetch helper to overcome the 1000-row default limit
 async function fetchAllPaginatedRows(table: string, filterCol: string, filterVal: string) {
@@ -625,16 +626,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           || (assignedCards || []).find(c => c.id === cardId);
         const cardUniqueId = card?.unique_id || '';
 
-        let categoryKey: string;
-        if (vol.is_employee) {
-          categoryKey = 'Corporate Internal';
-        } else if (vol.external_company) {
-          categoryKey = 'Corporate External';
-        } else {
-          categoryKey = 'Outreach Partners';
-        }
-
-        const company = vol.external_company || (vol.is_employee ? 'Dubai Holding' : 'Other');
+        const { categoryKey } = classifyVolunteer(vol);
+        const company = resolveCompanyName(vol);
         const siblingCards = cardsByVolunteerId.get(vol.id) || [];
         const { name: resolvedName } = resolveFamilyName(cardUniqueId, vol, siblingCards);
 
@@ -693,15 +686,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       for (const fv of formRegisteredVolunteers) {
         const alreadyInCards = volIdsInCardMap.has(fv.id);
 
-        let categoryKey: string;
-        if (fv.is_employee) {
-          categoryKey = 'Corporate Internal';
-        } else if (fv.external_company) {
-          categoryKey = 'Corporate External';
-        } else {
-          categoryKey = 'Outreach Partners';
-        }
-        const company = fv.external_company || (fv.is_employee ? 'Dubai Holding' : 'Other');
+        const { categoryKey } = classifyVolunteer(fv);
+        const company = resolveCompanyName(fv);
 
         // Add primary volunteer row if not already in card map
         if (!alreadyInCards) {
