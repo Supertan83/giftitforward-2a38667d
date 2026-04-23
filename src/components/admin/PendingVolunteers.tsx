@@ -1883,8 +1883,15 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     onCheckedChange={() => toggleSelect(volunteer.id)}
                                   />
                                 </TableCell>
-                                <TableCell className="font-medium truncate max-w-[100px]">
-                                  {volunteer.first_name} {volunteer.last_name?.charAt(0)}.
+                                <TableCell className="font-medium truncate max-w-[140px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate">{volunteer.first_name} {volunteer.last_name?.charAt(0)}.</span>
+                                    {activeTab === 'approved' && volunteer.source === 'bulk_upload' && (
+                                      <Badge variant="outline" className="h-4 px-1 text-[10px] font-medium bg-blue-500/10 text-blue-600 border-blue-500/30 shrink-0">
+                                        Bulk
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-muted-foreground truncate max-w-[120px]" title={volunteer.email}>
                                   {volunteer.email}
