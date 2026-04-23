@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { EmailAutomationsTab } from './EmailAutomationsTab';
