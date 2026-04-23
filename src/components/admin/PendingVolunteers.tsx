@@ -306,13 +306,11 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     // When searching, show results across approved + bulk_uploaded tabs (not duplicates)
     const isSearching = searchQuery.trim().length > 0;
     
-    // Apply source filter client-side only when NOT searching (and on approved/bulk tabs)
-    if (!isSearching && (activeTab === 'approved' || activeTab === 'bulk_uploaded')) {
-      if (activeTab === 'bulk_uploaded') {
-        result = result.filter(v => v.source === 'bulk_upload');
-      } else {
-        result = result.filter(v => !v.source || v.source !== 'bulk_upload');
-      }
+    // Apply source filter client-side only when NOT searching
+    // - bulk_uploaded tab: only bulk-upload rows
+    // - approved tab: ALL approved rows (partner submissions + bulk uploads)
+    if (!isSearching && activeTab === 'bulk_uploaded') {
+      result = result.filter(v => v.source === 'bulk_upload');
     }
     
     // Event filter
@@ -1100,11 +1098,9 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
         query = query.gte('created_at', exportStartDate.toISOString()).lte('created_at', endOfDay.toISOString());
       }
 
-      // Apply tab filter
+      // Apply tab filter (approved tab exports ALL approved rows, including bulk uploads)
       if (activeTab === 'bulk_uploaded') {
         query = query.eq('source', 'bulk_upload');
-      } else if (activeTab === 'approved') {
-        query = query.or('source.is.null,source.neq.bulk_upload');
       }
 
       const { data: rawData, error } = await query;
@@ -1887,8 +1883,15 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                                     onCheckedChange={() => toggleSelect(volunteer.id)}
                                   />
                                 </TableCell>
-                                <TableCell className="font-medium truncate max-w-[100px]">
-                                  {volunteer.first_name} {volunteer.last_name?.charAt(0)}.
+                                <TableCell className="font-medium truncate max-w-[140px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate">{volunteer.first_name} {volunteer.last_name?.charAt(0)}.</span>
+                                    {activeTab === 'approved' && volunteer.source === 'bulk_upload' && (
+                                      <Badge variant="outline" className="h-4 px-1 text-[10px] font-medium bg-blue-500/10 text-blue-600 border-blue-500/30 shrink-0">
+                                        Bulk
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-muted-foreground truncate max-w-[120px]" title={volunteer.email}>
                                   {volunteer.email}
