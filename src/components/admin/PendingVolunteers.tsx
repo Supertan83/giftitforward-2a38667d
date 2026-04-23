@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import {
   Dialog,
   DialogContent,
@@ -246,36 +247,37 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const { data: volunteers = [], isLoading, refetch } = useQuery({
     queryKey: ['pending-volunteers', activeTab],
     queryFn: async () => {
-      let query = supabase
-        .from('pending_volunteers')
-        .select(`
-          *,
-          volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (
-            id,
-            unique_id,
-            status,
-            checked_in_at,
-            checked_out_at,
-            survey_completed_at,
-            marketplace_id
-          )
-        `);
+      const data = await fetchAllRows<PendingVolunteer>(() => {
+        let query = supabase
+          .from('pending_volunteers')
+          .select(`
+            *,
+            volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (
+              id,
+              unique_id,
+              status,
+              checked_in_at,
+              checked_out_at,
+              survey_completed_at,
+              marketplace_id
+            )
+          `);
 
-      // Filter by status and source based on active tab
-      if (activeTab === 'pending_missing_email') {
-        query = query.eq('status', 'pending').like('email', '%@placeholder.invalid');
-      } else if (activeTab === 'duplicates') {
-        query = query.eq('status', 'duplicate');
-      } else {
-        // For approved and bulk_uploaded tabs, fetch ALL approved volunteers
-        // so search can work across both tabs
-        query = query.eq('status', 'approved');
-      }
+        // Filter by status and source based on active tab
+        if (activeTab === 'pending_missing_email') {
+          query = query.eq('status', 'pending').like('email', '%@placeholder.invalid');
+        } else if (activeTab === 'duplicates') {
+          query = query.eq('status', 'duplicate');
+        } else {
+          // For approved and bulk_uploaded tabs, fetch ALL approved volunteers
+          // so search can work across both tabs
+          query = query.eq('status', 'approved');
+        }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data as PendingVolunteer[];
+        return query.order('created_at', { ascending: false });
+      });
+
+      return data;
     }
   });
 
@@ -1086,26 +1088,26 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       const endOfDay = new Date(exportEndDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Query volunteers within date range
-      let query = supabase
-        .from('pending_volunteers')
-        .select(`*, volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (id, unique_id, status, checked_in_at, checked_out_at, survey_completed_at, marketplace_id)`)
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false });
+      // Query volunteers within date range — paginate to bypass 1000-row cap
+      const rawData = await fetchAllRows<any>(() => {
+        let query = supabase
+          .from('pending_volunteers')
+          .select(`*, volunteer_qr_cards!volunteer_qr_cards_volunteer_id_fkey (id, unique_id, status, checked_in_at, checked_out_at, survey_completed_at, marketplace_id)`)
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false });
 
-      // Only apply date range filter when exporting all marketplaces
-      if (exportMarketplace === 'all') {
-        query = query.gte('created_at', exportStartDate.toISOString()).lte('created_at', endOfDay.toISOString());
-      }
+        // Only apply date range filter when exporting all marketplaces
+        if (exportMarketplace === 'all') {
+          query = query.gte('created_at', exportStartDate.toISOString()).lte('created_at', endOfDay.toISOString());
+        }
 
-      // Apply tab filter (approved tab exports ALL approved rows, including bulk uploads)
-      if (activeTab === 'bulk_uploaded') {
-        query = query.eq('source', 'bulk_upload');
-      }
+        // Apply tab filter (approved tab exports ALL approved rows, including bulk uploads)
+        if (activeTab === 'bulk_uploaded') {
+          query = query.eq('source', 'bulk_upload');
+        }
 
-      const { data: rawData, error } = await query;
-
-      if (error) throw error;
+        return query;
+      });
 
       // Apply marketplace filter client-side (events_list is comma-separated text)
       let data = rawData || [];
