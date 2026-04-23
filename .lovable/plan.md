@@ -1,59 +1,49 @@
 
 
-## Plan: Classify Ejadah as Internal (Dubai Holding subsidiary)
+## Plan: Bulk-edit volunteer hours in Marketplace Reports
 
-### Issue
-Volunteers from **Ejadah** (a Dubai Holding subsidiary) currently appear under "Corporate External" because they have `is_employee = false` and `external_company = 'Ejadah'`. The classification logic only checks `is_employee` to decide internal vs. external.
+### Where it goes
+The "Volunteer List" table inside **Marketplace Reports** (`src/components/admin/MarketplaceReports.tsx`) — the same table that today has a per-row pencil (Edit) opening `VolunteerHoursEditDialog`. We'll keep the per-row edit and add a multi-select + bulk edit on top.
 
-Live DB confirms 9 Ejadah volunteers (8 with `is_employee=false`, 1 with `is_employee=true`).
+### UX
 
-### Approach
+1. **Selection column**
+   - Add a checkbox column on the left of every volunteer row (desktop table + mobile cards).
+   - A "select all" checkbox in the header selects/deselects every volunteer in the currently displayed marketplace report.
 
-Treat a configurable list of "Dubai Holding family" company names as **internal** regardless of the `is_employee` flag. Start with:
-- `Ejadah`
+2. **Bulk action bar** (appears above the table only when ≥1 row is selected)
+   - Shows: `"3 volunteers selected"` + buttons: **Edit Hours**, **Clear**.
+   - Click **Edit Hours** → opens a new bulk dialog.
 
-### Changes
+3. **New `VolunteerBulkHoursEditDialog`** (`src/components/admin/VolunteerBulkHoursEditDialog.tsx`)
+   - Lists the selected volunteer names (compact, scrollable).
+   - One field set applied to ALL selected volunteers, with three modes (radio):
+     - **Set hours to** — fixed numeric value (e.g. `5.0h`), overwrites `total_hours_worked`.
+     - **Set check-in / check-out times** — two `datetime-local` inputs; hours auto-calculated from the duration (matches existing single-edit behavior).
+     - **Clear hours** — sets hours to 0 and clears check-in/out timestamps.
+   - Save button disabled while empty/invalid; shows progress (`Updating 2 / 5…`).
 
-**1. Shared helper** — new file `src/lib/volunteerClassification.ts`
-```ts
-export const DH_INTERNAL_COMPANIES = ['ejadah']; // lowercase
+4. **Save behavior** (mirrors the existing single-edit logic)
+   - For each selected `cardId`, update `volunteer_qr_cards`:
+     - `total_hours_worked`, plus `checked_in_at` / `checked_out_at` when in time-mode.
+   - For the currently selected marketplace, also update the matching `volunteer_attendance` row (latest by `check_in_time`) — same join that `VolunteerHoursEditDialog` already does.
+   - Updates run sequentially with a small concurrency limit (e.g. 4 at a time) to keep the UI responsive.
+   - On completion: toast `"Updated N volunteers"` (and a count of failures if any), invalidate `['marketplace_report']`, close dialog, clear selection.
 
-export const isInternalCompany = (companyName?: string | null): boolean => {
-  if (!companyName) return false;
-  return DH_INTERNAL_COMPANIES.includes(companyName.trim().toLowerCase());
-};
+### Files touched
 
-export const classifyVolunteer = (vol: { is_employee?: boolean; external_company?: string | null }) => {
-  if (vol.is_employee || isInternalCompany(vol.external_company)) {
-    return { categoryKey: 'Corporate Internal', classification: 'internal' as const };
-  }
-  if (vol.external_company) {
-    return { categoryKey: 'Corporate External', classification: 'external' as const };
-  }
-  return { categoryKey: 'Outreach Partners', classification: 'outreach' as const };
-};
+- **NEW** `src/components/admin/VolunteerBulkHoursEditDialog.tsx` — the bulk dialog (built from the existing `VolunteerHoursEditDialog` pattern).
+- **EDIT** `src/components/admin/MarketplaceReports.tsx`:
+  - Add `selectedCardIds: Set<string>` state, scoped to the selected marketplace (cleared on marketplace change).
+  - Add checkbox column + "select all" header to the desktop table and mobile cards.
+  - Render the bulk-action bar above the Volunteer List when `selectedCardIds.size > 0`.
+  - Mount `<VolunteerBulkHoursEditDialog />` next to the existing single-edit dialog.
 
-export const resolveCompanyName = (vol: { is_employee?: boolean; external_company?: string | null }) => {
-  if (vol.is_employee && !vol.external_company) return 'Dubai Holding';
-  return vol.external_company || 'Other';
-};
-```
-
-**2. Use the helper in the 3 places that classify volunteers:**
-- `src/hooks/useVolunteerDetails.ts` (lines 124–164) — replace inline `if (vol.is_employee)` block.
-- `src/hooks/useMarketplaceAllocations.ts` (lines 628–637 and 696–704) — replace both inline blocks.
-- `src/components/admin/PendingVolunteers.tsx` (lines 1275, 1901, 2366) — display "Dubai Holding" for Ejadah rows too via `resolveCompanyName` (optional polish; keeps the Company column showing "Ejadah" if preferred — see Open question below).
-
-**3. No DB change.** The fix is purely classification logic; we don't mutate `is_employee` or `external_company` so the original company name stays visible/exportable.
+### Out of scope
+- No DB changes (uses existing `volunteer_qr_cards` + `volunteer_attendance` tables and current RLS — admins already have full access).
+- No edge function needed; updates go through the Supabase client like the single-edit flow.
+- No changes to the "Volunteers Added" tab (`PendingVolunteers.tsx`) — bulk hour edits only make sense per-marketplace context where check-in/out times live.
 
 ### Result
-- Ejadah volunteers move from "Corporate External" → "Corporate Internal" in:
-  - Volunteer Details stats (registered/attended/dropout per category)
-  - Marketplace Reports volunteer breakdown
-  - Statistics dashboard category counts
-- CSV exports and tooltips keep the literal company name "Ejadah" so the source is still traceable.
-- Adding more DH subsidiaries later = one-line change in `DH_INTERNAL_COMPANIES`.
-
-### Open question (optional)
-Should the **Company column** for Ejadah rows display "Ejadah" (current) or "Dubai Holding — Ejadah"? Default plan = keep "Ejadah" so admins still see the subsidiary name; only the *category* moves to Internal.
+Admins can tick multiple volunteers in a marketplace report, click **Edit Hours**, and apply a single hours value or a check-in/out window to all of them at once — saving repeated single-edit clicks during post-event reconciliation.
 
