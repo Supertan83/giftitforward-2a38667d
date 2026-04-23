@@ -1,49 +1,55 @@
 
 
-## Plan: Bulk-edit volunteer hours in Marketplace Reports
+## Yes — there's a hidden 1,000-row display limit (volunteers are NOT blocked)
 
-### Where it goes
-The "Volunteer List" table inside **Marketplace Reports** (`src/components/admin/MarketplaceReports.tsx`) — the same table that today has a per-row pencil (Edit) opening `VolunteerHoursEditDialog`. We'll keep the per-row edit and add a multi-select + bulk edit on top.
+### What's actually happening
 
-### UX
+- The database has **1,030 approved volunteers** today (confirmed via live query).
+- New signups, bulk uploads and partner registrations **continue to be saved** with no limit. Nothing in the code or database caps how many volunteers can exist.
+- The "1,000" you're seeing is a **Supabase/PostgREST default response cap**: any `SELECT` without explicit pagination silently returns at most 1,000 rows. Several places in the app fetch volunteers without paginating, so once we cross 1,000 the extra rows simply don't appear in the UI.
 
-1. **Selection column**
-   - Add a checkbox column on the left of every volunteer row (desktop table + mobile cards).
-   - A "select all" checkbox in the header selects/deselects every volunteer in the currently displayed marketplace report.
+### Where the 1,000-row truncation happens today
 
-2. **Bulk action bar** (appears above the table only when ≥1 row is selected)
-   - Shows: `"3 volunteers selected"` + buttons: **Edit Hours**, **Clear**.
-   - Click **Edit Hours** → opens a new bulk dialog.
+| # | File | What it loads | Impact when >1,000 approved volunteers |
+|---|---|---|---|
+| 1 | `src/components/admin/PendingVolunteers.tsx` line ~246 (main list query) | All approved volunteers for the "Volunteers Added" view | Newest 1,000 shown, oldest hidden |
+| 2 | `src/components/admin/PendingVolunteers.tsx` line ~1090 (CSV export) | Approved volunteers for export | Export missing rows beyond 1,000 |
+| 3 | `src/hooks/useVolunteerDetails.ts` line ~32 | Stats per marketplace (registered / attended / dropout / categories) | Counts under-report |
+| 4 | `src/components/admin/EmailCampaignManager.tsx` (4 queries around lines 173–230) | Recipient lists for "all volunteers", "by marketplace", "pending training" | Campaigns silently skip volunteers beyond 1,000 |
+| 5 | `src/hooks/useVolunteerDetails.ts` line ~87 — `registration_events.limit(1000)` | Family-member totals across all marketplaces | Family count under-reports as registrations grow |
 
-3. **New `VolunteerBulkHoursEditDialog`** (`src/components/admin/VolunteerBulkHoursEditDialog.tsx`)
-   - Lists the selected volunteer names (compact, scrollable).
-   - One field set applied to ALL selected volunteers, with three modes (radio):
-     - **Set hours to** — fixed numeric value (e.g. `5.0h`), overwrites `total_hours_worked`.
-     - **Set check-in / check-out times** — two `datetime-local` inputs; hours auto-calculated from the duration (matches existing single-edit behavior).
-     - **Clear hours** — sets hours to 0 and clears check-in/out timestamps.
-   - Save button disabled while empty/invalid; shows progress (`Updating 2 / 5…`).
+### The fix (paginated range fetching, no DB changes)
 
-4. **Save behavior** (mirrors the existing single-edit logic)
-   - For each selected `cardId`, update `volunteer_qr_cards`:
-     - `total_hours_worked`, plus `checked_in_at` / `checked_out_at` when in time-mode.
-   - For the currently selected marketplace, also update the matching `volunteer_attendance` row (latest by `check_in_time`) — same join that `VolunteerHoursEditDialog` already does.
-   - Updates run sequentially with a small concurrency limit (e.g. 4 at a time) to keep the UI responsive.
-   - On completion: toast `"Updated N volunteers"` (and a count of failures if any), invalidate `['marketplace_report']`, close dialog, clear selection.
+Apply the same range-loop pattern already memorised for this project (`mem://constraints/data-retrieval-pagination-at-scale`) in each location above:
 
-### Files touched
+```ts
+async function fetchAllRows(buildQuery, pageSize = 1000) {
+  const all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+```
 
-- **NEW** `src/components/admin/VolunteerBulkHoursEditDialog.tsx` — the bulk dialog (built from the existing `VolunteerHoursEditDialog` pattern).
-- **EDIT** `src/components/admin/MarketplaceReports.tsx`:
-  - Add `selectedCardIds: Set<string>` state, scoped to the selected marketplace (cleared on marketplace change).
-  - Add checkbox column + "select all" header to the desktop table and mobile cards.
-  - Render the bulk-action bar above the Volunteer List when `selectedCardIds.size > 0`.
-  - Mount `<VolunteerBulkHoursEditDialog />` next to the existing single-edit dialog.
+Apply it to the 5 query sites listed above so they keep paging until all rows are returned. The main list query in `PendingVolunteers.tsx` will use the same helper but capped to the currently active filter (status / source / search) so it stays fast.
 
 ### Out of scope
-- No DB changes (uses existing `volunteer_qr_cards` + `volunteer_attendance` tables and current RLS — admins already have full access).
-- No edge function needed; updates go through the Supabase client like the single-edit flow.
-- No changes to the "Volunteers Added" tab (`PendingVolunteers.tsx`) — bulk hour edits only make sense per-marketplace context where check-in/out times live.
+
+- No DB schema changes, no RLS changes, no new tables.
+- No edge function changes — `bulk-create-volunteers` is unaffected (it never reads the full list, only inserts).
+- The "Bulk Uploaded" tab and per-row badges added previously stay untouched.
 
 ### Result
-Admins can tick multiple volunteers in a marketplace report, click **Edit Hours**, and apply a single hours value or a check-in/out window to all of them at once — saving repeated single-edit clicks during post-event reconciliation.
+
+- Volunteers are **never blocked** from registering — that was never a real cap, only a display/count cap.
+- All approved volunteers (current 1,030 and any future growth) appear in the Volunteers Added list.
+- CSV exports include every matching row.
+- Volunteer-details stats and email campaigns count/target the full population, not just the first 1,000.
 
