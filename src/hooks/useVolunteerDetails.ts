@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { classifyVolunteer, resolveCompanyName } from '@/lib/volunteerClassification';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 export interface VolunteerCategoryBreakdown {
   category: string;
@@ -28,26 +29,26 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
   return useQuery({
     queryKey: ['volunteer_details_stats', marketplaceName || 'all', marketplaceId || 'all'],
     queryFn: async (): Promise<VolunteerDetailsData> => {
-      // Fetch all approved volunteers with their QR card status
-      const { data: volunteers, error } = await supabase
-        .from('pending_volunteers')
-        .select(`
-          id,
-          is_employee,
-          external_company,
-          gender,
-          source,
-          events_list,
-          events_json,
-          volunteer_qr_cards (
+      // Fetch all approved volunteers with their QR card status — paginated to bypass 1000-row cap
+      const volunteers = await fetchAllRows<any>(() =>
+        supabase
+          .from('pending_volunteers')
+          .select(`
             id,
-            status,
-            marketplace_id
-          )
-        `)
-        .eq('status', 'approved');
-
-      if (error) throw error;
+            is_employee,
+            external_company,
+            gender,
+            source,
+            events_list,
+            events_json,
+            volunteer_qr_cards (
+              id,
+              status,
+              marketplace_id
+            )
+          `)
+          .eq('status', 'approved')
+      );
 
       let vols = volunteers || [];
 
@@ -80,11 +81,12 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
           }
         }
       } else {
-        // Global: fetch from registration_events
-        const { data: regEvents } = await supabase
-          .from('registration_events')
-          .select('number_of_adults, number_of_children')
-          .limit(1000);
+        // Global: fetch from registration_events — paginated to bypass 1000-row cap
+        const regEvents = await fetchAllRows<{ number_of_adults: number | null; number_of_children: number | null }>(() =>
+          supabase
+            .from('registration_events')
+            .select('number_of_adults, number_of_children')
+        );
 
         if (regEvents) {
           totalFamilyMembers = regEvents.reduce((sum, re) =>

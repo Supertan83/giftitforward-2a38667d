@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { EmailAutomationsTab } from './EmailAutomationsTab';
@@ -171,11 +172,13 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       let recipientsList: { email: string; name: string; volunteer_id: string | null }[] = [];
 
       if (formRecipientType === 'all') {
-        const { data: volunteers } = await supabase
-          .from('pending_volunteers')
-          .select('id, first_name, last_name, email')
-          .eq('status', 'approved');
-        recipientsList = (volunteers || []).map(v => ({
+        const volunteers = await fetchAllRows<{ id: string; first_name: string; last_name: string; email: string }>(() =>
+          supabase
+            .from('pending_volunteers')
+            .select('id, first_name, last_name, email')
+            .eq('status', 'approved')
+        );
+        recipientsList = volunteers.map(v => ({
           email: v.email,
           name: `${v.first_name} ${v.last_name}`,
           volunteer_id: v.id,
@@ -183,11 +186,13 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
       } else if (formRecipientType === 'marketplace') {
         const mp = marketplaces.find(m => m.id === formMarketplaceId);
         const mpName = mp?.name || '';
-        const { data: volunteers } = await supabase
-          .from('pending_volunteers')
-          .select('id, first_name, last_name, email, events_list')
-          .eq('status', 'approved');
-        recipientsList = (volunteers || [])
+        const volunteers = await fetchAllRows<{ id: string; first_name: string; last_name: string; email: string; events_list: string | null }>(() =>
+          supabase
+            .from('pending_volunteers')
+            .select('id, first_name, last_name, email, events_list')
+            .eq('status', 'approved')
+        );
+        recipientsList = volunteers
           .filter(v => v.events_list?.toLowerCase().includes(mpName.toLowerCase()))
           .map(v => ({
             email: v.email,
@@ -198,15 +203,15 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
         const normalizeEmail = (value: string) => value.trim().toLowerCase();
         const emails = formManualEmails.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean);
 
-        const { data: matchedVolunteers, error: volunteersError } = await supabase
-          .from('pending_volunteers')
-          .select('id, first_name, last_name, email, status, created_at')
-          .order('created_at', { ascending: false });
-
-        if (volunteersError) throw volunteersError;
+        const matchedVolunteers = await fetchAllRows<{ id: string; first_name: string; last_name: string; email: string; status: string | null; created_at: string }>(() =>
+          supabase
+            .from('pending_volunteers')
+            .select('id, first_name, last_name, email, status, created_at')
+            .order('created_at', { ascending: false })
+        );
 
         const volMap = new Map<string, { id: string; first_name: string; last_name: string; email: string; status: string | null }>();
-        for (const volunteer of matchedVolunteers || []) {
+        for (const volunteer of matchedVolunteers) {
           const key = normalizeEmail(volunteer.email);
           const existing = volMap.get(key);
           if (!existing || (existing.status !== 'approved' && volunteer.status === 'approved')) {
@@ -223,12 +228,14 @@ export const EmailCampaignManager: React.FC<EmailCampaignManagerProps> = ({ onBa
           };
         });
       } else if (formRecipientType === 'pending_training') {
-        const { data: volunteers } = await supabase
-          .from('pending_volunteers')
-          .select('id, first_name, last_name, email')
-          .eq('status', 'approved')
-          .or('training_completed.is.null,training_completed.eq.false');
-        recipientsList = (volunteers || []).map(v => ({
+        const volunteers = await fetchAllRows<{ id: string; first_name: string; last_name: string; email: string }>(() =>
+          supabase
+            .from('pending_volunteers')
+            .select('id, first_name, last_name, email')
+            .eq('status', 'approved')
+            .or('training_completed.is.null,training_completed.eq.false')
+        );
+        recipientsList = volunteers.map(v => ({
           email: v.email,
           name: `${v.first_name} ${v.last_name}`,
           volunteer_id: v.id,
