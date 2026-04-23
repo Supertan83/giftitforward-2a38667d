@@ -614,20 +614,8 @@ Deno.serve(async (req) => {
           .from('user_roles')
           .insert({ user_id: newUser.user.id, role: 'volunteer' })
 
-        // Create volunteer QR card
-        const { error: qrError } = await supabaseAdmin
-          .from('volunteer_qr_cards')
-          .insert({
-            unique_id: qrCodeId,
-            status: 'inactive',
-          })
-
-        if (qrError) {
-          console.error('Error creating QR card:', qrError)
-        }
-
-        // Create pending volunteer record for tracking with all available fields
-        const { error: pvError } = await supabaseAdmin
+        // Create pending volunteer record FIRST so we can link the QR card to it
+        const { data: pvRow, error: pvError } = await supabaseAdmin
           .from('pending_volunteers')
           .insert({
             email,
@@ -649,6 +637,25 @@ Deno.serve(async (req) => {
               location: eventLocation 
             }] : null,
           })
+          .select('id')
+          .single()
+
+        if (pvError) {
+          console.error('Error creating pending volunteer:', pvError)
+        }
+
+        // Create volunteer QR card linked to the pending volunteer
+        const { error: qrError } = await supabaseAdmin
+          .from('volunteer_qr_cards')
+          .insert({
+            unique_id: qrCodeId,
+            status: 'inactive',
+            volunteer_id: pvRow?.id ?? null,
+          })
+
+        if (qrError) {
+          console.error('Error creating QR card:', qrError)
+        }
 
         // Build marketplace event object from CSV data
         const marketplaceEvent: MarketplaceEvent | null = eventName ? {
