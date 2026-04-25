@@ -1,55 +1,64 @@
+# Plan: Move 153 Active QR Cards from Morning to Afternoon Event (Option A)
 
+## Goal
+Recycle the 153 currently-active beneficiary cards from the **Morning** event so the same physical QR cards can be handed out at the **Afternoon** event tonight — without losing the morning's 13,834 transactions or its reporting numbers.
 
-## Yes — there's a hidden 1,000-row display limit (volunteers are NOT blocked)
+## Source / Target
+- **Morning event** (source): `cedfb6a2-41f6-4b86-b8b8-53fe867fb750` — Inclusive Community: Family and People of Determination Marketplace - Morning Event
+- **Afternoon event** (target): `71792e7c-9f98-4103-bd26-0aec8e5f0ad6` — Afternoon Event
 
-### What's actually happening
+## Steps
 
-- The database has **1,030 approved volunteers** today (confirmed via live query).
-- New signups, bulk uploads and partner registrations **continue to be saved** with no limit. Nothing in the code or database caps how many volunteers can exist.
-- The "1,000" you're seeing is a **Supabase/PostgREST default response cap**: any `SELECT` without explicit pagination silently returns at most 1,000 rows. Several places in the app fetch volunteers without paginating, so once we cross 1,000 the extra rows simply don't appear in the UI.
+### 1. Archive Morning's 153 active cards
+Force `status = 'checked_out'` on all `qr_cards` rows where `marketplace_id = <morning>` AND `status = 'active'`. This:
+- Preserves all 13,834 morning transactions and `total_items_collected` for reports.
+- Frees the physical QR codes for re-issue.
+- Inserts a `CheckOut` transaction row per card (audit trail, scanned_by = NULL = system).
 
-### Where the 1,000-row truncation happens today
+### 2. Recycle the 153 physical cards into the Afternoon event
+Insert 153 new rows into `qr_cards` with:
+- Same `unique_id` as the morning cards (physical QR is identical).
+- `marketplace_id` = Afternoon (`71792e7c-…`).
+- `status = 'inactive'`, `credit_balance = 0`, `total_items_collected = 0`, `collected_items = '[]'`.
+- Fresh `created_at = now()`, no `activated_at`.
 
-| # | File | What it loads | Impact when >1,000 approved volunteers |
-|---|---|---|---|
-| 1 | `src/components/admin/PendingVolunteers.tsx` line ~246 (main list query) | All approved volunteers for the "Volunteers Added" view | Newest 1,000 shown, oldest hidden |
-| 2 | `src/components/admin/PendingVolunteers.tsx` line ~1090 (CSV export) | Approved volunteers for export | Export missing rows beyond 1,000 |
-| 3 | `src/hooks/useVolunteerDetails.ts` line ~32 | Stats per marketplace (registered / attended / dropout / categories) | Counts under-report |
-| 4 | `src/components/admin/EmailCampaignManager.tsx` (4 queries around lines 173–230) | Recipient lists for "all volunteers", "by marketplace", "pending training" | Campaigns silently skip volunteers beyond 1,000 |
-| 5 | `src/hooks/useVolunteerDetails.ts` line ~87 — `registration_events.limit(1000)` | Family-member totals across all marketplaces | Family count under-reports as registrations grow |
+This matches the documented QR Card Lifecycle pattern (mem://system/qr-card-lifecycle-management) where physical cards get a fresh row per event.
 
-### The fix (paginated range fetching, no DB changes)
+### 3. Soft-delete duplicate Morning event row
+`UPDATE marketplace_events SET deleted_at = now() WHERE id = '43289a4a-fe35-4e20-bbf5-1d98d87f1065'` to prevent future Surpluss sync confusion.
 
-Apply the same range-loop pattern already memorised for this project (`mem://constraints/data-retrieval-pagination-at-scale`) in each location above:
+### 4. Verification (read-only checks)
+- Morning event: 0 active cards, 153 newly checked-out, 13,834 transactions intact.
+- Afternoon event: 153 new `inactive` cards ready for Entrance Zone scan-in.
+- Duplicate event row hidden from all admin lists.
 
-```ts
-async function fetchAllRows(buildQuery, pageSize = 1000) {
-  const all = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
-    if (error) throw error;
-    if (!data?.length) break;
-    all.push(...data);
-    if (data.length < pageSize) break;
-    from += pageSize;
-  }
-  return all;
-}
+## Out of Scope (per Option A)
+- No Afternoon allocation sync triggered. If Afternoon's inventory is still empty, run "Sync Allocations" from Marketplace Reports separately when ready.
+
+## Technical Detail (SQL pseudo-summary)
+```sql
+-- Step 1: archive
+UPDATE qr_cards SET status='checked_out', credit_balance=0,
+  collected_items='[]', updated_at=now()
+WHERE marketplace_id='cedfb6a2-...' AND status='active';
+
+INSERT INTO transactions (card_id, type, credit_change, marketplace_id)
+SELECT id, 'CheckOut', 0, marketplace_id FROM qr_cards
+WHERE marketplace_id='cedfb6a2-...' AND status='checked_out'
+  AND updated_at >= now() - interval '1 minute';
+
+-- Step 2: recycle
+INSERT INTO qr_cards (unique_id, marketplace_id, status,
+  credit_balance, total_items_collected, collected_items)
+SELECT unique_id, '71792e7c-...', 'inactive', 0, 0, '[]'::jsonb
+FROM qr_cards
+WHERE marketplace_id='cedfb6a2-...' AND status='checked_out'
+  AND updated_at >= now() - interval '1 minute';
+
+-- Step 3: soft-delete duplicate
+UPDATE marketplace_events SET deleted_at=now()
+WHERE id='43289a4a-fe35-4e20-bbf5-1d98d87f1065';
 ```
 
-Apply it to the 5 query sites listed above so they keep paging until all rows are returned. The main list query in `PendingVolunteers.tsx` will use the same helper but capped to the currently active filter (status / source / search) so it stays fast.
-
-### Out of scope
-
-- No DB schema changes, no RLS changes, no new tables.
-- No edge function changes — `bulk-create-volunteers` is unaffected (it never reads the full list, only inserts).
-- The "Bulk Uploaded" tab and per-row badges added previously stay untouched.
-
-### Result
-
-- Volunteers are **never blocked** from registering — that was never a real cap, only a display/count cap.
-- All approved volunteers (current 1,030 and any future growth) appear in the Volunteers Added list.
-- CSV exports include every matching row.
-- Volunteer-details stats and email campaigns count/target the full population, not just the first 1,000.
-
+## Result
+The volunteer team can scan the same 153 physical cards at the Afternoon Entrance Zone and they will be treated as fresh, unregistered cards — while the Morning event's stats stay frozen and accurate.
