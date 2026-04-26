@@ -1,45 +1,26 @@
-# Reset all QR cards for evening marketplace
-
-## Current state (live from DB)
-- **987** cards `checked_out` (carry old `marketplace_id`)
-- **142** cards `active` at the morning event (`a2d85409-96f2-458e-9c5f-53d0a3100f67`) — never exit-scanned
-- **828** cards already `inactive` (ready to use)
-- **Total to reset: 1,129 cards**
+# Extend Afternoon Marketplace End Time by 2 Hours
 
 ## Goal
-Every physical QR card must be `inactive`, unlinked from any marketplace, with zero balance, so any card scanned at tonight's **She Thrives Afternoon Event** entrance starts fresh.
+Extend tonight's **She Thrives: Women Workers Marketplace - Afternoon Event** so volunteers can keep scanning beneficiaries for an extra 2 hours.
 
-## Plan
+## Current state (live from DB)
+- Event ID: `e55c17ed-5394-4cfd-9a4d-db8aa05c5001`
+- Date: 2026-04-26
+- Start: 14:30
+- **End: 20:00** ← needs to change
 
-### 1. Force-checkout the 142 still-active morning cards (audit trail)
-For each of the 142 `active` cards in the morning marketplace, insert a synthetic `CheckOut` transaction:
-- `type = 'CheckOut'`
-- `marketplace_id = a2d85409-96f2-458e-9c5f-53d0a3100f67` (morning)
-- `timestamp = now()`
-- `credit_change = 0`
+## Change
+Single SQL update on `marketplace_events`:
+```sql
+UPDATE marketplace_events
+SET end_time = '22:00:00', updated_at = now()
+WHERE id = 'e55c17ed-5394-4cfd-9a4d-db8aa05c5001';
+```
 
-This preserves the morning marketplace's reporting integrity (their final items-collected counts stay intact in transaction history) before we wipe the card row.
+## Result
+- New end time: **22:00 (10:00 PM)**
+- Status stays `active` — no other fields touched
+- All zones (Entrance, Marketplace, Exit) remain operational for the extended window
 
-### 2. Reset all non-inactive cards to inactive
-Single `UPDATE qr_cards` covering all 1,129 cards where `status IN ('active','checked_out')`:
-- `status` → `'inactive'`
-- `credit_balance` → `0`
-- `total_items_collected` → `0`
-- `collected_items` → `'[]'::jsonb`
-- `marketplace_id` → `NULL`
-- `activated_at` → `NULL`
-- `updated_at` → `now()`
-
-This is exactly what the nightly `auto-unblock-cards` job does — just run early and across today's cards too.
-
-### 3. Verification
-Re-query and confirm: **0 active**, **0 checked_out**, **1,957 inactive**, **0 with marketplace_id**.
-
-## What this will NOT touch
-- ❌ Morning marketplace status, demographics, or distribution counts (already locked in `transactions` and `marketplace_item_allocations`)
-- ❌ Item allocations / inventory
-- ❌ Volunteer cards (`volunteer_qr_cards` is a separate table)
-- ❌ Any historical reports — morning reporting reads from `transactions` (with `marketplace_id` stamped on each row), not from current `qr_cards` state
-
-## Important note
-Once this runs, the Exit Zone for the morning event will show **0 "Still Active"** and the morning's 384 manually reconciled checkouts remain in transaction history. The afternoon team can begin scanning entries immediately afterward.
+## Not affected
+- Morning event data, transactions, QR card states, allocations, reports — all untouched.
