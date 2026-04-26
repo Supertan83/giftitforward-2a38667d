@@ -1,23 +1,35 @@
 
-## Problem
-Exit Zone shows ~44 checked-out for today's She Thrives Morning marketplace, but the team has physically checked out ~60. Investigation found **20 beneficiary cards activated TODAY (after 4:37 AM) are still linked to yesterday's marketplace** (`Inclusive Community: Family and People of Determination - Afternoon Event`, ID `71792e7c-…`). Of those, 19 are already `checked_out` and 1 is still `active`. They are invisible to today's Exit Zone counter because it filters by `marketplace_id = today's marketplace`.
+## Findings
 
-Root cause: yesterday's cleanup didn't fully reset the `marketplace_id` on every card, OR a scanning tablet still has yesterday's event selected, so new activations write the old `marketplace_id`.
+Today's She Thrives Morning marketplace (`a2d85409-…`) currently shows:
+- **135 checked-out**, **124 active**, **0 inactive**
+
+But 18 more cards activated today (after midnight) are STILL linked to yesterday's "Inclusive Family — Afternoon Event" marketplace (`71792e7c-…`):
+- **15 checked_out**
+- **3 active**
+
+This is the same root cause as before — at least one tablet had yesterday's event selected when scanning. Latest stray activation was 10:51 AM local time, so it appears the tablets have since switched correctly (most recent activation on the right marketplace was 11:14 AM).
+
+The cards in your photos (`QR-MLTC4HWM-IEVR`, `QR-MLS7W4O9-7ITX`, `QR-MLTC4HWN-HHF4`) are exactly in this batch — they were scanned today but show yesterday's marketplace name in the Card Status panel.
 
 ## Plan
 
-1. **Reattach today's stray cards to today's marketplace.** Update the 20 cards (activated_at >= today 00:00 AND marketplace_id = `71792e7c-…`) to set `marketplace_id = a2d85409-…` (She Thrives Morning). Their status (`checked_out` / `active`) and timestamps stay as-is. After this, today's Exit Zone counter will reflect ~80 checked-out (61 + 19) and the still-active count will rise by 1.
+1. **Reattach the 18 stray cards** activated today (≥ 2026-04-26 00:00 UTC) currently linked to yesterday's marketplace (`71792e7c-…`):
+   - Update `qr_cards.marketplace_id` → `a2d85409-…` (She Thrives Morning).
+   - Keep their existing `status` (`checked_out` / `active`) and timestamps untouched.
 
-2. **Also reattach their transactions for today.** Update `transactions` rows where `card_id` is in that set AND `timestamp >= today 00:00` AND `marketplace_id = 71792e7c-…` to point to today's marketplace, so distribution reports also align.
+2. **Reattach today's transactions for those same cards**:
+   - Update `transactions.marketplace_id` → `a2d85409-…` for rows where `card_id` is in that set AND `timestamp >= 2026-04-26 00:00 UTC` AND `marketplace_id = 71792e7c-…`.
+   - Older transactions (from genuine yesterday usage) stay linked to yesterday — untouched.
 
-3. **Verify** by re-running the status counters for both marketplaces and confirming yesterday's marketplace only contains pre-today (older) records.
+3. **Verify** counters afterwards:
+   - Expected today: ~150 checked-out, ~127 active.
+   - Yesterday's event returns to its true closed state (no records dated today).
 
-4. **Recommend operationally**: ask the field team to confirm every tablet has "She Thrives: Women Workers Marketplace - Morning Event" selected as the active marketplace before scanning. (No code change needed for this step — purely a comms note.)
+## Out of scope
+- No code changes. The Exit Zone counter logic is correct — only data was mis-attributed.
+- No schema changes.
+- The 9 legitimate yesterday cards under `71792e7c-…` (activated before today) stay where they belong.
 
-## Out of scope (will not touch)
-- The 9 truly-yesterday cards (`updated_day = OLDER`) under `71792e7c-…` — those are correctly closed yesterday's records and must stay linked to yesterday's event for reporting.
-- No schema changes; no code changes to Exit Zone logic. The counter is correct — the data was mis-attributed.
-
-## Expected outcome
-- She Thrives Morning: ~166 active, ~80 checked-out (matches physical count of 60+ and growing).
-- Yesterday's Inclusive Family event: returns to its closed state with only legitimate yesterday records.
+## Operational note for the field team
+Please double-check every tablet right now has **"She Thrives: Women Workers Marketplace - Morning Event"** selected as the active marketplace. This is the second time today the same drift has happened — at least one tablet was still on yesterday's afternoon event between midnight and ~10:51 AM. If it keeps recurring, we can look at locking scans to only the single `status = 'active'` marketplace at the database level.
