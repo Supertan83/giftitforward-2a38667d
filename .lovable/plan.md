@@ -1,29 +1,45 @@
-# Adjust She Thrives Morning checkout count to 384
+# Reset all QR cards for evening marketplace
+
+## Current state (live from DB)
+- **987** cards `checked_out` (carry old `marketplace_id`)
+- **142** cards `active` at the morning event (`a2d85409-96f2-458e-9c5f-53d0a3100f67`) — never exit-scanned
+- **828** cards already `inactive` (ready to use)
+- **Total to reset: 1,129 cards**
 
 ## Goal
-Make the system reflect **384 checked-out cards** for today's She Thrives Morning marketplace (`a2d85409-96f2-458e-9c5f-53d0a3100f67`) to match the manual paper count. No UI changes. No other marketplaces touched.
-
-## Current state
-- `checked_out` cards: **331**
-- `active` cards (entered + collected items, but never exit-scanned): **116** — all 116 have items distributed
-- Gap to close: **384 − 331 = 53 cards** must flip from `active` → `checked_out`
+Every physical QR card must be `inactive`, unlinked from any marketplace, with zero balance, so any card scanned at tonight's **She Thrives Afternoon Event** entrance starts fresh.
 
 ## Plan
 
-### 1. Promote 53 active cards to checked_out
-Select the 53 `active` cards in this marketplace with the **most items distributed** (most likely to be real completed visits that simply skipped the exit scanner). For each:
-- Update `qr_cards.status` from `active` → `checked_out`
-- Insert a synthetic `CheckOut` transaction (timestamp = now, scanned_by = 'manual_reconciliation') so the audit trail explains the change and the daily auto-unblock job treats them normally.
+### 1. Force-checkout the 142 still-active morning cards (audit trail)
+For each of the 142 `active` cards in the morning marketplace, insert a synthetic `CheckOut` transaction:
+- `type = 'CheckOut'`
+- `marketplace_id = a2d85409-96f2-458e-9c5f-53d0a3100f67` (morning)
+- `timestamp = now()`
+- `credit_change = 0`
 
-### 2. Verification
-Re-run the card stats query and confirm Exit Zone shows:
-- Checked Out: **384**
-- Still Active: **63**
+This preserves the morning marketplace's reporting integrity (their final items-collected counts stay intact in transaction history) before we wipe the card row.
 
-### 3. No other changes
-- No code or UI edits.
-- No changes to any other marketplace.
-- No edits to entrance/distribution transactions — only `CheckOut` rows are appended.
+### 2. Reset all non-inactive cards to inactive
+Single `UPDATE qr_cards` covering all 1,129 cards where `status IN ('active','checked_out')`:
+- `status` → `'inactive'`
+- `credit_balance` → `0`
+- `total_items_collected` → `0`
+- `collected_items` → `'[]'::jsonb`
+- `marketplace_id` → `NULL`
+- `activated_at` → `NULL`
+- `updated_at` → `now()`
 
-## Important caveat to confirm
-The "446" you saw in the Exit Zone screenshot was **checked_out (331) + still active (116)** = total cards activated today, **not** a checkout figure. The actual system checkout count today is **331**, so we are *increasing* it by 53 to reach 384 — not *decreasing* from 446. Please confirm this is the intended adjustment before approval.
+This is exactly what the nightly `auto-unblock-cards` job does — just run early and across today's cards too.
+
+### 3. Verification
+Re-query and confirm: **0 active**, **0 checked_out**, **1,957 inactive**, **0 with marketplace_id**.
+
+## What this will NOT touch
+- ❌ Morning marketplace status, demographics, or distribution counts (already locked in `transactions` and `marketplace_item_allocations`)
+- ❌ Item allocations / inventory
+- ❌ Volunteer cards (`volunteer_qr_cards` is a separate table)
+- ❌ Any historical reports — morning reporting reads from `transactions` (with `marketplace_id` stamped on each row), not from current `qr_cards` state
+
+## Important note
+Once this runs, the Exit Zone for the morning event will show **0 "Still Active"** and the morning's 384 manually reconciled checkouts remain in transaction history. The afternoon team can begin scanning entries immediately afterward.
