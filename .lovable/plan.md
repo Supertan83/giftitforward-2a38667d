@@ -1,35 +1,29 @@
+# Adjust She Thrives Morning checkout count to 384
 
-## Findings
+## Goal
+Make the system reflect **384 checked-out cards** for today's She Thrives Morning marketplace (`a2d85409-96f2-458e-9c5f-53d0a3100f67`) to match the manual paper count. No UI changes. No other marketplaces touched.
 
-Today's She Thrives Morning marketplace (`a2d85409-…`) currently shows:
-- **135 checked-out**, **124 active**, **0 inactive**
-
-But 18 more cards activated today (after midnight) are STILL linked to yesterday's "Inclusive Family — Afternoon Event" marketplace (`71792e7c-…`):
-- **15 checked_out**
-- **3 active**
-
-This is the same root cause as before — at least one tablet had yesterday's event selected when scanning. Latest stray activation was 10:51 AM local time, so it appears the tablets have since switched correctly (most recent activation on the right marketplace was 11:14 AM).
-
-The cards in your photos (`QR-MLTC4HWM-IEVR`, `QR-MLS7W4O9-7ITX`, `QR-MLTC4HWN-HHF4`) are exactly in this batch — they were scanned today but show yesterday's marketplace name in the Card Status panel.
+## Current state
+- `checked_out` cards: **331**
+- `active` cards (entered + collected items, but never exit-scanned): **116** — all 116 have items distributed
+- Gap to close: **384 − 331 = 53 cards** must flip from `active` → `checked_out`
 
 ## Plan
 
-1. **Reattach the 18 stray cards** activated today (≥ 2026-04-26 00:00 UTC) currently linked to yesterday's marketplace (`71792e7c-…`):
-   - Update `qr_cards.marketplace_id` → `a2d85409-…` (She Thrives Morning).
-   - Keep their existing `status` (`checked_out` / `active`) and timestamps untouched.
+### 1. Promote 53 active cards to checked_out
+Select the 53 `active` cards in this marketplace with the **most items distributed** (most likely to be real completed visits that simply skipped the exit scanner). For each:
+- Update `qr_cards.status` from `active` → `checked_out`
+- Insert a synthetic `CheckOut` transaction (timestamp = now, scanned_by = 'manual_reconciliation') so the audit trail explains the change and the daily auto-unblock job treats them normally.
 
-2. **Reattach today's transactions for those same cards**:
-   - Update `transactions.marketplace_id` → `a2d85409-…` for rows where `card_id` is in that set AND `timestamp >= 2026-04-26 00:00 UTC` AND `marketplace_id = 71792e7c-…`.
-   - Older transactions (from genuine yesterday usage) stay linked to yesterday — untouched.
+### 2. Verification
+Re-run the card stats query and confirm Exit Zone shows:
+- Checked Out: **384**
+- Still Active: **63**
 
-3. **Verify** counters afterwards:
-   - Expected today: ~150 checked-out, ~127 active.
-   - Yesterday's event returns to its true closed state (no records dated today).
+### 3. No other changes
+- No code or UI edits.
+- No changes to any other marketplace.
+- No edits to entrance/distribution transactions — only `CheckOut` rows are appended.
 
-## Out of scope
-- No code changes. The Exit Zone counter logic is correct — only data was mis-attributed.
-- No schema changes.
-- The 9 legitimate yesterday cards under `71792e7c-…` (activated before today) stay where they belong.
-
-## Operational note for the field team
-Please double-check every tablet right now has **"She Thrives: Women Workers Marketplace - Morning Event"** selected as the active marketplace. This is the second time today the same drift has happened — at least one tablet was still on yesterday's afternoon event between midnight and ~10:51 AM. If it keeps recurring, we can look at locking scans to only the single `status = 'active'` marketplace at the database level.
+## Important caveat to confirm
+The "446" you saw in the Exit Zone screenshot was **checked_out (331) + still active (116)** = total cards activated today, **not** a checkout figure. The actual system checkout count today is **331**, so we are *increasing* it by 53 to reach 384 — not *decreasing* from 446. Please confirm this is the intended adjustment before approval.
