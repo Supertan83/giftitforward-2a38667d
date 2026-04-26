@@ -1,57 +1,23 @@
-I found the likely cause of the “0” allocation display:
 
-- Today’s active GIF marketplace is `She Thrives: Women Workers Marketplace - Morning Event`.
-- It currently has no Tractor link (`external_id` is empty), so the GIF allocation screen cannot pull Tractor allocations for it.
-- A separate newly-created duplicate marketplace exists from the Tractor import: `Women In Facilities Management Marketplace Morning Event` with Tractor `external_id = 42`, but it is not the active marketplace selected in the screenshot.
-- Because the selected active marketplace is unlinked, its `marketplace_item_allocations` total is correctly showing `0` locally.
+## Problem
+Exit Zone shows ~44 checked-out for today's She Thrives Morning marketplace, but the team has physically checked out ~60. Investigation found **20 beneficiary cards activated TODAY (after 4:37 AM) are still linked to yesterday's marketplace** (`Inclusive Community: Family and People of Determination - Afternoon Event`, ID `71792e7c-…`). Of those, 19 are already `checked_out` and 1 is still `active`. They are invisible to today's Exit Zone counter because it filters by `marketplace_id = today's marketplace`.
 
-Plan to fix after approval:
+Root cause: yesterday's cleanup didn't fully reset the `marketplace_id` on every card, OR a scanning tablet still has yesterday's event selected, so new activations write the old `marketplace_id`.
 
-1. Confirm the correct Tractor event mapping
-   - Verify that Tractor event `42` is the correct event for today’s Morning marketplace.
-   - If confirmed, link `external_id = 42` to the active GIF marketplace: `She Thrives: Women Workers Marketplace - Morning Event`.
+## Plan
 
-2. Clean up the duplicate marketplace record safely
-   - If the duplicate `Women In Facilities Management Marketplace Morning Event` has no cards, transactions, or allocations, soft-delete it.
-   - If it has any related records, move/link them safely before soft-deleting.
+1. **Reattach today's stray cards to today's marketplace.** Update the 20 cards (activated_at >= today 00:00 AND marketplace_id = `71792e7c-…`) to set `marketplace_id = a2d85409-…` (She Thrives Morning). Their status (`checked_out` / `active`) and timestamps stay as-is. After this, today's Exit Zone counter will reflect ~80 checked-out (61 + 19) and the still-active count will rise by 1.
 
-3. Sync allocations from Tractor into GIF
-   - Run the existing allocation sync for today’s Morning marketplace.
-   - This should create/update `marketplace_item_allocations` and item rows from Tractor allocation materials.
-   - Re-check the allocation totals so the admin screen no longer shows `0`.
+2. **Also reattach their transactions for today.** Update `transactions` rows where `card_id` is in that set AND `timestamp >= today 00:00` AND `marketplace_id = 71792e7c-…` to point to today's marketplace, so distribution reports also align.
 
-4. Fix today’s scan limit configuration
-   - Today’s Morning marketplace is still set to `max_items_per_scan = 1`.
-   - Set it to `22` to avoid yesterday’s repeated scan/manual entry issue.
-   - Keep `beneficiary_credit_limit = 22`.
+3. **Verify** by re-running the status counters for both marketplaces and confirming yesterday's marketplace only contains pre-today (older) records.
 
-5. Prevent this from happening again
-   - Update the Tractor marketplace linking logic so it does not create a duplicate event when Tractor uses a different title.
-   - Add safer matching using event date/time and existing active/upcoming marketplaces, not only fuzzy name matching.
-   - Improve the sync button feedback so admins see “Marketplace is not linked to Tractor” instead of silently seeing `0`.
+4. **Recommend operationally**: ask the field team to confirm every tablet has "She Thrives: Women Workers Marketplace - Morning Event" selected as the active marketplace before scanning. (No code change needed for this step — purely a comms note.)
 
-Technical details:
+## Out of scope (will not touch)
+- The 9 truly-yesterday cards (`updated_day = OLDER`) under `71792e7c-…` — those are correctly closed yesterday's records and must stay linked to yesterday's event for reporting.
+- No schema changes; no code changes to Exit Zone logic. The counter is correct — the data was mis-attributed.
 
-```text
-Current active marketplace:
-- id: a2d85409-96f2-458e-9c5f-53d0a3100f67
-- name: She Thrives: Women Workers Marketplace - Morning Event
-- date: 2026-04-26
-- status: active
-- external_id: NULL
-- allocation rows: 0
-- max_items_per_scan: 1
-- beneficiary_credit_limit: 22
-
-Likely duplicate imported from Tractor:
-- id: 93d755de-bc6a-450c-9327-cb101c4372b5
-- name: Women In Facilities Management Marketplace Morning Event
-- external_id: 42
-- allocation rows: 0
-```
-
-Expected result:
-
-- The selected Morning marketplace will show the actual Tractor allocation quantities instead of `0`.
-- QR distribution can use up to 22 items per scan/session as intended.
-- The duplicate/unlinked marketplace issue will be reduced for future Tractor imports.
+## Expected outcome
+- She Thrives Morning: ~166 active, ~80 checked-out (matches physical count of 60+ and growing).
+- Yesterday's Inclusive Family event: returns to its closed state with only legitimate yesterday records.
