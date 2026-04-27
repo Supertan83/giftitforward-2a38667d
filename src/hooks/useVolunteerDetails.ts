@@ -25,6 +25,45 @@ export interface VolunteerDetailsData {
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+// Token + date based matcher (mirrors useMarketplaceAllocations / webhook-receiver)
+const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+const STOP_TOKENS = new Set(['the','and','for','marketplace','event','morning','afternoon','evening','day','first','second','third','half','part']);
+
+const extractDateFromEventSlug = (slug: string): { month: number; day: number } | null => {
+  const s = slug.toLowerCase();
+  for (let i = 0; i < MONTHS.length; i++) {
+    const m = s.match(new RegExp(`${MONTHS[i]}[-\\s]*?(\\d{1,2})`));
+    if (m) return { month: i + 1, day: parseInt(m[1], 10) };
+  }
+  return null;
+};
+
+const eventSlugMatchesMarketplace = (
+  rawEventSlug: string,
+  marketplaceName: string,
+  marketplaceEventDate?: string | null,
+): boolean => {
+  if (!rawEventSlug) return false;
+  const slug = rawEventSlug.toLowerCase();
+  const flat = slug.replace(/[^a-z0-9]/g, '');
+  const nameFlat = marketplaceName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (flat === nameFlat) return true;
+  const slugTokens = slug.split(/[-_\s]+/).filter(p => p.length > 2 && !STOP_TOKENS.has(p) && !MONTHS.includes(p));
+  const nameLower = marketplaceName.toLowerCase();
+  const tokenMatchCount = slugTokens.filter(t => nameLower.includes(t)).length;
+  const nameMatches = tokenMatchCount >= 2 || (slugTokens.length === 1 && nameLower.includes(slugTokens[0]));
+  if (!nameMatches) return false;
+  if (marketplaceEventDate) {
+    const slugDate = extractDateFromEventSlug(slug);
+    if (slugDate) {
+      const [y, m, d] = marketplaceEventDate.split('-').map(Number);
+      if (m !== slugDate.month || d !== slugDate.day) return false;
+    }
+  }
+  return true;
+};
+
+
 export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: string) => {
   return useQuery({
     queryKey: ['volunteer_details_stats', marketplaceName || 'all', marketplaceId || 'all'],
