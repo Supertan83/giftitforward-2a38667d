@@ -290,22 +290,29 @@ serve(async (req) => {
     }
     console.log(`Found ${alreadySyncedEmails.size} previously synced emails`);
 
-    // 3. Fetch ALL volunteers (now including events_list and employee_vertical)
-    const { data: allVolunteers, error: volError } = await supabase
-      .from("pending_volunteers")
-      .select(
-        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json, training_completed, training_completed_at",
+    // 3. Fetch ALL volunteers (paginated to bypass PostgREST 1000-row default cap)
+    let allVolunteers: any[] = [];
+    try {
+      allVolunteers = await fetchAllRows(() =>
+        supabase
+          .from("pending_volunteers")
+          .select(
+            "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json, training_completed, training_completed_at",
+          ),
       );
-
-    if (volError) {
-      throw new Error(`Failed to fetch volunteers: ${volError.message}`);
+    } catch (volError: any) {
+      throw new Error(`Failed to fetch volunteers: ${volError?.message ?? volError}`);
     }
+    console.log(`Fetched ${allVolunteers.length} total volunteers (paginated)`);
 
-    // Fetch volunteer QR card statuses to enrich volunteer data
-    const { data: allVolCards } = await supabase
-      .from("volunteer_qr_cards")
-      .select("volunteer_id, status, marketplace_id")
-      .not("volunteer_id", "is", null);
+    // Fetch volunteer QR card statuses to enrich volunteer data (paginated)
+    const allVolCards = await fetchAllRows(() =>
+      supabase
+        .from("volunteer_qr_cards")
+        .select("volunteer_id, status, marketplace_id")
+        .not("volunteer_id", "is", null),
+    );
+    console.log(`Fetched ${allVolCards.length} total volunteer QR cards (paginated)`);
 
     const cardStatusByVolunteerId = new Map<string, string>();
     // When marketplace filtering, use marketplace-specific card status
