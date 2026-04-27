@@ -10,6 +10,28 @@ const corsHeaders = {
 /** Normalize a slug like "event-7---cda" to fuzzy-matchable form */
 const normalizeSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+/**
+ * Paginated range fetcher to bypass PostgREST's default 1000-row cap.
+ * Pass a thunk that returns a fresh query builder so .range() can be applied per page.
+ */
+async function fetchAllRows<T = any>(
+  buildQuery: () => any,
+  pageSize = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  for (let i = 0; i < 1000; i++) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as T[];
+    if (rows.length === 0) break;
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 /** Build a map of normalized slug fragments -> marketplace name */
 function buildEventSlugMap(marketplaces: { name: string }[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -268,22 +290,29 @@ serve(async (req) => {
     }
     console.log(`Found ${alreadySyncedEmails.size} previously synced emails`);
 
-    // 3. Fetch ALL volunteers (now including events_list and employee_vertical)
-    const { data: allVolunteers, error: volError } = await supabase
-      .from("pending_volunteers")
-      .select(
-        "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json, training_completed, training_completed_at",
+    // 3. Fetch ALL volunteers (paginated to bypass PostgREST 1000-row default cap)
+    let allVolunteers: any[] = [];
+    try {
+      allVolunteers = await fetchAllRows(() =>
+        supabase
+          .from("pending_volunteers")
+          .select(
+            "id, first_name, last_name, email, phone_number, is_employee, external_company, gender, events_list, employee_vertical, events_json, training_completed, training_completed_at",
+          ),
       );
-
-    if (volError) {
-      throw new Error(`Failed to fetch volunteers: ${volError.message}`);
+    } catch (volError: any) {
+      throw new Error(`Failed to fetch volunteers: ${volError?.message ?? volError}`);
     }
+    console.log(`Fetched ${allVolunteers.length} total volunteers (paginated)`);
 
-    // Fetch volunteer QR card statuses to enrich volunteer data
-    const { data: allVolCards } = await supabase
-      .from("volunteer_qr_cards")
-      .select("volunteer_id, status, marketplace_id")
-      .not("volunteer_id", "is", null);
+    // Fetch volunteer QR card statuses to enrich volunteer data (paginated)
+    const allVolCards = await fetchAllRows(() =>
+      supabase
+        .from("volunteer_qr_cards")
+        .select("volunteer_id, status, marketplace_id")
+        .not("volunteer_id", "is", null),
+    );
+    console.log(`Fetched ${allVolCards.length} total volunteer QR cards (paginated)`);
 
     const cardStatusByVolunteerId = new Map<string, string>();
     // When marketplace filtering, use marketplace-specific card status
