@@ -147,10 +147,9 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
 function extractDependentsForMarketplace(
   eventsJson: any[] | null,
   marketplaceName: string,
+  marketplaceEventDate?: string | null,
 ): Array<{ name: string; type: string; gender?: string; index?: string | number }> {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const targetNorm = norm(marketplaceName);
   const deps: Array<{ name: string; type: string; gender?: string; index?: string | number }> = [];
   // Dedup by name+type+index+gender so siblings with the same first name aren't dropped,
   // but the same dependent listed twice in the same event isn't duplicated.
@@ -158,20 +157,7 @@ function extractDependentsForMarketplace(
 
   for (const evt of eventsJson) {
     const eventSlug = evt["event-slug"] || evt.event_slug || evt["event"] || evt.event || "";
-    const eventNorm = norm(eventSlug);
-    if (!eventNorm) continue;
-
-    // Stricter match: require a meaningful overlap. A short event slug must not
-    // match a long marketplace name just because of a 3-char shared prefix.
-    // We require either:
-    //  - exact equality, or
-    //  - one fully contains the other AND the shorter is at least 12 chars.
-    const a = eventNorm;
-    const b = targetNorm;
-    const shorter = a.length <= b.length ? a : b;
-    const longer = a.length > b.length ? a : b;
-    const matches = a === b || (longer.includes(shorter) && shorter.length >= 12);
-    if (!matches) continue;
+    if (!eventSlugMatchesMarketplace(String(eventSlug), marketplaceName, marketplaceEventDate)) continue;
 
     const dependents = evt.dependents || [];
     if (!Array.isArray(dependents)) continue;
