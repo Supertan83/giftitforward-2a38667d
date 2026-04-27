@@ -430,16 +430,21 @@ serve(async (req) => {
 
     // 3b. Filter volunteers by marketplace events_list when marketplace IDs are provided
     if (marketplaceNamesForFilter.length > 0) {
-      const normalizedMarketplaceNames = marketplaceNamesForFilter.map((n) => normalizeSlug(n));
+      const marketplaceFilterRows = marketplaceIdsToProcess
+        .map((mpId) => (marketplaceEvents || []).find((m: any) => m.id === mpId))
+        .filter(Boolean) as Array<{ id: string; name: string; event_date?: string | null }>;
       const beforeCount = allEnrichedVolunteers.length;
 
       allEnrichedVolunteers = allEnrichedVolunteers.filter((v: any) => {
         if (!v.events_list) return false;
         const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim()));
-        return slugs.some((slug: string) =>
-          normalizedMarketplaceNames.some(
-            (mpName) => mpName.includes(slug) || slug.includes(mpName),
-          ),
+        const rawSlugs = v.events_list.split(",").map((s: string) => s.trim());
+        return marketplaceFilterRows.some((mp) =>
+          rawSlugs.some((slug: string) => eventSlugMatchesMarketplace(slug, mp.name, mp.event_date)) ||
+          slugs.some((slug: string) => {
+            const mpName = normalizeSlug(mp.name);
+            return mpName.includes(slug) || slug.includes(mpName);
+          }),
         );
       });
       console.log(`Filtered volunteers: ${beforeCount} → ${allEnrichedVolunteers.length} (for ${marketplaceNamesForFilter.join(", ")})`);
