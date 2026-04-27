@@ -91,13 +91,23 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
 
       let vols = volunteers || [];
 
+      // Resolve marketplace event_date once for token + date matching
+      let mpEventDate: string | null = null;
+      if (marketplaceName && marketplaceId) {
+        const { data: mp } = await supabase
+          .from('marketplace_events')
+          .select('event_date')
+          .eq('id', marketplaceId)
+          .maybeSingle();
+        mpEventDate = (mp as any)?.event_date ?? null;
+      }
+
       // Filter by marketplace if provided
       if (marketplaceName) {
-        const marketplaceSlug = slugify(marketplaceName);
         vols = vols.filter(v => {
           if (!v.events_list) return false;
           return v.events_list.split(',').some(
-            (slug: string) => slugify(slug.trim()) === marketplaceSlug
+            (slug: string) => eventSlugMatchesMarketplace(slug.trim(), marketplaceName, mpEventDate)
           );
         });
       }
@@ -107,12 +117,11 @@ export const useVolunteerDetails = (marketplaceName?: string, marketplaceId?: st
 
       if (marketplaceName) {
         // Use events_json to count family members for this specific marketplace
-        const marketplaceSlug = slugify(marketplaceName);
         for (const vol of vols) {
           if (vol.events_json && Array.isArray(vol.events_json)) {
             for (const evt of vol.events_json as any[]) {
-              const eventSlug = evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '';
-              if (slugify(eventSlug) === marketplaceSlug) {
+              const rawEventSlug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+              if (eventSlugMatchesMarketplace(rawEventSlug, marketplaceName, mpEventDate)) {
                 totalFamilyMembers += Number(evt['number-of-adults'] || evt.number_of_adults || 0);
                 totalFamilyMembers += Number(evt['number-of-children'] || evt.number_of_children || 0);
               }
