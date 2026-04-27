@@ -325,7 +325,7 @@ serve(async (req) => {
     let volunteerHoursSync: Record<string, unknown> | null = null;
 
     // 1. Fetch marketplace events for slug resolution
-    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name, external_id");
+    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name, external_id, event_date");
     const slugMap = buildEventSlugMap(marketplaceEvents || []);
     console.log(`Built slug map with ${slugMap.size} marketplace events`);
 
@@ -437,8 +437,8 @@ serve(async (req) => {
 
       allEnrichedVolunteers = allEnrichedVolunteers.filter((v: any) => {
         if (!v.events_list) return false;
-        const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim()));
-        const rawSlugs = v.events_list.split(",").map((s: string) => s.trim());
+        const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim())).filter(Boolean);
+        const rawSlugs = v.events_list.split(",").map((s: string) => s.trim()).filter(Boolean);
         return marketplaceFilterRows.some((mp) =>
           rawSlugs.some((slug: string) => eventSlugMatchesMarketplace(slug, mp.name, mp.event_date)) ||
           slugs.some((slug: string) => {
