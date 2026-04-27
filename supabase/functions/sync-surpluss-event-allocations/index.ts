@@ -521,7 +521,7 @@ serve(async (req) => {
       }
 
       console.log(`[sync-all] Syncing ${marketplaces.length} marketplace events (concurrent batches of 5)`);
-      const results: unknown[] = [];
+      const results: Array<{ success?: boolean; synced?: number; marketplace_name?: string; error?: string; created?: number; updated?: number }> = [];
       const batchSize = 5;
 
       for (let i = 0; i < marketplaces.length; i += batchSize) {
@@ -613,11 +613,11 @@ serve(async (req) => {
       const result = await syncSingleMarketplace(supabase, refreshed, environment, apiHeaders, baseUrl);
       return new Response(
         JSON.stringify({
+          ...result,
           success: result.success,
           marketplace_name: refreshed.name,
           external_id: refreshed.external_id,
           auto_linked: true,
-          ...result,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -627,10 +627,10 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
+        ...result,
         success: result.success,
         marketplace_name: marketplace.name,
         external_id: marketplace.external_id,
-        ...result,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
