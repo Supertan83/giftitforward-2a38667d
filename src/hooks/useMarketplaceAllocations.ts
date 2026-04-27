@@ -717,13 +717,19 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         if (!eventsJson || !Array.isArray(eventsJson)) return [];
         const seen = new Map<string, { name: string; type: string; gender?: string }>();
         for (const evt of eventsJson) {
-          const eventSlug = (evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (eventSlug !== marketplaceNameSlug) continue;
+          const rawEventSlug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+          if (!eventSlugMatchesMarketplace(rawEventSlug, marketplace.name, mpEventDate)) continue;
           if (evt.dependents && Array.isArray(evt.dependents)) {
             for (const dep of evt.dependents) {
               const name = dep.name?.trim();
               if (!name) continue;
-              const key = name.toLowerCase();
+              // Composite key so siblings with the same name are not deduped away
+              const key = [
+                name.toLowerCase(),
+                (dep.type || 'adult').toLowerCase(),
+                String(dep.index ?? ''),
+                (dep.gender || '').toLowerCase(),
+              ].join('|');
               if (!seen.has(key)) {
                 seen.set(key, { name, type: dep.type || 'adult', gender: dep.gender || undefined });
               }
@@ -732,6 +738,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
         return Array.from(seen.values());
       };
+
 
       let actualFamilyCount = 0;
 
