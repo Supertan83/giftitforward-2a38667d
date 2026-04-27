@@ -46,7 +46,7 @@ function namesMatch(localNorm: string, surplussNorm: string): boolean {
 }
 
 async function autoLinkMarketplaces(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   apiHeaders: Record<string, string>,
   baseUrl: string,
   _environment: string,
@@ -151,7 +151,7 @@ async function autoLinkMarketplaces(
 }
 
 async function syncMaterial(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   marketplace: { id: string; name: string; external_id: number },
   materialId: number,
   materialTitle: string,
@@ -255,7 +255,7 @@ async function syncMaterial(
 }
 
 async function syncSingleMarketplace(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   marketplace: { id: string; name: string; external_id: number },
   environment: string,
   apiHeaders: Record<string, string>,
