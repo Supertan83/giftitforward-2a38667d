@@ -876,13 +876,14 @@ serve(async (req) => {
         // Extract dependents from events_json for this marketplace and send as separate volunteer entries
         try {
           const marketplaceNameForDeps = marketplace.name as string;
+          const marketplaceEventDateForDeps = marketplace.event_date as string | null | undefined;
           let familySent = 0;
           let familySkipped = 0;
           let familyFailed = 0;
           let familyTotalFound = 0;
 
           for (const vol of volunteers) {
-            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps);
+            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps, marketplaceEventDateForDeps);
             if (deps.length === 0) continue;
             familyTotalFound += deps.length;
 
