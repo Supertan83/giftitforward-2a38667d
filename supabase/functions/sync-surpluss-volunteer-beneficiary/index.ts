@@ -900,7 +900,7 @@ serve(async (req) => {
           totalSent += familySent;
           totalSkipped += familySkipped;
           totalFailed += familyFailed;
-          console.log(`Family members for "${marketplaceNameForDeps}": sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
+          console.log(`Family members for "${marketplaceNameForDeps}": found=${familyTotalFound}, sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
         } catch (familyErr) {
           console.error("Family member sync error:", familyErr);
           allErrors.push(`Family member sync: ${familyErr instanceof Error ? familyErr.message : "Unknown"}`);
