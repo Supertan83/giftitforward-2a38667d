@@ -543,12 +543,15 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         .eq('status', 'approved')
         .not('events_list', 'is', null);
 
-      // Match volunteers to this marketplace using exact slug matching per event
+      // Match volunteers to this marketplace using token + date matching so that
+      // events_list slugs (e.g. "...---february-28---second-half") line up with
+      // marketplace names (e.g. "She Thrives ... - Afternoon Event").
       const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const mpEventDate = (marketplace as any).event_date as string | null | undefined;
       const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
         if (!pv.events_list) return false;
         return pv.events_list.split(',').some(
-          slug => slug.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === marketplaceNameSlug
+          slug => eventSlugMatchesMarketplace(slug.trim(), marketplace.name, mpEventDate)
         );
       });
       const totalRegisteredFromForm = formRegisteredVolunteers.length;
@@ -558,14 +561,15 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       for (const fv of formRegisteredVolunteers) {
         if (fv.events_json && Array.isArray(fv.events_json)) {
           for (const evt of fv.events_json as any[]) {
-            const eventSlug = (evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (eventSlug === marketplaceNameSlug) {
+            const rawEventSlug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+            if (eventSlugMatchesMarketplace(rawEventSlug, marketplace.name, mpEventDate)) {
               totalFamilyMembers += Number(evt['number-of-adults'] || evt.number_of_adults || 0);
               totalFamilyMembers += Number(evt['number-of-children'] || evt.number_of_children || 0);
             }
           }
         }
       }
+
 
 // Fetch volunteer data via attendance records (per-marketplace source of truth)
       const { data: attendanceRecords } = await supabase
