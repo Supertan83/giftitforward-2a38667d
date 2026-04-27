@@ -3007,8 +3007,8 @@ serve(async (req) => {
           let volunteerEventsJson: Array<Record<string, unknown>> | null = null;
           let volunteerMarketplaceInfo: MarketplaceInfo | null = null;
 
-          if ((volunteer as Record<string, unknown>).marketplace_id) {
-            volunteerMarketplaceId = (volunteer as Record<string, unknown>).marketplace_id as string;
+          if ((volunteer as unknown as Record<string, unknown>).marketplace_id) {
+            volunteerMarketplaceId = (volunteer as unknown as Record<string, unknown>).marketplace_id as string;
             volunteerMarketplaceInfo = await getMarketplaceInfo(supabase, volunteerMarketplaceId);
             if (volunteerMarketplaceInfo) {
               volunteerEventsList = volunteerMarketplaceInfo.name.toLowerCase().replace(/\s+/g, '-');
