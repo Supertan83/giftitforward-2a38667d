@@ -10,6 +10,77 @@ const corsHeaders = {
 /** Normalize a slug like "event-7---cda" to fuzzy-matchable form */
 const normalizeSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+const STOP_TOKENS = new Set([
+  "the",
+  "and",
+  "for",
+  "marketplace",
+  "event",
+  "morning",
+  "afternoon",
+  "evening",
+  "day",
+  "first",
+  "second",
+  "third",
+  "half",
+  "part",
+]);
+
+function extractDateFromEventSlug(slug: string): { month: number; day: number } | null {
+  const s = slug.toLowerCase();
+  for (let i = 0; i < MONTHS.length; i++) {
+    const m = s.match(new RegExp(`${MONTHS[i]}[-\\s]*?(\\d{1,2})`));
+    if (m) return { month: i + 1, day: parseInt(m[1], 10) };
+  }
+  return null;
+}
+
+function eventSlugMatchesMarketplace(
+  rawEventSlug: string,
+  marketplaceName: string,
+  marketplaceEventDate?: string | null,
+): boolean {
+  if (!rawEventSlug) return false;
+  const slug = rawEventSlug.toLowerCase();
+  const flat = normalizeSlug(slug);
+  const nameFlat = normalizeSlug(marketplaceName);
+
+  if (flat === nameFlat) return true;
+
+  const slugTokens = slug
+    .split(/[-_\s]+/)
+    .filter((p) => p.length > 2 && !STOP_TOKENS.has(p) && !MONTHS.includes(p));
+  const nameLower = marketplaceName.toLowerCase();
+  const tokenMatchCount = slugTokens.filter((t) => nameLower.includes(t)).length;
+  const nameMatches = tokenMatchCount >= 2 || (slugTokens.length === 1 && nameLower.includes(slugTokens[0]));
+  if (!nameMatches) return false;
+
+  if (marketplaceEventDate) {
+    const slugDate = extractDateFromEventSlug(slug);
+    if (slugDate) {
+      const [, m, d] = marketplaceEventDate.split("-").map(Number);
+      if (m !== slugDate.month || d !== slugDate.day) return false;
+    }
+  }
+
+  return true;
+}
+
 /**
  * Paginated range fetcher to bypass PostgREST's default 1000-row cap.
  * Pass a thunk that returns a fresh query builder so .range() can be applied per page.
@@ -76,10 +147,9 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
 function extractDependentsForMarketplace(
   eventsJson: any[] | null,
   marketplaceName: string,
+  marketplaceEventDate?: string | null,
 ): Array<{ name: string; type: string; gender?: string; index?: string | number }> {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const targetNorm = norm(marketplaceName);
   const deps: Array<{ name: string; type: string; gender?: string; index?: string | number }> = [];
   // Dedup by name+type+index+gender so siblings with the same first name aren't dropped,
   // but the same dependent listed twice in the same event isn't duplicated.
@@ -87,20 +157,7 @@ function extractDependentsForMarketplace(
 
   for (const evt of eventsJson) {
     const eventSlug = evt["event-slug"] || evt.event_slug || evt["event"] || evt.event || "";
-    const eventNorm = norm(eventSlug);
-    if (!eventNorm) continue;
-
-    // Stricter match: require a meaningful overlap. A short event slug must not
-    // match a long marketplace name just because of a 3-char shared prefix.
-    // We require either:
-    //  - exact equality, or
-    //  - one fully contains the other AND the shorter is at least 12 chars.
-    const a = eventNorm;
-    const b = targetNorm;
-    const shorter = a.length <= b.length ? a : b;
-    const longer = a.length > b.length ? a : b;
-    const matches = a === b || (longer.includes(shorter) && shorter.length >= 12);
-    if (!matches) continue;
+    if (!eventSlugMatchesMarketplace(String(eventSlug), marketplaceName, marketplaceEventDate)) continue;
 
     const dependents = evt.dependents || [];
     if (!Array.isArray(dependents)) continue;
@@ -268,16 +325,21 @@ serve(async (req) => {
     let volunteerHoursSync: Record<string, unknown> | null = null;
 
     // 1. Fetch marketplace events for slug resolution
-    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name, external_id");
+    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name, external_id, event_date");
     const slugMap = buildEventSlugMap(marketplaceEvents || []);
     console.log(`Built slug map with ${slugMap.size} marketplace events`);
 
     // 1b. Determine marketplace IDs early so we can filter volunteers
     let marketplaceIdsToProcess: string[] = [];
+    let hasExplicitMarketplaceFilter = false;
     if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
       marketplaceIdsToProcess = marketplace_ids;
+      hasExplicitMarketplaceFilter = true;
     } else if (marketplace_id) {
       marketplaceIdsToProcess = [marketplace_id];
+      hasExplicitMarketplaceFilter = true;
+    } else {
+      marketplaceIdsToProcess = (marketplaceEvents || []).map((m: any) => m.id).filter(Boolean);
     }
 
     // 1c. Resolve marketplace names for filtering volunteers by events_list
@@ -372,17 +434,22 @@ serve(async (req) => {
     }));
 
     // 3b. Filter volunteers by marketplace events_list when marketplace IDs are provided
-    if (marketplaceNamesForFilter.length > 0) {
-      const normalizedMarketplaceNames = marketplaceNamesForFilter.map((n) => normalizeSlug(n));
+    if (hasExplicitMarketplaceFilter && marketplaceNamesForFilter.length > 0) {
+      const marketplaceFilterRows = marketplaceIdsToProcess
+        .map((mpId) => (marketplaceEvents || []).find((m: any) => m.id === mpId))
+        .filter(Boolean) as Array<{ id: string; name: string; event_date?: string | null }>;
       const beforeCount = allEnrichedVolunteers.length;
 
       allEnrichedVolunteers = allEnrichedVolunteers.filter((v: any) => {
         if (!v.events_list) return false;
-        const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim()));
-        return slugs.some((slug: string) =>
-          normalizedMarketplaceNames.some(
-            (mpName) => mpName.includes(slug) || slug.includes(mpName),
-          ),
+        const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim())).filter(Boolean);
+        const rawSlugs = v.events_list.split(",").map((s: string) => s.trim()).filter(Boolean);
+        return marketplaceFilterRows.some((mp) =>
+          rawSlugs.some((slug: string) => eventSlugMatchesMarketplace(slug, mp.name, mp.event_date)) ||
+          slugs.some((slug: string) => {
+            const mpName = normalizeSlug(mp.name);
+            return mpName.includes(slug) || slug.includes(mpName);
+          }),
         );
       });
       console.log(`Filtered volunteers: ${beforeCount} → ${allEnrichedVolunteers.length} (for ${marketplaceNamesForFilter.join(", ")})`);
@@ -814,13 +881,14 @@ serve(async (req) => {
         // Extract dependents from events_json for this marketplace and send as separate volunteer entries
         try {
           const marketplaceNameForDeps = marketplace.name as string;
+          const marketplaceEventDateForDeps = marketplace.event_date as string | null | undefined;
           let familySent = 0;
           let familySkipped = 0;
           let familyFailed = 0;
           let familyTotalFound = 0;
 
           for (const vol of volunteers) {
-            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps);
+            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps, marketplaceEventDateForDeps);
             if (deps.length === 0) continue;
             familyTotalFound += deps.length;
 
