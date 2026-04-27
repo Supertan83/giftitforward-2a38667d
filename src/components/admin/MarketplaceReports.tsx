@@ -196,23 +196,20 @@ export const MarketplaceReports = ({
                         {report.marketplace.status}
                       </span>
                       <div className="flex items-center gap-2">
-                        <Select value={surplussEnv} onValueChange={(v) => setSurplussEnv(v as 'staging' | 'production')}>
-                          <SelectTrigger className="w-28 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="production">Production</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {isSyncing && currentStepLabel && (
+                          <span className="text-xs text-muted-foreground hidden md:inline">
+                            {currentStepLabel}
+                          </span>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={isSyncing}
-                          onClick={() => syncToSurpluss(selectedMarketplaceId, surplussEnv)}
+                          onClick={() => setConfirmSyncOpen(true)}
                           className="gap-1.5"
                         >
                           {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                          Send to Surpluss
+                          {isSyncing ? (currentStepLabel || 'Syncing…') : 'Send to Surpluss'}
                         </Button>
                       </div>
                     </div>
