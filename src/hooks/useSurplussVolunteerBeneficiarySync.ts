@@ -26,8 +26,34 @@ interface SyncResult {
   errors: string[];
 }
 
+export type SurplussSyncStep = 'idle' | 'volunteers' | 'beneficiaries' | 'distribution';
+
+const STEP_LABELS: Record<SurplussSyncStep, string> = {
+  idle: '',
+  volunteers: 'Syncing volunteers… (1/3)',
+  beneficiaries: 'Syncing beneficiaries… (2/3)',
+  distribution: 'Reporting distribution… (3/3)',
+};
+
+async function extractFunctionError(err: unknown, fallback: string): Promise<string> {
+  try {
+    const anyErr = err as any;
+    // supabase-js FunctionsHttpError exposes .context (Response) when available
+    if (anyErr?.context && typeof anyErr.context.json === 'function') {
+      const body = await anyErr.context.json().catch(() => null);
+      if (body?.error) return typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+      if (body?.message) return body.message;
+    }
+    if (anyErr?.message) return anyErr.message;
+  } catch {
+    /* swallow */
+  }
+  return fallback;
+}
+
 export const useSurplussVolunteerBeneficiarySync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [currentStep, setCurrentStep] = useState<SurplussSyncStep>('idle');
   const { toast } = useToast();
 
   const syncToSurpluss = async (
@@ -35,26 +61,53 @@ export const useSurplussVolunteerBeneficiarySync = () => {
     environment: 'staging' | 'production'
   ): Promise<SyncResult | null> => {
     setIsSyncing(true);
+    setCurrentStep('volunteers');
+
+    let failedStep: SurplussSyncStep | null = null;
+
     try {
       // 1. Sync volunteers & demographics
-      const { data: volData, error: volError } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', {
-        body: { marketplace_id: marketplaceId, environment },
-      });
-      if (volError) throw volError;
+      let volData: any = null;
+      try {
+        const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', {
+          body: { marketplace_id: marketplaceId, environment },
+        });
+        if (error) {
+          failedStep = 'volunteers';
+          const msg = await extractFunctionError(error, 'Volunteer sync failed');
+          throw new Error(msg);
+        }
+        volData = data;
+      } catch (err) {
+        if (!failedStep) failedStep = 'volunteers';
+        throw err;
+      }
 
       // 2. Sync beneficiaries
-      const { data: benData, error: benError } = await supabase.functions.invoke('sync-surpluss-beneficiaries', {
-        body: { marketplace_id: marketplaceId, environment },
-      });
-      if (benError) throw benError;
+      setCurrentStep('beneficiaries');
+      let benData: any = null;
+      try {
+        const { data, error } = await supabase.functions.invoke('sync-surpluss-beneficiaries', {
+          body: { marketplace_id: marketplaceId, environment },
+        });
+        if (error) {
+          failedStep = 'beneficiaries';
+          const msg = await extractFunctionError(error, 'Beneficiary sync failed');
+          throw new Error(msg);
+        }
+        benData = data;
+      } catch (err) {
+        if (!failedStep) failedStep = 'beneficiaries';
+        throw err;
+      }
 
-      // 3. Report distribution figures
+      // 3. Report distribution figures (non-fatal — capture in result)
+      setCurrentStep('distribution');
       let distributionReported = false;
       let distributionError: string | null = null;
       let distributionAllocationsSent = 0;
 
       try {
-        // Get marketplace external_id
         const { data: marketplace, error: mpError } = await supabase
           .from('marketplace_events')
           .select('id, name, external_id')
@@ -66,7 +119,6 @@ export const useSurplussVolunteerBeneficiarySync = () => {
           throw new Error('Marketplace has no Surpluss external_id');
         }
 
-        // Get allocations with material mappings
         const { data: allocations, error: allocError } = await supabase
           .from('marketplace_item_allocations')
           .select(`
@@ -78,7 +130,6 @@ export const useSurplussVolunteerBeneficiarySync = () => {
 
         if (allocError) throw allocError;
 
-        // Get manual counts if available
         const { data: manualCounts } = await supabase
           .from('marketplace_manual_counts')
           .select('item_type_id, actual_distributed, actual_remaining')
@@ -86,7 +137,6 @@ export const useSurplussVolunteerBeneficiarySync = () => {
 
         const manualMap = new Map((manualCounts || []).map((m: any) => [m.item_type_id, m]));
 
-        // Group by surpluss_allocation_id
         const grouped = new Map<number, { material_id: number; distributed: number; allocated: number }[]>();
 
         for (const alloc of allocations || []) {
@@ -120,7 +170,10 @@ export const useSurplussVolunteerBeneficiarySync = () => {
             body: { environment, allocations: payloadAllocations },
           });
 
-          if (distError) throw distError;
+          if (distError) {
+            const msg = await extractFunctionError(distError, 'Distribution report failed');
+            throw new Error(msg);
+          }
           if (!distData?.success) throw new Error(distData?.error || 'Distribution report failed');
 
           distributionReported = true;
@@ -177,16 +230,18 @@ export const useSurplussVolunteerBeneficiarySync = () => {
 
       return result;
     } catch (error) {
+      const stepLabel = failedStep ? ` (step: ${failedStep})` : '';
       toast({
-        title: 'Sync Failed',
+        title: `Sync Failed${stepLabel}`,
         description: error instanceof Error ? error.message : 'Failed to sync to Surpluss',
         variant: 'destructive',
       });
       return null;
     } finally {
       setIsSyncing(false);
+      setCurrentStep('idle');
     }
   };
 
-  return { isSyncing, syncToSurpluss };
+  return { isSyncing, currentStep, currentStepLabel: STEP_LABELS[currentStep], syncToSurpluss };
 };
