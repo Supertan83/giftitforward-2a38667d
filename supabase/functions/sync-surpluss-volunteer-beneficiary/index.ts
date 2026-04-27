@@ -335,6 +335,8 @@ serve(async (req) => {
       marketplaceIdsToProcess = marketplace_ids;
     } else if (marketplace_id) {
       marketplaceIdsToProcess = [marketplace_id];
+    } else {
+      marketplaceIdsToProcess = (marketplaceEvents || []).map((m: any) => m.id).filter(Boolean);
     }
 
     // 1c. Resolve marketplace names for filtering volunteers by events_list
