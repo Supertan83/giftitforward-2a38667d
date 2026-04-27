@@ -110,7 +110,7 @@ async function autoLinkMarketplaces(
 
     const usedExternalIds = new Set((alreadyLinked ?? []).map((m: { external_id: number }) => m.external_id));
 
-    for (const local of unlinked) {
+    for (const local of unlinked as Array<{ id: string; name: string; external_id: number | null }>) {
       const localNorm = normalizeName(local.name as string);
 
       for (const surp of allSurplussEvents as Array<Record<string, unknown>>) {
