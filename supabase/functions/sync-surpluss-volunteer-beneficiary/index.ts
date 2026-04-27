@@ -76,29 +76,50 @@ function resolveEventSlugs(eventsList: string | null, slugMap: Map<string, strin
 function extractDependentsForMarketplace(
   eventsJson: any[] | null,
   marketplaceName: string,
-): Array<{ name: string; type: string; gender?: string }> {
+): Array<{ name: string; type: string; gender?: string; index?: string | number }> {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const targetNorm = norm(marketplaceName);
-  const deps: Array<{ name: string; type: string; gender?: string }> = [];
-  const seenNames = new Set<string>();
+  const deps: Array<{ name: string; type: string; gender?: string; index?: string | number }> = [];
+  // Dedup by name+type+index+gender so siblings with the same first name aren't dropped,
+  // but the same dependent listed twice in the same event isn't duplicated.
+  const seenKeys = new Set<string>();
 
   for (const evt of eventsJson) {
     const eventSlug = evt["event-slug"] || evt.event_slug || evt["event"] || evt.event || "";
     const eventNorm = norm(eventSlug);
-    // Fuzzy match: either contains the other
-    if (!eventNorm || (!eventNorm.includes(targetNorm) && !targetNorm.includes(eventNorm))) continue;
+    if (!eventNorm) continue;
+
+    // Stricter match: require a meaningful overlap. A short event slug must not
+    // match a long marketplace name just because of a 3-char shared prefix.
+    // We require either:
+    //  - exact equality, or
+    //  - one fully contains the other AND the shorter is at least 12 chars.
+    const a = eventNorm;
+    const b = targetNorm;
+    const shorter = a.length <= b.length ? a : b;
+    const longer = a.length > b.length ? a : b;
+    const matches = a === b || (longer.includes(shorter) && shorter.length >= 12);
+    if (!matches) continue;
 
     const dependents = evt.dependents || [];
     if (!Array.isArray(dependents)) continue;
     for (const d of dependents) {
       const dName = (d.name || "").trim();
-      if (!dName || seenNames.has(dName.toLowerCase())) continue;
-      seenNames.add(dName.toLowerCase());
+      if (!dName) continue;
+      const key = [
+        dName.toLowerCase(),
+        (d.type || "adult").toLowerCase(),
+        String(d.index ?? ""),
+        (d.gender || "").toLowerCase(),
+      ].join("|");
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
       deps.push({
         name: dName,
         type: d.type || "adult",
         gender: d.gender || undefined,
+        index: d.index,
       });
     }
   }
@@ -791,10 +812,12 @@ serve(async (req) => {
           let familySent = 0;
           let familySkipped = 0;
           let familyFailed = 0;
+          let familyTotalFound = 0;
 
           for (const vol of volunteers) {
             const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps);
             if (deps.length === 0) continue;
+            familyTotalFound += deps.length;
 
             const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
 
@@ -877,7 +900,7 @@ serve(async (req) => {
           totalSent += familySent;
           totalSkipped += familySkipped;
           totalFailed += familyFailed;
-          console.log(`Family members for "${marketplaceNameForDeps}": sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
+          console.log(`Family members for "${marketplaceNameForDeps}": found=${familyTotalFound}, sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
         } catch (familyErr) {
           console.error("Family member sync error:", familyErr);
           allErrors.push(`Family member sync: ${familyErr instanceof Error ? familyErr.message : "Unknown"}`);
