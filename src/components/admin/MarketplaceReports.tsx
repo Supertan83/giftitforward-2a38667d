@@ -11,6 +11,16 @@ import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
 import { VolunteerHoursEditDialog } from './VolunteerHoursEditDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 interface MarketplaceReportsProps {
   onBack: () => void;
@@ -26,7 +36,8 @@ export const MarketplaceReports = ({
     items: true,
     volunteers: true
   });
-  const { isSyncing, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
+  const { isSyncing, currentStepLabel, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const [editingVolunteer, setEditingVolunteer] = useState<{
     cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number; marketplaceId?: string;
   } | null>(null);
@@ -195,23 +206,20 @@ export const MarketplaceReports = ({
                         {report.marketplace.status}
                       </span>
                       <div className="flex items-center gap-2">
-                        <Select value={surplussEnv} onValueChange={(v) => setSurplussEnv(v as 'staging' | 'production')}>
-                          <SelectTrigger className="w-28 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="production">Production</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {isSyncing && currentStepLabel && (
+                          <span className="text-xs text-muted-foreground hidden md:inline">
+                            {currentStepLabel}
+                          </span>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={isSyncing}
-                          onClick={() => syncToSurpluss(selectedMarketplaceId, surplussEnv)}
+                          onClick={() => setConfirmSyncOpen(true)}
                           className="gap-1.5"
                         >
                           {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                          Send to Surpluss
+                          {isSyncing ? (currentStepLabel || 'Syncing…') : 'Send to Surpluss'}
                         </Button>
                       </div>
                     </div>
@@ -645,5 +653,28 @@ export const MarketplaceReports = ({
         open={!!editingVolunteer}
         onOpenChange={(open) => { if (!open) setEditingVolunteer(null); }}
       />
+      <AlertDialog open={confirmSyncOpen} onOpenChange={setConfirmSyncOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send to Surpluss?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will sync volunteers, beneficiaries, and distribution figures to Surpluss
+              (production). It can take 30–60 seconds for large marketplaces. Please don't close
+              this tab until it finishes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmSyncOpen(false);
+                if (selectedMarketplaceId) syncToSurpluss(selectedMarketplaceId, surplussEnv);
+              }}
+            >
+              Start sync
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>;
 };
