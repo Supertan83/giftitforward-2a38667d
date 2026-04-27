@@ -98,11 +98,12 @@ async function buildEventsHtml(
             .maybeSingle();
 
           if (marketplace) {
-            eventDate = formatDate(marketplace.event_date);
-            const startTime = formatTime(marketplace.start_time);
-            const endTime = formatTime(marketplace.end_time);
+            const mp = marketplace as { name: string; event_date: string | null; start_time: string | null; end_time: string | null; location: string | null };
+            eventDate = formatDate(mp.event_date);
+            const startTime = formatTime(mp.start_time);
+            const endTime = formatTime(mp.end_time);
             timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || endTime || '');
-            location = marketplace.location || '';
+            location = mp.location || '';
           }
         } catch (dbError) {
           console.error(`DB lookup failed for slug "${slug}":`, dbError);
@@ -322,7 +323,7 @@ serve(async (req: Request) => {
         }
       }
       
-      const eventsHtml = await buildEventsHtml(supabase, eventsSource);
+      const eventsHtml = await buildEventsHtml(supabase as any, eventsSource);
 
       // Build family QR sections - use dependent names when available
       const familyQRSections = familyQRs.map((fam, index) => {

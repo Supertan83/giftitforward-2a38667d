@@ -115,6 +115,6 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: corsHeaders });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), { status: 500, headers: corsHeaders });
   }
 });
