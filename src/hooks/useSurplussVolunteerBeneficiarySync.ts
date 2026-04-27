@@ -10,6 +10,10 @@ interface SyncResult {
   volunteers_bulk_updated: number;
   volunteers_total: number;
   volunteer_details: { name: string; status: string; reason?: string }[];
+  family_total: number;
+  family_sent: number;
+  family_skipped: number;
+  family_failed: number;
   demographics_sent: number;
   demographics_failed: number;
   demographics_details: { marketplace_id: string; marketplace_name: string; status: string; reason?: string }[];
