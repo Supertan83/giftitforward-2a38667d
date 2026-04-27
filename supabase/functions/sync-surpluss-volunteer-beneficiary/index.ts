@@ -331,10 +331,13 @@ serve(async (req) => {
 
     // 1b. Determine marketplace IDs early so we can filter volunteers
     let marketplaceIdsToProcess: string[] = [];
+    let hasExplicitMarketplaceFilter = false;
     if (marketplace_ids && Array.isArray(marketplace_ids) && marketplace_ids.length > 0) {
       marketplaceIdsToProcess = marketplace_ids;
+      hasExplicitMarketplaceFilter = true;
     } else if (marketplace_id) {
       marketplaceIdsToProcess = [marketplace_id];
+      hasExplicitMarketplaceFilter = true;
     } else {
       marketplaceIdsToProcess = (marketplaceEvents || []).map((m: any) => m.id).filter(Boolean);
     }
@@ -431,7 +434,7 @@ serve(async (req) => {
     }));
 
     // 3b. Filter volunteers by marketplace events_list when marketplace IDs are provided
-    if (marketplaceNamesForFilter.length > 0) {
+    if (hasExplicitMarketplaceFilter && marketplaceNamesForFilter.length > 0) {
       const marketplaceFilterRows = marketplaceIdsToProcess
         .map((mpId) => (marketplaceEvents || []).find((m: any) => m.id === mpId))
         .filter(Boolean) as Array<{ id: string; name: string; event_date?: string | null }>;
