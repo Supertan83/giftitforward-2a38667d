@@ -812,10 +812,12 @@ serve(async (req) => {
           let familySent = 0;
           let familySkipped = 0;
           let familyFailed = 0;
+          let familyTotalFound = 0;
 
           for (const vol of volunteers) {
             const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps);
             if (deps.length === 0) continue;
+            familyTotalFound += deps.length;
 
             const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
 
