@@ -653,5 +653,28 @@ export const MarketplaceReports = ({
         open={!!editingVolunteer}
         onOpenChange={(open) => { if (!open) setEditingVolunteer(null); }}
       />
+      <AlertDialog open={confirmSyncOpen} onOpenChange={setConfirmSyncOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send to Surpluss?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will sync volunteers, beneficiaries, and distribution figures to Surpluss
+              (production). It can take 30–60 seconds for large marketplaces. Please don't close
+              this tab until it finishes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmSyncOpen(false);
+                if (selectedMarketplaceId) syncToSurpluss(selectedMarketplaceId, surplussEnv);
+              }}
+            >
+              Start sync
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>;
 };
