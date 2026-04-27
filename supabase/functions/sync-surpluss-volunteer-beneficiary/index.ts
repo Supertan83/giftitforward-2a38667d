@@ -241,6 +241,11 @@ serve(async (req) => {
     let totalFailed = 0;
     let totalSkipped = 0;
     let totalBulkUpdated = 0;
+    // Aggregate family-member counters across all marketplaces processed in this call
+    let totalFamilyFound = 0;
+    let totalFamilySent = 0;
+    let totalFamilySkipped = 0;
+    let totalFamilyFailed = 0;
     const allVolunteerDetails: {
       name: string;
       status: "sent" | "skipped" | "failed" | "bulk_updated";
