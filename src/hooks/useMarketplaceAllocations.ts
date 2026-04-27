@@ -23,6 +23,54 @@ async function fetchAllPaginatedRows(table: string, filterCol: string, filterVal
   return allRows;
 }
 
+// Token + date based matcher between an event-slug (from events_json) and a
+// marketplace_events row. Mirrors the logic used by webhook-receiver so that
+// slugs like "she-thrives-women-workers-marketplace---february-28---second-half"
+// correctly match a marketplace named "She Thrives: Women Workers Marketplace -
+// Afternoon Event" with event_date 2026-02-28.
+const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+const STOP_TOKENS = new Set(['the','and','for','marketplace','event','morning','afternoon','evening','day','first','second','third','half','part']);
+
+function extractDateFromEventSlug(slug: string): { month: number; day: number } | null {
+  const s = slug.toLowerCase();
+  for (let i = 0; i < MONTHS.length; i++) {
+    const m = s.match(new RegExp(`${MONTHS[i]}[-\\s]*?(\\d{1,2})`));
+    if (m) return { month: i + 1, day: parseInt(m[1], 10) };
+  }
+  return null;
+}
+
+function eventSlugMatchesMarketplace(
+  rawEventSlug: string,
+  marketplaceName: string,
+  marketplaceEventDate?: string | null,
+): boolean {
+  if (!rawEventSlug) return false;
+  const slug = rawEventSlug.toLowerCase();
+  const flat = slug.replace(/[^a-z0-9]/g, '');
+  const nameFlat = marketplaceName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Fast path: exact flattened match (legacy behaviour)
+  if (flat === nameFlat) return true;
+
+  // Token overlap on the marketplace name (excluding stop words & months)
+  const slugTokens = slug.split(/[-_\s]+/).filter(p => p.length > 2 && !STOP_TOKENS.has(p) && !MONTHS.includes(p));
+  const nameLower = marketplaceName.toLowerCase();
+  const tokenMatchCount = slugTokens.filter(t => nameLower.includes(t)).length;
+  const nameMatches = tokenMatchCount >= 2 || (slugTokens.length === 1 && nameLower.includes(slugTokens[0]));
+  if (!nameMatches) return false;
+
+  // If marketplace has a date, require the slug's date (when present) to match it.
+  if (marketplaceEventDate) {
+    const slugDate = extractDateFromEventSlug(slug);
+    if (slugDate) {
+      const [y, m, d] = marketplaceEventDate.split('-').map(Number);
+      if (m !== slugDate.month || d !== slugDate.day) return false;
+    }
+  }
+  return true;
+}
+
 // Extract unique dependents from events_json (same logic as FamilyMembersTab)
 const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
