@@ -827,9 +827,12 @@ serve(async (req) => {
             const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
 
             for (const dep of deps) {
+              // Family member is linked to parent volunteer via parent_volunteer_email + relation_type.
+              // Do NOT decorate the name (e.g. with "(Family)") — Surpluss uses the relation
+              // metadata to associate the record with the parent, not the display name.
               const depPayload: Record<string, any> = {
-                name: `${dep.name} (Family)`,
-                type: "family_member",
+                name: dep.name,
+                relation_type: "family",
                 parent_volunteer_email: vol.email,
                 parent_volunteer_name: volunteerName,
               };
@@ -847,7 +850,8 @@ serve(async (req) => {
                 depPayload.age_group = "ADULT";
               }
 
-              // Company from parent
+              // Inherit company from parent so Surpluss attributes the family member
+              // to the same organization.
               const company = vol.external_company || vol.employee_vertical;
               if (company) depPayload.company_name = company;
 
