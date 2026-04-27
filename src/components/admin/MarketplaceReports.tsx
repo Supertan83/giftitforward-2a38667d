@@ -11,6 +11,16 @@ import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
 import { VolunteerHoursEditDialog } from './VolunteerHoursEditDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 interface MarketplaceReportsProps {
   onBack: () => void;
