@@ -26,7 +26,8 @@ export const MarketplaceReports = ({
     items: true,
     volunteers: true
   });
-  const { isSyncing, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
+  const { isSyncing, currentStepLabel, syncToSurpluss } = useSurplussVolunteerBeneficiarySync();
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const [editingVolunteer, setEditingVolunteer] = useState<{
     cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number; marketplaceId?: string;
   } | null>(null);
