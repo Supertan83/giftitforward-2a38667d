@@ -905,6 +905,10 @@ serve(async (req) => {
           totalSent += familySent;
           totalSkipped += familySkipped;
           totalFailed += familyFailed;
+          totalFamilyFound += familyTotalFound;
+          totalFamilySent += familySent;
+          totalFamilySkipped += familySkipped;
+          totalFamilyFailed += familyFailed;
           console.log(`Family members for "${marketplaceNameForDeps}": found=${familyTotalFound}, sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
         } catch (familyErr) {
           console.error("Family member sync error:", familyErr);
