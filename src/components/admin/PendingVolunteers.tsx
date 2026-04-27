@@ -3356,7 +3356,29 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 </div>
               </div>
 
-              {/* Beneficiary Summary Stats */}
+              {/* Family Members Summary Stats */}
+              <div>
+                <p className="text-sm font-medium mb-2">Family Members</p>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-2xl font-bold">{syncResult.family_total || 0}</p>
+                    <p className="text-xs text-muted-foreground">Found</p>
+                  </div>
+                  <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-green-600">{syncResult.family_sent || 0}</p>
+                    <p className="text-xs text-muted-foreground">Sent</p>
+                  </div>
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-yellow-600">{syncResult.family_skipped || 0}</p>
+                    <p className="text-xs text-muted-foreground">Skipped</p>
+                  </div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 text-center">
+                    <p className="text-2xl font-bold text-red-600">{syncResult.family_failed || 0}</p>
+                    <p className="text-xs text-muted-foreground">Failed</p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <p className="text-sm font-medium mb-2">Beneficiaries (QR Cards)</p>
                 <div className="grid grid-cols-4 gap-3">
