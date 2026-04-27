@@ -10,6 +10,28 @@ const corsHeaders = {
 /** Normalize a slug like "event-7---cda" to fuzzy-matchable form */
 const normalizeSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+/**
+ * Paginated range fetcher to bypass PostgREST's default 1000-row cap.
+ * Pass a thunk that returns a fresh query builder so .range() can be applied per page.
+ */
+async function fetchAllRows<T = any>(
+  buildQuery: () => any,
+  pageSize = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  for (let i = 0; i < 1000; i++) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as T[];
+    if (rows.length === 0) break;
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 /** Build a map of normalized slug fragments -> marketplace name */
 function buildEventSlugMap(marketplaces: { name: string }[]): Map<string, string> {
   const map = new Map<string, string>();
