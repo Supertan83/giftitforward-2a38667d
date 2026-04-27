@@ -23,6 +23,54 @@ async function fetchAllPaginatedRows(table: string, filterCol: string, filterVal
   return allRows;
 }
 
+// Token + date based matcher between an event-slug (from events_json) and a
+// marketplace_events row. Mirrors the logic used by webhook-receiver so that
+// slugs like "she-thrives-women-workers-marketplace---february-28---second-half"
+// correctly match a marketplace named "She Thrives: Women Workers Marketplace -
+// Afternoon Event" with event_date 2026-02-28.
+const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+const STOP_TOKENS = new Set(['the','and','for','marketplace','event','morning','afternoon','evening','day','first','second','third','half','part']);
+
+function extractDateFromEventSlug(slug: string): { month: number; day: number } | null {
+  const s = slug.toLowerCase();
+  for (let i = 0; i < MONTHS.length; i++) {
+    const m = s.match(new RegExp(`${MONTHS[i]}[-\\s]*?(\\d{1,2})`));
+    if (m) return { month: i + 1, day: parseInt(m[1], 10) };
+  }
+  return null;
+}
+
+function eventSlugMatchesMarketplace(
+  rawEventSlug: string,
+  marketplaceName: string,
+  marketplaceEventDate?: string | null,
+): boolean {
+  if (!rawEventSlug) return false;
+  const slug = rawEventSlug.toLowerCase();
+  const flat = slug.replace(/[^a-z0-9]/g, '');
+  const nameFlat = marketplaceName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Fast path: exact flattened match (legacy behaviour)
+  if (flat === nameFlat) return true;
+
+  // Token overlap on the marketplace name (excluding stop words & months)
+  const slugTokens = slug.split(/[-_\s]+/).filter(p => p.length > 2 && !STOP_TOKENS.has(p) && !MONTHS.includes(p));
+  const nameLower = marketplaceName.toLowerCase();
+  const tokenMatchCount = slugTokens.filter(t => nameLower.includes(t)).length;
+  const nameMatches = tokenMatchCount >= 2 || (slugTokens.length === 1 && nameLower.includes(slugTokens[0]));
+  if (!nameMatches) return false;
+
+  // If marketplace has a date, require the slug's date (when present) to match it.
+  if (marketplaceEventDate) {
+    const slugDate = extractDateFromEventSlug(slug);
+    if (slugDate) {
+      const [y, m, d] = marketplaceEventDate.split('-').map(Number);
+      if (m !== slugDate.month || d !== slugDate.day) return false;
+    }
+  }
+  return true;
+}
+
 // Extract unique dependents from events_json (same logic as FamilyMembersTab)
 const extractUniqueDependents = (eventsJson: unknown): Array<{ name: string; type: string }> => {
   if (!eventsJson || !Array.isArray(eventsJson)) return [];
@@ -495,12 +543,15 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         .eq('status', 'approved')
         .not('events_list', 'is', null);
 
-      // Match volunteers to this marketplace using exact slug matching per event
+      // Match volunteers to this marketplace using token + date matching so that
+      // events_list slugs (e.g. "...---february-28---second-half") line up with
+      // marketplace names (e.g. "She Thrives ... - Afternoon Event").
       const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const mpEventDate = (marketplace as any).event_date as string | null | undefined;
       const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
         if (!pv.events_list) return false;
         return pv.events_list.split(',').some(
-          slug => slug.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === marketplaceNameSlug
+          slug => eventSlugMatchesMarketplace(slug.trim(), marketplace.name, mpEventDate)
         );
       });
       const totalRegisteredFromForm = formRegisteredVolunteers.length;
@@ -510,14 +561,15 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       for (const fv of formRegisteredVolunteers) {
         if (fv.events_json && Array.isArray(fv.events_json)) {
           for (const evt of fv.events_json as any[]) {
-            const eventSlug = (evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (eventSlug === marketplaceNameSlug) {
+            const rawEventSlug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+            if (eventSlugMatchesMarketplace(rawEventSlug, marketplace.name, mpEventDate)) {
               totalFamilyMembers += Number(evt['number-of-adults'] || evt.number_of_adults || 0);
               totalFamilyMembers += Number(evt['number-of-children'] || evt.number_of_children || 0);
             }
           }
         }
       }
+
 
 // Fetch volunteer data via attendance records (per-marketplace source of truth)
       const { data: attendanceRecords } = await supabase
@@ -665,13 +717,19 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         if (!eventsJson || !Array.isArray(eventsJson)) return [];
         const seen = new Map<string, { name: string; type: string; gender?: string }>();
         for (const evt of eventsJson) {
-          const eventSlug = (evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (eventSlug !== marketplaceNameSlug) continue;
+          const rawEventSlug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+          if (!eventSlugMatchesMarketplace(rawEventSlug, marketplace.name, mpEventDate)) continue;
           if (evt.dependents && Array.isArray(evt.dependents)) {
             for (const dep of evt.dependents) {
               const name = dep.name?.trim();
               if (!name) continue;
-              const key = name.toLowerCase();
+              // Composite key so siblings with the same name are not deduped away
+              const key = [
+                name.toLowerCase(),
+                (dep.type || 'adult').toLowerCase(),
+                String(dep.index ?? ''),
+                (dep.gender || '').toLowerCase(),
+              ].join('|');
               if (!seen.has(key)) {
                 seen.set(key, { name, type: dep.type || 'adult', gender: dep.gender || undefined });
               }
@@ -680,6 +738,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
         return Array.from(seen.values());
       };
+
 
       let actualFamilyCount = 0;
 
