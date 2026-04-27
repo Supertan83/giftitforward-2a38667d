@@ -241,6 +241,11 @@ serve(async (req) => {
     let totalFailed = 0;
     let totalSkipped = 0;
     let totalBulkUpdated = 0;
+    // Aggregate family-member counters across all marketplaces processed in this call
+    let totalFamilyFound = 0;
+    let totalFamilySent = 0;
+    let totalFamilySkipped = 0;
+    let totalFamilyFailed = 0;
     const allVolunteerDetails: {
       name: string;
       status: "sent" | "skipped" | "failed" | "bulk_updated";
@@ -900,6 +905,10 @@ serve(async (req) => {
           totalSent += familySent;
           totalSkipped += familySkipped;
           totalFailed += familyFailed;
+          totalFamilyFound += familyTotalFound;
+          totalFamilySent += familySent;
+          totalFamilySkipped += familySkipped;
+          totalFamilyFailed += familyFailed;
           console.log(`Family members for "${marketplaceNameForDeps}": found=${familyTotalFound}, sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
         } catch (familyErr) {
           console.error("Family member sync error:", familyErr);
@@ -952,6 +961,10 @@ serve(async (req) => {
         volunteers_bulk_updated: totalBulkUpdated,
         volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
+        family_total: totalFamilyFound,
+        family_sent: totalFamilySent,
+        family_skipped: totalFamilySkipped,
+        family_failed: totalFamilyFailed,
         demographics_sent: demographicsSent,
         demographics_failed: demographicsFailed,
         demographics_details: demographicsDetails,

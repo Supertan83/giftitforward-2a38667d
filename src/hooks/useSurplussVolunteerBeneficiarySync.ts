@@ -10,6 +10,10 @@ interface SyncResult {
   volunteers_bulk_updated: number;
   volunteers_total: number;
   volunteer_details: { name: string; status: string; reason?: string }[];
+  family_total: number;
+  family_sent: number;
+  family_skipped: number;
+  family_failed: number;
   demographics_sent: number;
   demographics_failed: number;
   demographics_details: { marketplace_id: string; marketplace_name: string; status: string; reason?: string }[];
@@ -193,6 +197,10 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         volunteers_bulk_updated: volData?.volunteers_bulk_updated ?? 0,
         volunteers_total: volData?.volunteers_total ?? 0,
         volunteer_details: volData?.volunteer_details ?? [],
+        family_total: volData?.family_total ?? 0,
+        family_sent: volData?.family_sent ?? 0,
+        family_skipped: volData?.family_skipped ?? 0,
+        family_failed: volData?.family_failed ?? 0,
         demographics_sent: volData?.demographics_sent ?? 0,
         demographics_failed: volData?.demographics_failed ?? 0,
         demographics_details: volData?.demographics_details ?? [],
