@@ -210,87 +210,93 @@ serve(async (req) => {
       }
     }
 
-    console.log(`New beneficiaries: ${newBeneficiaries.length}, Previously synced: ${previouslySyncedBeneficiaries.length}`);
+    // Deterministic ordering so offset-based slicing is stable across invocations
+    newBeneficiaries.sort((a, b) => {
+      const ka = String(a.unique_id || a.qr_id || a.id || '');
+      const kb = String(b.unique_id || b.qr_id || b.id || '');
+      return ka.localeCompare(kb);
+    });
 
-    // 4. Create new beneficiaries
-    for (const ben of newBeneficiaries) {
+    const totalNew = newBeneficiaries.length;
+    const chunk = newBeneficiaries.slice(OFFSET, OFFSET + BATCH_SIZE);
+    const nextOffset = OFFSET + chunk.length;
+    const isFinalBatch = nextOffset >= totalNew;
+    console.log(`New beneficiaries: ${totalNew}, Previously synced: ${previouslySyncedBeneficiaries.length}. Processing offset=${OFFSET} batch_size=${BATCH_SIZE} (chunk=${chunk.length}, final=${isFinalBatch})`);
+
+    // 4. Create new beneficiaries (bounded concurrency, batched audit insert)
+    const auditRows: any[] = [];
+
+    async function processOne(ben: any) {
       const uniqueId = ben.unique_id || ben.qr_id || ben.id;
       const beneficiaryName = `Beneficiary-${uniqueId}`;
-
       try {
         const beneficiaryPayload = buildBeneficiaryPayload(ben);
-
         const apiUrl = `${baseUrl}/api/common/volunteers`;
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: apiHeaders,
           body: JSON.stringify(beneficiaryPayload),
         });
-
         const responseBody = await response.text();
         let responseJson: any;
-        try { 
-          responseJson = JSON.parse(responseBody); 
-        } catch { 
+        try {
+          responseJson = JSON.parse(responseBody);
+        } catch {
           responseJson = responseBody.includes('<!DOCTYPE') ? { raw: 'HTML response' } : { raw: responseBody.substring(0, 500) };
         }
 
-        await supabase.from('surpluss_api_audit_log').insert({
+        const isAlreadyExists = !response.ok && responseBody.includes('already exists');
+        auditRows.push({
           action: 'sync_beneficiary',
           environment,
           request_payload: beneficiaryPayload,
           response_status: response.status,
           response_body: responseJson,
-          success: response.ok,
+          success: response.ok || isAlreadyExists,
         });
 
         if (response.ok) {
           beneficiariesSent++;
-          beneficiaryDetails.push({ 
-            unique_id: uniqueId, 
-            name: beneficiaryName, 
-            status: 'sent' 
-          });
-        } else if (responseBody.includes('already exists')) {
+          beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'sent' });
+        } else if (isAlreadyExists) {
           beneficiariesSkipped++;
-          beneficiaryDetails.push({ 
-            unique_id: uniqueId, 
-            name: beneficiaryName, 
-            status: 'skipped', 
-            reason: 'Already exists in Surpluss' 
-          });
+          beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'skipped', reason: 'Already exists in Surpluss' });
         } else {
           beneficiariesFailed++;
-          const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
-          beneficiaryDetails.push({ 
-            unique_id: uniqueId, 
-            name: beneficiaryName, 
-            status: 'failed', 
-            reason 
-          });
+          beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'failed', reason: `${response.status} - ${responseBody.substring(0, 200)}` });
         }
       } catch (err) {
         beneficiariesFailed++;
-        beneficiaryDetails.push({ 
-          unique_id: uniqueId, 
-          name: beneficiaryName, 
-          status: 'failed', 
-          reason: err instanceof Error ? err.message : 'Unknown' 
-        });
+        beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'failed', reason: err instanceof Error ? err.message : 'Unknown' });
       }
     }
 
-    // 5. Handle previously synced beneficiaries (optional: could update them if needed)
-    if (previouslySyncedBeneficiaries.length > 0) {
+    // Worker pool with CONCURRENCY in-flight requests
+    let cursor = 0;
+    async function worker() {
+      while (cursor < chunk.length) {
+        const idx = cursor++;
+        await processOne(chunk[idx]);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunk.length) }, () => worker()));
+
+    if (auditRows.length > 0) {
+      const { error: auditErr } = await supabase.from('surpluss_api_audit_log').insert(auditRows);
+      if (auditErr) console.log('Audit log batch insert failed:', auditErr.message);
+    }
+
+    // 5. Handle previously synced beneficiaries — only counted/listed on the final batch
+    if (isFinalBatch && previouslySyncedBeneficiaries.length > 0) {
       console.log(`Skipping ${previouslySyncedBeneficiaries.length} previously synced beneficiaries`);
       for (const ben of previouslySyncedBeneficiaries) {
         const uniqueId = ben.unique_id || ben.qr_id || ben.id;
         beneficiariesSkipped++;
-        beneficiaryDetails.push({ 
-          unique_id: uniqueId, 
-          name: `Beneficiary-${uniqueId}`, 
-          status: 'skipped', 
-          reason: 'Already synced' 
+        beneficiaryDetails.push({
+          unique_id: uniqueId,
+          name: `Beneficiary-${uniqueId}`,
+          status: 'skipped',
+          reason: 'Already synced',
         });
       }
     }
