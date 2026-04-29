@@ -501,6 +501,7 @@ serve(async (req) => {
         allErrors.push(`Error updating marketplace event ${surplussEventId}: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
     }
+    } // end if (isFinalBatch)
 
     return new Response(
       JSON.stringify({
@@ -513,6 +514,10 @@ serve(async (req) => {
         marketplace_events_failed: eventsFailed,
         beneficiary_details: beneficiaryDetails,
         errors: allErrors,
+        done: isFinalBatch,
+        next_offset: nextOffset,
+        total_new: totalNew,
+        processed_in_batch: chunk.length,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
