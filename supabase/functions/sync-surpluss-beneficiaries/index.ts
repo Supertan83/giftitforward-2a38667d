@@ -301,7 +301,10 @@ serve(async (req) => {
       }
     }
 
-    // 6. Aggregate beneficiaries by marketplace event and update marketplace events
+    // 6. Aggregate beneficiaries by marketplace event and update marketplace events — only on final batch
+    let eventsUpdated = 0;
+    let eventsFailed = 0;
+    if (isFinalBatch) {
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
     
     // Get all marketplace events from Supabase
