@@ -1,47 +1,75 @@
-## What's actually happening
+## Problem
 
-I tested the backend directly. **The Surpluss sync functions do work** — but they're slow and the UI gives almost no feedback, so it looks like the button is broken.
+"Send to Surpluss" fails on Marketplace Reports with toast `Sync Failed (step: beneficiaries) — Edge Function returned…`.
 
-For the Women Community Workers Marketplace - Morning Event:
-- Volunteer/demographics sync: ~5s, success ✓
-- Beneficiary sync: **~30s**, 177 sent + 226 skipped (out of 403) ✓
-- Distribution report: extra call after that
+Root cause confirmed via direct edge function calls + logs:
 
-During this 30+ seconds the button just shows a tiny spinner with no other indication. If the user navigates away, refreshes, or the request times out on a flaky connection, nothing happens visibly and they conclude the button is "not working".
+- Step 1 (`sync-surpluss-volunteer-beneficiary`) returns 200 OK successfully.
+- Step 2 (`sync-surpluss-beneficiaries`) is processing **497 new beneficiaries sequentially** for a single marketplace (Mens Aviation – Morning Event). Each iteration does:
+  1. `POST /api/common/volunteers` to Surpluss
+  2. `INSERT` into `surpluss_api_audit_log`
+- 497 × (~300ms upstream + DB insert) easily exceeds the edge runtime wall-clock limit (~150s). The runtime cancels the request, the client receives a network-level error, and the toast surfaces "Edge Function returned…" with no upstream body.
 
-There's also a real bug: in `useSurplussVolunteerBeneficiarySync.ts`, **if the first call (volunteers) throws, no toast is fired with details** — only a generic "Sync Failed" message. And the second call's huge response (~2,300 lines JSON) is parsed entirely on the main thread, which can briefly freeze the UI.
+The function never returns an error itself — it gets killed mid-loop. That's why the logs show only `Found … previously synced` / `New beneficiaries: 497` and nothing more.
 
 ## Fix
 
-### 1. Add real progress feedback
-Show step-by-step progress inside the button / a small inline status, not just a spinner:
-- "Syncing volunteers… (1/3)"
-- "Syncing beneficiaries… (2/3)"
-- "Reporting distribution… (3/3)"
+Make `sync-surpluss-beneficiaries` resumable and bounded per invocation, and have the client loop until it's done.
 
-Implemented by adding a `currentStep` state in `useSurplussVolunteerBeneficiarySync` and surfacing it in `MarketplaceReports.tsx` next to the button.
+### Edge function changes (`supabase/functions/sync-surpluss-beneficiaries/index.ts`)
 
-### 2. Better error surfacing
-In the hook's `catch`, include which step failed and the underlying message in the toast (currently the generic catch swallows useful info from the FunctionsHttpError body). Read `error.context?.body` when present.
+1. Accept an optional `batch_size` (default 80) and `offset` (default 0) in the request body.
+2. Process at most `batch_size` *new* beneficiaries per invocation:
+   - Sort the `newBeneficiaries` list deterministically (e.g. by `unique_id`) so chunks are stable.
+   - Slice `newBeneficiaries.slice(offset, offset + batch_size)`.
+3. Parallelize within the chunk with bounded concurrency (e.g. 5 in-flight requests) using a small worker pool. Keeps Surpluss happy and brings 80 items down to ~5–10s instead of 30+s.
+4. Batch-insert audit log rows once per chunk (single `insert([...])` instead of N inserts).
+5. Skip the marketplace-events aggregation step (steps 5–6 in the file) until the final invocation. Return a `done: boolean` and `next_offset: number` so the client knows whether to call again.
+6. Keep the current dedup logic (`alreadySyncedUniqueIds`) — fetched once per invocation is fine.
 
-### 3. Prevent accidental double-clicks / navigation loss
-- Keep `disabled={isSyncing}` (already present) ✓
-- Add a confirmation dialog before starting: "This may take 30–60 seconds. Don't close the tab."
+Response shape addition:
+```ts
+{
+  // existing fields…
+  done: boolean,            // true when all new beneficiaries processed AND aggregation step ran
+  next_offset: number,      // offset to pass to the next call
+  processed_in_batch: number
+}
+```
 
-### 4. Remove dead Staging option (cosmetic)
-The select shows only "Production" but the state type is `'staging' | 'production'`. Either re-add a Staging item or simplify to a single button (cleaner). Recommend simplifying.
+### Client changes (`src/hooks/useSurplussVolunteerBeneficiarySync.ts`)
 
-## Technical changes
+Replace the single `invoke('sync-surpluss-beneficiaries')` call with a loop:
 
-- `src/hooks/useSurplussVolunteerBeneficiarySync.ts`
-  - Add `currentStep: 'idle' | 'volunteers' | 'beneficiaries' | 'distribution'` state and expose it.
-  - Wrap each `supabase.functions.invoke` call with a try/catch that captures `error.context?.body` and continues to next step where appropriate.
-  - On final catch, include the step name in the toast description.
-- `src/components/admin/MarketplaceReports.tsx`
-  - Replace the small inline spinner label with dynamic text driven by `currentStep`.
-  - Remove the `Select` (production-only) and keep just the button.
-  - Optional: AlertDialog confirmation before starting.
+```text
+offset = 0
+totals = { sent: 0, failed: 0, skipped: 0, total: 0, marketplace_events_updated: 0, … }
+loop:
+  resp = invoke('sync-surpluss-beneficiaries', { marketplace_id, environment, batch_size: 80, offset })
+  accumulate counts into totals
+  if resp.done -> break
+  offset = resp.next_offset
+  safety cap: max 30 iterations
+```
 
-## What this does NOT change
-- No backend / edge function changes — they already succeed.
-- No data is re-sent or duplicated; Surpluss API treats already-existing volunteers/beneficiaries as skipped (per existing memory).
+Update the toast/result so the user sees aggregated `beneficiaries_sent / failed / skipped` across all batches. `currentStepLabel` for the beneficiaries step can show progress: `Syncing beneficiaries… (offset/total)`.
+
+### Why this works
+
+- Each invocation finishes well under the wall-clock limit (≤ ~15s for 80 items at concurrency 5).
+- Audit log rows are still written, so dedup across runs continues to work.
+- The aggregation/`PUT /marketplace-events/{id}` step runs only on the final batch, when all beneficiaries for the marketplace have been pushed.
+- Volunteer sync (step 1) and distribution reporting (step 3) need no changes — they're already fast.
+
+### Verification
+
+1. Test with `marketplace_id = 3f44eb86-f1c5-48a4-8bf3-5b70b41c5bfd` (Mens Aviation – Morning, 497 new beneficiaries) via `curl_edge_functions` per batch.
+2. Then trigger from the UI and confirm the toast shows `Sync Complete` with non-zero `beneficiaries_sent`.
+3. Re-run; second run should report all skipped (already synced).
+
+## Files to edit
+
+- `supabase/functions/sync-surpluss-beneficiaries/index.ts` — chunking, concurrency, batched audit insert, `done`/`next_offset`.
+- `src/hooks/useSurplussVolunteerBeneficiarySync.ts` — paginated loop for step 2, accumulated totals, progress label.
+
+No DB migrations or new secrets required.

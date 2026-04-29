@@ -70,7 +70,10 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { marketplace_id, marketplace_ids, environment } = await req.json();
+    const { marketplace_id, marketplace_ids, environment, batch_size, offset } = await req.json();
+    const BATCH_SIZE = Math.max(1, Math.min(Number(batch_size) || 80, 200));
+    const OFFSET = Math.max(0, Number(offset) || 0);
+    const CONCURRENCY = 5;
 
     if (!environment) {
       return new Response(
@@ -207,92 +210,101 @@ serve(async (req) => {
       }
     }
 
-    console.log(`New beneficiaries: ${newBeneficiaries.length}, Previously synced: ${previouslySyncedBeneficiaries.length}`);
+    // Deterministic ordering so offset-based slicing is stable across invocations
+    newBeneficiaries.sort((a, b) => {
+      const ka = String(a.unique_id || a.qr_id || a.id || '');
+      const kb = String(b.unique_id || b.qr_id || b.id || '');
+      return ka.localeCompare(kb);
+    });
 
-    // 4. Create new beneficiaries
-    for (const ben of newBeneficiaries) {
+    const totalNew = newBeneficiaries.length;
+    const chunk = newBeneficiaries.slice(OFFSET, OFFSET + BATCH_SIZE);
+    const nextOffset = OFFSET + chunk.length;
+    const isFinalBatch = nextOffset >= totalNew;
+    console.log(`New beneficiaries: ${totalNew}, Previously synced: ${previouslySyncedBeneficiaries.length}. Processing offset=${OFFSET} batch_size=${BATCH_SIZE} (chunk=${chunk.length}, final=${isFinalBatch})`);
+
+    // 4. Create new beneficiaries (bounded concurrency, batched audit insert)
+    const auditRows: any[] = [];
+
+    async function processOne(ben: any) {
       const uniqueId = ben.unique_id || ben.qr_id || ben.id;
       const beneficiaryName = `Beneficiary-${uniqueId}`;
-
       try {
         const beneficiaryPayload = buildBeneficiaryPayload(ben);
-
         const apiUrl = `${baseUrl}/api/common/volunteers`;
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: apiHeaders,
           body: JSON.stringify(beneficiaryPayload),
         });
-
         const responseBody = await response.text();
         let responseJson: any;
-        try { 
-          responseJson = JSON.parse(responseBody); 
-        } catch { 
+        try {
+          responseJson = JSON.parse(responseBody);
+        } catch {
           responseJson = responseBody.includes('<!DOCTYPE') ? { raw: 'HTML response' } : { raw: responseBody.substring(0, 500) };
         }
 
-        await supabase.from('surpluss_api_audit_log').insert({
+        const isAlreadyExists = !response.ok && responseBody.includes('already exists');
+        auditRows.push({
           action: 'sync_beneficiary',
           environment,
           request_payload: beneficiaryPayload,
           response_status: response.status,
           response_body: responseJson,
-          success: response.ok,
+          success: response.ok || isAlreadyExists,
         });
 
         if (response.ok) {
           beneficiariesSent++;
-          beneficiaryDetails.push({ 
-            unique_id: uniqueId, 
-            name: beneficiaryName, 
-            status: 'sent' 
-          });
-        } else if (responseBody.includes('already exists')) {
+          beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'sent' });
+        } else if (isAlreadyExists) {
           beneficiariesSkipped++;
-          beneficiaryDetails.push({ 
-            unique_id: uniqueId, 
-            name: beneficiaryName, 
-            status: 'skipped', 
-            reason: 'Already exists in Surpluss' 
-          });
+          beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'skipped', reason: 'Already exists in Surpluss' });
         } else {
           beneficiariesFailed++;
-          const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
-          beneficiaryDetails.push({ 
-            unique_id: uniqueId, 
-            name: beneficiaryName, 
-            status: 'failed', 
-            reason 
-          });
+          beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'failed', reason: `${response.status} - ${responseBody.substring(0, 200)}` });
         }
       } catch (err) {
         beneficiariesFailed++;
-        beneficiaryDetails.push({ 
-          unique_id: uniqueId, 
-          name: beneficiaryName, 
-          status: 'failed', 
-          reason: err instanceof Error ? err.message : 'Unknown' 
-        });
+        beneficiaryDetails.push({ unique_id: uniqueId, name: beneficiaryName, status: 'failed', reason: err instanceof Error ? err.message : 'Unknown' });
       }
     }
 
-    // 5. Handle previously synced beneficiaries (optional: could update them if needed)
-    if (previouslySyncedBeneficiaries.length > 0) {
+    // Worker pool with CONCURRENCY in-flight requests
+    let cursor = 0;
+    async function worker() {
+      while (cursor < chunk.length) {
+        const idx = cursor++;
+        await processOne(chunk[idx]);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunk.length) }, () => worker()));
+
+    if (auditRows.length > 0) {
+      const { error: auditErr } = await supabase.from('surpluss_api_audit_log').insert(auditRows);
+      if (auditErr) console.log('Audit log batch insert failed:', auditErr.message);
+    }
+
+    // 5. Handle previously synced beneficiaries — only counted/listed on the final batch
+    if (isFinalBatch && previouslySyncedBeneficiaries.length > 0) {
       console.log(`Skipping ${previouslySyncedBeneficiaries.length} previously synced beneficiaries`);
       for (const ben of previouslySyncedBeneficiaries) {
         const uniqueId = ben.unique_id || ben.qr_id || ben.id;
         beneficiariesSkipped++;
-        beneficiaryDetails.push({ 
-          unique_id: uniqueId, 
-          name: `Beneficiary-${uniqueId}`, 
-          status: 'skipped', 
-          reason: 'Already synced' 
+        beneficiaryDetails.push({
+          unique_id: uniqueId,
+          name: `Beneficiary-${uniqueId}`,
+          status: 'skipped',
+          reason: 'Already synced',
         });
       }
     }
 
-    // 6. Aggregate beneficiaries by marketplace event and update marketplace events
+    // 6. Aggregate beneficiaries by marketplace event and update marketplace events — only on final batch
+    let eventsUpdated = 0;
+    let eventsFailed = 0;
+    if (isFinalBatch) {
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
     
     // Get all marketplace events from Supabase
@@ -341,9 +353,8 @@ serve(async (req) => {
     }
 
     // Aggregate and update each marketplace event
-    let eventsUpdated = 0;
-    let eventsFailed = 0;
     
+
     for (const [supabaseEventId, eventBeneficiaries] of beneficiariesByEvent) {
       // Find Supabase marketplace event
       const supabaseMarketplace = supabaseMarketplaces?.find(mp => mp.id === supabaseEventId);
@@ -490,6 +501,7 @@ serve(async (req) => {
         allErrors.push(`Error updating marketplace event ${surplussEventId}: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
     }
+    } // end if (isFinalBatch)
 
     return new Response(
       JSON.stringify({
@@ -502,6 +514,10 @@ serve(async (req) => {
         marketplace_events_failed: eventsFailed,
         beneficiary_details: beneficiaryDetails,
         errors: allErrors,
+        done: isFinalBatch,
+        next_offset: nextOffset,
+        total_new: totalNew,
+        processed_in_batch: chunk.length,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
