@@ -353,9 +353,8 @@ serve(async (req) => {
     }
 
     // Aggregate and update each marketplace event
-    let eventsUpdated = 0;
-    let eventsFailed = 0;
     
+
     for (const [supabaseEventId, eventBeneficiaries] of beneficiariesByEvent) {
       // Find Supabase marketplace event
       const supabaseMarketplace = supabaseMarketplaces?.find(mp => mp.id === supabaseEventId);
