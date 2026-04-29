@@ -87,19 +87,43 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         throw err;
       }
 
-      // 2. Sync beneficiaries
+      // 2. Sync beneficiaries (paginated — loop until done to avoid edge timeout)
       setCurrentStep('beneficiaries');
-      let benData: any = null;
+      let benData: any = {
+        success: true,
+        beneficiaries_sent: 0,
+        beneficiaries_failed: 0,
+        beneficiaries_skipped: 0,
+        beneficiaries_total: 0,
+        marketplace_events_updated: 0,
+        marketplace_events_failed: 0,
+        beneficiary_details: [] as any[],
+        errors: [] as string[],
+      };
       try {
-        const { data, error } = await supabase.functions.invoke('sync-surpluss-beneficiaries', {
-          body: { marketplace_id: marketplaceId, environment },
-        });
-        if (error) {
-          failedStep = 'beneficiaries';
-          const msg = await extractFunctionError(error, 'Beneficiary sync failed');
-          throw new Error(msg);
+        let offset = 0;
+        const BATCH = 80;
+        for (let i = 0; i < 30; i++) {
+          const { data, error } = await supabase.functions.invoke('sync-surpluss-beneficiaries', {
+            body: { marketplace_id: marketplaceId, environment, batch_size: BATCH, offset },
+          });
+          if (error) {
+            failedStep = 'beneficiaries';
+            const msg = await extractFunctionError(error, 'Beneficiary sync failed');
+            throw new Error(msg);
+          }
+          benData.beneficiaries_sent += data?.beneficiaries_sent ?? 0;
+          benData.beneficiaries_failed += data?.beneficiaries_failed ?? 0;
+          benData.beneficiaries_skipped += data?.beneficiaries_skipped ?? 0;
+          benData.beneficiaries_total = data?.beneficiaries_total ?? benData.beneficiaries_total;
+          benData.marketplace_events_updated += data?.marketplace_events_updated ?? 0;
+          benData.marketplace_events_failed += data?.marketplace_events_failed ?? 0;
+          benData.beneficiary_details.push(...(data?.beneficiary_details ?? []));
+          benData.errors.push(...(data?.errors ?? []));
+          if (data?.success === false) benData.success = false;
+          if (data?.done) break;
+          offset = data?.next_offset ?? (offset + BATCH);
         }
-        benData = data;
       } catch (err) {
         if (!failedStep) failedStep = 'beneficiaries';
         throw err;
