@@ -70,7 +70,10 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { marketplace_id, marketplace_ids, environment } = await req.json();
+    const { marketplace_id, marketplace_ids, environment, batch_size, offset } = await req.json();
+    const BATCH_SIZE = Math.max(1, Math.min(Number(batch_size) || 80, 200));
+    const OFFSET = Math.max(0, Number(offset) || 0);
+    const CONCURRENCY = 5;
 
     if (!environment) {
       return new Response(
