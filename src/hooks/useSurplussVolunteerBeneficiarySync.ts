@@ -27,6 +27,10 @@ interface SyncResult {
   distribution_reported: boolean;
   distribution_error: string | null;
   distribution_allocations_sent: number;
+  distribution_items_reported: number;
+  distribution_items_total: number;
+  distribution_skipped_items: string[];
+  allocations_resynced: number;
   errors: string[];
 }
 
