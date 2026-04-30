@@ -281,11 +281,18 @@ export const useReportDistribution = () => {
       const manualMap = new Map((manualCounts || []).map((m: any) => [m.item_type_id, m]));
 
       const grouped = new Map<number, AllocationMaterialForReport[]>();
+      const skippedItems: string[] = [];
+      const totalAllocations = (allocations || []).length;
 
       for (const alloc of allocations || []) {
         const materialId = (alloc as any).item_types?.external_material_id;
+        const itemName = (alloc as any).item_types?.name || "Unknown item";
         const surplussAllocationId = alloc.surpluss_allocation_id;
-        if (!materialId || !surplussAllocationId) continue;
+        if (!materialId || !surplussAllocationId) {
+          const reason = !surplussAllocationId ? "no Surpluss allocation mapping" : "no material mapping";
+          skippedItems.push(`'${itemName}' (${reason})`);
+          continue;
+        }
 
         const manual = manualMap.get(alloc.item_type_id);
         const distributed = manual ? Number(manual.actual_distributed || 0) : Number(alloc.distributed_quantity || 0);
@@ -309,7 +316,8 @@ export const useReportDistribution = () => {
       }));
 
       if (!payloadAllocations.length) {
-        throw new Error("No synced allocation/material mapping found for this marketplace");
+        const skipDetail = skippedItems.length > 0 ? ` Skipped: ${skippedItems.slice(0, 3).join(", ")}.` : "";
+        throw new Error(`No synced allocation/material mapping found for this marketplace.${skipDetail}`);
       }
 
       const { data, error } = await supabase.functions.invoke("report-surpluss-distribution", {
@@ -322,9 +330,16 @@ export const useReportDistribution = () => {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Failed to report marketplace distribution");
 
+      const reportedMaterials = Array.from(grouped.values()).reduce((sum, m) => sum + m.length, 0);
+      const resyncNote = allocationsResynced > 0 ? ` Auto re-synced ${allocationsResynced} mapping(s).` : "";
+      const skipNote = skippedItems.length > 0
+        ? ` Skipped ${skippedItems.length}: ${skippedItems.slice(0, 2).join(", ")}${skippedItems.length > 2 ? "…" : ""}.`
+        : "";
+
       toast({
         title: "Distribution Sent",
-        description: `${marketplace.name}: ${data.reported_count || payloadAllocations.length} allocation report(s) sent.`,
+        description: `${marketplace.name}: ${reportedMaterials}/${totalAllocations} item(s) reported.${resyncNote}${skipNote}`,
+        variant: skippedItems.length > 0 ? "destructive" : "default",
       });
 
       queryClient.invalidateQueries({ queryKey: ["distribution_reports"] });
