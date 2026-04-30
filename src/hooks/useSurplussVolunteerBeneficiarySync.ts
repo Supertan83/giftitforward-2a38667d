@@ -138,6 +138,10 @@ export const useSurplussVolunteerBeneficiarySync = () => {
       let distributionReported = false;
       let distributionError: string | null = null;
       let distributionAllocationsSent = 0;
+      let distributionItemsReported = 0;
+      let distributionItemsTotal = 0;
+      let distributionSkippedItems: string[] = [];
+      let allocationsResynced = 0;
 
       try {
         const { data: marketplace, error: mpError } = await supabase
@@ -151,16 +155,38 @@ export const useSurplussVolunteerBeneficiarySync = () => {
           throw new Error('Marketplace has no Surpluss external_id');
         }
 
+        // PRE-FLIGHT: detect missing surpluss_allocation_id mappings, auto re-sync
+        const { data: preAllocations } = await supabase
+          .from('marketplace_item_allocations')
+          .select('id, surpluss_allocation_id')
+          .eq('marketplace_id', marketplaceId)
+          .is('deleted_at', null);
+
+        const missing = (preAllocations || []).filter((a: any) => !a.surpluss_allocation_id);
+        if (missing.length > 0) {
+          console.log(`[sync] ${missing.length} allocation(s) missing mapping — auto re-syncing`);
+          const { error: resyncErr } = await supabase.functions.invoke('sync-surpluss-event-allocations', {
+            body: { marketplace_id: marketplaceId, environment },
+          });
+          if (!resyncErr) {
+            allocationsResynced = missing.length;
+          } else {
+            console.warn('[sync] auto allocation re-sync failed:', resyncErr);
+          }
+        }
+
         const { data: allocations, error: allocError } = await supabase
           .from('marketplace_item_allocations')
           .select(`
             id, item_type_id, allocated_quantity, distributed_quantity, surpluss_allocation_id,
-            item_types ( external_material_id )
+            item_types ( name, external_material_id )
           `)
           .eq('marketplace_id', marketplaceId)
-          .not('surpluss_allocation_id', 'is', null);
+          .is('deleted_at', null);
 
         if (allocError) throw allocError;
+
+        distributionItemsTotal = (allocations || []).length;
 
         const { data: manualCounts } = await supabase
           .from('marketplace_manual_counts')
@@ -173,8 +199,13 @@ export const useSurplussVolunteerBeneficiarySync = () => {
 
         for (const alloc of allocations || []) {
           const materialId = (alloc as any).item_types?.external_material_id;
+          const itemName = (alloc as any).item_types?.name || 'Unknown item';
           const surplussAllocationId = alloc.surpluss_allocation_id;
-          if (!materialId || !surplussAllocationId) continue;
+          if (!materialId || !surplussAllocationId) {
+            const reason = !surplussAllocationId ? 'no Surpluss allocation mapping' : 'no material mapping';
+            distributionSkippedItems.push(`'${itemName}' (${reason})`);
+            continue;
+          }
 
           const manual = manualMap.get(alloc.item_type_id);
           const distributed = manual ? Number(manual.actual_distributed || 0) : Number(alloc.distributed_quantity || 0);
@@ -197,6 +228,8 @@ export const useSurplussVolunteerBeneficiarySync = () => {
           materials,
         }));
 
+        distributionItemsReported = Array.from(grouped.values()).reduce((s, m) => s + m.length, 0);
+
         if (payloadAllocations.length > 0) {
           const { data: distData, error: distError } = await supabase.functions.invoke('report-surpluss-distribution', {
             body: { environment, allocations: payloadAllocations },
@@ -211,7 +244,9 @@ export const useSurplussVolunteerBeneficiarySync = () => {
           distributionReported = true;
           distributionAllocationsSent = distData.reported_count || payloadAllocations.length;
         } else {
-          distributionError = 'No synced allocation/material mapping found';
+          distributionError = distributionSkippedItems.length > 0
+            ? `No mapped items to report. Skipped ${distributionSkippedItems.length}: ${distributionSkippedItems.slice(0, 2).join(', ')}`
+            : 'No synced allocation/material mapping found';
         }
       } catch (err) {
         distributionError = err instanceof Error ? err.message : 'Distribution reporting failed';
@@ -242,23 +277,33 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         distribution_reported: distributionReported,
         distribution_error: distributionError,
         distribution_allocations_sent: distributionAllocationsSent,
+        distribution_items_reported: distributionItemsReported,
+        distribution_items_total: distributionItemsTotal,
+        distribution_skipped_items: distributionSkippedItems,
+        allocations_resynced: allocationsResynced,
         errors: [...(volData?.errors ?? []), ...(benData?.errors ?? []), ...(distributionError ? [distributionError] : [])],
       };
 
+      const resyncNote = allocationsResynced > 0 ? ` Re-synced ${allocationsResynced} mapping(s).` : '';
+      const skipNote = distributionSkippedItems.length > 0
+        ? ` Skipped ${distributionSkippedItems.length} item(s).`
+        : '';
       const distStatus = distributionReported
-        ? `Distribution: ${distributionAllocationsSent} sent.`
+        ? `Distribution: ${distributionItemsReported}/${distributionItemsTotal} item(s) reported.${resyncNote}${skipNote}`
         : distributionError
-        ? `Distribution: failed (${distributionError}).`
+        ? `Distribution: failed (${distributionError}).${resyncNote}`
         : '';
 
-      if (result.success) {
+      const hasIssues = !result.success || !!distributionError || distributionSkippedItems.length > 0;
+
+      if (!hasIssues) {
         toast({
           title: 'Sync Complete',
           description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent, ${result.beneficiaries_skipped} skipped. ${distStatus}`,
         });
       } else {
         toast({
-          title: 'Sync Completed with Issues',
+          title: result.success ? 'Sync Complete with Warnings' : 'Sync Completed with Issues',
           description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed. ${distStatus}`,
           variant: 'destructive',
         });
