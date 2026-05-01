@@ -673,6 +673,11 @@ export const MarketplaceReports = ({
                                   })}>
                                     <Pencil className="w-3 h-3" />
                                   </Button>
+                                  {cid && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                               <p className="text-xs text-muted-foreground pl-6">{vol.category} · {vol.company}</p>
