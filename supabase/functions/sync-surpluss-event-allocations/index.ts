@@ -209,18 +209,24 @@ async function syncMaterial(
     }
   }
 
-  const { data: existingAlloc, error: eaErr } = await supabase
+  // IMPORTANT: include soft-deleted rows so we can resurrect them instead of
+  // updating a tombstone (which leaves the UI showing nothing). Prefer the
+  // most-recently-touched row if duplicates exist.
+  const { data: existingAllocs, error: eaErr } = await supabase
     .from("marketplace_item_allocations")
-    .select("id, allocated_quantity, distributed_quantity")
+    .select("id, allocated_quantity, distributed_quantity, deleted_at")
     .eq("marketplace_id", marketplace.id)
     .eq("item_type_id", resolvedItemType.id)
-    .limit(1)
-    .maybeSingle();
+    .order("deleted_at", { ascending: true, nullsFirst: true })
+    .order("updated_at", { ascending: false })
+    .limit(1);
 
   if (eaErr) {
     errors.push(`marketplace_item_allocations select: ${eaErr.message}`);
     return;
   }
+
+  const existingAlloc = (existingAllocs && existingAllocs[0]) || null;
 
   if (existingAlloc) {
     const finalDistributed = Math.max((existingAlloc.distributed_quantity as number) || 0, distributedAmount);
@@ -229,6 +235,8 @@ async function syncMaterial(
       distributed_quantity: finalDistributed,
       updated_at: new Date().toISOString(),
     };
+    // Resurrect if the row was previously soft-deleted
+    if (existingAlloc.deleted_at) updateData.deleted_at = null;
     if (surplussAllocationId) updateData.surpluss_allocation_id = surplussAllocationId;
 
     const { error: upErr } = await supabase
