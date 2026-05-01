@@ -1,59 +1,95 @@
-## Problem
+## Sorun Tespiti
 
-"Send to Surpluss" akışı tamamlandığında Surpluss tarafında **Item Distributed = 0** görünüyor. Sebep: distribution reporting adımı, `marketplace_item_allocations` tablosunda `surpluss_allocation_id IS NULL` olan satırları **sessizce atlıyor**. Afternoon Event'te 19 allocation'ın 18'i mapping'siz olduğu için report'a hiçbir şey girmiyor; Morning Event'te ise son başarılı report 10 Nisan'dan kalma.
+DH Form'dan 2-3 Mayıs 2026 için 4 ayrı marketplace slug'ı geldi, ama DB'de sadece **1** marketplace oluşturuldu. Sonuç: 17 volunteer kayıt oldu, **14'ü yanlış/eksik marketplace'e bağlandı**, ve admin panelinde marketplace'ler görünmüyor.
 
-Yani volunteer + beneficiary sync başarılı çalışsa bile, distribution adımı boş geçiyor ve admin bunu fark etmiyor.
+### Webhook'tan gelen 4 slug:
 
-## Çözüm (3 katmanlı, tek akışta)
+| Slug | Tarih | Saat | Volunteer | Email gitti? |
+|---|---|---|---|---|
+| `...---morning-event` | **May 2**, 10:00–15:00 | 3 | ✅ 3 |
+| `...---morning-event-2` | **May 3**, 10:00–15:00 | 2 | ✅ 2 |
+| `...---afternoon-event` | **May 2**, 15:00–20:00 | 6 | ⚠️ 3/6 |
+| `...---afternoon-event-2` | **May 3**, 15:00–20:00 | 6 | ⚠️ 4/6 |
 
-### 1. Pre-flight: eksik mapping varsa otomatik allocation re-sync
+### DB'deki tek kayıt:
+- "Single Mothers Household Workers Marketplace Morning Event" — **May 2**, 10:00–03:00 (yanlış end_time, external_id NULL)
 
-`reportMarketplaceDistribution` çağrılmadan önce:
-- Marketplace'in tüm `marketplace_item_allocations` satırlarını çek
-- `surpluss_allocation_id IS NULL` olan var mı diye bak
-- Varsa: önce `sync-surpluss-event-allocations` edge function'ını çağır (mevcut, çalışıyor)
-- Sonra allocation listesini **tekrar oku** ve report'a devam et
+### Kök Neden — `webhook-receiver/index.ts` `createMarketplacesFromEvents`
 
-Bu, admin'in ayrıca "Sync Allocations" butonuna basmasına gerek bırakmaz.
+Fonksiyondaki fuzzy matching mantığı, `-2` suffix'li slug'ları (May 3 versiyonları) yanlışlıkla `-2`siz mevcut May 2 marketplace'ine eşleştiriyor:
 
-### 2. Transparent skip reporting
-
-`useSurplussDistributionReporting.ts` içinde:
-- Mapping tamamlandıktan sonra hâlâ `surpluss_allocation_id` veya `external_material_id` eksik kalan item'ları **say ve isimlendir**
-- Toast'ta açıkça göster:
-  - Başarılı: `"Distribution Sent — 19/19 allocations reported"`
-  - Kısmi: `"Distribution Sent — 18/19 reported. Skipped: 'Winter Jacket' (no Surpluss material mapping)"`
-- Skip > 0 ise toast variant'ı warning, bilgilendirici link ile
-
-### 3. Master flow entegrasyonu
-
-`useSurplussVolunteerBeneficiarySync.ts` zincirinin **distribution adımına** pre-flight check'i ekle:
-
-```text
-Step 1: Volunteers sync         (mevcut)
-Step 2: Beneficiaries sync      (mevcut, batched)
-Step 3: ▶ Allocation pre-check  (YENİ)
-        → eksik mapping varsa sync-surpluss-event-allocations çağır
-Step 4: Distribution report     (mevcut, ama artık tam mapping ile)
+```ts
+// satır 614-617 - bug:
+const shorter = ... // "Single Mothers Household Workers Marketplace Morning Event"
+const longer  = ... // "Single Mothers Household Workers Marketplace Morning Event 2"
+if (longer.includes(shorter) || shorter.includes(longer.replace(/\s+\d+\s*$/, '').trim())) {
+  // ↑ Burada longer.includes(shorter) TRUE olur,
+  //   slugDate (May 3) DB date (May 2) ile uyuşmasa bile
+  //   "fuzzy match" yazıp slug'ı eski marketplace'e bağlıyor.
+}
 ```
 
-Final özet toast'ta her adımın sonucu görünür: `Volunteers: 12 | Beneficiaries: 80 | Allocations re-synced: 18 | Distribution: 19/19 reported`.
+Üstelik slug'lar (`morning-event`, `afternoon-event`, `morning-event-2`, `afternoon-event-2`) içinde ay/gün ismi yok → `extractDateFromSlug()` `null` dönüyor → tarih kontrolü yapılmıyor → `family-members-joining`, `eventDate` formundan gelen **gerçek tarih** kullanılmadan eşleşme onaylanıyor.
 
-## Ek karar: idempotency
+İkinci sorun: DB'deki ilk marketplace `end_time = 03:00:00` (büyük ihtimal "03.00 pm" yanlış parse). Bu da ayrı bir parse bug'ı işareti.
 
-Distribution report **her tıklamada tüm allocation'lar için** yeniden gönderilecek (Surpluss tarafı PUT endpoint'i; tekrar göndermek mevcut değerleri overwrite eder, duplicate yaratmaz). Bu sayede bir önceki sync'te atlanan item'lar bir sonraki tıklamada otomatik düzeliyor.
+---
 
-## Değişecek dosyalar
+## Plan
 
-- `src/hooks/useSurplussDistributionReporting.ts` — pre-flight allocation sync, skipped item detayı, toast iyileştirmesi
-- `src/hooks/useSurplussVolunteerBeneficiarySync.ts` — Step 3'ü distribution'dan önce ekle, özet toast'a allocation-resync sayısını ekle
-- (gerekirse) `supabase/functions/sync-surpluss-event-allocations/index.ts` — sadece tek marketplace için tetiklenebildiğinden emin olmak için input doğrulama
+### 1. Eksik 3 marketplace'i oluştur (one-shot SQL migration)
+4 farklı slug için 4 ayrı marketplace olmalı. Mevcut "Morning Event"i koruyup, 3 yenisini ekle ve mevcut marketplace'in `end_time`'ını düzelt:
 
-DB migration veya yeni secret gerekmiyor.
+```text
+✓ Single Mothers Household Workers Marketplace - Morning Event   | May 2 | 10:00–15:00 (varolan, end_time fix)
++ Single Mothers Household Workers Marketplace - Afternoon Event | May 2 | 15:00–20:00 (yeni)
++ Single Mothers Household Workers Marketplace - Morning Event 2 | May 3 | 10:00–15:00 (yeni)
++ Single Mothers Household Workers Marketplace - Afternoon Event 2 | May 3 | 15:00–20:00 (yeni)
+```
 
-## Doğrulama
+**Not:** İsimlendirme kullanıcının marketplace memory'sindeki "dash separator" kuralına uygun (`Marketplace - Event`).
 
-1. Afternoon Event (18/19 mapping eksik) için "Send to Surpluss" → toast'ta "Allocations re-synced: 18, Distribution: 19/19 reported" görünmeli
-2. Surpluss UI'da Item Distributed > 0 doğrulanmalı
-3. Tekrar tıkla → idempotent: tüm reported, 0 skip
-4. Morning Event için aynı doğrulama (497 beneficiary + distribution)
+### 2. Yanlış bağlanmış volunteer'ların etkisini düzelt
+Aslında volunteer'lar `marketplace_id`'ye değil `events_list` slug'ına bağlı (pending_volunteers tablosunda marketplace FK yok). Yani 17 volunteer'ın kaydı doğru, sadece marketplace'ler eksik olduğu için admin panelinde grup olarak görünmüyor. Marketplace'leri oluşturduğumuzda volunteer'lar otomatik olarak doğru tarafta listelenecek.
+
+### 3. Eksik welcome email'leri için bilgilendirme
+12 volunteer'ın email'i gitmiş, **5'i pending/email_sent=false**. Bunlar için "Resend Welcome Email" butonuna basılması gerekiyor (admin panelden manuel) — VEYA bu plana bir resend tetikleyicisi ekleyebilirim. Sorum 1'e bakın.
+
+### 4. Webhook bug fix — `createMarketplacesFromEvents` (kalıcı çözüm)
+İki düzeltme:
+
+**A.** `extractDateFromSlug` `null` dönerse, **`evt.eventDate` form alanından** tarih çıkar ve marketplace eşleştirmede kullan. Şu an bu fallback yok (sadece `getMarketplacesBySlug` içinde var).
+
+**B.** İsim benzerliği matching'inde, "trailing number" (-2, 2 vb.) varlığı **belirleyici fark** olarak ele alınsın:
+```ts
+const stripTrailingNum = (s: string) => s.replace(/\s+\d+\s*$/, '').trim();
+const eventHasSuffix = /\s+\d+\s*$/.test(normalizedEventName);
+const mpHasSuffix    = /\s+\d+\s*$/.test(normalizedMpName);
+if (stripTrailingNum(normalizedEventName) === stripTrailingNum(normalizedMpName)
+    && eventHasSuffix !== mpHasSuffix) {
+  continue; // farklı event sayılır, eşleşme atlansın
+}
+```
+
+Aynı mantık `getMarketplacesBySlug` (satır 401-) içine de eklenecek ki webhook QR/email akışında da volunteer'lar yanlış marketplace'e bağlanmasın.
+
+**C.** Zaman parse bug'ı: `"03.00 pm – 08.00 pm"` aslında 15:00–20:00 olmalı; ilk marketplace'te `end_time=03:00` bu PM/AM normalizasyon hatasını gösteriyor. `parseTimeRange`'i okuyup düzelteceğim.
+
+### 5. Dökümantasyon güncellemesi
+`mem://features/marketplace-event-naming-convention` memory'sine "trailing number suffix marks distinct event instance" notu eklenecek.
+
+---
+
+## Etkilenen Dosyalar / İşlemler
+
+| Dosya / İşlem | Tip |
+|---|---|
+| Migration: 3 marketplace insert + 1 end_time update | SQL |
+| `supabase/functions/webhook-receiver/index.ts` | Edit (4 yer: `createMarketplacesFromEvents`, `getMarketplacesBySlug`, `parseTimeRange`, fallback `eventDate`) |
+| `mem://features/marketplace-event-naming-convention` | Memory update |
+
+---
+
+## Onay Öncesi Tek Sorum
+
+Pending kalan **5 welcome email**'i otomatik resend edeyim mi (bu plan içinde edge function tetiklensin), yoksa siz admin panelden mi göndereceksiniz? Cevabınızı bekliyorum, sonra implement ediyorum.
