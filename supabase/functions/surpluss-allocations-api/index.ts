@@ -154,7 +154,10 @@ serve(async (req) => {
           error?: string;
         }> = [];
 
-        for (const mat of materials) {
+        // Process in parallel batches of 10 to avoid edge runtime timeout (~150s).
+        // Sequential 200ms delay × 427 materials + per-call latency was timing out.
+        const BATCH_SIZE = 10;
+        const processOne = async (mat: any) => {
           try {
             const reconcileUrl = `${apiBase}/donation-metadata/${mat.external_material_id}/reconcile-remaining`;
             const res = await fetch(reconcileUrl, {
@@ -169,27 +172,26 @@ serve(async (req) => {
             if (res.ok && resJson?.success && resJson.data) {
               const d = resJson.data;
               const changed = d.total_remaining_item_count_before !== d.total_remaining_item_count_after;
-              results.push({
+              return {
                 material_id: mat.external_material_id,
                 name: mat.name,
                 item_count: d.item_count ?? null,
                 before: d.total_remaining_item_count_before,
                 after: d.total_remaining_item_count_after,
                 changed,
-              });
-            } else {
-              results.push({
-                material_id: mat.external_material_id,
-                name: mat.name,
-                item_count: null,
-                before: null,
-                after: null,
-                changed: false,
-                error: resJson?.error || `HTTP ${res.status}`,
-              });
+              };
             }
+            return {
+              material_id: mat.external_material_id,
+              name: mat.name,
+              item_count: null,
+              before: null,
+              after: null,
+              changed: false,
+              error: resJson?.error || `HTTP ${res.status}`,
+            };
           } catch (e: any) {
-            results.push({
+            return {
               material_id: mat.external_material_id,
               name: mat.name,
               item_count: null,
@@ -197,10 +199,14 @@ serve(async (req) => {
               after: null,
               changed: false,
               error: e.message,
-            });
+            };
           }
-          // Rate-limit: 200ms delay between calls
-          await new Promise((r) => setTimeout(r, 200));
+        };
+
+        for (let i = 0; i < materials.length; i += BATCH_SIZE) {
+          const batch = materials.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(batch.map(processOne));
+          results.push(...batchResults);
         }
 
         const drifted = results.filter((r) => r.changed).length;
