@@ -151,7 +151,7 @@ export const MaterialBreakdownLookup = () => {
     setAuditLoading(true);
     try {
       const result = await auditGifTractorMismatch("production");
-      if (!result.ok) throw new Error(result.error);
+      if (result.ok === false) throw new Error(result.error);
       setAuditReport(result.report);
       toast.success(
         `Audit complete: ${result.report.summary.materials_with_issues} of ${result.report.summary.total_materials} materials have issues`,
