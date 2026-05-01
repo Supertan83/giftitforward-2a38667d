@@ -709,6 +709,27 @@ export const MarketplaceReports = ({
         open={!!editingVolunteer}
         onOpenChange={(open) => { if (!open) setEditingVolunteer(null); }}
       />
+      <AlertDialog open={!!deletingVolunteer} onOpenChange={(open) => { if (!open && !isDeleting) setDeletingVolunteer(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from this marketplace?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium text-foreground">{deletingVolunteer?.name}</span> will be removed from this marketplace report only.
+              Their volunteer profile and any data on other marketplaces stay intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              onClick={(e) => { e.preventDefault(); handleConfirmDelete(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Removing…' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirmSyncOpen} onOpenChange={setConfirmSyncOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
