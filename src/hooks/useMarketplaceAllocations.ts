@@ -40,7 +40,7 @@ function extractDateFromEventSlug(slug: string): { month: number; day: number } 
   return null;
 }
 
-function eventSlugMatchesMarketplace(
+export function eventSlugMatchesMarketplace(
   rawEventSlug: string,
   marketplaceName: string,
   marketplaceEventDate?: string | null,
