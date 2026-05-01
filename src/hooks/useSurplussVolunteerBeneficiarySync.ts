@@ -296,15 +296,21 @@ export const useSurplussVolunteerBeneficiarySync = () => {
 
       const hasIssues = !result.success || !!distributionError || distributionSkippedItems.length > 0;
 
+      // Volunteers summary: combine new (sent) + bulk-updated so users see real impact
+      const volTouched = result.volunteers_sent + result.volunteers_bulk_updated;
+      const volSummary = result.volunteers_bulk_updated > 0
+        ? `Volunteers: ${volTouched} updated (${result.volunteers_sent} new, ${result.volunteers_bulk_updated} updated)`
+        : `Volunteers: ${result.volunteers_sent} sent`;
+
       if (!hasIssues) {
         toast({
           title: 'Sync Complete',
-          description: `Volunteers: ${result.volunteers_sent} sent. Beneficiaries: ${result.beneficiaries_sent} sent, ${result.beneficiaries_skipped} skipped. ${distStatus}`,
+          description: `${volSummary}. Beneficiaries: ${result.beneficiaries_sent} sent, ${result.beneficiaries_skipped} skipped. ${distStatus}`,
         });
       } else {
         toast({
           title: result.success ? 'Sync Complete with Warnings' : 'Sync Completed with Issues',
-          description: `Vol: ${result.volunteers_sent} sent, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed. ${distStatus}`,
+          description: `${volSummary}, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed. ${distStatus}`,
           variant: 'destructive',
         });
       }
