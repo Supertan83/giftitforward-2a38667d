@@ -212,6 +212,105 @@ export const MaterialBreakdownLookup = () => {
       </div>
 
       <div className="p-4 md:p-6 space-y-4">
+        {/* GIF ↔ Tractor Mismatch Audit Report */}
+        {auditReport && (
+          <div className="border border-border rounded-lg p-4 bg-muted/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <GitCompareArrows className="w-4 h-4" />
+                GIF ↔ Tractor Allocation Mismatch Audit
+              </h3>
+              <Button size="sm" variant="ghost" onClick={() => setAuditReport(null)}>
+                Dismiss
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Total Materials</p>
+                <p className="font-bold">{auditReport.summary.total_materials}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Perfectly Synced</p>
+                <p className="font-bold text-emerald-600">{auditReport.summary.perfectly_synced}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">With Issues</p>
+                <p className="font-bold text-amber-600">{auditReport.summary.materials_with_issues}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Over-Allocated</p>
+                <p className="font-bold text-destructive">{auditReport.summary.over_allocated_count}</p>
+              </div>
+              <div className="p-2 bg-background rounded border">
+                <p className="text-muted-foreground text-xs">Total Drift (units)</p>
+                <p className="font-bold">{auditReport.summary.drift_total_units.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {auditReport.issues.length > 0 && (
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Material</TableHead>
+                      <TableHead className="text-right">Tractor item_count</TableHead>
+                      <TableHead className="text-right">GIF Allocated</TableHead>
+                      <TableHead className="text-right">Tractor Allocated</TableHead>
+                      <TableHead className="text-right">Drift</TableHead>
+                      <TableHead>Issues</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditReport.issues.slice(0, 100).map((iss) => (
+                      <TableRow key={iss.material_id}>
+                        <TableCell>
+                          <p className="font-medium">#{iss.material_id} {iss.name}</p>
+                        </TableCell>
+                        <TableCell className="text-right">{iss.tractor_item_count.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{iss.gif_allocated_total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{iss.tractor_allocated_total.toLocaleString()}</TableCell>
+                        <TableCell className={`text-right font-semibold ${iss.drift !== 0 ? "text-amber-600" : ""}`}>
+                          {iss.drift > 0 ? "+" : ""}{iss.drift.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 flex-wrap">
+                            {iss.over_allocated && (
+                              <Badge variant="destructive" className="text-xs">Over-allocated</Badge>
+                            )}
+                            {iss.missing_in_tractor.length > 0 && (
+                              <Badge variant="outline" className="text-xs text-amber-600">
+                                {iss.missing_in_tractor.length} missing
+                              </Badge>
+                            )}
+                            {iss.tractor_only.length > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {iss.tractor_only.length} tractor-only
+                              </Badge>
+                            )}
+                            {iss.tractor_error && (
+                              <Badge variant="destructive" className="text-xs">{iss.tractor_error}</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {auditReport.issues.length > 100 && (
+                  <p className="text-xs text-muted-foreground p-2">
+                    Showing top 100 of {auditReport.issues.length} issues (sorted by drift magnitude)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {auditReport.issues.length === 0 && (
+              <p className="text-xs text-emerald-600">✅ All materials are perfectly synced with Tractor.</p>
+            )}
+          </div>
+        )}
+
         {/* Bulk Reconcile Report */}
         {bulkReconcileReport && (
           <div className="border border-border rounded-lg p-4 bg-muted/30 space-y-3">
