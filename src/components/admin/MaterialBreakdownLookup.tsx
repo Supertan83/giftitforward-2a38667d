@@ -176,7 +176,17 @@ export const MaterialBreakdownLookup = () => {
               Search by Material ID or name to see allocation breakdown across all marketplaces
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runMismatchAudit}
+              disabled={auditLoading}
+              className="flex items-center gap-2"
+            >
+              {auditLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitCompareArrows className="w-4 h-4" />}
+              GIF ↔ Tractor Audit
+            </Button>
             <Button
               variant="outline"
               size="sm"
