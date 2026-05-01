@@ -9,7 +9,7 @@ import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, Trending
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
-import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarketplaceAllocations';
+import { useMarketplaceReport, useAllMarketplaceReports, eventSlugMatchesMarketplace } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
@@ -46,7 +46,12 @@ export const MarketplaceReports = ({
   } | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
-  const [deletingVolunteer, setDeletingVolunteer] = useState<{ cardId: string; name: string } | null>(null);
+  const [deletingVolunteer, setDeletingVolunteer] = useState<{
+    cardId?: string;
+    volunteerId?: string;
+    dependentName?: string;
+    name: string;
+  } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -56,28 +61,92 @@ export const MarketplaceReports = ({
     setIsDeleting(true);
     try {
       const now = new Date().toISOString();
-      // Soft-delete only the QR card row for THIS marketplace.
-      // The pending_volunteers profile is intentionally NOT touched.
-      const { error: cardErr } = await supabase
-        .from('volunteer_qr_cards')
-        .update({ deleted_at: now })
-        .eq('id', deletingVolunteer.cardId);
-      if (cardErr) throw cardErr;
 
-      // Also soft-delete attendance rows tied to this card so totals update.
-      const { error: attErr } = await supabase
-        .from('volunteer_attendance')
-        .update({ deleted_at: now })
-        .eq('volunteer_card_id', deletingVolunteer.cardId)
-        .is('deleted_at', null);
-      if (attErr) throw attErr;
+      if (deletingVolunteer.cardId) {
+        // CASE 1: Volunteer has a QR card for this marketplace — soft-delete the card link.
+        const { error: cardErr } = await supabase
+          .from('volunteer_qr_cards')
+          .update({ deleted_at: now })
+          .eq('id', deletingVolunteer.cardId);
+        if (cardErr) throw cardErr;
+
+        const { error: attErr } = await supabase
+          .from('volunteer_attendance')
+          .update({ deleted_at: now })
+          .eq('volunteer_card_id', deletingVolunteer.cardId)
+          .is('deleted_at', null);
+        if (attErr) throw attErr;
+
+        setSelectedCardIds(prev => {
+          const next = new Set(prev);
+          next.delete(deletingVolunteer.cardId!);
+          return next;
+        });
+      } else if (deletingVolunteer.volunteerId) {
+        // CASE 2: Inactive (form-registered) volunteer — strip this marketplace from
+        // their events_list / events_json so they no longer appear in this report.
+        // Their pending_volunteers profile (and other marketplace links) stay intact.
+        const mp = marketplaces?.find(m => m.id === selectedMarketplaceId);
+        if (!mp) throw new Error('Marketplace not found');
+        const mpEventDate = (mp as any).event_date || null;
+
+        const { data: pv, error: pvErr } = await supabase
+          .from('pending_volunteers')
+          .select('events_list, events_json')
+          .eq('id', deletingVolunteer.volunteerId)
+          .maybeSingle();
+        if (pvErr) throw pvErr;
+        if (!pv) throw new Error('Volunteer profile not found');
+
+        const eventsJsonArr: any[] = Array.isArray(pv.events_json) ? (pv.events_json as any[]) : [];
+
+        let newEventsJson: any[];
+        let newEventsList: string;
+
+        if (deletingVolunteer.dependentName) {
+          // Remove only the matching dependent from matching events.
+          const depKey = deletingVolunteer.dependentName.trim().toLowerCase();
+          newEventsJson = eventsJsonArr.map(evt => {
+            const slug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+            if (!eventSlugMatchesMarketplace(slug, mp.name, mpEventDate)) return evt;
+            const deps = Array.isArray(evt.dependents) ? evt.dependents : [];
+            // remove first matching dependent only
+            let removed = false;
+            const filteredDeps = deps.filter((d: any) => {
+              if (removed) return true;
+              if ((d?.name || '').trim().toLowerCase() === depKey) { removed = true; return false; }
+              return true;
+            });
+            const newAdults = Math.max(0, Number(evt['number-of-adults'] || evt.number_of_adults || 0) - (filteredDeps.length < deps.length && (deps.find((d: any) => (d?.name || '').trim().toLowerCase() === depKey)?.type !== 'child') ? 1 : 0));
+            const newChildren = Math.max(0, Number(evt['number-of-children'] || evt.number_of_children || 0) - (filteredDeps.length < deps.length && (deps.find((d: any) => (d?.name || '').trim().toLowerCase() === depKey)?.type === 'child') ? 1 : 0));
+            return {
+              ...evt,
+              dependents: filteredDeps,
+              ...(evt['number-of-adults'] !== undefined ? { 'number-of-adults': newAdults } : {}),
+              ...(evt.number_of_adults !== undefined ? { number_of_adults: newAdults } : {}),
+              ...(evt['number-of-children'] !== undefined ? { 'number-of-children': newChildren } : {}),
+              ...(evt.number_of_children !== undefined ? { number_of_children: newChildren } : {}),
+            };
+          });
+          newEventsList = pv.events_list || '';
+        } else {
+          // Remove every event entry matching this marketplace entirely.
+          newEventsJson = eventsJsonArr.filter(evt => {
+            const slug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
+            return !eventSlugMatchesMarketplace(slug, mp.name, mpEventDate);
+          });
+          const slugs = (pv.events_list || '').split(',').map(s => s.trim()).filter(Boolean);
+          newEventsList = slugs.filter(s => !eventSlugMatchesMarketplace(s, mp.name, mpEventDate)).join(',');
+        }
+
+        const { error: updErr } = await supabase
+          .from('pending_volunteers')
+          .update({ events_json: newEventsJson, events_list: newEventsList })
+          .eq('id', deletingVolunteer.volunteerId);
+        if (updErr) throw updErr;
+      }
 
       toast({ title: 'Removed from marketplace', description: `${deletingVolunteer.name} was removed from this marketplace. Their profile is preserved.` });
-      setSelectedCardIds(prev => {
-        const next = new Set(prev);
-        next.delete(deletingVolunteer.cardId);
-        return next;
-      });
       setDeletingVolunteer(null);
       queryClient.invalidateQueries({ queryKey: ['marketplace_report'] });
       queryClient.invalidateQueries({ queryKey: ['all_marketplace_reports'] });
@@ -628,8 +697,8 @@ export const MarketplaceReports = ({
                                       })}>
                                         <Pencil className="w-3.5 h-3.5" />
                                       </Button>
-                                      {cid && (
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                      {(cid || vol.volunteerId) && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer(cid ? { cardId: cid, name: vol.name } : { volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
                                       )}
@@ -673,8 +742,8 @@ export const MarketplaceReports = ({
                                   })}>
                                     <Pencil className="w-3 h-3" />
                                   </Button>
-                                  {cid && (
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                  {(cid || vol.volunteerId) && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer(cid ? { cardId: cid, name: vol.name } : { volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
                                       <Trash2 className="w-3 h-3" />
                                     </Button>
                                   )}
