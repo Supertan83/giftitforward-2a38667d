@@ -563,6 +563,11 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               ))}
             </SelectContent>
           </Select>
+          {selectedMarketplaceId && !selectedHasExternalId && (
+            <p className="text-xs text-amber-600 mt-2">
+              ⚠ This marketplace is not linked to a Surpluss event. The "Sync from Surpluss" button is hidden because there is no external event to pull allocations from. Link this marketplace to a Surpluss event first.
+            </p>
+          )}
         </div>
 
         {selectedMarketplaceId ? (
