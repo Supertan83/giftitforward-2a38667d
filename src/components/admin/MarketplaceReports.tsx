@@ -9,7 +9,7 @@ import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, Trending
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
-import { useMarketplaceReport, useAllMarketplaceReports } from '@/hooks/useMarketplaceAllocations';
+import { useMarketplaceReport, useAllMarketplaceReports, eventSlugMatchesMarketplace } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
