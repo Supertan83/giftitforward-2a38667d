@@ -697,8 +697,8 @@ export const MarketplaceReports = ({
                                       })}>
                                         <Pencil className="w-3.5 h-3.5" />
                                       </Button>
-                                      {cid && (
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                      {(cid || vol.volunteerId) && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer(cid ? { cardId: cid, name: vol.name } : { volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
                                       )}
