@@ -90,10 +90,12 @@ export const MaterialBreakdownLookup = () => {
           allocated_quantity,
           distributed_quantity,
           marketplace_id,
-          marketplace_events!inner(name, event_date)
+          marketplace_events!inner(name, event_date, deleted_at)
         `,
         )
-        .eq("item_type_id", selectedItemId);
+        .eq("item_type_id", selectedItemId)
+        .is("deleted_at", null)
+        .is("marketplace_events.deleted_at", null);
 
       if (error) throw error;
 

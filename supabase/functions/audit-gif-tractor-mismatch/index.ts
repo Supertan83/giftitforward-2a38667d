@@ -39,7 +39,9 @@ Deno.serve(async (req) => {
 
     const { data: allocs, error: allocErr } = await supabase
       .from("marketplace_item_allocations")
-      .select("item_type_id, allocated_quantity, distributed_quantity, marketplace_id, marketplace_events!inner(name, external_id, event_date)");
+      .select("item_type_id, allocated_quantity, distributed_quantity, marketplace_id, deleted_at, marketplace_events!inner(name, external_id, event_date, deleted_at)")
+      .is("deleted_at", null)
+      .is("marketplace_events.deleted_at", null);
     if (allocErr) throw allocErr;
 
     // Group GIF allocations by item_type_id
