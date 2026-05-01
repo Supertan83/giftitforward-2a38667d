@@ -131,17 +131,27 @@ export const useCardStats = (marketplaceId: string) => {
     queryKey: ['card_stats', marketplaceId],
     staleTime: 15000,
     queryFn: async () => {
+      // Compute "today" in Asia/Dubai (UTC+4) so on-site stats reset at midnight Dubai time,
+      // not at 04:00 Dubai (which is UTC midnight).
+      const now = new Date();
+      const dubaiNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+      dubaiNow.setUTCHours(0, 0, 0, 0);
+      const todayDubaiStartISO = new Date(dubaiNow.getTime() - 4 * 60 * 60 * 1000).toISOString();
+
       const [activeRes, checkedOutRes, readyRes, todayCheckInsRes] = await Promise.all([
         supabase
           .from('qr_cards')
           .select('*', { count: 'exact', head: true })
           .eq('marketplace_id', marketplaceId)
           .eq('status', 'active'),
+        // Today-only check-outs at THIS marketplace, so the stat reflects today's
+        // exit traffic (not historical totals from past events).
         supabase
           .from('qr_cards')
           .select('*', { count: 'exact', head: true })
           .eq('marketplace_id', marketplaceId)
-          .eq('status', 'checked_out'),
+          .eq('status', 'checked_out')
+          .gte('updated_at', todayDubaiStartISO),
         supabase
           .from('qr_cards')
           .select('*', { count: 'exact', head: true })
@@ -150,7 +160,7 @@ export const useCardStats = (marketplaceId: string) => {
           .from('qr_cards')
           .select('*', { count: 'exact', head: true })
           .eq('marketplace_id', marketplaceId)
-          .gte('activated_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+          .gte('activated_at', todayDubaiStartISO),
       ]);
 
       return {

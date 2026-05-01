@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { ScanLine, Search, ArrowLeft, CreditCard, MapPin, Hash, AlertTriangle, Save, User } from 'lucide-react';
+import { ScanLine, Search, ArrowLeft, CreditCard, MapPin, Hash, AlertTriangle, Save, User, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,7 +72,34 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
   const [volunteerNames, setVolunteerNames] = useState<Record<string, string>>({});
   const [marketplaceNames, setMarketplaceNames] = useState<Record<string, { name: string; event_date: string | null }>>({});
   const [adjustValue, setAdjustValue] = useState('');
+  const [resettingStuck, setResettingStuck] = useState(false);
   const { toast } = useToast();
+
+  const handleResetStuckCards = useCallback(async () => {
+    if (!confirm('Reset all cards from previous events back to "Ready"?\n\nThis will release any cards still locked from past marketplaces. Cards activated today will NOT be affected.')) return;
+    setResettingStuck(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-unblock-cards', {
+        body: { triggered_by: 'admin_manual' },
+      });
+      if (error) throw error;
+      const unblocked = (data as { unblocked?: number })?.unblocked ?? 0;
+      toast({
+        title: unblocked > 0 ? 'Cards reset' : 'Nothing to reset',
+        description: unblocked > 0
+          ? `${unblocked} stuck cards from previous events are now Ready.`
+          : 'All cards from previous events are already cleared.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Reset failed',
+        description: err instanceof Error ? err.message : 'Could not reset stuck cards',
+        variant: 'destructive',
+      });
+    } finally {
+      setResettingStuck(false);
+    }
+  }, [toast]);
 
   const lookupCard = useCallback(async (uniqueId: string) => {
     setLoading(true);
@@ -299,13 +326,24 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-display font-bold flex items-center gap-2">
             <ScanLine className="h-5 w-5 text-primary" />
             Beneficiary QR Control Center
           </h1>
           <p className="text-sm text-muted-foreground">Look up, inspect, and adjust beneficiary card balances</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleResetStuckCards}
+          disabled={resettingStuck}
+          className="shrink-0 gap-2"
+          title="Release any cards still locked to previous-event marketplaces. Today's cards are preserved."
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${resettingStuck ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">{resettingStuck ? 'Resetting…' : 'Reset Stuck Cards'}</span>
+        </Button>
       </div>
 
       {/* Search */}
