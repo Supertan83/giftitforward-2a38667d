@@ -532,7 +532,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 ) : (
                   <RefreshCw className="w-4 h-4 mr-1" />
                 )}
-                <span className="hidden sm:inline">Sync Surpluss</span>
+                <span className="hidden sm:inline">Sync from Surpluss</span>
               </Button>
             )}
             <Button onClick={() => setShowAllocateModal(true)} size="sm" className="shrink-0">

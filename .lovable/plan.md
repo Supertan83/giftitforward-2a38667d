@@ -1,46 +1,36 @@
-## Context
+# Why the "Sync Surpluss" button is missing on Item Allocation
 
-Three May 9, 2026 marketplaces currently exist for the same site (Al Khawaneej Street – Al Ttay – Dubai):
+## Diagnosis
 
-| # | Name | Time | external_id (Surpluss) | Has data? |
-|---|------|------|------|------|
-| 1 | Family Orphan Marketplace Morning Event | 09:00 – 02:00 | **48** | None (0 allocations, 0 cards, 0 transactions, 0 logs) |
-| 2 | Low Income Families Marketplace Morning Event | 09:00 – 02:00 | NULL | None |
-| 3 | Low Income Families Marketplace - Afternoon Event | 14:30 – 20:30 | NULL | None |
+I checked the database and the code. The button **is correctly wired up** and the four upcoming "Single Mothers Household Workers" marketplaces (May 2 morning/afternoon and May 3 morning/afternoon) **all have a valid `external_id` link to Surpluss** (IDs 43–46).
 
-The user clarified that the renamed "Family Orphan" is the same real-world event as the Low Income one. The only valuable thing on Family Orphan today is its Surpluss linkage (`external_id = 48`), which must NOT be lost — otherwise the Surpluss sync, allocations, distribution reports, and future webhook traffic for that event will all break.
+The button render rule in `AllocationManagement.tsx` is:
 
-## Goal
+```ts
+const selectedHasExternalId = selectedMarketplace && selectedMarketplace.external_id;
+{selectedHasExternalId && <Button>Sync Surpluss</Button>}
+```
 
-- Keep the Surpluss linkage alive so all current and future Surpluss data flows into the Low Income marketplace.
-- Remove the duplicate "Family Orphan" record cleanly.
-- Lose zero data, current or future.
+Because all four Saturday/Sunday events have `external_id` set, this condition is true and the button **should already render in the current preview**.
 
-## Approach (chosen)
+The screenshot is from `gif.thesurpluss.com` (the published site), which is most likely running an older deploy from before the "Sync Surpluss" button was added. That is why it isn't visible there.
 
-Rather than soft-delete the Family Orphan row (which would lose `external_id = 48` and force a relink), we will:
+## Fix
 
-1. **Rename the Family Orphan row in place** to "Low Income Families Marketplace Morning Event". This preserves its `id` and `external_id = 48`, so all Surpluss syncs, allocation pushes, distribution reports, and webhook routing continue to work without any reconnect step.
-2. **Soft-delete the empty duplicate** "Low Income Families Marketplace Morning Event" row (id `770c55ed-…`) since it has no allocations, no cards, no transactions, no manual counts, no surveys, and no Surpluss link. Soft delete keeps it recoverable per the project's universal `deleted_at` pattern.
-3. **Leave the Afternoon event untouched** (id `c2b04114-…`). It is a separate time slot.
+Two small changes to make the situation clearer and safer:
 
-This avoids any data migration and any window where Surpluss event 48 is unlinked.
+1. **Rename the header button** from "Sync Surpluss" → "Sync from Surpluss" so admins immediately know it pulls Surpluss allocations into GIF (the screenshot shows 0 items in GIF but 83,922 in Surpluss — exactly what this button is for).
 
-## Steps
+2. **Show a small warning** under the marketplace selector when the selected marketplace has **no `external_id`**, e.g.:
 
-1. `UPDATE marketplace_events SET name = 'Low Income Families Marketplace Morning Event', updated_at = now() WHERE id = '6de32a60-696d-4fbd-96bb-101201a89023';`
-2. `UPDATE marketplace_events SET deleted_at = now() WHERE id = '770c55ed-4928-4037-ab89-628f02f4596e';`
-3. Verify: confirm only two May 9 rows remain visible (Morning + Afternoon), Morning still has `external_id = 48`, and the Afternoon row is unaffected.
+   > "This marketplace is not linked to a Surpluss event. Sync is disabled."
 
-## Why this is safe
+   This way, the next time the button doesn't appear, admins immediately understand why instead of assuming it's a bug.
 
-- Family Orphan has zero rows in: `marketplace_item_allocations`, `qr_cards`, `transactions`, `marketplace_manual_counts`, `pending_beneficiaries` (both `marketplace_id` and `marketplace_event_id`), `external_survey_responses`, `allocation_traceability_logs`, `archived_card_data`, and no demographics/manual_beneficiary_count populated.
-- Renaming preserves the UUID PK, so any future references that already point at it stay valid.
-- Preserving `external_id = 48` means the next Surpluss sync, batch_update, and distribution report for this event continue to land on the renamed marketplace automatically.
-- The duplicate Low Income Morning row is soft-deleted (not hard-deleted), so it can be restored if anyone disagrees.
+3. **Republish the project** so `gif.thesurpluss.com` picks up the current build. Without republish, the button stays invisible on the live URL no matter what we change in code.
 
-## Out of scope
+## Files touched
 
-- No code changes.
-- No edge function changes.
-- The Afternoon Low Income event (separate time slot) is not modified — and still needs Surpluss linkage to occur via a future Sync Marketplaces run when Surpluss publishes that event.
+- `src/components/admin/AllocationManagement.tsx` — rename button label, add the "not linked to Surpluss" hint under the marketplace selector.
+
+After approval I'll apply these edits and you can republish to push them to `gif.thesurpluss.com`.
