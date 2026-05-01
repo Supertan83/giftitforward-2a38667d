@@ -598,13 +598,34 @@ async function createMarketplacesFromEvents(supabase: any, eventsJson: unknown):
       const normalizedEventName = normalizeName(eventName);
       
       // Extract date from slug for precise matching
-      const slugDate = extractDateFromSlug(evt.event);
+      let slugDate = extractDateFromSlug(evt.event);
+      
+      // FALLBACK: if slug has no month/day (e.g. "...---afternoon-event-2"),
+      // use the form's eventDate so we don't false-match on name alone.
+      if (!slugDate) {
+        slugDate = parseDateComponents(evt.eventDate);
+      }
+      
+      // Helpers for "trailing number" suffix detection.
+      // Slugs like "...-morning-event" vs "...-morning-event-2" represent DIFFERENT
+      // marketplace instances on different days; never collapse them via fuzzy match.
+      const stripTrailingNum = (s: string) => s.replace(/\s+\d+\s*$/, '').trim();
+      const eventHasSuffix = /\s+\d+\s*$/.test(normalizedEventName);
+      const eventBase = stripTrailingNum(normalizedEventName);
       
       // Try to find a matching marketplace using normalized fuzzy matching
       let matchFound = false;
       
       for (const mp of existingMarketplaces) {
         const normalizedMpName = normalizeName(mp.name);
+        const mpHasSuffix = /\s+\d+\s*$/.test(normalizedMpName);
+        const mpBase = stripTrailingNum(normalizedMpName);
+        
+        // BUG FIX: same base name but different "trailing number" presence
+        // means a distinct marketplace instance — skip this candidate entirely.
+        if (eventBase === mpBase && eventHasSuffix !== mpHasSuffix) {
+          continue;
+        }
         
         // Check exact normalized match first
         if (normalizedMpName === normalizedEventName) {
@@ -626,10 +647,13 @@ async function createMarketplacesFromEvents(supabase: any, eventsJson: unknown):
               console.log(`Marketplace fuzzy+date match: "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
               matchFound = true;
               break;
+            } else {
+              console.log(`✗ Name fuzzy match for "${eventName}" but date mismatch (slug=${slugDate.month}/${slugDate.day} vs db=${mp.event_date}); skipping`);
+              continue;
             }
           } else {
             // No date to compare - name similarity is enough
-            console.log(`Marketplace fuzzy match: "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
+            console.log(`Marketplace fuzzy match (no date): "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
             matchFound = true;
             break;
           }
@@ -650,6 +674,9 @@ async function createMarketplacesFromEvents(supabase: any, eventsJson: unknown):
               console.log(`Marketplace word-overlap+date match (${(overlapRatio * 100).toFixed(0)}%): "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
               matchFound = true;
               break;
+            } else {
+              console.log(`✗ Word-overlap match for "${eventName}" but date mismatch; skipping`);
+              continue;
             }
           } else {
             console.log(`Marketplace word-overlap match (${(overlapRatio * 100).toFixed(0)}%): "${eventName}" -> "${mp.name}" (ID: ${mp.id})`);
