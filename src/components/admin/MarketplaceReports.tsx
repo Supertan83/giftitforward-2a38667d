@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { VolunteerBulkHoursEditDialog, type BulkVolunteerEditTarget } from './VolunteerBulkHoursEditDialog';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, GraduationCap } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, Trash2, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
@@ -43,6 +46,47 @@ export const MarketplaceReports = ({
   } | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [deletingVolunteer, setDeletingVolunteer] = useState<{ cardId: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleConfirmDelete = async () => {
+    if (!deletingVolunteer) return;
+    setIsDeleting(true);
+    try {
+      const now = new Date().toISOString();
+      // Soft-delete only the QR card row for THIS marketplace.
+      // The pending_volunteers profile is intentionally NOT touched.
+      const { error: cardErr } = await supabase
+        .from('volunteer_qr_cards')
+        .update({ deleted_at: now })
+        .eq('id', deletingVolunteer.cardId);
+      if (cardErr) throw cardErr;
+
+      // Also soft-delete attendance rows tied to this card so totals update.
+      const { error: attErr } = await supabase
+        .from('volunteer_attendance')
+        .update({ deleted_at: now })
+        .eq('volunteer_card_id', deletingVolunteer.cardId)
+        .is('deleted_at', null);
+      if (attErr) throw attErr;
+
+      toast({ title: 'Removed from marketplace', description: `${deletingVolunteer.name} was removed from this marketplace. Their profile is preserved.` });
+      setSelectedCardIds(prev => {
+        const next = new Set(prev);
+        next.delete(deletingVolunteer.cardId);
+        return next;
+      });
+      setDeletingVolunteer(null);
+      queryClient.invalidateQueries({ queryKey: ['marketplace_report'] });
+      queryClient.invalidateQueries({ queryKey: ['all_marketplace_reports'] });
+    } catch (e: any) {
+      toast({ title: 'Delete failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Clear selection when marketplace changes
   useEffect(() => {
@@ -573,16 +617,23 @@ export const MarketplaceReports = ({
                                   </td>
                                   <td className="py-2.5 px-2 text-right font-medium">{vol.hoursWorked > 0 ? `${vol.hoursWorked.toFixed(1)}h` : '—'}</td>
                                   <td className="py-2.5 px-2 text-center">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingVolunteer({
-                                      cardId: vol.cardId,
-                                      name: vol.name,
-                                      checkedInAt: vol.checkedInAt,
-                                      checkedOutAt: vol.checkedOutAt,
-                                      hoursWorked: vol.hoursWorked,
-                                      marketplaceId: selectedMarketplaceId || undefined,
-                                    })}>
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </Button>
+                                    <div className="flex items-center justify-center gap-1">
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingVolunteer({
+                                        cardId: vol.cardId,
+                                        name: vol.name,
+                                        checkedInAt: vol.checkedInAt,
+                                        checkedOutAt: vol.checkedOutAt,
+                                        hoursWorked: vol.hoursWorked,
+                                        marketplaceId: selectedMarketplaceId || undefined,
+                                      })}>
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </Button>
+                                      {cid && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                                 );
@@ -622,6 +673,11 @@ export const MarketplaceReports = ({
                                   })}>
                                     <Pencil className="w-3 h-3" />
                                   </Button>
+                                  {cid && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                               <p className="text-xs text-muted-foreground pl-6">{vol.category} · {vol.company}</p>
@@ -653,6 +709,27 @@ export const MarketplaceReports = ({
         open={!!editingVolunteer}
         onOpenChange={(open) => { if (!open) setEditingVolunteer(null); }}
       />
+      <AlertDialog open={!!deletingVolunteer} onOpenChange={(open) => { if (!open && !isDeleting) setDeletingVolunteer(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from this marketplace?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium text-foreground">{deletingVolunteer?.name}</span> will be removed from this marketplace report only.
+              Their volunteer profile and any data on other marketplaces stay intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              onClick={(e) => { e.preventDefault(); handleConfirmDelete(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Removing…' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirmSyncOpen} onOpenChange={setConfirmSyncOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
