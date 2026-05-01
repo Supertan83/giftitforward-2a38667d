@@ -46,6 +46,47 @@ export const MarketplaceReports = ({
   } | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [deletingVolunteer, setDeletingVolunteer] = useState<{ cardId: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleConfirmDelete = async () => {
+    if (!deletingVolunteer) return;
+    setIsDeleting(true);
+    try {
+      const now = new Date().toISOString();
+      // Soft-delete only the QR card row for THIS marketplace.
+      // The pending_volunteers profile is intentionally NOT touched.
+      const { error: cardErr } = await supabase
+        .from('volunteer_qr_cards')
+        .update({ deleted_at: now })
+        .eq('id', deletingVolunteer.cardId);
+      if (cardErr) throw cardErr;
+
+      // Also soft-delete attendance rows tied to this card so totals update.
+      const { error: attErr } = await supabase
+        .from('volunteer_attendance')
+        .update({ deleted_at: now })
+        .eq('volunteer_card_id', deletingVolunteer.cardId)
+        .is('deleted_at', null);
+      if (attErr) throw attErr;
+
+      toast({ title: 'Removed from marketplace', description: `${deletingVolunteer.name} was removed from this marketplace. Their profile is preserved.` });
+      setSelectedCardIds(prev => {
+        const next = new Set(prev);
+        next.delete(deletingVolunteer.cardId);
+        return next;
+      });
+      setDeletingVolunteer(null);
+      queryClient.invalidateQueries({ queryKey: ['marketplace_report'] });
+      queryClient.invalidateQueries({ queryKey: ['all_marketplace_reports'] });
+    } catch (e: any) {
+      toast({ title: 'Delete failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Clear selection when marketplace changes
   useEffect(() => {
