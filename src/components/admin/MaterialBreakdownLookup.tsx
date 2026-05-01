@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Package, AlertTriangle, Loader2, Wrench, RefreshCcw } from "lucide-react";
+import { Search, Package, AlertTriangle, Loader2, Wrench, RefreshCcw, GitCompareArrows } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { useItemTypes } from "@/hooks/useSupabaseData";
 import { useSurplussDonationMetadata } from "@/hooks/useSurplussDonationMetadata";
 import { surplussBulkReconcileDonationRemaining, type BulkReconcileResponse } from "@/lib/surplussReconcileRemaining";
+import { auditGifTractorMismatch, type MismatchReport } from "@/lib/auditGifTractorMismatch";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -54,6 +55,8 @@ export const MaterialBreakdownLookup = () => {
   const [fixLoading, setFixLoading] = useState(false);
   const [bulkReconcileReport, setBulkReconcileReport] = useState<BulkReconcileResponse | null>(null);
   const [bulkReconcileLoading, setBulkReconcileLoading] = useState(false);
+  const [auditReport, setAuditReport] = useState<MismatchReport | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const matchingItems = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -141,6 +144,22 @@ export const MaterialBreakdownLookup = () => {
       toast.error(`Bulk reconcile failed: ${err.message}`);
     } finally {
       setBulkReconcileLoading(false);
+    }
+  };
+
+  const runMismatchAudit = async () => {
+    setAuditLoading(true);
+    try {
+      const result = await auditGifTractorMismatch("production");
+      if (!result.ok) throw new Error(result.error);
+      setAuditReport(result.report);
+      toast.success(
+        `Audit complete: ${result.report.summary.materials_with_issues} of ${result.report.summary.total_materials} materials have issues`,
+      );
+    } catch (err: any) {
+      toast.error(`Audit failed: ${err.message}`);
+    } finally {
+      setAuditLoading(false);
     }
   };
 
