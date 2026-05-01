@@ -617,16 +617,23 @@ export const MarketplaceReports = ({
                                   </td>
                                   <td className="py-2.5 px-2 text-right font-medium">{vol.hoursWorked > 0 ? `${vol.hoursWorked.toFixed(1)}h` : '—'}</td>
                                   <td className="py-2.5 px-2 text-center">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingVolunteer({
-                                      cardId: vol.cardId,
-                                      name: vol.name,
-                                      checkedInAt: vol.checkedInAt,
-                                      checkedOutAt: vol.checkedOutAt,
-                                      hoursWorked: vol.hoursWorked,
-                                      marketplaceId: selectedMarketplaceId || undefined,
-                                    })}>
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </Button>
+                                    <div className="flex items-center justify-center gap-1">
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingVolunteer({
+                                        cardId: vol.cardId,
+                                        name: vol.name,
+                                        checkedInAt: vol.checkedInAt,
+                                        checkedOutAt: vol.checkedOutAt,
+                                        hoursWorked: vol.hoursWorked,
+                                        marketplaceId: selectedMarketplaceId || undefined,
+                                      })}>
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </Button>
+                                      {cid && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                                 );
