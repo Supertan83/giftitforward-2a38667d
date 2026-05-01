@@ -527,7 +527,10 @@ function parseTimeRange(timeStr: string | null | undefined): { start: string | n
   if (!timeStr) return { start: null, end: null };
   
   const parseTime = (t: string): string | null => {
-    const match = t.trim().match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+    // Accept "10:00", "10.00", "10", optionally followed by am/pm.
+    // FIX: previous regex only matched ":" as minute separator, so "03.00 pm" fell back to bare "03"
+    // and dropped the am/pm capture, causing PM times to be stored as AM (e.g. 03:00 pm -> 03:00).
+    const match = t.trim().match(/(\d{1,2})\s*[:.]?\s*(\d{2})?\s*(am|pm)?/i);
     if (!match) return null;
     
     let hours = parseInt(match[1]);
