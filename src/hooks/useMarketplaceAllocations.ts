@@ -761,6 +761,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
             cardId: '',
             checkedInAt: null,
             checkedOutAt: null,
+            volunteerId: fv.id,
           });
 
           if (!volCategoryMap.has(categoryKey)) {
