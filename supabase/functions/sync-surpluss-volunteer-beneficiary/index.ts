@@ -961,10 +961,10 @@ serve(async (req) => {
               const company = vol.external_company || vol.employee_vertical;
               if (company) depPayload.company_name = company;
 
-              if (surplussEventId != null) {
-                depPayload.marketplace_event_id = surplussEventId;
-                depPayload.event_id = surplussEventId;
-              }
+              // Do NOT send marketplace_event_id for family members — they should be
+              // stored in the volunteers table (linked to the parent via relation_type)
+              // but must NOT appear in marketplace_event_volunteers, which would inflate
+              // the event's volunteer count with non-volunteer dependents.
 
               try {
                 const apiUrl = `${baseUrl}/api/common/volunteers`;
