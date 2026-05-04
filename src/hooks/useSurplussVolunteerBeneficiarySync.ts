@@ -259,6 +259,7 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         volunteers_failed: volData?.volunteers_failed ?? 0,
         volunteers_skipped: volData?.volunteers_skipped ?? 0,
         volunteers_bulk_updated: volData?.volunteers_bulk_updated ?? 0,
+        volunteers_attached_to_event: volData?.volunteers_attached_to_event ?? ((volData?.volunteers_sent ?? 0) + (volData?.volunteers_bulk_updated ?? 0)),
         volunteers_total: volData?.volunteers_total ?? 0,
         volunteer_details: volData?.volunteer_details ?? [],
         family_total: volData?.family_total ?? 0,
