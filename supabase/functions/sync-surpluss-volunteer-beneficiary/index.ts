@@ -1058,6 +1058,9 @@ serve(async (req) => {
         volunteers_failed: totalFailed,
         volunteers_skipped: totalSkipped,
         volunteers_bulk_updated: totalBulkUpdated,
+        // Volunteers we attempted to attach to the targeted marketplace_event
+        // (new POSTs that succeeded + existing volunteers pushed through bulk-update).
+        volunteers_attached_to_event: totalSent + totalBulkUpdated,
         volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
         family_total: totalFamilyFound,
