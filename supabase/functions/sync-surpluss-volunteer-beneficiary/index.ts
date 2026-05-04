@@ -511,20 +511,23 @@ serve(async (req) => {
         if (response.ok) {
           totalSent++;
           allVolunteerDetails.push({ name: volunteerName, status: "sent" });
-        } else if (responseBody.includes("already exists") || responseBody.includes("already assigned")) {
-          totalSkipped++;
-          allVolunteerDetails.push({ name: volunteerName, status: "skipped", reason: "Already exists in Surpluss" });
-          // Find and update the most recent failed log entry for this volunteer
-          const { data: recentLogs } = await supabase
-            .from("surpluss_api_audit_log")
-            .select("id")
-            .eq("action", "sync_volunteer")
-            .eq("success", false)
-            .order("created_at", { ascending: false })
-            .limit(1);
-          if (recentLogs && recentLogs.length > 0) {
-            await supabase.from("surpluss_api_audit_log").update({ success: true }).eq("id", recentLogs[0].id);
-          }
+        } else if (
+          response.status === 409 ||
+          responseBody.includes("already exists") ||
+          responseBody.includes("already assigned")
+        ) {
+          // Volunteer exists on Surpluss but is NOT linked to this marketplace_event yet.
+          // Move them to bulk-update so the event linkage is sent. Do not flip the original
+          // failed audit row — record a separate row that documents the success.
+          previouslySyncedVolunteers.push(vol);
+          await supabase.from("surpluss_api_audit_log").insert({
+            action: "sync_volunteer_existing",
+            environment,
+            request_payload: { email: vol.email, marketplace_event_id: linkedMarketplaceEventId },
+            response_status: response.status,
+            response_body: { note: "Volunteer already exists on Surpluss; queued for bulk-update with event linkage." },
+            success: true,
+          });
         } else {
           totalFailed++;
           const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
@@ -721,7 +724,15 @@ serve(async (req) => {
         }
 
         // --- Volunteer hours from QR cards (+ attendance fallback if total_hours_worked is still 0) ---
+        // We emit a row for EVERY volunteer registered to this event (via events_list) — even if
+        // hours = 0 — so Tractor attaches them to the marketplace_event. Without this, volunteers
+        // who never used a volunteer QR card would never appear in Tractor's distribution records.
         try {
+          const eventTitle = marketplace.name as string;
+          const eventDateForMatch = (marketplace.event_date as string | null | undefined) ?? null;
+          const hoursByEmail = new Map<string, { email: string; hours: number }>();
+
+          // 1) QR card hours
           const { data: vCards } = await supabase
             .from("volunteer_qr_cards")
             .select("id, volunteer_id, total_hours_worked")
@@ -746,7 +757,6 @@ serve(async (req) => {
             const volIds = [...new Set(vCards.map((c) => c.volunteer_id).filter(Boolean))] as string[];
             const { data: pvs } = await supabase.from("pending_volunteers").select("id, email").in("id", volIds);
             const emailById = new Map((pvs || []).map((p) => [p.id as string, String(p.email || "").trim()]));
-            const hoursByEmail = new Map<string, { email: string; hours: number }>();
             for (const c of vCards) {
               const vid = c.volunteer_id as string;
               const em = emailById.get(vid);
@@ -759,24 +769,40 @@ serve(async (req) => {
               if (prev) prev.hours += h;
               else hoursByEmail.set(key, { email: em, hours: h });
             }
-            const eventTitle = marketplace.name as string;
-            for (const { email, hours } of hoursByEmail.values()) {
-              if (hours <= 0) continue;
-              const row: {
-                volunteer_email: string;
-                marketplace_event_title: string;
-                hours_contributed: number;
-                marketplace_event_id?: number;
-              } = {
-                volunteer_email: email,
-                marketplace_event_title: eventTitle,
-                hours_contributed: Math.round(hours * 100) / 100,
-              };
-              if (surplussEventId != null) {
-                row.marketplace_event_id = surplussEventId;
-              }
-              volunteerHourRows.push(row);
+          }
+
+          // 2) Add 0-hour rows for volunteers whose events_list mentions this marketplace but who
+          //    don't have a QR card (most volunteers — they just need to be linked to the event).
+          for (const vol of volunteers) {
+            const em = String(vol.email || "").trim();
+            if (!em) continue;
+            const key = em.toLowerCase();
+            if (hoursByEmail.has(key)) continue;
+            if (!vol.events_list) continue;
+            const rawSlugs = vol.events_list.split(",").map((s: string) => s.trim()).filter(Boolean);
+            const matches = rawSlugs.some((slug: string) =>
+              eventSlugMatchesMarketplace(slug, eventTitle, eventDateForMatch),
+            );
+            if (matches) {
+              hoursByEmail.set(key, { email: em, hours: 0 });
             }
+          }
+
+          for (const { email, hours } of hoursByEmail.values()) {
+            const row: {
+              volunteer_email: string;
+              marketplace_event_title: string;
+              hours_contributed: number;
+              marketplace_event_id?: number;
+            } = {
+              volunteer_email: email,
+              marketplace_event_title: eventTitle,
+              hours_contributed: Math.round(hours * 100) / 100,
+            };
+            if (surplussEventId != null) {
+              row.marketplace_event_id = surplussEventId;
+            }
+            volunteerHourRows.push(row);
           }
         } catch (hoursCollectErr) {
           console.error("Volunteer hours collection error:", hoursCollectErr);
@@ -784,6 +810,7 @@ serve(async (req) => {
             `Volunteer hours collection: ${hoursCollectErr instanceof Error ? hoursCollectErr.message : "Unknown"}`,
           );
         }
+
 
         // --- Demographics Update ---
 
@@ -1031,6 +1058,9 @@ serve(async (req) => {
         volunteers_failed: totalFailed,
         volunteers_skipped: totalSkipped,
         volunteers_bulk_updated: totalBulkUpdated,
+        // Volunteers we attempted to attach to the targeted marketplace_event
+        // (new POSTs that succeeded + existing volunteers pushed through bulk-update).
+        volunteers_attached_to_event: totalSent + totalBulkUpdated,
         volunteers_total: volunteers.length,
         volunteer_details: allVolunteerDetails,
         family_total: totalFamilyFound,

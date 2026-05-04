@@ -8,6 +8,7 @@ interface SyncResult {
   volunteers_failed: number;
   volunteers_skipped: number;
   volunteers_bulk_updated: number;
+  volunteers_attached_to_event: number;
   volunteers_total: number;
   volunteer_details: { name: string; status: string; reason?: string }[];
   family_total: number;
@@ -258,6 +259,7 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         volunteers_failed: volData?.volunteers_failed ?? 0,
         volunteers_skipped: volData?.volunteers_skipped ?? 0,
         volunteers_bulk_updated: volData?.volunteers_bulk_updated ?? 0,
+        volunteers_attached_to_event: volData?.volunteers_attached_to_event ?? ((volData?.volunteers_sent ?? 0) + (volData?.volunteers_bulk_updated ?? 0)),
         volunteers_total: volData?.volunteers_total ?? 0,
         volunteer_details: volData?.volunteer_details ?? [],
         family_total: volData?.family_total ?? 0,
@@ -296,11 +298,8 @@ export const useSurplussVolunteerBeneficiarySync = () => {
 
       const hasIssues = !result.success || !!distributionError || distributionSkippedItems.length > 0;
 
-      // Volunteers summary: combine new (sent) + bulk-updated so users see real impact
-      const volTouched = result.volunteers_sent + result.volunteers_bulk_updated;
-      const volSummary = result.volunteers_bulk_updated > 0
-        ? `Volunteers: ${volTouched} updated (${result.volunteers_sent} new, ${result.volunteers_bulk_updated} updated)`
-        : `Volunteers: ${result.volunteers_sent} sent`;
+      // Volunteers summary: report the number actually attached to the marketplace event on Surpluss
+      const volSummary = `Volunteers: ${result.volunteers_attached_to_event} attached to event (${result.volunteers_sent} new, ${result.volunteers_bulk_updated} re-linked)`;
 
       if (!hasIssues) {
         toast({

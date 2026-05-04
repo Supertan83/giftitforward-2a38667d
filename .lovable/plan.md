@@ -1,75 +1,90 @@
-## Current State (Saturday, May 2, 2026 — Dubai)
 
-Today's events: Single Mothers Household Workers — Morning (ended 15:00) and Afternoon (ends 20:00). Tomorrow: Single Mothers Marketplace Morning + Afternoon Event 2 (May 3).
+## What's wrong
 
-QR card snapshot (total 1,957 cards):
-- **900 inactive** — ready for use
-- **42 active** — checked in but never checked out (37 from Morning that already ended, 5 from Afternoon still running)
-- **1,015 checked_out** — used today, holding old marketplace_id and balance data
+For "Mens Construction Facility Workers Marketplace Morning Event" (Surpluss event ID 33), GIF sends `Sync complete` but Tractor → Distribution Records → Volunteers shows the wrong (much smaller) number.
 
-If we do nothing, the existing midnight cron (`auto-unblock-qr-cards-midnight` at 00:00 Dubai + safety-net at 03:30) will reset all of these tonight because their `activated_at` is before tomorrow's Dubai-day boundary. So tomorrow morning **should** wake up with all 1,957 cards inactive — but we want belt-and-suspenders to avoid the issue from last weekend.
+Audit log proves the bug:
 
-## Goal
-
-Guarantee that by tomorrow morning every beneficiary QR card is `inactive`, has zero balance, no `marketplace_id`, and no `activated_at`, so check-in shows the full ~1,957 ready pool.
-
-## Plan
-
-### 1. Force-checkout the 37 stuck Morning-event cards now
-The Morning event ended at 15:00 but 37 beneficiaries were never checked out. Run a one-shot script to:
-- For each `qr_cards` row with `status='active'` AND `marketplace_id = 27cad0fe…` (Morning):
-  - Insert a `CheckOut` transaction (so distribution counts/reports stay accurate)
-  - Then run the standard reset (status → `inactive`, clear balance, items, marketplace_id, activated_at)
-
-Leave the 5 Afternoon cards alone for now — that event is still live until 20:00; volunteers may still scan checkouts. The cron will sweep them tonight.
-
-### 2. Run the existing `auto-unblock-cards` edge function manually right after the Afternoon event ends
-This validates end-to-end that the overnight reset works and surfaces any failure tonight rather than tomorrow at 6 AM. It will:
-- Auto-complete both Single Mothers events (Morning will already be past end_time; Afternoon will be after 20:00)
-- Reset every card whose `activated_at < Dubai today-start` (tomorrow's run) — so we'll invoke once tonight after 20:00 and confirm ~1,057 cards reset
-
-### 3. Verification queries
-After the manual run, confirm:
-- `qr_cards`: 1,957 inactive / 0 active / 0 checked_out / 0 with marketplace_id
-- `marketplace_events` for today: status = `completed`
-- `BeneficiaryQRControlCenter` "Ready" count shows ~1,957
-
-### 4. No code changes required
-The fixes to `auto-unblock-cards` (handle stuck `checked_out` and orphaned `marketplace_id` rows) were already shipped earlier this week. This task is purely operational: a one-shot SQL/script and a manual edge-function invocation tonight.
-
-### Technical details
-
-One-shot reset script for the 37 Morning-event stuck active cards (run via insert-only SQL; safe because we insert CheckOut transactions then update qr_cards):
-
-```sql
--- 1. Log a CheckOut transaction for each stuck active card on the Morning event
-INSERT INTO transactions (card_id, type, credit_change, marketplace_id)
-SELECT id, 'CheckOut', 0, marketplace_id
-FROM qr_cards
-WHERE deleted_at IS NULL
-  AND status = 'active'
-  AND marketplace_id = '27cad0fe-2274-484e-ab36-92261a62287b';
-
--- 2. Reset those cards (requires migration — UPDATE not in insert scope)
-UPDATE qr_cards
-SET status = 'inactive',
-    credit_balance = 0,
-    total_items_collected = 0,
-    collected_items = '[]'::jsonb,
-    marketplace_id = NULL,
-    activated_at = NULL,
-    updated_at = now()
-WHERE deleted_at IS NULL
-  AND status = 'active'
-  AND marketplace_id = '27cad0fe-2274-484e-ab36-92261a62287b';
+```
+sync_volunteer  → mp_event_id=33 → 500: "Volunteer with email X already exists"
+sync_volunteer  → mp_event_id=33 → 500: "Volunteer with email Y already exists"
+sync_volunteer  → mp_event_id=33 → 500: "Volunteer with email Z already exists"
+bulk_update_volunteers → 200 OK
+sync_volunteer_event_hours → 200 OK
 ```
 
-Then tonight after 20:00 Dubai (Afternoon event ends), invoke:
-```
-POST /functions/v1/auto-unblock-cards
-```
-and confirm response shows ~1,020 cards reset and 2 marketplaces auto-completed.
+Then the edge function **rewrites those 500s to `success=true`** in the audit log (lines 514–527 in `sync-surpluss-volunteer-beneficiary/index.ts`), the toast shows "Sync complete", and on Tractor those volunteers are never attached to event 33.
 
-### Risk / rollback
-- Pre-checkout of the 37 Morning cards is safe: those beneficiaries already left the venue hours ago; the CheckOut transaction preserves the audit trail.
-- We will NOT touch the 5 Afternoon cards or 1,015 already-checked-out cards manually; the existing cron handles them.
+### Why it happens
+
+Three independent bugs combine:
+
+1. **"Already exists" path is mishandled.** When Surpluss returns 500 / "already exists", we mark it `skipped` and *don't* call bulk-update for that volunteer (the "previously synced" set is built only from local audit logs, not from Surpluss's truth). So the marketplace_event_id link is never sent for those volunteers.
+2. **Bulk-update never receives `marketplace_event_id` for `previouslySyncedVolunteers`** unless the run itself was a single-marketplace run *and* the volunteer was already in the local audit log as a successful `sync_volunteer`. For volunteers that just got rejected as "already exists" in this same run, they are in `newVolunteers`, not `previouslySyncedVolunteers`, so they never reach bulk-update.
+3. **`volunteer_hours` rows are skipped when `total_hours_worked = 0` and there's no attendance row** (line 764: `if (hours <= 0) continue;`). Volunteers who were never checked-in via the volunteer QR (most of them at this event — only 2 of 6 expected have cards) are simply omitted from the hours payload, so Tractor never gets a row tying them to event 33.
+
+Net effect: only a tiny subset (the 2 with QR check-ins + maybe brand-new volunteers we created via POST) get attached to event 33 on Tractor. Everyone else stays unlinked → the Distribution Records volunteer count is wrong.
+
+### Verified evidence
+
+- 6 volunteers in our DB have `events_list` containing `mens-construction-facility-workers-marketplace---morning-event`.
+- Only 2 have a `volunteer_qr_cards` row for that marketplace, both `checked_out`.
+- Last 4 sync runs against event 33 produced **only** `500 already exists` responses for the new POSTs, then 200 for bulk-update and hours.
+- `bulk_update_volunteers` payload only ever covers volunteers already in `surpluss_api_audit_log` as a successful `sync_volunteer` — not the 500-returning ones from the same run.
+
+## Fix
+
+### 1. Treat "already exists" as a successful sync and queue the volunteer for bulk-update
+
+In `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts`, in the new-volunteer loop (around lines 511–540):
+
+- When Surpluss returns 500 with `already exists`/`already assigned` (or 409), do **not** just mark `skipped`. Push the volunteer into `previouslySyncedVolunteers` so it goes through bulk-update with the current `linkedMarketplaceEventId`.
+- Stop overwriting the original failed audit-log row to `success=true`. Either insert a new `sync_volunteer_existing` row with `success=true`, or leave the 500 row untouched and rely on the new bulk-update row as proof. The current "find most recent failed and flip it" hack hides real failures.
+
+### 2. Always include `marketplace_event_id` / `event_id` in bulk-update for the targeted run
+
+The bulk-update payload (around lines 547–569) already conditionally adds `marketplace_event_id`. Make sure:
+
+- Every volunteer in this set (including the ones moved over from step 1) gets the marketplace_event_id explicitly.
+- If Surpluss's bulk-update endpoint expects an array field like `marketplace_event_ids` or `events_attended_ids`, send that too. We need to confirm the exact field name from Surpluss API docs / a curl test (see "Verification" below).
+
+### 3. Send a volunteer-hours row for *every* matched volunteer, even with 0 hours
+
+In the hours collection block (around lines 723–786):
+
+- Drop the `if (hours <= 0) continue;` guard. Send `hours_contributed: 0` instead.
+- For volunteers matched by `events_list` but without any `volunteer_qr_cards` row for this marketplace, also emit a row (`hours_contributed: 0`) so Tractor still attaches them to the event.
+- If Surpluss rejects 0-hour rows, fall back to a separate "attach volunteer to event" call (whatever endpoint Tractor exposes for that — see Verification).
+
+### 4. Surface real sync results in the toast
+
+`success: totalFailed === 0` is currently always true because we flip 500s to skipped. After the fix:
+- `volunteers_attached_to_event` — actual count we know Tractor accepted (from bulk-update + hours response).
+- `volunteers_unmatched` — volunteers in our DB whose `events_list` mentions this marketplace but who couldn't be linked (with the reason).
+
+Show these in `useSurplussVolunteerBeneficiarySync.ts` so admins see the truth.
+
+## Verification
+
+Before deploying, confirm two Surpluss API behaviors with `curl_edge_functions` against `surpluss-allocations-api` (or a quick test edge function):
+
+1. Does `POST /api/common/volunteers/bulk-update` actually attach `marketplace_event_id` (or does it need a different field)?
+2. Is there an explicit "attach existing volunteer to marketplace event" endpoint? If yes, use it instead of relying on POST /volunteers + bulk-update.
+
+After deploy, on a test marketplace:
+1. Run "Send to Surpluss".
+2. Query the audit log: every volunteer in `events_list` for that event should produce either a 200/201 from `sync_volunteer` **or** appear in the bulk-update payload **and** the hours payload.
+3. Check Tractor → Distribution Records → that marketplace → Volunteers count matches `SELECT count(*) FROM pending_volunteers WHERE events_list ILIKE '%<slug>%'`.
+
+## Files to change
+
+- `supabase/functions/sync-surpluss-volunteer-beneficiary/index.ts` — steps 1–3 above, plus richer return payload.
+- `src/hooks/useSurplussVolunteerBeneficiarySync.ts` — surface `volunteers_attached_to_event` / `volunteers_unmatched` in the toast.
+
+No DB migration. No schema changes. No new tables.
+
+## Out of scope
+
+- Beneficiary count mismatch (handled separately by `sync-surpluss-beneficiaries`).
+- Distribution / item counts (handled by `report-surpluss-distribution`).
+- Backfilling historical events on Tractor — once the fix ships, re-running "Send to Surpluss" on each old marketplace will reconcile them.
