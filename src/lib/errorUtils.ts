@@ -9,9 +9,15 @@ interface PostgresError {
   details?: string;
 }
 
+// Only log internal error details in development to avoid leaking
+// database schema, error codes, and auth internals in production via DevTools.
+const isDev = import.meta.env.DEV;
+const devLog = (...args: unknown[]) => {
+  if (isDev) console.error(...args);
+};
+
 export const mapDatabaseError = (error: unknown): string => {
-  // Log full error for debugging (server-side only in production)
-  console.error('Database error:', error);
+  devLog('Database error:', error);
   
   const pgError = error as PostgresError;
   
@@ -59,7 +65,7 @@ export const mapDatabaseError = (error: unknown): string => {
 };
 
 export const mapAuthError = (error: unknown): string => {
-  console.error('Auth error:', error);
+  devLog('Auth error:', error);
   
   const authError = error as { message?: string; status?: number };
   const message = authError?.message?.toLowerCase() || '';
@@ -98,9 +104,9 @@ export class SafeError extends Error {
   constructor(userMessage: string, originalError?: unknown) {
     super(userMessage);
     this.name = 'SafeError';
-    // Log original error for debugging
+    // Log original error for debugging (development only)
     if (originalError) {
-      console.error('Original error:', originalError);
+      devLog('Original error:', originalError);
     }
   }
 }
