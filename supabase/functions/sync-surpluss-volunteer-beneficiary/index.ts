@@ -511,20 +511,23 @@ serve(async (req) => {
         if (response.ok) {
           totalSent++;
           allVolunteerDetails.push({ name: volunteerName, status: "sent" });
-        } else if (responseBody.includes("already exists") || responseBody.includes("already assigned")) {
-          totalSkipped++;
-          allVolunteerDetails.push({ name: volunteerName, status: "skipped", reason: "Already exists in Surpluss" });
-          // Find and update the most recent failed log entry for this volunteer
-          const { data: recentLogs } = await supabase
-            .from("surpluss_api_audit_log")
-            .select("id")
-            .eq("action", "sync_volunteer")
-            .eq("success", false)
-            .order("created_at", { ascending: false })
-            .limit(1);
-          if (recentLogs && recentLogs.length > 0) {
-            await supabase.from("surpluss_api_audit_log").update({ success: true }).eq("id", recentLogs[0].id);
-          }
+        } else if (
+          response.status === 409 ||
+          responseBody.includes("already exists") ||
+          responseBody.includes("already assigned")
+        ) {
+          // Volunteer exists on Surpluss but is NOT linked to this marketplace_event yet.
+          // Move them to bulk-update so the event linkage is sent. Do not flip the original
+          // failed audit row — record a separate row that documents the success.
+          previouslySyncedVolunteers.push(vol);
+          await supabase.from("surpluss_api_audit_log").insert({
+            action: "sync_volunteer_existing",
+            environment,
+            request_payload: { email: vol.email, marketplace_event_id: linkedMarketplaceEventId },
+            response_status: response.status,
+            response_body: { note: "Volunteer already exists on Surpluss; queued for bulk-update with event linkage." },
+            success: true,
+          });
         } else {
           totalFailed++;
           const reason = `${response.status} - ${responseBody.substring(0, 200)}`;
