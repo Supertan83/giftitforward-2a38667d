@@ -8,6 +8,7 @@ interface SyncResult {
   volunteers_failed: number;
   volunteers_skipped: number;
   volunteers_bulk_updated: number;
+  volunteers_attached_to_event: number;
   volunteers_total: number;
   volunteer_details: { name: string; status: string; reason?: string }[];
   family_total: number;
