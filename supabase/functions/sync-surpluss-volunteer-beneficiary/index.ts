@@ -694,6 +694,29 @@ serve(async (req) => {
         allErrors.push(`Surpluss events lookup error: ${err instanceof Error ? err.message : "Unknown"}`);
       }
 
+      // Build set of already-sent family members to avoid re-creating on every sync run.
+      // Family members have no email so Tractor cannot deduplicate them — we must do it here.
+      const alreadySentFamilyKeys = new Set<string>();
+      try {
+        const { data: familySyncLogs } = await supabase
+          .from("surpluss_api_audit_log")
+          .select("request_payload")
+          .eq("action", "sync_family_member")
+          .eq("environment", environment)
+          .eq("success", true);
+        for (const log of familySyncLogs || []) {
+          const p = log.request_payload as any;
+          if (p?.parent_volunteer_email && p?.name) {
+            alreadySentFamilyKeys.add(
+              `${String(p.parent_volunteer_email).toLowerCase()}::${String(p.name).toLowerCase()}`,
+            );
+          }
+        }
+        console.log(`Found ${alreadySentFamilyKeys.size} already-synced family members`);
+      } catch {
+        // Non-fatal: if audit lookup fails we proceed; 409 / already-exists handles true dups
+      }
+
       for (const mpId of marketplaceIdsToProcess) {
         console.log(`\n=== Processing Marketplace ID: ${mpId} ===`);
         const { data: marketplace } = await supabase.from("marketplace_events").select("*").eq("id", mpId).single();
@@ -933,6 +956,19 @@ serve(async (req) => {
             const volunteerName = `${vol.first_name || ""} ${vol.last_name || ""}`.trim();
 
             for (const dep of deps) {
+              // Skip family members that were successfully sent in a previous sync run.
+              // Without this check, email-less dependents would be re-created on every sync.
+              const famKey = `${String(vol.email || "").toLowerCase()}::${String(dep.name).toLowerCase()}`;
+              if (alreadySentFamilyKeys.has(famKey)) {
+                familySkipped++;
+                allVolunteerDetails.push({
+                  name: `${dep.name} (family of ${volunteerName})`,
+                  status: "skipped",
+                  reason: "Already synced",
+                });
+                continue;
+              }
+
               // Family member is linked to parent volunteer via parent_volunteer_email + relation_type.
               // Do NOT decorate the name (e.g. with "(Family)") — Surpluss uses the relation
               // metadata to associate the record with the parent, not the display name.
@@ -1020,9 +1056,9 @@ serve(async (req) => {
             }
           }
 
-          totalSent += familySent;
-          totalSkipped += familySkipped;
-          totalFailed += familyFailed;
+          // Family members are NOT counted in totalSent/totalSkipped/totalFailed —
+          // they are not linked to the marketplace event as volunteers and must not
+          // inflate the volunteers_attached_to_event metric.
           totalFamilyFound += familyTotalFound;
           totalFamilySent += familySent;
           totalFamilySkipped += familySkipped;
