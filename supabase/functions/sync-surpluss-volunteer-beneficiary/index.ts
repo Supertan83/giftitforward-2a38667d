@@ -62,9 +62,7 @@ function eventSlugMatchesMarketplace(
 
   if (flat === nameFlat) return true;
 
-  const slugTokens = slug
-    .split(/[-_\s]+/)
-    .filter((p) => p.length > 2 && !STOP_TOKENS.has(p) && !MONTHS.includes(p));
+  const slugTokens = slug.split(/[-_\s]+/).filter((p) => p.length > 2 && !STOP_TOKENS.has(p) && !MONTHS.includes(p));
   const nameLower = marketplaceName.toLowerCase();
   const tokenMatchCount = slugTokens.filter((t) => nameLower.includes(t)).length;
   const nameMatches = tokenMatchCount >= 2 || (slugTokens.length === 1 && nameLower.includes(slugTokens[0]));
@@ -85,10 +83,7 @@ function eventSlugMatchesMarketplace(
  * Paginated range fetcher to bypass PostgREST's default 1000-row cap.
  * Pass a thunk that returns a fresh query builder so .range() can be applied per page.
  */
-async function fetchAllRows<T = any>(
-  buildQuery: () => any,
-  pageSize = 1000,
-): Promise<T[]> {
+async function fetchAllRows<T = any>(buildQuery: () => any, pageSize = 1000): Promise<T[]> {
   const all: T[] = [];
   let from = 0;
   for (let i = 0; i < 1000; i++) {
@@ -325,7 +320,9 @@ serve(async (req) => {
     let volunteerHoursSync: Record<string, unknown> | null = null;
 
     // 1. Fetch marketplace events for slug resolution
-    const { data: marketplaceEvents } = await supabase.from("marketplace_events").select("id, name, external_id, event_date");
+    const { data: marketplaceEvents } = await supabase
+      .from("marketplace_events")
+      .select("id, name, external_id, event_date");
     const slugMap = buildEventSlugMap(marketplaceEvents || []);
     console.log(`Built slug map with ${slugMap.size} marketplace events`);
 
@@ -356,15 +353,15 @@ serve(async (req) => {
       marketplaceIdsToProcess.length === 1
         ? (marketplaceEvents || []).find((m: any) => m.id === marketplaceIdsToProcess[0])
         : null;
-    const linkedMarketplaceEventId = singleMarketplaceForSync?.external_id != null
-      ? Number(singleMarketplaceForSync.external_id)
-      : null;
+    const linkedMarketplaceEventId =
+      singleMarketplaceForSync?.external_id != null ? Number(singleMarketplaceForSync.external_id) : null;
 
-    // 2. Fetch all previously synced emails for deduplication
+    // 2. Fetch all previously synced emails for deduplication (scoped to this environment)
     const { data: previousSyncs } = await supabase
       .from("surpluss_api_audit_log")
       .select("request_payload")
       .eq("action", "sync_volunteer")
+      .eq("environment", environment)
       .eq("success", true);
 
     const alreadySyncedEmails = new Set<string>();
@@ -426,7 +423,8 @@ serve(async (req) => {
     console.log(`Mapped ${cardStatusByVolunteerId.size} volunteer card statuses`);
 
     // Use marketplace-specific card status when filtering by marketplace
-    const statusMap = marketplaceIdsToProcess.length > 0 ? cardStatusByVolunteerForMarketplace : cardStatusByVolunteerId;
+    const statusMap =
+      marketplaceIdsToProcess.length > 0 ? cardStatusByVolunteerForMarketplace : cardStatusByVolunteerId;
 
     let allEnrichedVolunteers = (allVolunteers || []).map((v: any) => ({
       ...v,
@@ -442,17 +440,26 @@ serve(async (req) => {
 
       allEnrichedVolunteers = allEnrichedVolunteers.filter((v: any) => {
         if (!v.events_list) return false;
-        const slugs = v.events_list.split(",").map((s: string) => normalizeSlug(s.trim())).filter(Boolean);
-        const rawSlugs = v.events_list.split(",").map((s: string) => s.trim()).filter(Boolean);
-        return marketplaceFilterRows.some((mp) =>
-          rawSlugs.some((slug: string) => eventSlugMatchesMarketplace(slug, mp.name, mp.event_date)) ||
-          slugs.some((slug: string) => {
-            const mpName = normalizeSlug(mp.name);
-            return mpName.includes(slug) || slug.includes(mpName);
-          }),
+        const slugs = v.events_list
+          .split(",")
+          .map((s: string) => normalizeSlug(s.trim()))
+          .filter(Boolean);
+        const rawSlugs = v.events_list
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        return marketplaceFilterRows.some(
+          (mp) =>
+            rawSlugs.some((slug: string) => eventSlugMatchesMarketplace(slug, mp.name, mp.event_date)) ||
+            slugs.some((slug: string) => {
+              const mpName = normalizeSlug(mp.name);
+              return mpName.includes(slug) || slug.includes(mpName);
+            }),
         );
       });
-      console.log(`Filtered volunteers: ${beforeCount} → ${allEnrichedVolunteers.length} (for ${marketplaceNamesForFilter.join(", ")})`);
+      console.log(
+        `Filtered volunteers: ${beforeCount} → ${allEnrichedVolunteers.length} (for ${marketplaceNamesForFilter.join(", ")})`,
+      );
     }
 
     const volunteers = allEnrichedVolunteers;
@@ -634,7 +641,7 @@ serve(async (req) => {
       const surplussEventsMap = new Map<string, number>();
 
       try {
-        const lookupUrl = `${baseUrl}/api/common/marketplace-events`;
+        const lookupUrl = `${baseUrl}/api/common/marketplace-events?limit=1000`;
         console.log(`\n🔍 Looking up Surpluss events from: ${lookupUrl}`);
         const lookupResp = await fetch(lookupUrl, { headers: apiHeaders });
         const lookupBody = await lookupResp.text();
@@ -706,9 +713,7 @@ serve(async (req) => {
         console.log(`✅ Marketplace found: ${marketplace.name}`);
 
         // Resolve Surpluss marketplace event ID first (same logic as demographics) — hours sync uses this id so titles need not match exactly.
-        let surplussEventId: number | null = marketplace.external_id != null
-          ? Number(marketplace.external_id)
-          : null;
+        let surplussEventId: number | null = marketplace.external_id != null ? Number(marketplace.external_id) : null;
         if (surplussEventId == null) {
           const targetName = normalize(marketplace.name);
           if (surplussEventsMap.has(targetName)) {
@@ -779,7 +784,10 @@ serve(async (req) => {
             const key = em.toLowerCase();
             if (hoursByEmail.has(key)) continue;
             if (!vol.events_list) continue;
-            const rawSlugs = vol.events_list.split(",").map((s: string) => s.trim()).filter(Boolean);
+            const rawSlugs = vol.events_list
+              .split(",")
+              .map((s: string) => s.trim())
+              .filter(Boolean);
             const matches = rawSlugs.some((slug: string) =>
               eventSlugMatchesMarketplace(slug, eventTitle, eventDateForMatch),
             );
@@ -810,7 +818,6 @@ serve(async (req) => {
             `Volunteer hours collection: ${hoursCollectErr instanceof Error ? hoursCollectErr.message : "Unknown"}`,
           );
         }
-
 
         // --- Demographics Update ---
 
@@ -915,7 +922,11 @@ serve(async (req) => {
           let familyTotalFound = 0;
 
           for (const vol of volunteers) {
-            const deps = extractDependentsForMarketplace(vol.events_json, marketplaceNameForDeps, marketplaceEventDateForDeps);
+            const deps = extractDependentsForMarketplace(
+              vol.events_json,
+              marketplaceNameForDeps,
+              marketplaceEventDateForDeps,
+            );
             if (deps.length === 0) continue;
             familyTotalFound += deps.length;
 
@@ -985,10 +996,18 @@ serve(async (req) => {
                   allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "sent" });
                 } else if (responseBody.includes("already exists") || responseBody.includes("already assigned")) {
                   familySkipped++;
-                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "skipped", reason: "Already exists" });
+                  allVolunteerDetails.push({
+                    name: `${dep.name} (family of ${volunteerName})`,
+                    status: "skipped",
+                    reason: "Already exists",
+                  });
                 } else {
                   familyFailed++;
-                  allVolunteerDetails.push({ name: `${dep.name} (family of ${volunteerName})`, status: "failed", reason: `${response.status}` });
+                  allVolunteerDetails.push({
+                    name: `${dep.name} (family of ${volunteerName})`,
+                    status: "failed",
+                    reason: `${response.status}`,
+                  });
                 }
               } catch (depErr) {
                 familyFailed++;
@@ -1008,7 +1027,9 @@ serve(async (req) => {
           totalFamilySent += familySent;
           totalFamilySkipped += familySkipped;
           totalFamilyFailed += familyFailed;
-          console.log(`Family members for "${marketplaceNameForDeps}": found=${familyTotalFound}, sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`);
+          console.log(
+            `Family members for "${marketplaceNameForDeps}": found=${familyTotalFound}, sent=${familySent}, skipped=${familySkipped}, failed=${familyFailed}`,
+          );
         } catch (familyErr) {
           console.error("Family member sync error:", familyErr);
           allErrors.push(`Family member sync: ${familyErr instanceof Error ? familyErr.message : "Unknown"}`);
