@@ -849,8 +849,8 @@ export const MarketplaceReports = ({
           {qrVolunteer && (
             <div className="space-y-4">
               <div className="flex justify-center bg-white p-4 rounded-lg border border-border">
-                {qrVolunteer.cardId ? (
-                  <QRCodeSVG value={qrVolunteer.cardId} size={220} level="H" includeMargin />
+                {qrVolunteer.uniqueId ? (
+                  <QRCodeSVG value={qrVolunteer.uniqueId} size={220} level="H" includeMargin />
                 ) : (
                   <div className="py-12 text-center text-muted-foreground text-sm">
                     No QR card assigned
@@ -859,8 +859,8 @@ export const MarketplaceReports = ({
               </div>
               <div className="space-y-1.5 text-sm">
                 <p className="font-display font-semibold text-base text-foreground">{qrVolunteer.name}</p>
-                {qrVolunteer.cardId && (
-                  <p className="font-mono text-xs text-muted-foreground break-all">{qrVolunteer.cardId}</p>
+                {qrVolunteer.uniqueId && (
+                  <p className="font-mono text-xs text-muted-foreground break-all">{qrVolunteer.uniqueId}</p>
                 )}
                 <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
                   {qrVolunteer.category && (
