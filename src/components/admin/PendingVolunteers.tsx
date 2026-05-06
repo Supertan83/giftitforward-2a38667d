@@ -230,7 +230,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   });
   // Add event state
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
-  const [selectedEventToAdd, setSelectedEventToAdd] = useState<string>('');
+  const [selectedEventsToAdd, setSelectedEventsToAdd] = useState<string[]>([]);
+  const [isAddingEvents, setIsAddingEvents] = useState(false);
   // Remove event state
   const [showRemoveEventDialog, setShowRemoveEventDialog] = useState(false);
   const [eventToRemove, setEventToRemove] = useState<{ slug: string; name: string } | null>(null);
@@ -830,8 +831,6 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
-      setShowAddEventDialog(false);
-      setSelectedEventToAdd('');
       // Update local selected volunteer with new event
       if (selectedVolunteer) {
         const updatedVolunteer = volunteers.find(v => v.id === selectedVolunteer.id);
@@ -839,10 +838,6 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           setSelectedVolunteer(updatedVolunteer);
         }
       }
-      toast({
-        title: 'Event Added',
-        description: `${data.eventName} has been added to the volunteer's registration`,
-      });
     },
     onError: (error: Error) => {
       toast({
@@ -3232,77 +3227,126 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
       {/* Add Event Dialog */}
       <Dialog open={showAddEventDialog} onOpenChange={(open) => {
         setShowAddEventDialog(open);
-        if (!open) setSelectedEventToAdd('');
+        if (!open) setSelectedEventsToAdd([]);
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Event to Registration</DialogTitle>
+            <DialogTitle>Add Events to Registration</DialogTitle>
             <DialogDescription>
-              Select an event to add to {selectedVolunteer?.first_name}'s registration.
+              Select one or more events to add to {selectedVolunteer?.first_name}'s registration.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Select Event</Label>
-              <Select value={selectedEventToAdd} onValueChange={setSelectedEventToAdd}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an event..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {(() => {
-                    // Get current registered events
-                    const currentEvents = selectedVolunteer?.events_list
-                      ?.split(',')
-                      .map(e => formatEventName(e.trim())) || [];
-                    
-                    // Filter marketplaces to show only those not already registered
-                    const availableMarketplaces = marketplaces.filter(m => 
-                      !currentEvents.includes(m.name)
-                    );
-                    
-                    if (availableMarketplaces.length === 0) {
-                      return (
-                        <SelectItem value="none" disabled>
-                          No additional events available
-                        </SelectItem>
-                      );
-                    }
-                    
-                    return availableMarketplaces.map(marketplace => (
-                      <SelectItem key={marketplace.id} value={marketplace.name}>
-                        {marketplace.name}
-                        {marketplace.event_date && (
-                          <span className="text-muted-foreground ml-2">
-                            ({new Date(marketplace.event_date).toLocaleDateString()})
-                          </span>
-                        )}
-                      </SelectItem>
-                    ));
-                  })()}
-                </SelectContent>
-              </Select>
-            </div>
+            {(() => {
+              const currentEvents = selectedVolunteer?.events_list
+                ?.split(',')
+                .map(e => formatEventName(e.trim())) || [];
+              const availableMarketplaces = marketplaces.filter(m =>
+                !currentEvents.includes(m.name)
+              );
+              const allNames = availableMarketplaces.map(m => m.name);
+              const allSelected = allNames.length > 0 && allNames.every(n => selectedEventsToAdd.includes(n));
+
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Select Events</Label>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-muted-foreground">{selectedEventsToAdd.length} selected</span>
+                      {availableMarketplaces.length > 0 && (
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => setSelectedEventsToAdd(allSelected ? [] : allNames)}
+                        >
+                          {allSelected ? 'Clear all' : 'Select all'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {availableMarketplaces.length === 0 ? (
+                    <div className="rounded-md border p-4 text-sm text-muted-foreground text-center">
+                      No additional events available
+                    </div>
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
+                      {availableMarketplaces.map(marketplace => {
+                        const checked = selectedEventsToAdd.includes(marketplace.name);
+                        return (
+                          <label
+                            key={marketplace.id}
+                            className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-accent"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setSelectedEventsToAdd(prev =>
+                                  v ? [...prev, marketplace.name] : prev.filter(n => n !== marketplace.name)
+                                );
+                              }}
+                            />
+                            <div className="flex-1 text-sm">
+                              <span>{marketplace.name}</span>
+                              {marketplace.event_date && (
+                                <span className="text-muted-foreground ml-2">
+                                  ({new Date(marketplace.event_date).toLocaleDateString()})
+                                </span>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
-          
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddEventDialog(false)}>
+            <Button variant="outline" onClick={() => setShowAddEventDialog(false)} disabled={isAddingEvents}>
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                if (selectedVolunteer && selectedEventToAdd) {
-                  const mkt = marketplaces.find(m => m.name === selectedEventToAdd);
-                  addEventMutation.mutate({
-                    pendingId: selectedVolunteer.id,
-                    eventName: selectedEventToAdd,
-                    marketplace: mkt ? { name: mkt.name, event_date: mkt.event_date, start_time: mkt.start_time, end_time: mkt.end_time, location: mkt.location } : undefined
+              onClick={async () => {
+                if (!selectedVolunteer || selectedEventsToAdd.length === 0) return;
+                setIsAddingEvents(true);
+                let successCount = 0;
+                const failed: string[] = [];
+                for (const name of selectedEventsToAdd) {
+                  const mkt = marketplaces.find(m => m.name === name);
+                  try {
+                    await addEventMutation.mutateAsync({
+                      pendingId: selectedVolunteer.id,
+                      eventName: name,
+                      marketplace: mkt ? { name: mkt.name, event_date: mkt.event_date, start_time: mkt.start_time, end_time: mkt.end_time, location: mkt.location } : undefined
+                    });
+                    successCount++;
+                  } catch (e) {
+                    failed.push(name);
+                  }
+                }
+                setIsAddingEvents(false);
+                setShowAddEventDialog(false);
+                setSelectedEventsToAdd([]);
+                if (successCount > 0) {
+                  toast({
+                    title: successCount === 1 ? 'Event Added' : 'Events Added',
+                    description: `${successCount} event${successCount === 1 ? '' : 's'} added to ${selectedVolunteer.first_name}'s registration${failed.length ? ` (${failed.length} failed)` : ''}`,
+                  });
+                } else if (failed.length) {
+                  toast({
+                    title: 'Failed to Add Events',
+                    description: `Could not add: ${failed.join(', ')}`,
+                    variant: 'destructive',
                   });
                 }
               }}
-              disabled={!selectedEventToAdd || addEventMutation.isPending}
+              disabled={selectedEventsToAdd.length === 0 || isAddingEvents}
             >
-              {addEventMutation.isPending ? (
+              {isAddingEvents ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Adding...
@@ -3310,7 +3354,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
               ) : (
                 <>
                   <Check className="w-4 h-4 mr-2" />
-                  Add Event
+                  {selectedEventsToAdd.length > 1 ? `Add ${selectedEventsToAdd.length} Events` : 'Add Event'}
                 </>
               )}
             </Button>
