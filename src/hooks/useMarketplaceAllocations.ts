@@ -600,10 +600,15 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
 
 // Fetch volunteer data via attendance records (per-marketplace source of truth)
-      const { data: attendanceRecords } = await supabase
+      const { data: attendanceRecordsRaw } = await supabase
         .from('volunteer_attendance')
-        .select('*, volunteer_qr_cards(id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender, events_json))')
-        .eq('marketplace_id', marketplaceId);
+        .select('*, volunteer_qr_cards(id, unique_id, status, volunteer_id, deleted_at, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender, events_json))')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null);
+      // Filter out attendance whose parent card has been soft-deleted
+      const attendanceRecords = (attendanceRecordsRaw || []).filter(
+        (a: any) => !a.volunteer_qr_cards || a.volunteer_qr_cards.deleted_at == null
+      );
 
       // Group attendance by volunteer_card_id and sum hours per volunteer for THIS marketplace
       const volCardMap = new Map<string, {
@@ -654,7 +659,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const { data: assignedCards } = await supabase
         .from('volunteer_qr_cards')
         .select('id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender, events_json)')
-        .eq('marketplace_id', marketplaceId);
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null);
 
       // Add any assigned volunteers who don't have attendance records yet
       for (const card of assignedCards || []) {
