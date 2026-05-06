@@ -48,6 +48,7 @@ export const MarketplaceReports = ({
   } | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [qrVolunteer, setQrVolunteer] = useState<any | null>(null);
   const [deletingVolunteer, setDeletingVolunteer] = useState<{
     cardId?: string;
     volunteerId?: string;
