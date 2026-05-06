@@ -230,7 +230,8 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   });
   // Add event state
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
-  const [selectedEventToAdd, setSelectedEventToAdd] = useState<string>('');
+  const [selectedEventsToAdd, setSelectedEventsToAdd] = useState<string[]>([]);
+  const [isAddingEvents, setIsAddingEvents] = useState(false);
   // Remove event state
   const [showRemoveEventDialog, setShowRemoveEventDialog] = useState(false);
   const [eventToRemove, setEventToRemove] = useState<{ slug: string; name: string } | null>(null);
