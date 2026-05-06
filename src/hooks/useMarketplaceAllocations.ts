@@ -692,6 +692,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           company,
           gender: vol.gender || null,
           cardId: entry.cardId,
+          uniqueId: cardUniqueId,
           checkedInAt: entry.checkedInAt,
           checkedOutAt: entry.checkedOutAt,
         });
