@@ -5,7 +5,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { VolunteerBulkHoursEditDialog, type BulkVolunteerEditTarget } from './VolunteerBulkHoursEditDialog';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, Trash2, GraduationCap } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, Trash2, GraduationCap, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketplaces } from '@/hooks/useSupabaseData';
@@ -46,6 +48,7 @@ export const MarketplaceReports = ({
   } | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [qrVolunteer, setQrVolunteer] = useState<any | null>(null);
   const [deletingVolunteer, setDeletingVolunteer] = useState<{
     cardId?: string;
     volunteerId?: string;
@@ -641,11 +644,12 @@ export const MarketplaceReports = ({
                           <table className="w-full text-sm table-fixed">
                             <colgroup>
                               <col className="w-[5%]" />
-                              <col className="w-[22%]" />
-                              <col className="w-[15%]" />
-                              <col className="w-[15%]" />
-                              <col className="w-[15%]" />
+                              <col className="w-[20%]" />
+                              <col className="w-[8%]" />
+                              <col className="w-[13%]" />
                               <col className="w-[14%]" />
+                              <col className="w-[13%]" />
+                              <col className="w-[13%]" />
                               <col className="w-[14%]" />
                             </colgroup>
                             <thead>
@@ -654,6 +658,7 @@ export const MarketplaceReports = ({
                                   <Checkbox checked={allSelected ? true : (someSelected ? 'indeterminate' : false)} onCheckedChange={toggleAll} aria-label="Select all" />
                                 </th>
                                 <th className="text-left py-3 px-2 font-medium">Name</th>
+                                <th className="text-center py-3 px-2 font-medium">QR Code</th>
                                 <th className="text-left py-3 px-2 font-medium">Category</th>
                                 <th className="text-left py-3 px-2 font-medium">Company</th>
                                 <th className="text-left py-3 px-2 font-medium">Status</th>
@@ -673,6 +678,15 @@ export const MarketplaceReports = ({
                                     )}
                                   </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
+                                  <td className="py-2.5 px-2 text-center">
+                                    {cid ? (
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
+                                        <QrCode className="w-4 h-4 text-primary" />
+                                      </Button>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </td>
                                   <td className="py-2.5 px-2 text-muted-foreground text-xs">{vol.category}</td>
                                   <td className="py-2.5 px-2 text-muted-foreground text-xs truncate">{vol.company}</td>
                                   <td className="py-2.5 px-2">
@@ -732,6 +746,11 @@ export const MarketplaceReports = ({
                                   }`}>
                                     {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
                                   </span>
+                                  {cid && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
+                                      <QrCode className="w-3 h-3 text-primary" />
+                                    </Button>
+                                  )}
                                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingVolunteer({
                                     cardId: vol.cardId,
                                     name: vol.name,
@@ -822,5 +841,58 @@ export const MarketplaceReports = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={!!qrVolunteer} onOpenChange={(open) => { if (!open) setQrVolunteer(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Volunteer QR Code</DialogTitle>
+          </DialogHeader>
+          {qrVolunteer && (
+            <div className="space-y-4">
+              <div className="flex justify-center bg-white p-4 rounded-lg border border-border">
+                {qrVolunteer.cardId ? (
+                  <QRCodeSVG value={qrVolunteer.cardId} size={220} level="H" includeMargin />
+                ) : (
+                  <div className="py-12 text-center text-muted-foreground text-sm">
+                    No QR card assigned
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <p className="font-display font-semibold text-base text-foreground">{qrVolunteer.name}</p>
+                {qrVolunteer.cardId && (
+                  <p className="font-mono text-xs text-muted-foreground break-all">{qrVolunteer.cardId}</p>
+                )}
+                <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
+                  {qrVolunteer.category && (
+                    <div><span className="text-muted-foreground">Category:</span> <span className="text-foreground">{qrVolunteer.category}</span></div>
+                  )}
+                  {qrVolunteer.company && (
+                    <div><span className="text-muted-foreground">Company:</span> <span className="text-foreground">{qrVolunteer.company}</span></div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Status:</span>{' '}
+                    <span className={`px-2 py-0.5 rounded-full ${
+                      qrVolunteer.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
+                      qrVolunteer.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {qrVolunteer.status === 'checked_in' ? 'Checked In' : qrVolunteer.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
+                    </span>
+                  </div>
+                  {qrVolunteer.hoursWorked > 0 && (
+                    <div><span className="text-muted-foreground">Hours:</span> <span className="text-foreground">{qrVolunteer.hoursWorked.toFixed(1)}h</span></div>
+                  )}
+                  {qrVolunteer.checkedInAt && (
+                    <div className="col-span-2"><span className="text-muted-foreground">Checked in:</span> <span className="text-foreground">{new Date(qrVolunteer.checkedInAt).toLocaleString()}</span></div>
+                  )}
+                  {qrVolunteer.checkedOutAt && (
+                    <div className="col-span-2"><span className="text-muted-foreground">Checked out:</span> <span className="text-foreground">{new Date(qrVolunteer.checkedOutAt).toLocaleString()}</span></div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>;
 };
