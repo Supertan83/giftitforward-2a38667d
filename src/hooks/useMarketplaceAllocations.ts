@@ -802,8 +802,9 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
         // Only add dependents not already covered by family QR card rows
         const dependentsToAdd = dependents.slice(existingFamilyCardCount);
-        for (const dep of dependentsToAdd) {
+        dependentsToAdd.forEach((dep, depIdx) => {
           actualFamilyCount++;
+          const famCard = familyCards[depIdx];
           volunteerList.push({
             name: `${dep.name} (Family)`,
             status: 'registered',
@@ -811,7 +812,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
             category: categoryKey,
             company,
             gender: dep.gender || null,
-            cardId: '',
+            cardId: famCard?.id || '',
             checkedInAt: null,
             checkedOutAt: null,
             volunteerId: fv.id,
