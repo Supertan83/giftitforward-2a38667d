@@ -679,7 +679,7 @@ export const MarketplaceReports = ({
                                   </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
                                   <td className="py-2.5 px-2 text-center">
-                                    {cid ? (
+                                    {vol.uniqueId ? (
                                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
                                         <QrCode className="w-4 h-4 text-primary" />
                                       </Button>
