@@ -827,7 +827,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           if (dep.gender?.toLowerCase() === 'male') cat.male++;
           if (dep.gender?.toLowerCase() === 'female') cat.female++;
           cat.companies.set(company, (cat.companies.get(company) || 0) + 1);
-        }
+        });
       }
 
       // Also count family cards already in the volCardMap
