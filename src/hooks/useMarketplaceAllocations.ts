@@ -779,6 +779,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
             company,
             gender: fv.gender || null,
             cardId: primaryCard?.id || '',
+            uniqueId: primaryCard?.unique_id || '',
             checkedInAt: null,
             checkedOutAt: null,
             volunteerId: fv.id,
