@@ -658,7 +658,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       const volunteerList: Array<{
         name: string; status: string; hoursWorked: number; category: string; company: string; gender: string | null;
-        cardId: string; checkedInAt: string | null; checkedOutAt: string | null;
+        cardId: string; uniqueId?: string; checkedInAt: string | null; checkedOutAt: string | null;
         volunteerId?: string; dependentName?: string;
       }> = [];
 
