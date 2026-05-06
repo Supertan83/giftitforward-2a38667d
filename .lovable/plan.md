@@ -1,27 +1,84 @@
 ## Problem
 
-In the new "QR Code" popup on the admin **Marketplace Reports → Volunteer List**, the QR is generated from `vol.cardId`, which is the `volunteer_qr_cards.id` (a UUID). The scanner pipeline (e.g. `QRScanner`, entrance/exit zones) matches on the card's `unique_id` (the human-readable code stored in `qr_cards.unique_id` / `volunteer_qr_cards.unique_id`). So when an admin scans the popup QR, lookup fails → "failed".
+When an admin adds a volunteer to the **Afternoon** shift of a marketplace via *Volunteers Added → Profile → Add Event*, the volunteer also shows up under the **Morning** shift of the same marketplace in the Marketplace Reports / Allocations view.
 
-All other QR rendering in the app uses `unique_id` (see `VolunteerQRCardsViewer.tsx` line 671 and `VolunteerQRCodeGenerator.tsx`).
+Root cause is in `src/hooks/useMarketplaceAllocations.ts → eventSlugMatchesMarketplace()`, which is the matcher used to decide which marketplace a volunteer's `events_list` slug belongs to.
+
+```ts
+const STOP_TOKENS = new Set([
+  'the','and','for','marketplace','event',
+  'morning','afternoon','evening',          // ← time-slot tokens stripped
+  'day','first','second','third','half','part'
+]);
+```
+
+The matcher then:
+1. Splits the slug into tokens, removes stop words and month names.
+2. Says it matches if ≥2 remaining tokens are substrings of the marketplace name.
+3. If the marketplace has a date and the slug encodes a date, requires them to match.
+
+For the *Inclusive Community Family And People Of Determination Marketplace*, the **Morning Event** and **Afternoon Event** rows in `marketplace_events` share the same date and almost all words. The only distinguishing tokens are `morning` / `afternoon`, but those are explicitly stripped as stop words. So a slug containing `…-afternoon-event` matches **both** marketplace rows → the volunteer appears under both shifts.
+
+The same root cause explains the previously-noticed *Mens Aviation MP* duplication.
+
+The webhook receiver already handles this conflict during marketplace creation (see memory: "Webhook Marketplace Processing Logic" → `hasConflictingTimeSlot`), but the client-side matcher used for reporting/allocations does not.
 
 ## Fix
 
-Surface the card's `unique_id` alongside `cardId` in the volunteer list, then render the QR from `unique_id`.
+Update `eventSlugMatchesMarketplace` in `src/hooks/useMarketplaceAllocations.ts` to enforce time-slot agreement when either side uses a time-slot keyword.
 
-### 1. `src/hooks/useMarketplaceAllocations.ts`
-- Extend the `volunteerList` row type to include `uniqueId?: string`.
-- Wherever a row is built with `cardId`, also populate `uniqueId` from the same source:
-  - Active rows: from `attendanceRecords[*].volunteer_qr_cards.unique_id` (already loaded in `volCardMap` enrichment block).
-  - Inactive rows: from the matched `volunteer_qr_cards.unique_id` (primary + family) added in the previous change.
-- No DB changes.
+### 1. Add a small helper
 
-### 2. `src/components/admin/MarketplaceReports.tsx`
-- Update the local volunteer row type to include `uniqueId?: string`.
-- In the QR popup `<Dialog>`:
-  - Render `<QRCodeSVG value={qrVolunteer.uniqueId} ... />` instead of `cardId`.
-  - Show `uniqueId` (mono, small) under the name as the human-readable card code; keep `cardId` out of the UI (internal UUID, not useful to staff).
-  - Disable the QR icon button when `uniqueId` is missing (instead of `cardId`), and show the "No QR card assigned" empty state in the popup when `uniqueId` is missing.
+```ts
+const TIME_SLOT_GROUPS: string[][] = [
+  ['morning'],
+  ['afternoon'],
+  ['evening'],
+  ['first half', 'first-half', 'firsthalf'],
+  ['second half', 'second-half', 'secondhalf'],
+  ['day 2', 'day-2', 'day2'],
+  ['day 3', 'day-3', 'day3'],
+];
+
+function detectTimeSlot(text: string): string | null {
+  const t = text.toLowerCase();
+  for (const group of TIME_SLOT_GROUPS) {
+    if (group.some(k => t.includes(k))) return group[0]; // canonical key
+  }
+  return null;
+}
+```
+
+### 2. Use it inside `eventSlugMatchesMarketplace`
+
+After the existing token-overlap check, before returning `true`:
+
+```ts
+const slugSlot = detectTimeSlot(slug);
+const nameSlot = detectTimeSlot(marketplaceName);
+
+// If either side declares a time slot, both must agree.
+// (If only one declares one, treat as mismatch — they are clearly different shifts.)
+if (slugSlot || nameSlot) {
+  if (slugSlot !== nameSlot) return false;
+}
+```
+
+This means:
+- Slug `…-afternoon-event` will no longer match a marketplace named `… - Morning Event`.
+- Slug with no time slot will no longer accidentally match a marketplace that explicitly says "Morning Event" (and vice versa) — which is the safer behaviour for shift-split marketplaces.
+- Marketplaces with no shift split (no morning/afternoon/etc. in the name) are unaffected.
+
+### 3. Keep the existing date check
+
+The existing date check stays as a second guard. Together: token overlap **and** date (when present) **and** time-slot agreement.
 
 ### Out of scope
-- No changes to the scanner, DB, or RLS.
-- No new columns; purely wiring the correct field through the existing data flow.
+- No DB changes, no edits to existing `events_list` / `events_json` data.
+- No changes to `webhook-receiver` (already handles this on the write path).
+- No changes to `PendingVolunteers.tsx → addEventMutation`; the slug it generates from `eventName.toLowerCase().replace(/\s+/g, '-')` already contains `morning` / `afternoon` when the marketplace name does, so the new matcher will disambiguate correctly.
+
+### Verification
+- Add Sarah to *Inclusive Community … Marketplace - Afternoon Event* via Add Event.
+- Confirm she appears only in the Afternoon row in Marketplace Reports / allocations, not the Morning row.
+- Spot-check Mens Aviation MP (morning vs afternoon) and any "First Half / Second Half" marketplace.
