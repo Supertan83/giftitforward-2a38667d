@@ -746,6 +746,11 @@ export const MarketplaceReports = ({
                                   }`}>
                                     {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
                                   </span>
+                                  {cid && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
+                                      <QrCode className="w-3 h-3 text-primary" />
+                                    </Button>
+                                  )}
                                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingVolunteer({
                                     cardId: vol.cardId,
                                     name: vol.name,
