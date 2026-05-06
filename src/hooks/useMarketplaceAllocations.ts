@@ -743,8 +743,27 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       let actualFamilyCount = 0;
 
+      // Fetch any existing QR cards for the form-registered volunteers (across all marketplaces)
+      // so "inactive" rows can still display a scannable QR code.
+      const formVolIds = formRegisteredVolunteers.map(v => v.id);
+      const cardsByFormVolId = new Map<string, Array<{ id: string; unique_id: string }>>();
+      if (formVolIds.length > 0) {
+        const { data: anyCards } = await supabase
+          .from('volunteer_qr_cards')
+          .select('id, unique_id, volunteer_id')
+          .in('volunteer_id', formVolIds);
+        for (const c of anyCards || []) {
+          if (!c.volunteer_id) continue;
+          if (!cardsByFormVolId.has(c.volunteer_id)) cardsByFormVolId.set(c.volunteer_id, []);
+          cardsByFormVolId.get(c.volunteer_id)!.push({ id: c.id, unique_id: c.unique_id });
+        }
+      }
+
       for (const fv of formRegisteredVolunteers) {
         const alreadyInCards = volIdsInCardMap.has(fv.id);
+        const fallbackCards = cardsByFormVolId.get(fv.id) || [];
+        const primaryCard = fallbackCards.find(c => !/-F\d+/.test(c.unique_id)) || fallbackCards[0];
+        const familyCards = fallbackCards.filter(c => /-F\d+/.test(c.unique_id));
 
         const { categoryKey } = classifyVolunteer(fv);
         const company = resolveCompanyName(fv);
