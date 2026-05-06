@@ -658,7 +658,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
 
       const volunteerList: Array<{
         name: string; status: string; hoursWorked: number; category: string; company: string; gender: string | null;
-        cardId: string; checkedInAt: string | null; checkedOutAt: string | null;
+        cardId: string; uniqueId?: string; checkedInAt: string | null; checkedOutAt: string | null;
         volunteerId?: string; dependentName?: string;
       }> = [];
 
@@ -692,6 +692,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           company,
           gender: vol.gender || null,
           cardId: entry.cardId,
+          uniqueId: cardUniqueId,
           checkedInAt: entry.checkedInAt,
           checkedOutAt: entry.checkedOutAt,
         });
@@ -778,6 +779,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
             company,
             gender: fv.gender || null,
             cardId: primaryCard?.id || '',
+            uniqueId: primaryCard?.unique_id || '',
             checkedInAt: null,
             checkedOutAt: null,
             volunteerId: fv.id,
@@ -813,6 +815,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
             company,
             gender: dep.gender || null,
             cardId: famCard?.id || '',
+            uniqueId: famCard?.unique_id || '',
             checkedInAt: null,
             checkedOutAt: null,
             volunteerId: fv.id,

@@ -1,30 +1,27 @@
-## Add QR Code Column to Volunteer List
+## Problem
 
-Add a new "QR Code" column to the Volunteer List table in `src/components/admin/MarketplaceReports.tsx`. Each row gets a small QR icon button; clicking it opens a popup dialog showing the volunteer's QR code (rendered from their `cardId`) along with their info (name, category, company, status, hours, check-in/out times).
+In the new "QR Code" popup on the admin **Marketplace Reports → Volunteer List**, the QR is generated from `vol.cardId`, which is the `volunteer_qr_cards.id` (a UUID). The scanner pipeline (e.g. `QRScanner`, entrance/exit zones) matches on the card's `unique_id` (the human-readable code stored in `qr_cards.unique_id` / `volunteer_qr_cards.unique_id`). So when an admin scans the popup QR, lookup fails → "failed".
 
-### Changes
+All other QR rendering in the app uses `unique_id` (see `VolunteerQRCardsViewer.tsx` line 671 and `VolunteerQRCodeGenerator.tsx`).
 
-**File: `src/components/admin/MarketplaceReports.tsx`**
+## Fix
 
-1. Import `QRCodeSVG` from `qrcode.react` and the `QrCode` icon from `lucide-react`. Import `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle` from `@/components/ui/dialog`.
-2. Add state: `const [qrVolunteer, setQrVolunteer] = useState<any | null>(null);`
-3. Update the desktop table:
-   - Adjust `<colgroup>` widths to fit 8 columns (e.g. 5 / 20 / 13 / 14 / 13 / 10 / 12 / 13).
-   - Add a new `<th>` "QR Code" between Status and Hours (or right after Name — placing it after **Name** matches the user's screenshot context best — final placement: right after Name column).
-   - In each row, add a `<td>` with a ghost icon `Button` containing the `QrCode` icon. Disabled when `vol.cardId` is missing. `onClick={() => setQrVolunteer(vol)}`.
-4. Update the mobile card layout: add a small QR icon button next to the Edit/Delete buttons, same disabled rule and click handler.
-5. Add a `<Dialog>` at the bottom of the component (next to existing dialogs):
-   - Open when `qrVolunteer` is truthy.
-   - Content: centered `QRCodeSVG value={qrVolunteer.cardId} size={220}` with margin, then volunteer info block: name (bold), card ID (mono, small), category, company, status badge, hours, and check-in/check-out timestamps if present.
-   - If `cardId` is missing, show a "No QR card assigned" empty state instead of the QR.
+Surface the card's `unique_id` alongside `cardId` in the volunteer list, then render the QR from `unique_id`.
 
-### Technical Notes
+### 1. `src/hooks/useMarketplaceAllocations.ts`
+- Extend the `volunteerList` row type to include `uniqueId?: string`.
+- Wherever a row is built with `cardId`, also populate `uniqueId` from the same source:
+  - Active rows: from `attendanceRecords[*].volunteer_qr_cards.unique_id` (already loaded in `volCardMap` enrichment block).
+  - Inactive rows: from the matched `volunteer_qr_cards.unique_id` (primary + family) added in the previous change.
+- No DB changes.
 
-- `qrcode.react` is already a project dependency (used in `VolunteerQRCardsViewer.tsx` and `VolunteerQRCodeGenerator.tsx`).
-- `vol.cardId` is the QR unique ID encoded into the QR (matches existing pattern in `VolunteerQRCardsViewer.tsx`).
-- No DB or backend changes required — purely UI.
+### 2. `src/components/admin/MarketplaceReports.tsx`
+- Update the local volunteer row type to include `uniqueId?: string`.
+- In the QR popup `<Dialog>`:
+  - Render `<QRCodeSVG value={qrVolunteer.uniqueId} ... />` instead of `cardId`.
+  - Show `uniqueId` (mono, small) under the name as the human-readable card code; keep `cardId` out of the UI (internal UUID, not useful to staff).
+  - Disable the QR icon button when `uniqueId` is missing (instead of `cardId`), and show the "No QR card assigned" empty state in the popup when `uniqueId` is missing.
 
-### Out of Scope
-
-- Printing / downloading the QR from the popup (can be added later if needed).
-- Bulk QR export from this view.
+### Out of scope
+- No changes to the scanner, DB, or RLS.
+- No new columns; purely wiring the correct field through the existing data flow.

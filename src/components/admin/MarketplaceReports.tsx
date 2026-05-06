@@ -679,7 +679,7 @@ export const MarketplaceReports = ({
                                   </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
                                   <td className="py-2.5 px-2 text-center">
-                                    {cid ? (
+                                    {vol.uniqueId ? (
                                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
                                         <QrCode className="w-4 h-4 text-primary" />
                                       </Button>
@@ -746,7 +746,7 @@ export const MarketplaceReports = ({
                                   }`}>
                                     {vol.status === 'checked_in' ? 'Checked In' : vol.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
                                   </span>
-                                  {cid && (
+                                  {vol.uniqueId && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
                                       <QrCode className="w-3 h-3 text-primary" />
                                     </Button>
@@ -849,8 +849,8 @@ export const MarketplaceReports = ({
           {qrVolunteer && (
             <div className="space-y-4">
               <div className="flex justify-center bg-white p-4 rounded-lg border border-border">
-                {qrVolunteer.cardId ? (
-                  <QRCodeSVG value={qrVolunteer.cardId} size={220} level="H" includeMargin />
+                {qrVolunteer.uniqueId ? (
+                  <QRCodeSVG value={qrVolunteer.uniqueId} size={220} level="H" includeMargin />
                 ) : (
                   <div className="py-12 text-center text-muted-foreground text-sm">
                     No QR card assigned
@@ -859,8 +859,8 @@ export const MarketplaceReports = ({
               </div>
               <div className="space-y-1.5 text-sm">
                 <p className="font-display font-semibold text-base text-foreground">{qrVolunteer.name}</p>
-                {qrVolunteer.cardId && (
-                  <p className="font-mono text-xs text-muted-foreground break-all">{qrVolunteer.cardId}</p>
+                {qrVolunteer.uniqueId && (
+                  <p className="font-mono text-xs text-muted-foreground break-all">{qrVolunteer.uniqueId}</p>
                 )}
                 <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
                   {qrVolunteer.category && (
