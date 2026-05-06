@@ -40,6 +40,28 @@ function extractDateFromEventSlug(slug: string): { month: number; day: number } 
   return null;
 }
 
+// Time-slot disambiguation: when a marketplace is split into Morning/Afternoon
+// (or First Half/Second Half, Day 2, etc.), the slug and marketplace name must
+// agree on the slot — otherwise an "afternoon" volunteer leaks into the
+// "morning" row because every other token matches.
+const TIME_SLOT_GROUPS: string[][] = [
+  ['morning'],
+  ['afternoon'],
+  ['evening'],
+  ['first half', 'first-half', 'firsthalf'],
+  ['second half', 'second-half', 'secondhalf'],
+  ['day 2', 'day-2', 'day2'],
+  ['day 3', 'day-3', 'day3'],
+];
+
+function detectTimeSlot(text: string): string | null {
+  const t = text.toLowerCase();
+  for (const group of TIME_SLOT_GROUPS) {
+    if (group.some(k => t.includes(k))) return group[0];
+  }
+  return null;
+}
+
 export function eventSlugMatchesMarketplace(
   rawEventSlug: string,
   marketplaceName: string,
@@ -68,6 +90,12 @@ export function eventSlugMatchesMarketplace(
       if (m !== slugDate.month || d !== slugDate.day) return false;
     }
   }
+
+  // Time-slot agreement: if either side declares a slot, both must match.
+  const slugSlot = detectTimeSlot(slug);
+  const nameSlot = detectTimeSlot(marketplaceName);
+  if ((slugSlot || nameSlot) && slugSlot !== nameSlot) return false;
+
   return true;
 }
 
