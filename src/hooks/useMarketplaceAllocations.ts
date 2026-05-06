@@ -659,7 +659,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const { data: assignedCards } = await supabase
         .from('volunteer_qr_cards')
         .select('id, unique_id, status, volunteer_id, volunteer:pending_volunteers(id, first_name, last_name, is_employee, external_company, gender, events_json)')
-        .eq('marketplace_id', marketplaceId);
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null);
 
       // Add any assigned volunteers who don't have attendance records yet
       for (const card of assignedCards || []) {
