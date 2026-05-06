@@ -841,5 +841,58 @@ export const MarketplaceReports = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={!!qrVolunteer} onOpenChange={(open) => { if (!open) setQrVolunteer(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Volunteer QR Code</DialogTitle>
+          </DialogHeader>
+          {qrVolunteer && (
+            <div className="space-y-4">
+              <div className="flex justify-center bg-white p-4 rounded-lg border border-border">
+                {qrVolunteer.cardId ? (
+                  <QRCodeSVG value={qrVolunteer.cardId} size={220} level="H" includeMargin />
+                ) : (
+                  <div className="py-12 text-center text-muted-foreground text-sm">
+                    No QR card assigned
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <p className="font-display font-semibold text-base text-foreground">{qrVolunteer.name}</p>
+                {qrVolunteer.cardId && (
+                  <p className="font-mono text-xs text-muted-foreground break-all">{qrVolunteer.cardId}</p>
+                )}
+                <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
+                  {qrVolunteer.category && (
+                    <div><span className="text-muted-foreground">Category:</span> <span className="text-foreground">{qrVolunteer.category}</span></div>
+                  )}
+                  {qrVolunteer.company && (
+                    <div><span className="text-muted-foreground">Company:</span> <span className="text-foreground">{qrVolunteer.company}</span></div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Status:</span>{' '}
+                    <span className={`px-2 py-0.5 rounded-full ${
+                      qrVolunteer.status === 'checked_in' ? 'bg-emerald-500/10 text-emerald-600' :
+                      qrVolunteer.status === 'checked_out' ? 'bg-blue-500/10 text-blue-600' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {qrVolunteer.status === 'checked_in' ? 'Checked In' : qrVolunteer.status === 'checked_out' ? 'Checked Out' : 'Inactive'}
+                    </span>
+                  </div>
+                  {qrVolunteer.hoursWorked > 0 && (
+                    <div><span className="text-muted-foreground">Hours:</span> <span className="text-foreground">{qrVolunteer.hoursWorked.toFixed(1)}h</span></div>
+                  )}
+                  {qrVolunteer.checkedInAt && (
+                    <div className="col-span-2"><span className="text-muted-foreground">Checked in:</span> <span className="text-foreground">{new Date(qrVolunteer.checkedInAt).toLocaleString()}</span></div>
+                  )}
+                  {qrVolunteer.checkedOutAt && (
+                    <div className="col-span-2"><span className="text-muted-foreground">Checked out:</span> <span className="text-foreground">{new Date(qrVolunteer.checkedOutAt).toLocaleString()}</span></div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>;
 };
