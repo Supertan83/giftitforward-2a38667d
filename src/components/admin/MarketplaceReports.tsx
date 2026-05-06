@@ -644,11 +644,12 @@ export const MarketplaceReports = ({
                           <table className="w-full text-sm table-fixed">
                             <colgroup>
                               <col className="w-[5%]" />
-                              <col className="w-[22%]" />
-                              <col className="w-[15%]" />
-                              <col className="w-[15%]" />
-                              <col className="w-[15%]" />
+                              <col className="w-[20%]" />
+                              <col className="w-[8%]" />
+                              <col className="w-[13%]" />
                               <col className="w-[14%]" />
+                              <col className="w-[13%]" />
+                              <col className="w-[13%]" />
                               <col className="w-[14%]" />
                             </colgroup>
                             <thead>
@@ -657,6 +658,7 @@ export const MarketplaceReports = ({
                                   <Checkbox checked={allSelected ? true : (someSelected ? 'indeterminate' : false)} onCheckedChange={toggleAll} aria-label="Select all" />
                                 </th>
                                 <th className="text-left py-3 px-2 font-medium">Name</th>
+                                <th className="text-center py-3 px-2 font-medium">QR Code</th>
                                 <th className="text-left py-3 px-2 font-medium">Category</th>
                                 <th className="text-left py-3 px-2 font-medium">Company</th>
                                 <th className="text-left py-3 px-2 font-medium">Status</th>
