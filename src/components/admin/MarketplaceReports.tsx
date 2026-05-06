@@ -678,6 +678,15 @@ export const MarketplaceReports = ({
                                     )}
                                   </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
+                                  <td className="py-2.5 px-2 text-center">
+                                    {cid ? (
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrVolunteer(vol)} aria-label={`Show QR for ${vol.name}`}>
+                                        <QrCode className="w-4 h-4 text-primary" />
+                                      </Button>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </td>
                                   <td className="py-2.5 px-2 text-muted-foreground text-xs">{vol.category}</td>
                                   <td className="py-2.5 px-2 text-muted-foreground text-xs truncate">{vol.company}</td>
                                   <td className="py-2.5 px-2">
