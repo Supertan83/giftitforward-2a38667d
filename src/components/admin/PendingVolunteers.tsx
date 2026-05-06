@@ -831,8 +831,6 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
-      setShowAddEventDialog(false);
-      setSelectedEventToAdd('');
       // Update local selected volunteer with new event
       if (selectedVolunteer) {
         const updatedVolunteer = volunteers.find(v => v.id === selectedVolunteer.id);
@@ -840,10 +838,6 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
           setSelectedVolunteer(updatedVolunteer);
         }
       }
-      toast({
-        title: 'Event Added',
-        description: `${data.eventName} has been added to the volunteer's registration`,
-      });
     },
     onError: (error: Error) => {
       toast({
