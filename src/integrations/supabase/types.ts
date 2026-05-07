@@ -2226,6 +2226,7 @@ export type Database = {
         Args: { p_card_id: string; p_new_items_collected: number }
         Returns: Json
       }
+      admin_reset_qr_card: { Args: { p_unique_id: string }; Returns: Json }
       checkout_beneficiary_card: {
         Args: { p_unique_id: string }
         Returns: Json
