@@ -149,7 +149,6 @@ export const useCardStats = (marketplaceId: string) => {
         supabase
           .from('qr_cards')
           .select('*', { count: 'exact', head: true })
-          .eq('marketplace_id', marketplaceId)
           .eq('status', 'checked_out')
           .gte('updated_at', todayDubaiStartISO),
         supabase
