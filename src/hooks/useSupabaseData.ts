@@ -108,16 +108,23 @@ export const useQRCards = () => {
     }
   });
 
-  // Subscribe to realtime updates
+  // Subscribe to realtime updates (debounced to coalesce scan bursts)
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+      }, 1500);
+    };
     const channel = supabase
       .channel('qr_cards_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, scheduleInvalidate)
       .subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
@@ -131,16 +138,22 @@ export const useCardStats = (marketplaceId: string) => {
 
   useEffect(() => {
     if (!marketplaceId) return;
+    // Debounce realtime invalidations: bursts of qr_cards updates from a single
+    // batch scan would otherwise trigger N count queries per client.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        queryClient.invalidateQueries({ queryKey: ['card_stats', marketplaceId] });
+      }, 1500);
+    };
     const channel = supabase
       .channel(`card_stats_${marketplaceId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['card_stats', marketplaceId] });
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transactions' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['card_stats', marketplaceId] });
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, scheduleInvalidate)
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [marketplaceId, queryClient]);
