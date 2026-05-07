@@ -428,6 +428,20 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
                   <Badge variant="destructive" className="ml-auto text-xs">Limit Reached</Badge>
                 )}
               </div>
+              {card.status !== 'inactive' && (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetCard}
+                    disabled={resettingCard}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${resettingCard ? 'animate-spin' : ''}`} />
+                    {resettingCard ? 'Resetting...' : 'Reset to Ready'}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
