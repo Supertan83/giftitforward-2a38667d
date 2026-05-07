@@ -127,9 +127,29 @@ export const useQRCards = () => {
 
 // Lightweight card stats (counts only) for zone components
 export const useCardStats = (marketplaceId: string) => {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!marketplaceId) return;
+    const channel = supabase
+      .channel(`card_stats_${marketplaceId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['card_stats', marketplaceId] });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transactions' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['card_stats', marketplaceId] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [marketplaceId, queryClient]);
+
   return useQuery({
     queryKey: ['card_stats', marketplaceId],
-    staleTime: 15000,
+    staleTime: 0,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       // Compute "today" in Asia/Dubai (UTC+4) so on-site stats reset at midnight Dubai time,
       // not at 04:00 Dubai (which is UTC midnight).

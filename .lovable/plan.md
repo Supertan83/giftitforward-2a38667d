@@ -1,45 +1,40 @@
 ## Problem
 
-The Exit Zone "Checked Out" counter shows ~133 (or 80+ depending on time), but real check-outs today are under 50.
+The "Checked Out" tile updates only on the device that scanned the card (because that device manually invalidates `card_stats`). When **another device** activates a card at the Entrance, the Exit Zone tile stays the same — it only re-fetches when its own user does something or when the page reloads.
 
-## Root cause
+DB confirms the data itself is correct right now:
+- Construction Workers: **88 active cards** in `qr_cards`
+- All-marketplace active total: **94**
 
-Earlier today, a backfill migration ran:
-
-```sql
-UPDATE qr_cards
-SET marketplace_id = NULL, activated_at = NULL, updated_at = now()
-WHERE status = 'checked_out' AND ...;
-```
-
-This bumped `updated_at` on **every historical checked-out card** to today's timestamp. The current `useCardStats` query counts `status = 'checked_out' AND updated_at >= todayDubaiStart`, so it now counts every old card as if it were checked out today.
-
-DB confirms: 80+ cards have `status='checked_out'` with `updated_at` falling on today's Dubai date — but only the genuinely-checked-out-today subset should count.
+So the bug is purely a UI freshness problem, not a counting bug.
 
 ## Fix
 
-Switch the "Checked Out" stat to count from the `transactions` table (source of truth, immutable, has accurate `timestamp`) instead of relying on `qr_cards.updated_at` (which was rewritten by the backfill).
+Make the stats tile self-refresh, so any device sees up-to-date numbers without manual reload.
 
-Update the `checkedOutRes` block in `useCardStats` (`src/hooks/useSupabaseData.ts`) to:
+Two changes, both inside `src/hooks/useSupabaseData.ts` → `useCardStats`:
 
-```ts
-supabase
-  .from('transactions')
-  .select('*', { count: 'exact', head: true })
-  .eq('type', 'CheckOut')
-  .eq('marketplace_id', marketplaceId)
-  .gte('timestamp', todayDubaiStartISO)
+1. **Polling**: add `refetchInterval: 10000` and `refetchOnWindowFocus: true` so the tile refreshes every 10 s automatically and immediately when the operator returns to the tab. Drop `staleTime` to `0` so polled data is always shown fresh.
+
+2. **Realtime push**: subscribe to `qr_cards` and `transactions` postgres-changes inside a small effect-driven companion hook (or directly inside the React Query `queryFn` setup using `useEffect` + `supabase.channel`). On any insert/update event for the selected marketplace, call `queryClient.invalidateQueries(['card_stats', marketplaceId])`. This gives near-instant cross-device updates while polling acts as a safety net if the websocket drops.
+
+Realtime requires the two tables to be in the `supabase_realtime` publication. Add a migration:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.qr_cards;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
+ALTER TABLE public.qr_cards REPLICA IDENTITY FULL;
+ALTER TABLE public.transactions REPLICA IDENTITY FULL;
 ```
 
-Why this works:
-- `transactions` rows are inserted once at checkout and never mutated, so the backfill didn't touch them.
-- Each successful `checkout_beneficiary_card` RPC call inserts exactly one `CheckOut` transaction, so count = today's real check-outs.
-- Filtering by `marketplace_id` (preserved on the transaction row even though it's nulled on the card) scopes it to the active event.
+(If either table is already in the publication the `ADD TABLE` will no-op via `IF NOT EXISTS`-style guard in the migration.)
 
 ## Scope
 
-- One file: `src/hooks/useSupabaseData.ts`
-- One query (the `checkedOutRes` block inside `useCardStats`)
-- No DB migration, no RPC change, no UI change
+- `src/hooks/useSupabaseData.ts` — update `useCardStats` (polling + realtime subscription + invalidation)
+- One migration to enable realtime on `qr_cards` and `transactions`
+- No UI/component changes, no RPC changes, no other queries touched
 
-After the fix, the "Checked Out" tile will reflect today's actual check-out transaction count for the selected marketplace.
+After this:
+- Entrance, Exit, and Admin views all reflect the same live numbers within ~1 s of any check-in / check-out, regardless of which device performed it.
+- "Checked Out" goes up on every checkout, "Active Cards" goes up on every activation, both across all devices.
