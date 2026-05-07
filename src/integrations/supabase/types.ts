@@ -2222,6 +2222,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_beneficiary_card: {
+        Args: {
+          p_children_count?: number
+          p_gender?: string
+          p_marital_status?: string
+          p_marketplace_id?: string
+          p_nationality?: string
+          p_unique_id: string
+        }
+        Returns: Json
+      }
       admin_adjust_card_balance: {
         Args: { p_card_id: string; p_new_items_collected: number }
         Returns: Json

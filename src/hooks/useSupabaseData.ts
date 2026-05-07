@@ -264,80 +264,45 @@ export const useCardOperations = () => {
   };
 
   const activateCard = useMutation({
-    mutationFn: async ({ 
-      uniqueId, 
+    mutationFn: async ({
+      uniqueId,
       beneficiaryInfo,
-      marketplaceId 
-    }: { 
-      uniqueId: string; 
-      beneficiaryInfo?: { 
-        gender?: string; 
-        maritalStatus?: string; 
-        childrenCount?: number; 
-        nationality?: string; 
+      marketplaceId
+    }: {
+      uniqueId: string;
+      beneficiaryInfo?: {
+        gender?: string;
+        maritalStatus?: string;
+        childrenCount?: number;
+        nationality?: string;
       };
       marketplaceId?: string;
     }) => {
       const cleanId = sanitizeQRCode(uniqueId);
-      // Find card
-      const { data: card, error: findError } = await supabase
-        .from('qr_cards')
-        .select('*')
-        .ilike('unique_id', cleanId)
-        .maybeSingle();
-
-      if (findError || !card) throw new SafeError('Card not found');
-      
-      // BLOCK: If card is already active, prevent re-entry
-      if (card.status === 'active') {
-        throw new SafeError('Card already activated. This beneficiary has already entered the marketplace.');
-      }
-
-      // BLOCK: If card was already checked out today, prevent same-day reuse
-      if (card.status === 'checked_out') {
-        throw new SafeError('This card has already been used today. It will be available again tomorrow.');
-      }
-
-      // Update card with beneficiary info - start with 0 items collected (credit_balance = 0)
-      const updateData: Record<string, unknown> = {
-        status: 'active' as DbCardStatus,
-        credit_balance: 0, // Start with 0 items collected, limit is set per marketplace
-        total_items_collected: 0,
-        collected_items: [],
-        activated_at: new Date().toISOString()
-      };
-
-      if (marketplaceId) {
-        updateData.marketplace_id = marketplaceId;
-      }
-
-      if (beneficiaryInfo) {
-        updateData.gender = beneficiaryInfo.gender;
-        updateData.nationality = beneficiaryInfo.nationality;
-        if (beneficiaryInfo.maritalStatus) updateData.marital_status = beneficiaryInfo.maritalStatus;
-        if (beneficiaryInfo.childrenCount !== undefined) updateData.children_count = beneficiaryInfo.childrenCount;
-      }
-
-      const { data: updated, error: updateError } = await supabase
-        .from('qr_cards')
-        .update(updateData)
-        .eq('id', card.id)
-        .select()
-        .single();
-
-      if (updateError) throw new SafeError(mapDatabaseError(updateError), updateError);
-
-      // Create transaction
-      await supabase.from('transactions').insert({
-        card_id: card.id,
-        type: 'CheckIn' as DbTransactionType,
-        credit_change: 0
+      // Single atomic RPC: lookup + status guard + update + transaction insert.
+      // Replaces 3 sequential roundtrips and a non-indexed ILIKE that scanned all cards.
+      const { data, error } = await supabase.rpc('activate_beneficiary_card', {
+        p_unique_id: cleanId,
+        p_marketplace_id: marketplaceId ?? null,
+        p_gender: beneficiaryInfo?.gender ?? null,
+        p_marital_status: beneficiaryInfo?.maritalStatus ?? null,
+        p_nationality: beneficiaryInfo?.nationality ?? null,
+        p_children_count: beneficiaryInfo?.childrenCount ?? null,
       });
 
-      return updated;
+      if (error) throw new SafeError(mapDatabaseError(error), error);
+      return data as {
+        id: string;
+        unique_id: string;
+        credit_balance: number;
+        total_items_collected: number;
+        marketplace_id: string | null;
+      };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+      // Stats refresh is handled by the caller (lightweight card_stats query).
+      // Skip the heavy ['qr_cards'] invalidation here — it triggers a 2k+ row refetch
+      // on every scan and was a major contributor to scan latency.
     }
   });
 
