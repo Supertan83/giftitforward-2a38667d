@@ -1,23 +1,25 @@
-# Multi-select events when adding to a volunteer's registration
+## Fix: clear stale marketplace on checked-out cards
 
-## Goal
-In the "Add Event to Registration" dialog (Volunteers Added → volunteer profile → Add New Event), allow admins to select multiple marketplaces at once instead of just one.
+### Root cause
+`checkout_beneficiary_card` zeroes balances but leaves `marketplace_id` and `activated_at` pointing at the previous event, so the Card Status panel keeps displaying an old marketplace name. The same is true for `auto-unblock-cards` if it doesn't null those fields.
 
-## Changes (single file: `src/components/admin/PendingVolunteers.tsx`)
+### Changes
 
-1. **State**: Replace `selectedEventToAdd: string` with `selectedEventsToAdd: string[]`.
+**1. Migration — update `checkout_beneficiary_card` RPC**
+Add to the UPDATE inside the function:
+```
+marketplace_id = NULL,
+activated_at = NULL,
+```
+Everything else (transaction insert, return payload) stays the same. The `CheckOut` transaction row still records `v_card.marketplace_id` so history is preserved.
 
-2. **UI**: Replace the shadcn `Select` with a checkbox list inside a scrollable container (`max-h-72 overflow-y-auto` with bordered rows). Each row shows the marketplace name + date, same filtering rules (hide already-registered events). Add a small "X selected" counter and a "Select all / Clear" toggle for convenience.
+**2. Migration — one-time data cleanup**
+For all `qr_cards` where `status = 'checked_out'`, set `marketplace_id = NULL` and `activated_at = NULL`. Does not touch `inactive` or `active` cards, does not touch transactions, does not touch counts/credits.
 
-3. **Submit handler**: On click of "Add Events", iterate the selected names and call `addEventMutation.mutateAsync(...)` sequentially for each (sequential to keep the existing single-event mutation logic safe against concurrent reads of `events_list`/`events_json` for the same volunteer). After all complete, close the dialog, clear selection, and show one combined toast like "3 events added to Sarah's registration".
+**3. Verify `auto-unblock-cards` edge function**
+Read `supabase/functions/auto-unblock-cards/index.ts` and, if it resets cards without nulling `marketplace_id` / `activated_at`, add those two fields to its UPDATE so reset cards also display "None".
 
-4. **Button label/state**: 
-   - Button text: "Add Event" when 0–1 selected, "Add N Events" when >1.
-   - Disabled when `selectedEventsToAdd.length === 0` or while in-flight.
-
-5. **No backend changes**: `addEventMutation` already correctly merges into `events_list` and `events_json` and respects existing entries. Reusing it sequentially preserves the existing time-slot logic and avoids duplicating mutation code.
-
-## Out of scope
-- No schema, RLS, or edge function changes.
-- No changes to the "Remove event" flow or to the volunteer profile view.
-- No changes to time-slot matching logic introduced earlier.
+### Out of scope
+- No UI changes — the existing `marketplace?.name || 'None'` rendering already handles a null marketplace.
+- No changes to `transactions`, allocation counters, or any other RPC.
+- Active cards in today's marketplace are not touched.
