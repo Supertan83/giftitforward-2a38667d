@@ -108,16 +108,23 @@ export const useQRCards = () => {
     }
   });
 
-  // Subscribe to realtime updates
+  // Subscribe to realtime updates (debounced to coalesce scan bursts)
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
+      }, 1500);
+    };
     const channel = supabase
       .channel('qr_cards_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['qr_cards'] });
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_cards' }, scheduleInvalidate)
       .subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
