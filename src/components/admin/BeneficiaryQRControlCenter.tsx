@@ -266,6 +266,23 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
     lookupCard(code);
   };
 
+  const [resettingCard, setResettingCard] = useState(false);
+  const handleResetCard = async () => {
+    if (!card) return;
+    if (!confirm(`Reset card ${card.unique_id} to "Ready"?\n\nThis will clear:\n• Items collected (${card.total_items_collected})\n• Credit balance\n• Marketplace link\n\nThe card will become Ready for the next event. A CheckOut record is logged for history.`)) return;
+    setResettingCard(true);
+    try {
+      const { error } = await supabase.rpc('admin_reset_qr_card', { p_unique_id: card.unique_id });
+      if (error) throw error;
+      toast({ title: 'Card reset', description: `${card.unique_id} is now Ready.` });
+      await lookupCard(card.unique_id);
+    } catch (err: any) {
+      toast({ title: 'Reset failed', description: err.message || 'Could not reset card', variant: 'destructive' });
+    } finally {
+      setResettingCard(false);
+    }
+  };
+
   const handleAdjust = async () => {
     if (!card) return;
     const newVal = parseInt(adjustValue);
@@ -411,6 +428,20 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
                   <Badge variant="destructive" className="ml-auto text-xs">Limit Reached</Badge>
                 )}
               </div>
+              {card.status !== 'inactive' && (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetCard}
+                    disabled={resettingCard}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${resettingCard ? 'animate-spin' : ''}`} />
+                    {resettingCard ? 'Resetting...' : 'Reset to Ready'}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
