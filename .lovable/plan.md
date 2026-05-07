@@ -1,42 +1,45 @@
 ## Problem
 
-The "Checked Out" stat on the Exit Zone shows **0** even though 7–10 beneficiaries have been checked out. The "Still Active" counter (309) is correct.
+The Exit Zone "Checked Out" counter shows ~133 (or 80+ depending on time), but real check-outs today are under 50.
 
 ## Root cause
 
-Earlier today we fixed the Card Status panel by changing `checkout_beneficiary_card` to **null out `marketplace_id`** on checkout (so cards no longer show an old marketplace name).
+Earlier today, a backfill migration ran:
 
-The Exit Zone counter in `useCardStats` (src/hooks/useSupabaseData.ts) counts checked-out cards with this filter:
-
-```
-qr_cards
-  .eq('marketplace_id', selectedMarketplaceId)
-  .eq('status', 'checked_out')
-  .gte('updated_at', todayDubaiStart)
+```sql
+UPDATE qr_cards
+SET marketplace_id = NULL, activated_at = NULL, updated_at = now()
+WHERE status = 'checked_out' AND ...;
 ```
 
-Since today's checked-out cards now have `marketplace_id = NULL`, they no longer match `marketplace_id = selectedMarketplaceId` — so the count is always 0. The check-outs ARE happening (DB is updated, transactions are written); only the stat is wrong.
+This bumped `updated_at` on **every historical checked-out card** to today's timestamp. The current `useCardStats` query counts `status = 'checked_out' AND updated_at >= todayDubaiStart`, so it now counts every old card as if it were checked out today.
+
+DB confirms: 80+ cards have `status='checked_out'` with `updated_at` falling on today's Dubai date — but only the genuinely-checked-out-today subset should count.
 
 ## Fix
 
-Update the **`checkedOut` count query only** in `useCardStats` to drop the `marketplace_id` filter and rely on `status = 'checked_out'` + today's `updated_at` window (Asia/Dubai):
+Switch the "Checked Out" stat to count from the `transactions` table (source of truth, immutable, has accurate `timestamp`) instead of relying on `qr_cards.updated_at` (which was rewritten by the backfill).
 
-```
-qr_cards
-  .eq('status', 'checked_out')
-  .gte('updated_at', todayDubaiStart)
+Update the `checkedOutRes` block in `useCardStats` (`src/hooks/useSupabaseData.ts`) to:
+
+```ts
+supabase
+  .from('transactions')
+  .select('*', { count: 'exact', head: true })
+  .eq('type', 'CheckOut')
+  .eq('marketplace_id', marketplaceId)
+  .gte('timestamp', todayDubaiStartISO)
 ```
 
-This is safe because:
-- Only one marketplace event runs per day, so "checked out today" unambiguously means today's event.
-- Historical checked-out cards from previous days are excluded by the `updated_at >= today` filter.
-- The `Still Active` count is unchanged (active cards still have `marketplace_id` set).
-- The `todayCheckIns` count is unchanged (uses `activated_at`, which is set on check-in).
+Why this works:
+- `transactions` rows are inserted once at checkout and never mutated, so the backfill didn't touch them.
+- Each successful `checkout_beneficiary_card` RPC call inserts exactly one `CheckOut` transaction, so count = today's real check-outs.
+- Filtering by `marketplace_id` (preserved on the transaction row even though it's nulled on the card) scopes it to the active event.
 
 ## Scope
 
 - One file: `src/hooks/useSupabaseData.ts`
-- One query inside `useCardStats` (the `checkedOutRes` block)
+- One query (the `checkedOutRes` block inside `useCardStats`)
 - No DB migration, no RPC change, no UI change
 
-After the fix, the Exit Zone "Checked Out" tile will immediately reflect today's actual check-out count.
+After the fix, the "Checked Out" tile will reflect today's actual check-out transaction count for the selected marketplace.

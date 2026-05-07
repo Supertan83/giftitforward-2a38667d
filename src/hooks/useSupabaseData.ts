@@ -144,13 +144,15 @@ export const useCardStats = (marketplaceId: string) => {
           .select('*', { count: 'exact', head: true })
           .eq('marketplace_id', marketplaceId)
           .eq('status', 'active'),
-        // Today-only check-outs at THIS marketplace, so the stat reflects today's
-        // exit traffic (not historical totals from past events).
+        // Count today's CheckOut transactions at THIS marketplace.
+        // We use transactions (immutable) instead of qr_cards.updated_at, which
+        // can be rewritten by maintenance/backfill jobs and inflate the count.
         supabase
-          .from('qr_cards')
+          .from('transactions')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'checked_out')
-          .gte('updated_at', todayDubaiStartISO),
+          .eq('type', 'CheckOut')
+          .eq('marketplace_id', marketplaceId)
+          .gte('timestamp', todayDubaiStartISO),
         supabase
           .from('qr_cards')
           .select('*', { count: 'exact', head: true })
