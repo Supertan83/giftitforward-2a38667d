@@ -266,6 +266,23 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
     lookupCard(code);
   };
 
+  const [resettingCard, setResettingCard] = useState(false);
+  const handleResetCard = async () => {
+    if (!card) return;
+    if (!confirm(`Reset card ${card.unique_id} to "Ready"?\n\nThis will clear:\n• Items collected (${card.total_items_collected})\n• Credit balance\n• Marketplace link\n\nThe card will become Ready for the next event. A CheckOut record is logged for history.`)) return;
+    setResettingCard(true);
+    try {
+      const { error } = await supabase.rpc('admin_reset_qr_card', { p_unique_id: card.unique_id });
+      if (error) throw error;
+      toast({ title: 'Card reset', description: `${card.unique_id} is now Ready.` });
+      await lookupCard(card.unique_id);
+    } catch (err: any) {
+      toast({ title: 'Reset failed', description: err.message || 'Could not reset card', variant: 'destructive' });
+    } finally {
+      setResettingCard(false);
+    }
+  };
+
   const handleAdjust = async () => {
     if (!card) return;
     const newVal = parseInt(adjustValue);
