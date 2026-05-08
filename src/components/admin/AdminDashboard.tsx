@@ -24,6 +24,7 @@ import { TrainingCompletionViewer } from '@/components/admin/TrainingCompletionV
 import { VolunteerQRCodeGenerator } from '@/components/admin/VolunteerQRCodeGenerator';
 import { MarketplaceSyncPanel } from '@/components/admin/MarketplaceSyncPanel';
 import { MarketplaceReports } from '@/components/admin/MarketplaceReports';
+import { FullReport } from '@/components/admin/FullReport';
 import { SurplussSyncPanel } from '@/components/admin/SurplussSyncPanel';
 import { AllocationManagement } from '@/components/admin/AllocationManagement';
 import { SurplussAllocationControl } from '@/components/admin/SurplussAllocationControl';
@@ -53,7 +54,7 @@ import { ActiveBeneficiaryCards } from '@/components/admin/ActiveBeneficiaryCard
 import { MarketplaceDeletion } from '@/components/admin/MarketplaceDeletion';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards' | 'marketplace-deletion';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards' | 'marketplace-deletion' | 'full-report';
 
 export const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -258,6 +259,7 @@ export const AdminDashboard = () => {
       case 'beneficiary-qr-control': return <BeneficiaryQRControlCenter onBack={goBack} />;
       case 'active-beneficiary-cards': return <ActiveBeneficiaryCards onBack={goBack} />;
       case 'marketplace-deletion': return <MarketplaceDeletion onBack={goBack} />;
+      case 'full-report': return <FullReport onBack={goBack} />;
       default: return renderDashboardHome();
     }
   };
