@@ -200,6 +200,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   const [syncingBeneficiaries, setSyncingBeneficiaries] = useState(false);
   const [showBenSyncResultDialog, setShowBenSyncResultDialog] = useState(false);
   const [benSyncResult, setBenSyncResult] = useState<any>(null);
