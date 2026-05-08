@@ -751,7 +751,21 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                         const isEditing = editingAllocationId === alloc.id;
 
                         return (
-                          <TableRow key={alloc.id}>
+                          <TableRow key={alloc.id} data-state={selectedAllocIds.has(alloc.id) ? "selected" : undefined}>
+                            <TableCell className="w-10">
+                              <Checkbox
+                                checked={selectedAllocIds.has(alloc.id)}
+                                onCheckedChange={(v) => {
+                                  setSelectedAllocIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (v) next.add(alloc.id);
+                                    else next.delete(alloc.id);
+                                    return next;
+                                  });
+                                }}
+                                aria-label={`Select ${alloc.itemName || "item"}`}
+                              />
+                            </TableCell>
                             {isEditing ? (
                               <>
                                 <TableCell className="font-mono text-sm text-muted-foreground">
