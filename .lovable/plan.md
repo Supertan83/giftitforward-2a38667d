@@ -1,33 +1,31 @@
-# Fix: "Sync to Surpluss" fails with "non-2xx status code" on All Events
+# Bulk Distribute in Allocate Items
 
-## Root cause
+Currently in **Admin → Allocate Items**, marking items as distributed requires clicking the paper-plane icon row by row, which is painful for marketplaces with 98+ listings or 11k+ units.
 
-In `src/components/admin/PendingVolunteers.tsx` (lines 1410–1434), the **Sync to Surpluss** button calls `sync-surpluss-volunteer-beneficiary` with an empty body when `eventFilter === 'all'`. The edge function then walks **every** marketplace, every volunteer, every family member and every hours record in one request. That exceeds the Supabase Edge Function ~150s wall-clock / CPU limit, the worker is killed, and the client sees a generic non-2xx error. Single-event syncs work because they finish in time.
+## What I'll add
 
-## Fix (frontend only — no edge function changes needed)
+In `src/components/admin/AllocationManagement.tsx`, on top of the allocations table for the selected marketplace:
 
-Change the button handler so that, in "All Events" mode, the client iterates marketplaces and calls the edge function **once per marketplace**, aggregating the results before showing the dialog. Each per-marketplace call stays well within the timeout, and we get a clean per-event progress indicator.
+1. **Row checkboxes + a "select all" checkbox** in the table header.
+2. A **bulk action bar** that appears above the table when the marketplace has allocations, showing:
+   - `Selected: X / 98` (or `All` when select-all is on)
+   - Button **"Distribute Remaining (selected)"** — sets `distributed_quantity = allocated_quantity` for each selected row that still has remaining > 0.
+   - Button **"Distribute All Remaining"** — same, but for every row in the current marketplace (one click, no selection needed).
+3. A **confirmation dialog** before running the bulk action, showing counts:
+   - e.g. *"This will mark 10,985 units across 98 items as distributed for Stronger Together Emirati Family Community Marketplace February 21. Continue?"*
+4. **Progress + result toast** ("Distributed 10,985 units across 98 items. 0 failed.").
+5. Rows already fully distributed are skipped silently.
 
-### Changes in `src/components/admin/PendingVolunteers.tsx`
+## Technical details
 
-1. Replace the current `onClick` for the **Sync to Surpluss** button (~lines 1413–1434) with a loop:
-   - If `eventFilter !== 'all'` → keep current single-call behaviour.
-   - If `eventFilter === 'all'` → loop over `marketplaces`, calling `supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', { body: { environment: 'production', marketplace_id: m.id } })` sequentially.
-   - Aggregate counters (volunteers_sent / failed / skipped / bulk_updated / attached_to_event, beneficiaries, demographics, family, errors[]) into a single combined result shaped like the existing `setSyncResult(data)` payload.
-   - Catch per-marketplace errors and push them into `errors[]` plus `volunteer_details`/`beneficiary_details` with `status: 'failed'` and the marketplace name, so the run continues even if one event fails.
-   - Track progress in local state (`syncProgress: { current, total, marketplaceName }`) and show it inside the existing button label, e.g. `Syncing 3/12 — Eid Marketplace…`.
+- Reuse the existing `updateAllocationQuantities` mutation from `useMarketplaceAllocations` — it already takes `{ id, allocatedQuantity, distributedQuantity }`. For each target row we call it with `distributedQuantity = allocatedQuantity` (allocated stays the same).
+- Run the mutations with bounded concurrency (e.g. `Promise.all` in chunks of 8) to stay responsive without hammering the DB.
+- After completion: invalidate the allocations query (mutation already does this) and write one `traceability_logs` entry summarising the bulk action (action `bulk_distributed`, with count + total units).
+- No changes to the database, RLS, edge functions, or to the per-row Send button.
+- No change to Surpluss reporting — that remains a separate explicit step (the existing "Report Distribution" flow in `useSurplussDistributionReporting` keeps working unchanged, using the new `distributed_quantity` values).
 
-2. Show the existing `SyncResultDialog` once the loop completes with the combined result.
+## Out of scope
 
-3. No backend, schema, RLS, or edge function changes.
-
-## Verification
-
-- With **All Events** selected: click Sync to Surpluss → button shows progress per marketplace → dialog opens with combined totals; no "non-2xx" toast.
-- With **a specific event** selected: behaviour unchanged (one call, one result).
-- Force one marketplace's call to throw (e.g. temporarily bad payload) → the loop continues and the failed marketplace is listed in the result dialog under errors.
-
-## Optional follow-ups (not part of this fix)
-
-- Same loop pattern can be applied to the **Sync Beneficiaries** button (lines 1444–1466) once we confirm it shows the same symptom on very large datasets.
-- Long-term, move the multi-marketplace loop to a queued background job so admins don't have to keep the tab open.
+- Bulk *undo* / *reallocate* — only **Distribute** is requested.
+- Cross-marketplace bulk actions.
+- Changes to the Surpluss sync button.

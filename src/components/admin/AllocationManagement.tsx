@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useItemTypes, useMarketplaces } from "@/hooks/useSupabaseData";
 import { useMarketplaceAllocations, useAllocationOperations } from "@/hooks/useMarketplaceAllocations";
 import { useToast } from "@/hooks/use-toast";
@@ -79,6 +80,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
   } | null>(null);
 
   const [isSyncingFromSurpluss, setIsSyncingFromSurpluss] = useState(false);
+
+  // Bulk distribute state
+  const [selectedAllocIds, setSelectedAllocIds] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<{ mode: "selected" | "all"; ids: string[] } | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const { data: itemTypes = [], isLoading: loadingItems } = useItemTypes();
   const { data: marketplaces = [], isLoading: loadingMarketplaces } = useMarketplaces();
@@ -336,6 +343,67 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     }
   };
 
+  // Bulk distribute: set distributed_quantity = allocated_quantity for each target row
+  const runBulkDistribute = async (ids: string[]) => {
+    const targets = allocations.filter(
+      (a) => ids.includes(a.id) && a.allocatedQuantity - a.distributedQuantity > 0,
+    );
+    if (targets.length === 0) {
+      toast({ title: "Nothing to distribute", description: "All selected items are already fully distributed." });
+      setBulkConfirm(null);
+      return;
+    }
+
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
+    setBulkRunning(true);
+    setBulkProgress({ done: 0, total: targets.length });
+
+    let success = 0;
+    let failed = 0;
+    let unitsDistributed = 0;
+    const chunkSize = 8;
+
+    for (let i = 0; i < targets.length; i += chunkSize) {
+      const chunk = targets.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (alloc) => {
+          const delta = alloc.allocatedQuantity - alloc.distributedQuantity;
+          try {
+            await updateAllocationQuantities.mutateAsync({
+              allocationId: alloc.id,
+              distributedQuantity: alloc.allocatedQuantity,
+            });
+            success += 1;
+            unitsDistributed += delta;
+          } catch {
+            failed += 1;
+          }
+        }),
+      );
+      setBulkProgress({ done: Math.min(i + chunk.length, targets.length), total: targets.length });
+    }
+
+    logEvent.mutate({
+      marketplaceId: selectedMarketplaceId || undefined,
+      marketplaceName: mp?.name || "Unknown",
+      actionType: "distributed",
+      quantityBefore: 0,
+      quantityAfter: unitsDistributed,
+      description: `Bulk distribute: ${success} item(s), ${unitsDistributed.toLocaleString()} units at ${mp?.name || "marketplace"}${failed ? ` (${failed} failed)` : ""}`,
+    });
+
+    toast({
+      title: failed ? "Bulk Distribute Completed with Errors" : "Bulk Distribute Completed",
+      description: `${success} item(s) updated, ${unitsDistributed.toLocaleString()} units distributed${failed ? `. ${failed} failed.` : "."}`,
+      variant: failed ? "destructive" : "default",
+    });
+
+    setBulkRunning(false);
+    setBulkProgress(null);
+    setBulkConfirm(null);
+    setSelectedAllocIds(new Set());
+  };
+
   // Handle undo / return to warehouse
   const handleUndo = async () => {
     if (!undoAllocation) return;
@@ -550,7 +618,13 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         {/* Marketplace Selector */}
         <div className="mb-6">
           <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
-          <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+          <Select
+            value={selectedMarketplaceId}
+            onValueChange={(v) => {
+              setSelectedMarketplaceId(v);
+              setSelectedAllocIds(new Set());
+            }}
+          >
             <SelectTrigger className="w-full md:w-80">
               <SelectValue placeholder="Choose a marketplace..." />
             </SelectTrigger>
@@ -597,8 +671,39 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
 
             {/* Allocations Table */}
             <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
-              <div className="p-4 md:p-6 border-b border-border">
+              <div className="p-4 md:p-6 border-b border-border flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-display font-bold text-lg">Items for {selectedMarketplace?.name}</h2>
+                {allocations.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {selectedAllocIds.size > 0
+                        ? `${selectedAllocIds.size} selected`
+                        : `${allocations.length} item(s)`}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedAllocIds.size === 0 || bulkRunning}
+                      onClick={() =>
+                        setBulkConfirm({ mode: "selected", ids: Array.from(selectedAllocIds) })
+                      }
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Distribute Selected
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={bulkRunning || allocations.every((a) => a.allocatedQuantity - a.distributedQuantity <= 0)}
+                      onClick={() =>
+                        setBulkConfirm({ mode: "all", ids: allocations.map((a) => a.id) })
+                      }
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Distribute All Remaining
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {loadingAllocations ? (
@@ -616,6 +721,22 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={
+                              allocations.length > 0 && selectedAllocIds.size === allocations.length
+                                ? true
+                                : selectedAllocIds.size > 0
+                                ? "indeterminate"
+                                : false
+                            }
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedAllocIds(new Set(allocations.map((a) => a.id)));
+                              else setSelectedAllocIds(new Set());
+                            }}
+                            aria-label="Select all"
+                          />
+                        </TableHead>
                         <TableHead>Material ID</TableHead>
                         <TableHead>Item Name</TableHead>
                         <TableHead className="text-right">Allocated</TableHead>
@@ -630,7 +751,21 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                         const isEditing = editingAllocationId === alloc.id;
 
                         return (
-                          <TableRow key={alloc.id}>
+                          <TableRow key={alloc.id} data-state={selectedAllocIds.has(alloc.id) ? "selected" : undefined}>
+                            <TableCell className="w-10">
+                              <Checkbox
+                                checked={selectedAllocIds.has(alloc.id)}
+                                onCheckedChange={(v) => {
+                                  setSelectedAllocIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (v) next.add(alloc.id);
+                                    else next.delete(alloc.id);
+                                    return next;
+                                  });
+                                }}
+                                aria-label={`Select ${alloc.itemName || "item"}`}
+                              />
+                            </TableCell>
                             {isEditing ? (
                               <>
                                 <TableCell className="font-mono text-sm text-muted-foreground">
@@ -1217,6 +1352,52 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
               Move Items
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Distribute Confirmation */}
+      <Dialog
+        open={!!bulkConfirm}
+        onOpenChange={(open) => {
+          if (!open && !bulkRunning) setBulkConfirm(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk Distribute</DialogTitle>
+            <DialogDescription>
+              {bulkConfirm && (() => {
+                const targets = allocations.filter(
+                  (a) => bulkConfirm.ids.includes(a.id) && a.allocatedQuantity - a.distributedQuantity > 0,
+                );
+                const units = targets.reduce((s, a) => s + (a.allocatedQuantity - a.distributedQuantity), 0);
+                return `This will mark ${units.toLocaleString()} unit(s) across ${targets.length} item(s) as fully distributed for ${selectedMarketplace?.name || "this marketplace"}. This cannot be undone with one click.`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          {bulkProgress && (
+            <p className="text-sm text-muted-foreground">
+              Processing {bulkProgress.done} / {bulkProgress.total}…
+            </p>
+          )}
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setBulkConfirm(null)} disabled={bulkRunning}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => bulkConfirm && runBulkDistribute(bulkConfirm.ids)}
+              disabled={bulkRunning}
+            >
+              {bulkRunning ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Distributing…
+                </>
+              ) : (
+                "Confirm Distribute"
+              )}
             </Button>
           </div>
         </DialogContent>
