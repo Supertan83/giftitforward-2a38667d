@@ -43,36 +43,32 @@ export const FullReport = ({ onBack }: Props) => {
     queryKey: ['full-report'],
     queryFn: async () => {
       const [marketplaces, allocations, vCards, qrCards] = await Promise.all([
-        fetchAllRows((from, to) =>
+        fetchAllRows(() =>
           supabase
             .from('marketplace_events')
             .select('id, name, event_date, status, location, outreach_partner, demographics_total_families, demographics_total_adults, demographics_total_children, manual_beneficiary_count')
             .is('deleted_at', null)
             .order('event_date', { ascending: false, nullsFirst: false })
-            .range(from, to)
         ),
-        fetchAllRows((from, to) =>
+        fetchAllRows(() =>
           supabase
             .from('marketplace_item_allocations')
             .select('marketplace_id, allocated_quantity, distributed_quantity')
             .is('deleted_at', null)
-            .range(from, to)
         ),
-        fetchAllRows((from, to) =>
+        fetchAllRows(() =>
           supabase
             .from('volunteer_qr_cards')
             .select('marketplace_id, status')
             .is('deleted_at', null)
             .in('status', ['checked_in', 'checked_out'])
-            .range(from, to)
         ),
-        fetchAllRows((from, to) =>
+        fetchAllRows(() =>
           supabase
             .from('qr_cards')
             .select('marketplace_id, total_items_collected')
             .is('deleted_at', null)
             .not('marketplace_id', 'is', null)
-            .range(from, to)
         ),
       ]);
 
