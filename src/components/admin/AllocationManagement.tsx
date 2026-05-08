@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useItemTypes, useMarketplaces } from "@/hooks/useSupabaseData";
 import { useMarketplaceAllocations, useAllocationOperations } from "@/hooks/useMarketplaceAllocations";
 import { useToast } from "@/hooks/use-toast";
