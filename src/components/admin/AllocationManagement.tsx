@@ -618,7 +618,13 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         {/* Marketplace Selector */}
         <div className="mb-6">
           <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
-          <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+          <Select
+            value={selectedMarketplaceId}
+            onValueChange={(v) => {
+              setSelectedMarketplaceId(v);
+              setSelectedAllocIds(new Set());
+            }}
+          >
             <SelectTrigger className="w-full md:w-80">
               <SelectValue placeholder="Choose a marketplace..." />
             </SelectTrigger>
