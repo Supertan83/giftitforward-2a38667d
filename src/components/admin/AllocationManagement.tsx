@@ -343,6 +343,67 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     }
   };
 
+  // Bulk distribute: set distributed_quantity = allocated_quantity for each target row
+  const runBulkDistribute = async (ids: string[]) => {
+    const targets = allocations.filter(
+      (a) => ids.includes(a.id) && a.allocatedQuantity - a.distributedQuantity > 0,
+    );
+    if (targets.length === 0) {
+      toast({ title: "Nothing to distribute", description: "All selected items are already fully distributed." });
+      setBulkConfirm(null);
+      return;
+    }
+
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
+    setBulkRunning(true);
+    setBulkProgress({ done: 0, total: targets.length });
+
+    let success = 0;
+    let failed = 0;
+    let unitsDistributed = 0;
+    const chunkSize = 8;
+
+    for (let i = 0; i < targets.length; i += chunkSize) {
+      const chunk = targets.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (alloc) => {
+          const delta = alloc.allocatedQuantity - alloc.distributedQuantity;
+          try {
+            await updateAllocationQuantities.mutateAsync({
+              allocationId: alloc.id,
+              distributedQuantity: alloc.allocatedQuantity,
+            });
+            success += 1;
+            unitsDistributed += delta;
+          } catch {
+            failed += 1;
+          }
+        }),
+      );
+      setBulkProgress({ done: Math.min(i + chunk.length, targets.length), total: targets.length });
+    }
+
+    logEvent.mutate({
+      marketplaceId: selectedMarketplaceId || undefined,
+      marketplaceName: mp?.name || "Unknown",
+      actionType: "distributed",
+      quantityBefore: 0,
+      quantityAfter: unitsDistributed,
+      description: `Bulk distribute: ${success} item(s), ${unitsDistributed.toLocaleString()} units at ${mp?.name || "marketplace"}${failed ? ` (${failed} failed)` : ""}`,
+    });
+
+    toast({
+      title: failed ? "Bulk Distribute Completed with Errors" : "Bulk Distribute Completed",
+      description: `${success} item(s) updated, ${unitsDistributed.toLocaleString()} units distributed${failed ? `. ${failed} failed.` : "."}`,
+      variant: failed ? "destructive" : "default",
+    });
+
+    setBulkRunning(false);
+    setBulkProgress(null);
+    setBulkConfirm(null);
+    setSelectedAllocIds(new Set());
+  };
+
   // Handle undo / return to warehouse
   const handleUndo = async () => {
     if (!undoAllocation) return;
