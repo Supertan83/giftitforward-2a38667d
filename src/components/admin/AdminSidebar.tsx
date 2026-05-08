@@ -2,7 +2,7 @@ import {
   UserPlus, Upload, UserCheck, Award, GraduationCap, FileQuestion,
   QrCode, Store, PieChart, RefreshCw, Unlock, ScanLine, CreditCard,
   Package, TrendingUp, Users, Webhook, Database, CloudUpload, Mail, Loader2, ScrollText, FileText,
-  ChevronRight, Archive, Megaphone, LinkIcon, Trash2, ClipboardList
+  ChevronRight, Archive, Megaphone, LinkIcon, Trash2, ClipboardList, BarChart3
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,7 +21,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BrandLogo } from '@/components/BrandLogo';
 
-type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards' | 'marketplace-deletion';
+type AdminView = 'dashboard' | 'qr-generator' | 'statistics' | 'users' | 'marketplaces' | 'inventory' | 'webhooks' | 'partner-registrations' | 'external-items' | 'pending-volunteers' | 'training-assessments' | 'training-completion' | 'volunteer-qr' | 'marketplace-sync' | 'marketplace-reports' | 'allocations' | 'volunteer-qr-cards' | 'surpluss-sync' | 'surpluss-allocation-control' | 'surpluss-sync-monitor' | 'hubspot-email-config' | 'email-logs' | 'email-management' | 'bulk-volunteer-upload' | 'traceability-logs' | 'email-templates' | 'item-list' | 'email-campaigns' | 'volunteer-schema-export' | 'external-survey-links' | 'survey-questions' | 'data-cleanup' | 'survey-reviews' | 'database-backup' | 'beneficiary-qr-control' | 'active-beneficiary-cards' | 'marketplace-deletion' | 'full-report';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -52,6 +52,7 @@ const beneficiaryItems = [
 ];
 
 const adminItems = [
+  { view: 'full-report' as AdminView, label: 'Full Report', icon: BarChart3, color: 'text-primary' },
   { view: 'item-list' as AdminView, label: 'Item List', icon: Package, color: 'text-sky-500' },
   { view: 'allocations' as AdminView, label: 'Allocate Items', icon: TrendingUp, color: 'text-teal-500' },
   { view: 'statistics' as AdminView, label: 'Live Statistics', icon: TrendingUp, color: 'text-emerald-500' },
