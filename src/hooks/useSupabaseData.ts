@@ -1545,7 +1545,10 @@ export const useVolunteerCardOperations = () => {
           checked_in_at: now,
           checked_out_at: null,
           marketplace_id: marketplaceId || null,
-          assigned_zone: assignedZone || null
+          assigned_zone: assignedZone || null,
+          // If card was previously soft-deleted (e.g. via "Remove from marketplace"),
+          // a fresh check-in re-activates it so Marketplace Reports include them again.
+          deleted_at: null,
         })
         .eq('id', card.id);
 

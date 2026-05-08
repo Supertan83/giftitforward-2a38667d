@@ -1,31 +1,42 @@
-# Bulk Distribute in Allocate Items
+# Why Marilyn & Cecilia show as "Inactive" in Marketplace Reports
 
-Currently in **Admin → Allocate Items**, marking items as distributed requires clicking the paper-plane icon row by row, which is painful for marketplaces with 98+ listings or 11k+ units.
+## Root cause
 
-## What I'll add
+Both volunteer QR cards (`VOL-MO0CM7T7-VG2O`, `VOL-MO1HN9MH-LHWF`) were **soft-deleted on 2026-05-06 09:35** (someone clicked "Remove from marketplace" earlier). After that, the cards were scanned again today and got their `status` flipped to `checked_in`, with fresh `volunteer_attendance` rows — but the `deleted_at` timestamp on the card row was never cleared.
 
-In `src/components/admin/AllocationManagement.tsx`, on top of the allocations table for the selected marketplace:
+The `useMarketplaceReport` hook in `src/hooks/useMarketplaceAllocations.ts` does:
 
-1. **Row checkboxes + a "select all" checkbox** in the table header.
-2. A **bulk action bar** that appears above the table when the marketplace has allocations, showing:
-   - `Selected: X / 98` (or `All` when select-all is on)
-   - Button **"Distribute Remaining (selected)"** — sets `distributed_quantity = allocated_quantity` for each selected row that still has remaining > 0.
-   - Button **"Distribute All Remaining"** — same, but for every row in the current marketplace (one click, no selection needed).
-3. A **confirmation dialog** before running the bulk action, showing counts:
-   - e.g. *"This will mark 10,985 units across 98 items as distributed for Stronger Together Emirati Family Community Marketplace February 21. Continue?"*
-4. **Progress + result toast** ("Distributed 10,985 units across 98 items. 0 failed.").
-5. Rows already fully distributed are skipped silently.
+- Fetch `volunteer_qr_cards` with `.is('deleted_at', null)` → these two cards are skipped.
+- Filter attendance whose parent card is soft-deleted → today's attendance rows are also skipped.
 
-## Technical details
+Because the cards/attendance are skipped, the volunteers don't enter `volCardMap`. They then fall through to the form-registered branch (they're in `events_list` for this marketplace), which assigns `status: 'registered'`. The UI renders anything that isn't `checked_in`/`checked_out` as **"Inactive"**.
 
-- Reuse the existing `updateAllocationQuantities` mutation from `useMarketplaceAllocations` — it already takes `{ id, allocatedQuantity, distributedQuantity }`. For each target row we call it with `distributedQuantity = allocatedQuantity` (allocated stays the same).
-- Run the mutations with bounded concurrency (e.g. `Promise.all` in chunks of 8) to stay responsive without hammering the DB.
-- After completion: invalidate the allocations query (mutation already does this) and write one `traceability_logs` entry summarising the bulk action (action `bulk_distributed`, with count + total units).
-- No changes to the database, RLS, edge functions, or to the per-row Send button.
-- No change to Surpluss reporting — that remains a separate explicit step (the existing "Report Distribution" flow in `useSurplussDistributionReporting` keeps working unchanged, using the new `distributed_quantity` values).
+So the data is "right" from the report's point of view: it refuses to count a soft-deleted card. The bug is that the check-in flow let a soft-deleted card be scanned without un-deleting it.
+
+## Fix — two parts
+
+### 1. Data fix (immediate, unblocks the user)
+
+Clear `deleted_at` on the two affected cards so today's check-ins are recognized:
+
+```sql
+UPDATE volunteer_qr_cards
+SET deleted_at = NULL, updated_at = now()
+WHERE id IN (
+  '196017d9-2c68-415f-8b6b-ce31972346ea',  -- Marilyn Abarca
+  '5e54f9a9-ad44-422b-b0d0-11d7630a66e0'   -- Cecilia Arellano
+);
+```
+
+(Their attendance rows for today are already `deleted_at IS NULL`, so no further data change is needed. The Reports page will show them as "Checked In" on the next refresh.)
+
+### 2. Code fix (prevents this from happening again)
+
+Update the volunteer check-in RPC (`checkin_volunteer_card` / wherever the volunteer scan flow writes `status='checked_in'`) so that when a scanned card is soft-deleted, it **auto-clears `deleted_at`** as part of the check-in. Rationale: if a volunteer is being physically checked in on the field, the card is by definition active again — Reports should not silently hide them.
+
+Concretely, in the same `UPDATE volunteer_qr_cards SET status='checked_in' …` statement used by the check-in RPC, also set `deleted_at = NULL`. No schema change, no RLS change.
 
 ## Out of scope
 
-- Bulk *undo* / *reallocate* — only **Distribute** is requested.
-- Cross-marketplace bulk actions.
-- Changes to the Surpluss sync button.
+- Changing how "Remove from marketplace" works (it should still soft-delete; the issue is only that the inverse — re-scan — must undo it).
+- Backfilling other historically soft-deleted-but-rescanned cards. We can run an audit query separately if you want.
