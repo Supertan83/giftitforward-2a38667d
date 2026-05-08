@@ -1,44 +1,35 @@
-## Why scanning is slow right now
+## Problem
 
-After investigating live data, the bottleneck is **not** the scan RPCs themselves — it's the cascade of dashboards and stats queries that re-run on every scan.
+In the volunteer "Add Events to Registration" dialog, selecting multiple events (4, or any N > 1) and clicking **Add N Events** only saves 1 event to the registration.
 
-Findings:
-- `transactions` has **306,280 rows** and only a primary-key index. Any filter on `marketplace_id` / `type` / `timestamp` does a **parallel sequential scan (~300ms)**.
-- `useCardStats` (used by Entrance, Exit, Marketplace, Stats zones) runs **4 count queries** every refresh — one of them is the slow CheckOut/transactions filter.
-- `useCardStats` subscribes to **every `transactions` INSERT** via realtime and immediately re-invalidates. Distribution RPCs insert one transaction row **per item** (and `generate_series` for batches), so a single 10-item scan triggers 10 invalidations across every connected admin client. Each invalidation fires the 300ms transactions count again → snowballs.
-- `useQRCards` (used by Unblock zone, Stats Dashboard, QR Generator, Sync panel) fetches **all 2,255 rows** and is invalidated on every `qr_cards` change. With several admins logged in, this is constantly re-fetching during scans.
+## Root cause
 
-## Plan
+In `src/components/admin/PendingVolunteers.tsx`, the dialog's confirm handler (around line 3318) loops over `selectedEventsToAdd` and calls `addEventMutation.mutateAsync` once per event.
 
-### 1. Add database indexes (migration)
-```
-CREATE INDEX IF NOT EXISTS idx_transactions_marketplace_type_timestamp
-  ON public.transactions (marketplace_id, type, timestamp DESC);
+Inside `addEventMutation` (line 768), each call reads the volunteer's current `events_list` and `events_json` from the React Query cache via `volunteers.find(...)`. That cache is only invalidated in `onSuccess` and is not refetched between the sequential `mutateAsync` calls. Every iteration therefore starts from the **same original** events list, appends one new event, and overwrites the previous iteration's update.
 
-CREATE INDEX IF NOT EXISTS idx_transactions_card_id
-  ON public.transactions (card_id);
+Result: last write wins → only the final selected event is saved, regardless of how many were selected (4, 10, 20, etc.).
 
-CREATE INDEX IF NOT EXISTS idx_transactions_timestamp
-  ON public.transactions (timestamp DESC);
-```
-Expected: the CheckOut count query drops from ~300ms (seq scan) to <10ms (index scan).
+## Fix
 
-### 2. Stop the realtime stampede in `useCardStats`
-- **Remove** the `transactions` INSERT subscription. The existing `refetchInterval: 10_000` already keeps the today-checkout count fresh enough for the operator dashboard, and dropping this subscription eliminates ~10 invalidations per batch distribution per client.
-- Keep the `qr_cards` subscription but **debounce** it (e.g. coalesce events for 1.5s) so a burst of updates triggers one refetch, not many.
+Replace the per-event loop with a **single batched update** that appends **all** selected events to `events_list` and `events_json` in one Supabase `update` call. This works for any number of selections.
 
-### 3. Reduce `useQRCards` pressure
-- **Debounce** the `qr_cards` realtime subscription in `useQRCards` the same way (1.5s).
-- This single hook is what makes Unblock / Stats / QR Generator screens slow down during heavy scanning, because each scan re-fetches all 2,255 rows on every open admin tab.
+### Changes in `src/components/admin/PendingVolunteers.tsx`
 
-### 4. (Verify only — no code change) RPCs are already optimal
-`activate_beneficiary_card`, `checkout_beneficiary_card`, `distribute_marketplace_item(s_batch)`, `return_marketplace_item(s_batch)` are all single-roundtrip SECURITY DEFINER functions using the `lower(unique_id)` index — those parts are fine.
+1. Add a new `addMultipleEventsMutation` that accepts the full array of selected event names plus their marketplace metadata, and:
+   - Reads the volunteer once.
+   - Iterates the array in-memory, appending each event slug to `events_list` (skipping ones already present) and one entry per event to `events_json` (reusing the existing `formatMktDate` / `formatMktTime` helpers).
+   - Performs a single `update` on `pending_volunteers` with the final `events_list` and `events_json`.
+   - Returns `{ added: string[], skipped: string[] }` for the toast.
 
-## Technical notes
-- Index creation on 306k rows is fast (seconds) and runs in the migration.
-- The realtime debounce will be a small `useRef` timer in each hook; no behavior change for the user beyond ~1.5s extra delay before stats refresh after someone else's scan.
-- No changes to RPCs, no changes to the scan UX, no changes to the auto-unblock cron.
+2. Update the dialog confirm handler (lines ~3312–3346) to call the new mutation **once** with the entire `selectedEventsToAdd` array instead of looping with `mutateAsync`. Keep the existing toast wording (singular vs plural based on count) and error handling.
 
-## Out of scope
-- Pagination of `useQRCards` consumers (Stats / Unblock screens) — bigger refactor; revisit if step 3 isn't enough.
-- Compute instance upsize — only suggest if these fixes don't restore speed.
+3. Leave the existing `addEventMutation` in place if it's still used elsewhere for single-event adds; otherwise remove after a quick search.
+
+No schema, RLS, or backend changes required. Dialog UI and behavior stay identical aside from the bug fix.
+
+## Verification
+
+- Open a pending volunteer, click **Add Event**, select 4 marketplaces → confirm all 4 are saved.
+- Repeat with 6+ selections → confirm all of them are saved.
+- Re-open the dialog and select an already-present event → confirm it is skipped (no duplicates).

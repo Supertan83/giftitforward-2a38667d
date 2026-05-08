@@ -3309,39 +3309,90 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
             <Button variant="outline" onClick={() => setShowAddEventDialog(false)} disabled={isAddingEvents}>
               Cancel
             </Button>
-            <Button
+             <Button
               onClick={async () => {
                 if (!selectedVolunteer || selectedEventsToAdd.length === 0) return;
                 setIsAddingEvents(true);
-                let successCount = 0;
-                const failed: string[] = [];
-                for (const name of selectedEventsToAdd) {
-                  const mkt = marketplaces.find(m => m.name === name);
-                  try {
-                    await addEventMutation.mutateAsync({
-                      pendingId: selectedVolunteer.id,
-                      eventName: name,
-                      marketplace: mkt ? { name: mkt.name, event_date: mkt.event_date, start_time: mkt.start_time, end_time: mkt.end_time, location: mkt.location } : undefined
-                    });
-                    successCount++;
-                  } catch (e) {
-                    failed.push(name);
-                  }
+
+                const volunteer = volunteers.find(v => v.id === selectedVolunteer.id);
+                if (!volunteer) {
+                  setIsAddingEvents(false);
+                  toast({ title: 'Volunteer not found', variant: 'destructive' });
+                  return;
                 }
+
+                const formatMktDate = (dateStr?: string | null) => {
+                  if (!dateStr) return null;
+                  try {
+                    const d = new Date(dateStr);
+                    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                  } catch { return null; }
+                };
+                const formatMktTime = (start?: string | null, end?: string | null) => {
+                  if (!start && !end) return null;
+                  const fmt = (t: string) => {
+                    try {
+                      const [h, m] = t.split(':').map(Number);
+                      const ampm = h >= 12 ? 'pm' : 'am';
+                      const h12 = h % 12 || 12;
+                      return `${String(h12).padStart(2, '0')}.${String(m).padStart(2, '0')} ${ampm}`;
+                    } catch { return t; }
+                  };
+                  if (start && end) return `${fmt(start)} - ${fmt(end)}`;
+                  return start ? fmt(start) : fmt(end!);
+                };
+
+                const currentEvents = volunteer.events_list ? volunteer.events_list.split(',').map(e => e.trim()).filter(Boolean) : [];
+                const currentEventsJson = Array.isArray(volunteer.events_json) ? [...volunteer.events_json] as any[] : [];
+                const added: string[] = [];
+                const skipped: string[] = [];
+
+                for (const name of selectedEventsToAdd) {
+                  const eventSlug = name.toLowerCase().replace(/\s+/g, '-');
+                  if (currentEvents.some(e => formatEventName(e) === name) || currentEvents.includes(eventSlug)) {
+                    skipped.push(name);
+                    continue;
+                  }
+                  const mkt = marketplaces.find(m => m.name === name);
+                  currentEvents.push(eventSlug);
+                  currentEventsJson.push({
+                    event: eventSlug,
+                    name: mkt?.name || name,
+                    eventDate: formatMktDate(mkt?.event_date),
+                    eventTime: formatMktTime(mkt?.start_time, mkt?.end_time),
+                    eventLocation: mkt?.location || null,
+                    addedManually: true,
+                    addedAt: new Date().toISOString(),
+                  });
+                  added.push(name);
+                }
+
+                let errorMsg: string | null = null;
+                if (added.length > 0) {
+                  const { error } = await supabase
+                    .from('pending_volunteers')
+                    .update({
+                      events_list: currentEvents.join(','),
+                      events_json: currentEventsJson,
+                    })
+                    .eq('id', selectedVolunteer.id);
+                  if (error) errorMsg = error.message;
+                }
+
                 setIsAddingEvents(false);
                 setShowAddEventDialog(false);
                 setSelectedEventsToAdd([]);
-                if (successCount > 0) {
+
+                if (errorMsg) {
+                  toast({ title: 'Failed to Add Events', description: errorMsg, variant: 'destructive' });
+                } else if (added.length > 0) {
+                  queryClient.invalidateQueries({ queryKey: ['pending-volunteers'] });
                   toast({
-                    title: successCount === 1 ? 'Event Added' : 'Events Added',
-                    description: `${successCount} event${successCount === 1 ? '' : 's'} added to ${selectedVolunteer.first_name}'s registration${failed.length ? ` (${failed.length} failed)` : ''}`,
+                    title: added.length === 1 ? 'Event Added' : 'Events Added',
+                    description: `${added.length} event${added.length === 1 ? '' : 's'} added to ${selectedVolunteer.first_name}'s registration${skipped.length ? ` (${skipped.length} already present)` : ''}`,
                   });
-                } else if (failed.length) {
-                  toast({
-                    title: 'Failed to Add Events',
-                    description: `Could not add: ${failed.join(', ')}`,
-                    variant: 'destructive',
-                  });
+                } else if (skipped.length) {
+                  toast({ title: 'No new events', description: 'All selected events were already added.' });
                 }
               }}
               disabled={selectedEventsToAdd.length === 0 || isAddingEvents}
