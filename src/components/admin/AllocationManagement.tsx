@@ -671,8 +671,39 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
 
             {/* Allocations Table */}
             <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-card">
-              <div className="p-4 md:p-6 border-b border-border">
+              <div className="p-4 md:p-6 border-b border-border flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-display font-bold text-lg">Items for {selectedMarketplace?.name}</h2>
+                {allocations.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {selectedAllocIds.size > 0
+                        ? `${selectedAllocIds.size} selected`
+                        : `${allocations.length} item(s)`}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedAllocIds.size === 0 || bulkRunning}
+                      onClick={() =>
+                        setBulkConfirm({ mode: "selected", ids: Array.from(selectedAllocIds) })
+                      }
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Distribute Selected
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={bulkRunning || allocations.every((a) => a.allocatedQuantity - a.distributedQuantity <= 0)}
+                      onClick={() =>
+                        setBulkConfirm({ mode: "all", ids: allocations.map((a) => a.id) })
+                      }
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Distribute All Remaining
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {loadingAllocations ? (
