@@ -721,6 +721,22 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={
+                              allocations.length > 0 && selectedAllocIds.size === allocations.length
+                                ? true
+                                : selectedAllocIds.size > 0
+                                ? "indeterminate"
+                                : false
+                            }
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedAllocIds(new Set(allocations.map((a) => a.id)));
+                              else setSelectedAllocIds(new Set());
+                            }}
+                            aria-label="Select all"
+                          />
+                        </TableHead>
                         <TableHead>Material ID</TableHead>
                         <TableHead>Item Name</TableHead>
                         <TableHead className="text-right">Allocated</TableHead>
