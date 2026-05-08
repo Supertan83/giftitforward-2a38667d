@@ -1,35 +1,33 @@
-## Problem
-
-In the volunteer "Add Events to Registration" dialog, selecting multiple events (4, or any N > 1) and clicking **Add N Events** only saves 1 event to the registration.
+# Fix: "Sync to Surpluss" fails with "non-2xx status code" on All Events
 
 ## Root cause
 
-In `src/components/admin/PendingVolunteers.tsx`, the dialog's confirm handler (around line 3318) loops over `selectedEventsToAdd` and calls `addEventMutation.mutateAsync` once per event.
+In `src/components/admin/PendingVolunteers.tsx` (lines 1410–1434), the **Sync to Surpluss** button calls `sync-surpluss-volunteer-beneficiary` with an empty body when `eventFilter === 'all'`. The edge function then walks **every** marketplace, every volunteer, every family member and every hours record in one request. That exceeds the Supabase Edge Function ~150s wall-clock / CPU limit, the worker is killed, and the client sees a generic non-2xx error. Single-event syncs work because they finish in time.
 
-Inside `addEventMutation` (line 768), each call reads the volunteer's current `events_list` and `events_json` from the React Query cache via `volunteers.find(...)`. That cache is only invalidated in `onSuccess` and is not refetched between the sequential `mutateAsync` calls. Every iteration therefore starts from the **same original** events list, appends one new event, and overwrites the previous iteration's update.
+## Fix (frontend only — no edge function changes needed)
 
-Result: last write wins → only the final selected event is saved, regardless of how many were selected (4, 10, 20, etc.).
-
-## Fix
-
-Replace the per-event loop with a **single batched update** that appends **all** selected events to `events_list` and `events_json` in one Supabase `update` call. This works for any number of selections.
+Change the button handler so that, in "All Events" mode, the client iterates marketplaces and calls the edge function **once per marketplace**, aggregating the results before showing the dialog. Each per-marketplace call stays well within the timeout, and we get a clean per-event progress indicator.
 
 ### Changes in `src/components/admin/PendingVolunteers.tsx`
 
-1. Add a new `addMultipleEventsMutation` that accepts the full array of selected event names plus their marketplace metadata, and:
-   - Reads the volunteer once.
-   - Iterates the array in-memory, appending each event slug to `events_list` (skipping ones already present) and one entry per event to `events_json` (reusing the existing `formatMktDate` / `formatMktTime` helpers).
-   - Performs a single `update` on `pending_volunteers` with the final `events_list` and `events_json`.
-   - Returns `{ added: string[], skipped: string[] }` for the toast.
+1. Replace the current `onClick` for the **Sync to Surpluss** button (~lines 1413–1434) with a loop:
+   - If `eventFilter !== 'all'` → keep current single-call behaviour.
+   - If `eventFilter === 'all'` → loop over `marketplaces`, calling `supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', { body: { environment: 'production', marketplace_id: m.id } })` sequentially.
+   - Aggregate counters (volunteers_sent / failed / skipped / bulk_updated / attached_to_event, beneficiaries, demographics, family, errors[]) into a single combined result shaped like the existing `setSyncResult(data)` payload.
+   - Catch per-marketplace errors and push them into `errors[]` plus `volunteer_details`/`beneficiary_details` with `status: 'failed'` and the marketplace name, so the run continues even if one event fails.
+   - Track progress in local state (`syncProgress: { current, total, marketplaceName }`) and show it inside the existing button label, e.g. `Syncing 3/12 — Eid Marketplace…`.
 
-2. Update the dialog confirm handler (lines ~3312–3346) to call the new mutation **once** with the entire `selectedEventsToAdd` array instead of looping with `mutateAsync`. Keep the existing toast wording (singular vs plural based on count) and error handling.
+2. Show the existing `SyncResultDialog` once the loop completes with the combined result.
 
-3. Leave the existing `addEventMutation` in place if it's still used elsewhere for single-event adds; otherwise remove after a quick search.
-
-No schema, RLS, or backend changes required. Dialog UI and behavior stay identical aside from the bug fix.
+3. No backend, schema, RLS, or edge function changes.
 
 ## Verification
 
-- Open a pending volunteer, click **Add Event**, select 4 marketplaces → confirm all 4 are saved.
-- Repeat with 6+ selections → confirm all of them are saved.
-- Re-open the dialog and select an already-present event → confirm it is skipped (no duplicates).
+- With **All Events** selected: click Sync to Surpluss → button shows progress per marketplace → dialog opens with combined totals; no "non-2xx" toast.
+- With **a specific event** selected: behaviour unchanged (one call, one result).
+- Force one marketplace's call to throw (e.g. temporarily bad payload) → the loop continues and the failed marketplace is listed in the result dialog under errors.
+
+## Optional follow-ups (not part of this fix)
+
+- Same loop pattern can be applied to the **Sync Beneficiaries** button (lines 1444–1466) once we confirm it shows the same symptom on very large datasets.
+- Long-term, move the multi-marketplace loop to a queued background job so admins don't have to keep the tab open.

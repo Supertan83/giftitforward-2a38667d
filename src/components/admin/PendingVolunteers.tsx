@@ -200,6 +200,7 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
   const [syncingSurpluss, setSyncingSurpluss] = useState(false);
   const [showSyncResultDialog, setShowSyncResultDialog] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   const [syncingBeneficiaries, setSyncingBeneficiaries] = useState(false);
   const [showBenSyncResultDialog, setShowBenSyncResultDialog] = useState(false);
   const [benSyncResult, setBenSyncResult] = useState<any>(null);
@@ -1412,15 +1413,78 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                 size="sm" 
                 onClick={async () => {
                    setSyncingSurpluss(true);
+                   setSyncProgress(null);
                   try {
-                    const body: any = { environment: 'production' };
-                    if (eventFilter !== 'all') {
-                      body.marketplace_id = marketplaces.find(m => m.name === eventFilter)?.id;
+                    // Build target marketplace list
+                    const targets =
+                      eventFilter !== 'all'
+                        ? marketplaces.filter(m => m.name === eventFilter)
+                        : marketplaces;
+
+                    if (targets.length === 0) {
+                      toast({ title: 'No marketplaces to sync', variant: 'destructive' });
+                      return;
                     }
-                    // When 'all', no marketplace_id sent = edge function processes ALL marketplaces
-                    const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', { body });
-                    if (error) throw error;
-                    setSyncResult(data);
+
+                    // Aggregate counters
+                    const combined: any = {
+                      success: true,
+                      volunteers_sent: 0, volunteers_failed: 0, volunteers_skipped: 0,
+                      volunteers_bulk_updated: 0, volunteers_attached_to_event: 0, volunteers_total: 0,
+                      volunteer_details: [] as any[],
+                      family_total: 0, family_sent: 0, family_skipped: 0, family_failed: 0,
+                      demographics_sent: 0, demographics_failed: 0, demographics_details: [] as any[],
+                      beneficiaries_sent: 0, beneficiaries_failed: 0, beneficiaries_skipped: 0, beneficiaries_total: 0,
+                      marketplace_events_updated: 0, marketplace_events_failed: 0,
+                      beneficiary_details: [] as any[],
+                      errors: [] as string[],
+                      per_marketplace: [] as any[],
+                    };
+
+                    for (let i = 0; i < targets.length; i++) {
+                      const m = targets[i];
+                      setSyncProgress({ current: i + 1, total: targets.length, name: m.name });
+                      try {
+                        const { data, error } = await supabase.functions.invoke(
+                          'sync-surpluss-volunteer-beneficiary',
+                          { body: { environment: 'production', marketplace_id: m.id } },
+                        );
+                        if (error) throw error;
+                        const d = data || {};
+                        combined.success = combined.success && (d.success !== false);
+                        combined.volunteers_sent += d.volunteers_sent ?? 0;
+                        combined.volunteers_failed += d.volunteers_failed ?? 0;
+                        combined.volunteers_skipped += d.volunteers_skipped ?? 0;
+                        combined.volunteers_bulk_updated += d.volunteers_bulk_updated ?? 0;
+                        combined.volunteers_attached_to_event += d.volunteers_attached_to_event ?? 0;
+                        combined.volunteers_total += d.volunteers_total ?? 0;
+                        combined.volunteer_details.push(...(d.volunteer_details ?? []));
+                        combined.family_total += d.family_total ?? 0;
+                        combined.family_sent += d.family_sent ?? 0;
+                        combined.family_skipped += d.family_skipped ?? 0;
+                        combined.family_failed += d.family_failed ?? 0;
+                        combined.demographics_sent += d.demographics_sent ?? 0;
+                        combined.demographics_failed += d.demographics_failed ?? 0;
+                        combined.demographics_details.push(...(d.demographics_details ?? []));
+                        combined.beneficiaries_sent += d.beneficiaries_sent ?? 0;
+                        combined.beneficiaries_failed += d.beneficiaries_failed ?? 0;
+                        combined.beneficiaries_skipped += d.beneficiaries_skipped ?? 0;
+                        combined.beneficiaries_total += d.beneficiaries_total ?? 0;
+                        combined.marketplace_events_updated += d.marketplace_events_updated ?? 0;
+                        combined.marketplace_events_failed += d.marketplace_events_failed ?? 0;
+                        combined.beneficiary_details.push(...(d.beneficiary_details ?? []));
+                        combined.errors.push(...(d.errors ?? []));
+                        combined.per_marketplace.push({ name: m.id, label: m.name, status: 'ok', summary: d });
+                      } catch (perErr) {
+                        const reason = perErr instanceof Error ? perErr.message : String(perErr);
+                        combined.success = false;
+                        combined.errors.push(`[${m.name}] ${reason}`);
+                        combined.volunteer_details.push({ name: m.name, status: 'failed', reason: `Marketplace sync failed: ${reason}` });
+                        combined.per_marketplace.push({ name: m.id, label: m.name, status: 'failed', reason });
+                      }
+                    }
+
+                    setSyncResult(combined);
                     setShowSyncResultDialog(true);
                   } catch (err) {
                     toast({
@@ -1430,13 +1494,18 @@ export const PendingVolunteers = ({ onBack }: PendingVolunteersProps) => {
                     });
                   } finally {
                     setSyncingSurpluss(false);
+                    setSyncProgress(null);
                   }
                 }}
                 disabled={syncingSurpluss || marketplaces.length === 0}
                 className="gap-2"
               >
                 {syncingSurpluss ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                <span className="hidden sm:inline">Sync to Surpluss</span>
+                <span className="hidden sm:inline">
+                  {syncingSurpluss && syncProgress
+                    ? `Syncing ${syncProgress.current}/${syncProgress.total} — ${syncProgress.name}`
+                    : 'Sync to Surpluss'}
+                </span>
               </Button>
               <Button 
                 variant="outline" 
