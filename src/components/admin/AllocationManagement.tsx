@@ -1356,6 +1356,52 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Distribute Confirmation */}
+      <Dialog
+        open={!!bulkConfirm}
+        onOpenChange={(open) => {
+          if (!open && !bulkRunning) setBulkConfirm(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk Distribute</DialogTitle>
+            <DialogDescription>
+              {bulkConfirm && (() => {
+                const targets = allocations.filter(
+                  (a) => bulkConfirm.ids.includes(a.id) && a.allocatedQuantity - a.distributedQuantity > 0,
+                );
+                const units = targets.reduce((s, a) => s + (a.allocatedQuantity - a.distributedQuantity), 0);
+                return `This will mark ${units.toLocaleString()} unit(s) across ${targets.length} item(s) as fully distributed for ${selectedMarketplace?.name || "this marketplace"}. This cannot be undone with one click.`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          {bulkProgress && (
+            <p className="text-sm text-muted-foreground">
+              Processing {bulkProgress.done} / {bulkProgress.total}…
+            </p>
+          )}
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setBulkConfirm(null)} disabled={bulkRunning}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => bulkConfirm && runBulkDistribute(bulkConfirm.ids)}
+              disabled={bulkRunning}
+            >
+              {bulkRunning ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Distributing…
+                </>
+              ) : (
+                "Confirm Distribute"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
