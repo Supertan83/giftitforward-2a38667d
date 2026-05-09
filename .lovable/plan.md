@@ -1,42 +1,41 @@
-# Why Marilyn & Cecilia show as "Inactive" in Marketplace Reports
+## Problem
 
-## Root cause
+On the Entrance Zone (Check-in Kiosk), the **Checked Out** stat shows `0` for the active marketplace, even though the database has ~196 `CheckOut` transactions today for that marketplace. After deeper inspection, **Today's Check-ins** is also undercounted (UI: 309, real check-ins today: ~511).
 
-Both volunteer QR cards (`VOL-MO0CM7T7-VG2O`, `VOL-MO1HN9MH-LHWF`) were **soft-deleted on 2026-05-06 09:35** (someone clicked "Remove from marketplace" earlier). After that, the cards were scanned again today and got their `status` flipped to `checked_in`, with fresh `volunteer_attendance` rows — but the `deleted_at` timestamp on the card row was never cleared.
+### Root cause
 
-The `useMarketplaceReport` hook in `src/hooks/useMarketplaceAllocations.ts` does:
+Both stats are queried in `useCardStats` (`src/hooks/useSupabaseData.ts`, ~lines 161–209) and both rely on `qr_cards.marketplace_id`, but our checkout RPC (`checkout_beneficiary_card`) **wipes `marketplace_id` to NULL** when a beneficiary checks out:
 
-- Fetch `volunteer_qr_cards` with `.is('deleted_at', null)` → these two cards are skipped.
-- Filter attendance whose parent card is soft-deleted → today's attendance rows are also skipped.
+- `Today's Check-ins` query: `qr_cards where marketplace_id = X and activated_at >= today` → loses every card after it's checked out.
+- `Checked Out` query: counts `transactions` of type `CheckOut` filtered by `marketplace_id`. The SQL is correct in isolation (returns 196 in DB), but in practice it's returning `0` in the UI. Most likely cause: the transactions row's `marketplace_id` is being set correctly but a small RLS / count interaction (`head: true` + `count: exact` on a SELECT-restricted table) is returning `null`. Switching this stat to the same source as Today's Check-ins (and using a SECURITY DEFINER RPC) removes the ambiguity entirely.
 
-Because the cards/attendance are skipped, the volunteers don't enter `volCardMap`. They then fall through to the form-registered branch (they're in `events_list` for this marketplace), which assigns `status: 'registered'`. The UI renders anything that isn't `checked_in`/`checked_out` as **"Inactive"**.
+## Fix
 
-So the data is "right" from the report's point of view: it refuses to count a soft-deleted card. The bug is that the check-in flow let a soft-deleted card be scanned without un-deleting it.
+Add one small SECURITY DEFINER SQL function and switch the two affected stats to it. No UI/markup changes — only the data hook changes.
 
-## Fix — two parts
+### 1. Database
 
-### 1. Data fix (immediate, unblocks the user)
+Create `public.get_marketplace_kiosk_stats(p_marketplace_id uuid)` returning JSON with:
+- `today_check_ins`: `COUNT(*)` from `transactions` where `type='CheckIn' AND marketplace_id = p_marketplace_id AND timestamp >= start of Dubai day`
+- `checked_out`: same with `type='CheckOut'`
+- `active`: `COUNT(*)` from `qr_cards` where `marketplace_id = p_marketplace_id AND status='active'`
+- `ready`: `COUNT(*)` from `qr_cards` where `status='inactive'` (unchanged definition)
 
-Clear `deleted_at` on the two affected cards so today's check-ins are recognized:
+Function uses `is_staff(auth.uid())` guard, `SET search_path = public`, and computes the Dubai-midnight cutoff in SQL (`(date_trunc('day', now() AT TIME ZONE 'Asia/Dubai') AT TIME ZONE 'Asia/Dubai')`).
 
-```sql
-UPDATE volunteer_qr_cards
-SET deleted_at = NULL, updated_at = now()
-WHERE id IN (
-  '196017d9-2c68-415f-8b6b-ce31972346ea',  -- Marilyn Abarca
-  '5e54f9a9-ad44-422b-b0d0-11d7630a66e0'   -- Cecilia Arellano
-);
-```
+### 2. Frontend
 
-(Their attendance rows for today are already `deleted_at IS NULL`, so no further data change is needed. The Reports page will show them as "Checked In" on the next refresh.)
+In `src/hooks/useSupabaseData.ts` `useCardStats`:
+- Replace the four parallel `.from(...).select('*', { count: 'exact', head: true })` calls with a single `supabase.rpc('get_marketplace_kiosk_stats', { p_marketplace_id: marketplaceId })`.
+- Map the returned JSON to the existing `{ active, checkedOut, ready, todayCheckIns }` shape consumed by `EntranceZone`. No component changes needed.
 
-### 2. Code fix (prevents this from happening again)
+### Why this resolves the report
 
-Update the volunteer check-in RPC (`checkin_volunteer_card` / wherever the volunteer scan flow writes `status='checked_in'`) so that when a scanned card is soft-deleted, it **auto-clears `deleted_at`** as part of the check-in. Rationale: if a volunteer is being physically checked in on the field, the card is by definition active again — Reports should not silently hide them.
-
-Concretely, in the same `UPDATE volunteer_qr_cards SET status='checked_in' …` statement used by the check-in RPC, also set `deleted_at = NULL`. No schema change, no RLS change.
+- `Checked Out` will pull the same value SQL returns directly (196), bypassing the silent count/RLS behavior.
+- `Today's Check-ins` will now match reality even after beneficiaries are checked out, because `transactions.marketplace_id` is preserved (`v_prev_marketplace_id` is captured before clearing the qr_card).
 
 ## Out of scope
 
-- Changing how "Remove from marketplace" works (it should still soft-delete; the issue is only that the inverse — re-scan — must undo it).
-- Backfilling other historically soft-deleted-but-rescanned cards. We can run an audit query separately if you want.
+- No changes to checkout RPC behavior (intentional that a checked-out card is detached so it can be reused next day).
+- No UI/visual changes.
+- Volunteer/admin views, exit zone, and reports are unaffected.

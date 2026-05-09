@@ -2263,6 +2263,10 @@ export type Database = {
         Args: { p_marketplace_id: string }
         Returns: number
       }
+      get_marketplace_kiosk_stats: {
+        Args: { p_marketplace_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
