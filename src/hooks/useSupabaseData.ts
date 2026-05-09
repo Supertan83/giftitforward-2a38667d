@@ -164,44 +164,21 @@ export const useCardStats = (marketplaceId: string) => {
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      // Compute "today" in Asia/Dubai (UTC+4) so on-site stats reset at midnight Dubai time,
-      // not at 04:00 Dubai (which is UTC midnight).
-      const now = new Date();
-      const dubaiNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-      dubaiNow.setUTCHours(0, 0, 0, 0);
-      const todayDubaiStartISO = new Date(dubaiNow.getTime() - 4 * 60 * 60 * 1000).toISOString();
-
-      const [activeRes, checkedOutRes, readyRes, todayCheckInsRes] = await Promise.all([
-        supabase
-          .from('qr_cards')
-          .select('*', { count: 'exact', head: true })
-          .eq('marketplace_id', marketplaceId)
-          .eq('status', 'active'),
-        // Count today's CheckOut transactions at THIS marketplace.
-        // We use transactions (immutable) instead of qr_cards.updated_at, which
-        // can be rewritten by maintenance/backfill jobs and inflate the count.
-        supabase
-          .from('transactions')
-          .select('*', { count: 'exact', head: true })
-          .eq('type', 'CheckOut')
-          .eq('marketplace_id', marketplaceId)
-          .gte('timestamp', todayDubaiStartISO),
-        supabase
-          .from('qr_cards')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'inactive'),
-        supabase
-          .from('qr_cards')
-          .select('*', { count: 'exact', head: true })
-          .eq('marketplace_id', marketplaceId)
-          .gte('activated_at', todayDubaiStartISO),
-      ]);
-
+      const { data, error } = await supabase.rpc('get_marketplace_kiosk_stats', {
+        p_marketplace_id: marketplaceId,
+      });
+      if (error) throw error;
+      const stats = (data ?? {}) as {
+        active?: number;
+        ready?: number;
+        today_check_ins?: number;
+        checked_out?: number;
+      };
       return {
-        active: activeRes.count ?? 0,
-        checkedOut: checkedOutRes.count ?? 0,
-        ready: readyRes.count ?? 0,
-        todayCheckIns: todayCheckInsRes.count ?? 0,
+        active: stats.active ?? 0,
+        checkedOut: stats.checked_out ?? 0,
+        ready: stats.ready ?? 0,
+        todayCheckIns: stats.today_check_ins ?? 0,
       };
     },
     enabled: !!marketplaceId,
