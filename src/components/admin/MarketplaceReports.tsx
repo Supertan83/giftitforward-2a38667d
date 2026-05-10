@@ -803,7 +803,7 @@ export const MarketplaceReports = ({
                           marketplaceId={selectedMarketplaceId || undefined}
                           open={bulkEditOpen}
                           onOpenChange={setBulkEditOpen}
-                          onCompleted={() => setSelectedCardIds(new Set())}
+                          onCompleted={() => setSelectedRowKeys(new Set())}
                         />
                       </div>
                         );
