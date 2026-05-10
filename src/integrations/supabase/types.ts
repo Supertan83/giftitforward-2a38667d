@@ -1222,6 +1222,36 @@ export type Database = {
           },
         ]
       }
+      marketplace_volunteer_exclusions: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          dependent_name: string | null
+          excluded_by: string | null
+          id: string
+          marketplace_id: string
+          volunteer_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          dependent_name?: string | null
+          excluded_by?: string | null
+          id?: string
+          marketplace_id: string
+          volunteer_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          dependent_name?: string | null
+          excluded_by?: string | null
+          id?: string
+          marketplace_id?: string
+          volunteer_id?: string
+        }
+        Relationships: []
+      }
       outreach_partners: {
         Row: {
           created_at: string | null

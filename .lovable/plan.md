@@ -1,41 +1,66 @@
 ## Problem
 
-On the Entrance Zone (Check-in Kiosk), the **Checked Out** stat shows `0` for the active marketplace, even though the database has ~196 `CheckOut` transactions today for that marketplace. After deeper inspection, **Today's Check-ins** is also undercounted (UI: 309, real check-ins today: ~511).
+Two related issues in **Admin → Marketplace Reports** volunteer list:
 
-### Root cause
+1. **Deleting a checked-in / checked-out volunteer (CASE 1 in `handleConfirmDelete`)** only soft-deletes their `volunteer_qr_cards` + `volunteer_attendance` rows. The volunteer's `pending_volunteers` row still has this marketplace's slug in `events_list`, so the report's `formRegisteredVolunteers` query immediately re-adds them as **Inactive**.
+2. **Deleting an Inactive (form-registered) volunteer (CASE 2)** rewrites `events_list` / `events_json` to strip the matching event. In practice this is fragile: `eventSlugMatchesMarketplace` is a fuzzy matcher (token + date + slot), and slugs that don't perfectly match aren't stripped, so the volunteer keeps reappearing after refresh.
 
-Both stats are queried in `useCardStats` (`src/hooks/useSupabaseData.ts`, ~lines 161–209) and both rely on `qr_cards.marketplace_id`, but our checkout RPC (`checkout_beneficiary_card`) **wipes `marketplace_id` to NULL** when a beneficiary checks out:
-
-- `Today's Check-ins` query: `qr_cards where marketplace_id = X and activated_at >= today` → loses every card after it's checked out.
-- `Checked Out` query: counts `transactions` of type `CheckOut` filtered by `marketplace_id`. The SQL is correct in isolation (returns 196 in DB), but in practice it's returning `0` in the UI. Most likely cause: the transactions row's `marketplace_id` is being set correctly but a small RLS / count interaction (`head: true` + `count: exact` on a SELECT-restricted table) is returning `null`. Switching this stat to the same source as Today's Check-ins (and using a SECURITY DEFINER RPC) removes the ambiguity entirely.
+Both bugs let "deleted" volunteers come back, breaking parity with the Tractor Dashboard. The user also wants a bulk-delete to clean up many rows at once.
 
 ## Fix
 
-Add one small SECURITY DEFINER SQL function and switch the two affected stats to it. No UI/markup changes — only the data hook changes.
+Introduce an explicit, durable per-marketplace **exclusion list** as the source of truth, instead of trying to mutate the volunteer profile.
 
 ### 1. Database
 
-Create `public.get_marketplace_kiosk_stats(p_marketplace_id uuid)` returning JSON with:
-- `today_check_ins`: `COUNT(*)` from `transactions` where `type='CheckIn' AND marketplace_id = p_marketplace_id AND timestamp >= start of Dubai day`
-- `checked_out`: same with `type='CheckOut'`
-- `active`: `COUNT(*)` from `qr_cards` where `marketplace_id = p_marketplace_id AND status='active'`
-- `ready`: `COUNT(*)` from `qr_cards` where `status='inactive'` (unchanged definition)
+Create `public.marketplace_volunteer_exclusions`:
 
-Function uses `is_staff(auth.uid())` guard, `SET search_path = public`, and computes the Dubai-midnight cutoff in SQL (`(date_trunc('day', now() AT TIME ZONE 'Asia/Dubai') AT TIME ZONE 'Asia/Dubai')`).
+| column | type | notes |
+|---|---|---|
+| id | uuid PK | `gen_random_uuid()` |
+| marketplace_id | uuid NOT NULL | indexed |
+| volunteer_id | uuid NOT NULL | references `pending_volunteers.id` logically |
+| dependent_name | text NULL | NULL = primary volunteer; non-null = a single family dependent |
+| excluded_by | uuid NULL | `auth.uid()` of admin |
+| created_at | timestamptz NOT NULL DEFAULT now() |
+| deleted_at | timestamptz NULL | soft-delete (project convention) |
 
-### 2. Frontend
+Plus:
+- Unique index on `(marketplace_id, volunteer_id, COALESCE(dependent_name, ''))` where `deleted_at IS NULL`.
+- RLS: admins manage; staff can read.
 
-In `src/hooks/useSupabaseData.ts` `useCardStats`:
-- Replace the four parallel `.from(...).select('*', { count: 'exact', head: true })` calls with a single `supabase.rpc('get_marketplace_kiosk_stats', { p_marketplace_id: marketplaceId })`.
-- Map the returned JSON to the existing `{ active, checkedOut, ready, todayCheckIns }` shape consumed by `EntranceZone`. No component changes needed.
+### 2. Report builder (`src/hooks/useMarketplaceAllocations.ts`, `useMarketplaceReport`)
 
-### Why this resolves the report
+- Fetch exclusions for the current `marketplaceId` once (`SELECT volunteer_id, dependent_name WHERE marketplace_id = X AND deleted_at IS NULL`).
+- Build two sets: `excludedVolunteerIds` (rows where `dependent_name IS NULL`) and `excludedDependents` (Set of `${volunteer_id}|${name.toLowerCase()}`).
+- Filter:
+  - `formRegisteredVolunteers` — drop entries whose `id ∈ excludedVolunteerIds`.
+  - `volCardMap` (attendance source) — drop entries whose `vol.id ∈ excludedVolunteerIds`.
+  - Dependents from `extractDependentsForMarketplace` — drop entries matching `excludedDependents`.
+- Recompute totals (`totalRegisteredFromForm`, `totalFamilyMembers`, category counts) from the filtered lists so headline numbers shrink too.
 
-- `Checked Out` will pull the same value SQL returns directly (196), bypassing the silent count/RLS behavior.
-- `Today's Check-ins` will now match reality even after beneficiaries are checked out, because `transactions.marketplace_id` is preserved (`v_prev_marketplace_id` is captured before clearing the qr_card).
+### 3. Delete handler (`src/components/admin/MarketplaceReports.tsx`, `handleConfirmDelete`)
+
+- **CASE 1 (cardId present)**: keep existing card + attendance soft-delete, **and** look up the card's `volunteer_id`, then upsert an exclusion `(marketplace_id, volunteer_id, NULL)`. This blocks the form-registered re-entry.
+- **CASE 2 (volunteerId / inactive)**: replace the events_json/events_list mutation with a single upsert into `marketplace_volunteer_exclusions` `(marketplace_id, volunteerId, dependentName ?? null)`. Leave `pending_volunteers` untouched so other marketplaces / global views are unaffected.
+- Invalidate the same React Query keys as today.
+
+### 4. Bulk delete UI (`MarketplaceReports.tsx`)
+
+- Make checkbox selection support cardless rows by using a composite key (`cardId` if present, otherwise `vol-${volunteerId}-${dependentName ?? ''}`). Switch the existing `selectedCardIds: Set<string>` to `selectedRowKeys: Set<string>` and store the source row alongside.
+- Add a **Delete selected** destructive button in the existing selection toolbar (next to "Edit Hours").
+- Open an `AlertDialog` confirming the count, then loop the same per-row delete logic in parallel via `Promise.all`, finally invalidate queries and clear selection.
+- Toast summarising successes / failures.
+
+## Why this fixes the reported behaviour
+
+- The exclusion table is checked unconditionally in the report, so a deleted volunteer cannot reappear via *any* path (card, attendance, events_list, events_json, family dependent extraction).
+- Slug-matching fragility no longer matters — exclusion is keyed by stable UUIDs.
+- Bulk delete reuses the same code path so behaviour is identical for one row or many.
+- `pending_volunteers` stays intact, preserving cross-marketplace data and audit history.
 
 ## Out of scope
 
-- No changes to checkout RPC behavior (intentional that a checked-out card is detached so it can be reused next day).
-- No UI/visual changes.
-- Volunteer/admin views, exit zone, and reports are unaffected.
+- No changes to volunteer global profile, training data, or other marketplaces.
+- No change to the actual volunteer record / auth user.
+- Tractor Dashboard / Surpluss-side data is not modified by this change; the user must re-run their existing sync to push the cleaned list out.
