@@ -594,6 +594,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const mpEventDate = (marketplace as any).event_date as string | null | undefined;
       const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
+        if (excludedVolunteerIds.has(pv.id)) return false;
         if (!pv.events_list) return false;
         return pv.events_list.split(',').some(
           slug => eventSlugMatchesMarketplace(slug.trim(), marketplace.name, mpEventDate)
