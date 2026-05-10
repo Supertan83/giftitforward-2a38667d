@@ -46,7 +46,7 @@ export const MarketplaceReports = ({
   const [editingVolunteer, setEditingVolunteer] = useState<{
     cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number; marketplaceId?: string;
   } | null>(null);
-  const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [qrVolunteer, setQrVolunteer] = useState<any | null>(null);
   const [deletingVolunteer, setDeletingVolunteer] = useState<{
@@ -56,8 +56,68 @@ export const MarketplaceReports = ({
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const getRowKey = (vol: any) =>
+    vol?.cardId ? `card-${vol.cardId}` : `vol-${vol?.volunteerId || ''}-${(vol?.dependentName || '').toLowerCase()}`;
+
+  // Perform a single delete operation for one row (card-backed or cardless).
+  const performDelete = async (
+    target: { cardId?: string; volunteerId?: string; dependentName?: string }
+  ) => {
+    const now = new Date().toISOString();
+
+    if (target.cardId) {
+      // Soft-delete the card link + attendance for this marketplace.
+      const { data: cardRow, error: cardFetchErr } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id, volunteer_id, marketplace_id')
+        .eq('id', target.cardId)
+        .maybeSingle();
+      if (cardFetchErr) throw cardFetchErr;
+
+      const { error: cardErr } = await supabase
+        .from('volunteer_qr_cards')
+        .update({ deleted_at: now })
+        .eq('id', target.cardId);
+      if (cardErr) throw cardErr;
+
+      const { error: attErr } = await supabase
+        .from('volunteer_attendance')
+        .update({ deleted_at: now })
+        .eq('volunteer_card_id', target.cardId)
+        .is('deleted_at', null);
+      if (attErr) throw attErr;
+
+      // Also exclude the underlying volunteer from this marketplace's report so
+      // they don't reappear via the form-registered (events_list) path.
+      const volId = (cardRow as any)?.volunteer_id || target.volunteerId;
+      const mpId = (cardRow as any)?.marketplace_id || selectedMarketplaceId;
+      if (volId && mpId) {
+        await supabase
+          .from('marketplace_volunteer_exclusions')
+          .insert({ marketplace_id: mpId, volunteer_id: volId, dependent_name: null })
+          // Ignore unique-conflict — already excluded is fine.
+          .then(({ error }) => {
+            if (error && !/duplicate key|unique/i.test(error.message)) throw error;
+          });
+      }
+    } else if (target.volunteerId) {
+      // Cardless / inactive row: just record an exclusion. Profile stays intact.
+      const { error } = await supabase
+        .from('marketplace_volunteer_exclusions')
+        .insert({
+          marketplace_id: selectedMarketplaceId,
+          volunteer_id: target.volunteerId,
+          dependent_name: target.dependentName || null,
+        });
+      if (error && !/duplicate key|unique/i.test(error.message)) throw error;
+    }
+  };
+
 
   const handleConfirmDelete = async () => {
     if (!deletingVolunteer) return;
