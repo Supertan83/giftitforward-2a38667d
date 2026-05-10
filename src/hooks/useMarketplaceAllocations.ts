@@ -564,6 +564,23 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
       const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
+// Fetch per-marketplace exclusions: volunteers admins removed from THIS marketplace's report.
+      const { data: exclusionsRaw } = await supabase
+        .from('marketplace_volunteer_exclusions')
+        .select('volunteer_id, dependent_name')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null);
+      const excludedVolunteerIds = new Set<string>();
+      const excludedDependents = new Set<string>(); // key: `${volunteer_id}|${name.toLowerCase()}`
+      for (const ex of exclusionsRaw || []) {
+        if (!ex.volunteer_id) continue;
+        if (ex.dependent_name) {
+          excludedDependents.add(`${ex.volunteer_id}|${String(ex.dependent_name).trim().toLowerCase()}`);
+        } else {
+          excludedVolunteerIds.add(ex.volunteer_id);
+        }
+      }
+
 // Fetch registered volunteers from pending_volunteers using events_list matching
       const { data: pendingVolunteers } = await supabase
         .from('pending_volunteers')
