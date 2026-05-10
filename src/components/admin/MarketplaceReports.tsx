@@ -123,90 +123,19 @@ export const MarketplaceReports = ({
     if (!deletingVolunteer) return;
     setIsDeleting(true);
     try {
-      const now = new Date().toISOString();
+      await performDelete({
+        cardId: deletingVolunteer.cardId,
+        volunteerId: deletingVolunteer.volunteerId,
+        dependentName: deletingVolunteer.dependentName,
+      });
 
       if (deletingVolunteer.cardId) {
-        // CASE 1: Volunteer has a QR card for this marketplace — soft-delete the card link.
-        const { error: cardErr } = await supabase
-          .from('volunteer_qr_cards')
-          .update({ deleted_at: now })
-          .eq('id', deletingVolunteer.cardId);
-        if (cardErr) throw cardErr;
-
-        const { error: attErr } = await supabase
-          .from('volunteer_attendance')
-          .update({ deleted_at: now })
-          .eq('volunteer_card_id', deletingVolunteer.cardId)
-          .is('deleted_at', null);
-        if (attErr) throw attErr;
-
-        setSelectedCardIds(prev => {
+        const cid = deletingVolunteer.cardId;
+        setSelectedRowKeys(prev => {
           const next = new Set(prev);
-          next.delete(deletingVolunteer.cardId!);
+          next.delete(`card-${cid}`);
           return next;
         });
-      } else if (deletingVolunteer.volunteerId) {
-        // CASE 2: Inactive (form-registered) volunteer — strip this marketplace from
-        // their events_list / events_json so they no longer appear in this report.
-        // Their pending_volunteers profile (and other marketplace links) stay intact.
-        const mp = marketplaces?.find(m => m.id === selectedMarketplaceId);
-        if (!mp) throw new Error('Marketplace not found');
-        const mpEventDate = (mp as any).event_date || null;
-
-        const { data: pv, error: pvErr } = await supabase
-          .from('pending_volunteers')
-          .select('events_list, events_json')
-          .eq('id', deletingVolunteer.volunteerId)
-          .maybeSingle();
-        if (pvErr) throw pvErr;
-        if (!pv) throw new Error('Volunteer profile not found');
-
-        const eventsJsonArr: any[] = Array.isArray(pv.events_json) ? (pv.events_json as any[]) : [];
-
-        let newEventsJson: any[];
-        let newEventsList: string;
-
-        if (deletingVolunteer.dependentName) {
-          // Remove only the matching dependent from matching events.
-          const depKey = deletingVolunteer.dependentName.trim().toLowerCase();
-          newEventsJson = eventsJsonArr.map(evt => {
-            const slug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
-            if (!eventSlugMatchesMarketplace(slug, mp.name, mpEventDate)) return evt;
-            const deps = Array.isArray(evt.dependents) ? evt.dependents : [];
-            // remove first matching dependent only
-            let removed = false;
-            const filteredDeps = deps.filter((d: any) => {
-              if (removed) return true;
-              if ((d?.name || '').trim().toLowerCase() === depKey) { removed = true; return false; }
-              return true;
-            });
-            const newAdults = Math.max(0, Number(evt['number-of-adults'] || evt.number_of_adults || 0) - (filteredDeps.length < deps.length && (deps.find((d: any) => (d?.name || '').trim().toLowerCase() === depKey)?.type !== 'child') ? 1 : 0));
-            const newChildren = Math.max(0, Number(evt['number-of-children'] || evt.number_of_children || 0) - (filteredDeps.length < deps.length && (deps.find((d: any) => (d?.name || '').trim().toLowerCase() === depKey)?.type === 'child') ? 1 : 0));
-            return {
-              ...evt,
-              dependents: filteredDeps,
-              ...(evt['number-of-adults'] !== undefined ? { 'number-of-adults': newAdults } : {}),
-              ...(evt.number_of_adults !== undefined ? { number_of_adults: newAdults } : {}),
-              ...(evt['number-of-children'] !== undefined ? { 'number-of-children': newChildren } : {}),
-              ...(evt.number_of_children !== undefined ? { number_of_children: newChildren } : {}),
-            };
-          });
-          newEventsList = pv.events_list || '';
-        } else {
-          // Remove every event entry matching this marketplace entirely.
-          newEventsJson = eventsJsonArr.filter(evt => {
-            const slug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
-            return !eventSlugMatchesMarketplace(slug, mp.name, mpEventDate);
-          });
-          const slugs = (pv.events_list || '').split(',').map(s => s.trim()).filter(Boolean);
-          newEventsList = slugs.filter(s => !eventSlugMatchesMarketplace(s, mp.name, mpEventDate)).join(',');
-        }
-
-        const { error: updErr } = await supabase
-          .from('pending_volunteers')
-          .update({ events_json: newEventsJson, events_list: newEventsList })
-          .eq('id', deletingVolunteer.volunteerId);
-        if (updErr) throw updErr;
       }
 
       toast({ title: 'Removed from marketplace', description: `${deletingVolunteer.name} was removed from this marketplace. Their profile is preserved.` });
@@ -220,16 +149,45 @@ export const MarketplaceReports = ({
     }
   };
 
+  const handleConfirmBulkDelete = async () => {
+    const list: any[] = (report as any)?.volunteers?.volunteerList || [];
+    const targets = list.filter(v => selectedRowKeys.has(getRowKey(v)));
+    if (targets.length === 0) {
+      setBulkDeleteOpen(false);
+      return;
+    }
+    setIsBulkDeleting(true);
+    let success = 0, failed = 0;
+    const results = await Promise.allSettled(
+      targets.map(v => performDelete({
+        cardId: v.cardId || undefined,
+        volunteerId: v.volunteerId,
+        dependentName: v.dependentName,
+      }))
+    );
+    for (const r of results) r.status === 'fulfilled' ? success++ : failed++;
+    setIsBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    setSelectedRowKeys(new Set());
+    queryClient.invalidateQueries({ queryKey: ['marketplace_report'] });
+    queryClient.invalidateQueries({ queryKey: ['all_marketplace_reports'] });
+    toast({
+      title: failed === 0 ? `Removed ${success} volunteers` : `Removed ${success}, ${failed} failed`,
+      description: 'They are excluded from this marketplace report only.',
+      variant: failed > 0 ? 'destructive' : undefined,
+    });
+  };
+
   // Clear selection when marketplace changes
   useEffect(() => {
-    setSelectedCardIds(new Set());
+    setSelectedRowKeys(new Set());
   }, [selectedMarketplaceId]);
 
-  const toggleCard = (cardId: string) => {
-    setSelectedCardIds(prev => {
+  const toggleRow = (key: string) => {
+    setSelectedRowKeys(prev => {
       const next = new Set(prev);
-      if (next.has(cardId)) next.delete(cardId);
-      else next.add(cardId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
