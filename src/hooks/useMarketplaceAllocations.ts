@@ -856,7 +856,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
 
         // Add dependents as individual rows (skip those already represented by family QR cards)
-        const dependents = extractDependentsForMarketplace(fv.events_json);
+        const dependents = extractDependentsForMarketplace(fv.events_json)
+          .filter(dep => !excludedDependents.has(`${fv.id}|${dep.name.trim().toLowerCase()}`));
         // Count how many family cards this volunteer already has in the card map
         const existingFamilyCardCount = alreadyInCards
           ? (cardsByVolunteerId.get(fv.id) || []).filter(c => /-F\d/.test(c.uniqueId)).length
