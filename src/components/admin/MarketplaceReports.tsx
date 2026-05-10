@@ -750,13 +750,15 @@ export const MarketplaceReports = ({
                         <div className="space-y-2 md:hidden">
                           {list.map((vol: any, idx: number) => {
                             const cid = vol.cardId as string | undefined;
-                            const checked = cid ? selectedCardIds.has(cid) : false;
+                            const rowKey = getRowKey(vol);
+                            const selectable = !!(cid || vol.volunteerId);
+                            const checked = selectable ? selectedRowKeys.has(rowKey) : false;
                             return (
                             <div key={idx} className="border border-border rounded-lg p-3">
                               <div className="flex justify-between items-start mb-1 gap-2">
                                 <div className="flex items-start gap-2 min-w-0">
-                                  {cid && (
-                                    <Checkbox checked={checked} onCheckedChange={() => toggleCard(cid)} className="mt-0.5" aria-label={`Select ${vol.name}`} />
+                                  {selectable && (
+                                    <Checkbox checked={checked} onCheckedChange={() => toggleRow(rowKey)} className="mt-0.5" aria-label={`Select ${vol.name}`} />
                                   )}
                                   <p className="font-medium text-sm text-foreground truncate">{vol.name}</p>
                                 </div>
