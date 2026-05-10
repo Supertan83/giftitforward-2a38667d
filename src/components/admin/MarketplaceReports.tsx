@@ -623,36 +623,38 @@ export const MarketplaceReports = ({
                       {/* Individual Volunteer List */}
                       {report.volunteers?.volunteerList && report.volunteers.volunteerList.length > 0 && (() => {
                         const list = report.volunteers.volunteerList;
-                        const selectableIds: string[] = list.map((v: any) => v.cardId).filter(Boolean);
-                        const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedCardIds.has(id));
-                        const someSelected = selectableIds.some(id => selectedCardIds.has(id));
+                        const selectableKeys: string[] = list
+                          .filter((v: any) => v.cardId || v.volunteerId)
+                          .map((v: any) => getRowKey(v));
+                        const allSelected = selectableKeys.length > 0 && selectableKeys.every(k => selectedRowKeys.has(k));
+                        const someSelected = selectableKeys.some(k => selectedRowKeys.has(k));
                         const toggleAll = () => {
-                          setSelectedCardIds(prev => {
-                            if (allSelected) {
-                              const next = new Set(prev);
-                              selectableIds.forEach(id => next.delete(id));
-                              return next;
-                            }
+                          setSelectedRowKeys(prev => {
                             const next = new Set(prev);
-                            selectableIds.forEach(id => next.add(id));
+                            if (allSelected) selectableKeys.forEach(k => next.delete(k));
+                            else selectableKeys.forEach(k => next.add(k));
                             return next;
                           });
                         };
                         const selectedTargets: BulkVolunteerEditTarget[] = list
-                          .filter((v: any) => v.cardId && selectedCardIds.has(v.cardId))
+                          .filter((v: any) => v.cardId && selectedRowKeys.has(getRowKey(v)))
                           .map((v: any) => ({ cardId: v.cardId, name: v.name }));
+                        const editableSelectedCount = selectedTargets.length;
 
                         return (
                         <div>
                           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                             <h4 className="font-display font-semibold text-sm">Volunteer List</h4>
-                            {selectedCardIds.size > 0 && (
-                              <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-3 py-1.5">
-                                <span className="text-xs font-medium">{selectedCardIds.size} selected</span>
-                                <Button size="sm" variant="default" className="h-7" onClick={() => setBulkEditOpen(true)}>
+                            {selectedRowKeys.size > 0 && (
+                              <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-3 py-1.5 flex-wrap">
+                                <span className="text-xs font-medium">{selectedRowKeys.size} selected</span>
+                                <Button size="sm" variant="default" className="h-7" disabled={editableSelectedCount === 0} onClick={() => setBulkEditOpen(true)}>
                                   <Pencil className="w-3.5 h-3.5 mr-1" /> Edit Hours
                                 </Button>
-                                <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelectedCardIds(new Set())}>
+                                <Button size="sm" variant="destructive" className="h-7" onClick={() => setBulkDeleteOpen(true)}>
+                                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelectedRowKeys(new Set())}>
                                   Clear
                                 </Button>
                               </div>
