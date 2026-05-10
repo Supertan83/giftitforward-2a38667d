@@ -564,6 +564,23 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const totalDistributed = itemsByType.reduce((sum, item) => sum + item.distributed, 0);
       const totalRemaining = itemsByType.reduce((sum, item) => sum + item.remaining, 0);
 
+// Fetch per-marketplace exclusions: volunteers admins removed from THIS marketplace's report.
+      const { data: exclusionsRaw } = await supabase
+        .from('marketplace_volunteer_exclusions')
+        .select('volunteer_id, dependent_name')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null);
+      const excludedVolunteerIds = new Set<string>();
+      const excludedDependents = new Set<string>(); // key: `${volunteer_id}|${name.toLowerCase()}`
+      for (const ex of exclusionsRaw || []) {
+        if (!ex.volunteer_id) continue;
+        if (ex.dependent_name) {
+          excludedDependents.add(`${ex.volunteer_id}|${String(ex.dependent_name).trim().toLowerCase()}`);
+        } else {
+          excludedVolunteerIds.add(ex.volunteer_id);
+        }
+      }
+
 // Fetch registered volunteers from pending_volunteers using events_list matching
       const { data: pendingVolunteers } = await supabase
         .from('pending_volunteers')
@@ -577,6 +594,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
       const marketplaceNameSlug = marketplace.name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const mpEventDate = (marketplace as any).event_date as string | null | undefined;
       const formRegisteredVolunteers = (pendingVolunteers || []).filter(pv => {
+        if (excludedVolunteerIds.has(pv.id)) return false;
         if (!pv.events_list) return false;
         return pv.events_list.split(',').some(
           slug => eventSlugMatchesMarketplace(slug.trim(), marketplace.name, mpEventDate)
@@ -676,6 +694,14 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
             checkedOutAt: null,
             attended: card.status === 'checked_in' || card.status === 'checked_out',
           });
+        }
+      }
+
+      // Drop volunteers whose entire participation was excluded for this marketplace.
+      for (const [cardId, entry] of Array.from(volCardMap.entries())) {
+        const volId = entry.vol?.id;
+        if (volId && excludedVolunteerIds.has(volId)) {
+          volCardMap.delete(cardId);
         }
       }
 
@@ -830,7 +856,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
 
         // Add dependents as individual rows (skip those already represented by family QR cards)
-        const dependents = extractDependentsForMarketplace(fv.events_json);
+        const dependents = extractDependentsForMarketplace(fv.events_json)
+          .filter(dep => !excludedDependents.has(`${fv.id}|${dep.name.trim().toLowerCase()}`));
         // Count how many family cards this volunteer already has in the card map
         const existingFamilyCardCount = alreadyInCards
           ? (cardsByVolunteerId.get(fv.id) || []).filter(c => /-F\d/.test(c.uniqueId)).length

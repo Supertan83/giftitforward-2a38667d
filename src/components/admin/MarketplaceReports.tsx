@@ -46,7 +46,7 @@ export const MarketplaceReports = ({
   const [editingVolunteer, setEditingVolunteer] = useState<{
     cardId: string; name: string; checkedInAt: string | null; checkedOutAt: string | null; hoursWorked: number; marketplaceId?: string;
   } | null>(null);
-  const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [qrVolunteer, setQrVolunteer] = useState<any | null>(null);
   const [deletingVolunteer, setDeletingVolunteer] = useState<{
@@ -56,97 +56,86 @@ export const MarketplaceReports = ({
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const getRowKey = (vol: any) =>
+    vol?.cardId ? `card-${vol.cardId}` : `vol-${vol?.volunteerId || ''}-${(vol?.dependentName || '').toLowerCase()}`;
+
+  // Perform a single delete operation for one row (card-backed or cardless).
+  const performDelete = async (
+    target: { cardId?: string; volunteerId?: string; dependentName?: string }
+  ) => {
+    const now = new Date().toISOString();
+
+    if (target.cardId) {
+      // Soft-delete the card link + attendance for this marketplace.
+      const { data: cardRow, error: cardFetchErr } = await supabase
+        .from('volunteer_qr_cards')
+        .select('id, volunteer_id, marketplace_id')
+        .eq('id', target.cardId)
+        .maybeSingle();
+      if (cardFetchErr) throw cardFetchErr;
+
+      const { error: cardErr } = await supabase
+        .from('volunteer_qr_cards')
+        .update({ deleted_at: now })
+        .eq('id', target.cardId);
+      if (cardErr) throw cardErr;
+
+      const { error: attErr } = await supabase
+        .from('volunteer_attendance')
+        .update({ deleted_at: now })
+        .eq('volunteer_card_id', target.cardId)
+        .is('deleted_at', null);
+      if (attErr) throw attErr;
+
+      // Also exclude the underlying volunteer from this marketplace's report so
+      // they don't reappear via the form-registered (events_list) path.
+      const volId = (cardRow as any)?.volunteer_id || target.volunteerId;
+      const mpId = (cardRow as any)?.marketplace_id || selectedMarketplaceId;
+      if (volId && mpId) {
+        await supabase
+          .from('marketplace_volunteer_exclusions')
+          .insert({ marketplace_id: mpId, volunteer_id: volId, dependent_name: null })
+          // Ignore unique-conflict — already excluded is fine.
+          .then(({ error }) => {
+            if (error && !/duplicate key|unique/i.test(error.message)) throw error;
+          });
+      }
+    } else if (target.volunteerId) {
+      // Cardless / inactive row: just record an exclusion. Profile stays intact.
+      const { error } = await supabase
+        .from('marketplace_volunteer_exclusions')
+        .insert({
+          marketplace_id: selectedMarketplaceId,
+          volunteer_id: target.volunteerId,
+          dependent_name: target.dependentName || null,
+        });
+      if (error && !/duplicate key|unique/i.test(error.message)) throw error;
+    }
+  };
+
 
   const handleConfirmDelete = async () => {
     if (!deletingVolunteer) return;
     setIsDeleting(true);
     try {
-      const now = new Date().toISOString();
+      await performDelete({
+        cardId: deletingVolunteer.cardId,
+        volunteerId: deletingVolunteer.volunteerId,
+        dependentName: deletingVolunteer.dependentName,
+      });
 
       if (deletingVolunteer.cardId) {
-        // CASE 1: Volunteer has a QR card for this marketplace — soft-delete the card link.
-        const { error: cardErr } = await supabase
-          .from('volunteer_qr_cards')
-          .update({ deleted_at: now })
-          .eq('id', deletingVolunteer.cardId);
-        if (cardErr) throw cardErr;
-
-        const { error: attErr } = await supabase
-          .from('volunteer_attendance')
-          .update({ deleted_at: now })
-          .eq('volunteer_card_id', deletingVolunteer.cardId)
-          .is('deleted_at', null);
-        if (attErr) throw attErr;
-
-        setSelectedCardIds(prev => {
+        const cid = deletingVolunteer.cardId;
+        setSelectedRowKeys(prev => {
           const next = new Set(prev);
-          next.delete(deletingVolunteer.cardId!);
+          next.delete(`card-${cid}`);
           return next;
         });
-      } else if (deletingVolunteer.volunteerId) {
-        // CASE 2: Inactive (form-registered) volunteer — strip this marketplace from
-        // their events_list / events_json so they no longer appear in this report.
-        // Their pending_volunteers profile (and other marketplace links) stay intact.
-        const mp = marketplaces?.find(m => m.id === selectedMarketplaceId);
-        if (!mp) throw new Error('Marketplace not found');
-        const mpEventDate = (mp as any).event_date || null;
-
-        const { data: pv, error: pvErr } = await supabase
-          .from('pending_volunteers')
-          .select('events_list, events_json')
-          .eq('id', deletingVolunteer.volunteerId)
-          .maybeSingle();
-        if (pvErr) throw pvErr;
-        if (!pv) throw new Error('Volunteer profile not found');
-
-        const eventsJsonArr: any[] = Array.isArray(pv.events_json) ? (pv.events_json as any[]) : [];
-
-        let newEventsJson: any[];
-        let newEventsList: string;
-
-        if (deletingVolunteer.dependentName) {
-          // Remove only the matching dependent from matching events.
-          const depKey = deletingVolunteer.dependentName.trim().toLowerCase();
-          newEventsJson = eventsJsonArr.map(evt => {
-            const slug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
-            if (!eventSlugMatchesMarketplace(slug, mp.name, mpEventDate)) return evt;
-            const deps = Array.isArray(evt.dependents) ? evt.dependents : [];
-            // remove first matching dependent only
-            let removed = false;
-            const filteredDeps = deps.filter((d: any) => {
-              if (removed) return true;
-              if ((d?.name || '').trim().toLowerCase() === depKey) { removed = true; return false; }
-              return true;
-            });
-            const newAdults = Math.max(0, Number(evt['number-of-adults'] || evt.number_of_adults || 0) - (filteredDeps.length < deps.length && (deps.find((d: any) => (d?.name || '').trim().toLowerCase() === depKey)?.type !== 'child') ? 1 : 0));
-            const newChildren = Math.max(0, Number(evt['number-of-children'] || evt.number_of_children || 0) - (filteredDeps.length < deps.length && (deps.find((d: any) => (d?.name || '').trim().toLowerCase() === depKey)?.type === 'child') ? 1 : 0));
-            return {
-              ...evt,
-              dependents: filteredDeps,
-              ...(evt['number-of-adults'] !== undefined ? { 'number-of-adults': newAdults } : {}),
-              ...(evt.number_of_adults !== undefined ? { number_of_adults: newAdults } : {}),
-              ...(evt['number-of-children'] !== undefined ? { 'number-of-children': newChildren } : {}),
-              ...(evt.number_of_children !== undefined ? { number_of_children: newChildren } : {}),
-            };
-          });
-          newEventsList = pv.events_list || '';
-        } else {
-          // Remove every event entry matching this marketplace entirely.
-          newEventsJson = eventsJsonArr.filter(evt => {
-            const slug = String(evt['event-slug'] || evt.event_slug || evt['event'] || evt.event || '');
-            return !eventSlugMatchesMarketplace(slug, mp.name, mpEventDate);
-          });
-          const slugs = (pv.events_list || '').split(',').map(s => s.trim()).filter(Boolean);
-          newEventsList = slugs.filter(s => !eventSlugMatchesMarketplace(s, mp.name, mpEventDate)).join(',');
-        }
-
-        const { error: updErr } = await supabase
-          .from('pending_volunteers')
-          .update({ events_json: newEventsJson, events_list: newEventsList })
-          .eq('id', deletingVolunteer.volunteerId);
-        if (updErr) throw updErr;
       }
 
       toast({ title: 'Removed from marketplace', description: `${deletingVolunteer.name} was removed from this marketplace. Their profile is preserved.` });
@@ -160,16 +149,45 @@ export const MarketplaceReports = ({
     }
   };
 
+  const handleConfirmBulkDelete = async () => {
+    const list: any[] = (report as any)?.volunteers?.volunteerList || [];
+    const targets = list.filter(v => selectedRowKeys.has(getRowKey(v)));
+    if (targets.length === 0) {
+      setBulkDeleteOpen(false);
+      return;
+    }
+    setIsBulkDeleting(true);
+    let success = 0, failed = 0;
+    const results = await Promise.allSettled(
+      targets.map(v => performDelete({
+        cardId: v.cardId || undefined,
+        volunteerId: v.volunteerId,
+        dependentName: v.dependentName,
+      }))
+    );
+    for (const r of results) r.status === 'fulfilled' ? success++ : failed++;
+    setIsBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    setSelectedRowKeys(new Set());
+    queryClient.invalidateQueries({ queryKey: ['marketplace_report'] });
+    queryClient.invalidateQueries({ queryKey: ['all_marketplace_reports'] });
+    toast({
+      title: failed === 0 ? `Removed ${success} volunteers` : `Removed ${success}, ${failed} failed`,
+      description: 'They are excluded from this marketplace report only.',
+      variant: failed > 0 ? 'destructive' : undefined,
+    });
+  };
+
   // Clear selection when marketplace changes
   useEffect(() => {
-    setSelectedCardIds(new Set());
+    setSelectedRowKeys(new Set());
   }, [selectedMarketplaceId]);
 
-  const toggleCard = (cardId: string) => {
-    setSelectedCardIds(prev => {
+  const toggleRow = (key: string) => {
+    setSelectedRowKeys(prev => {
       const next = new Set(prev);
-      if (next.has(cardId)) next.delete(cardId);
-      else next.add(cardId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -605,36 +623,38 @@ export const MarketplaceReports = ({
                       {/* Individual Volunteer List */}
                       {report.volunteers?.volunteerList && report.volunteers.volunteerList.length > 0 && (() => {
                         const list = report.volunteers.volunteerList;
-                        const selectableIds: string[] = list.map((v: any) => v.cardId).filter(Boolean);
-                        const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedCardIds.has(id));
-                        const someSelected = selectableIds.some(id => selectedCardIds.has(id));
+                        const selectableKeys: string[] = list
+                          .filter((v: any) => v.cardId || v.volunteerId)
+                          .map((v: any) => getRowKey(v));
+                        const allSelected = selectableKeys.length > 0 && selectableKeys.every(k => selectedRowKeys.has(k));
+                        const someSelected = selectableKeys.some(k => selectedRowKeys.has(k));
                         const toggleAll = () => {
-                          setSelectedCardIds(prev => {
-                            if (allSelected) {
-                              const next = new Set(prev);
-                              selectableIds.forEach(id => next.delete(id));
-                              return next;
-                            }
+                          setSelectedRowKeys(prev => {
                             const next = new Set(prev);
-                            selectableIds.forEach(id => next.add(id));
+                            if (allSelected) selectableKeys.forEach(k => next.delete(k));
+                            else selectableKeys.forEach(k => next.add(k));
                             return next;
                           });
                         };
                         const selectedTargets: BulkVolunteerEditTarget[] = list
-                          .filter((v: any) => v.cardId && selectedCardIds.has(v.cardId))
+                          .filter((v: any) => v.cardId && selectedRowKeys.has(getRowKey(v)))
                           .map((v: any) => ({ cardId: v.cardId, name: v.name }));
+                        const editableSelectedCount = selectedTargets.length;
 
                         return (
                         <div>
                           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                             <h4 className="font-display font-semibold text-sm">Volunteer List</h4>
-                            {selectedCardIds.size > 0 && (
-                              <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-3 py-1.5">
-                                <span className="text-xs font-medium">{selectedCardIds.size} selected</span>
-                                <Button size="sm" variant="default" className="h-7" onClick={() => setBulkEditOpen(true)}>
+                            {selectedRowKeys.size > 0 && (
+                              <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-3 py-1.5 flex-wrap">
+                                <span className="text-xs font-medium">{selectedRowKeys.size} selected</span>
+                                <Button size="sm" variant="default" className="h-7" disabled={editableSelectedCount === 0} onClick={() => setBulkEditOpen(true)}>
                                   <Pencil className="w-3.5 h-3.5 mr-1" /> Edit Hours
                                 </Button>
-                                <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelectedCardIds(new Set())}>
+                                <Button size="sm" variant="destructive" className="h-7" onClick={() => setBulkDeleteOpen(true)}>
+                                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelectedRowKeys(new Set())}>
                                   Clear
                                 </Button>
                               </div>
@@ -669,12 +689,14 @@ export const MarketplaceReports = ({
                             <tbody>
                               {list.map((vol: any, idx: number) => {
                                 const cid = vol.cardId as string | undefined;
-                                const checked = cid ? selectedCardIds.has(cid) : false;
+                                const rowKey = getRowKey(vol);
+                                const selectable = !!(cid || vol.volunteerId);
+                                const checked = selectable ? selectedRowKeys.has(rowKey) : false;
                                 return (
                                 <tr key={idx} className="border-b border-border/50 last:border-0">
                                   <td className="py-2.5 px-2">
-                                    {cid && (
-                                      <Checkbox checked={checked} onCheckedChange={() => toggleCard(cid)} aria-label={`Select ${vol.name}`} />
+                                    {selectable && (
+                                      <Checkbox checked={checked} onCheckedChange={() => toggleRow(rowKey)} aria-label={`Select ${vol.name}`} />
                                     )}
                                   </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
@@ -728,13 +750,15 @@ export const MarketplaceReports = ({
                         <div className="space-y-2 md:hidden">
                           {list.map((vol: any, idx: number) => {
                             const cid = vol.cardId as string | undefined;
-                            const checked = cid ? selectedCardIds.has(cid) : false;
+                            const rowKey = getRowKey(vol);
+                            const selectable = !!(cid || vol.volunteerId);
+                            const checked = selectable ? selectedRowKeys.has(rowKey) : false;
                             return (
                             <div key={idx} className="border border-border rounded-lg p-3">
                               <div className="flex justify-between items-start mb-1 gap-2">
                                 <div className="flex items-start gap-2 min-w-0">
-                                  {cid && (
-                                    <Checkbox checked={checked} onCheckedChange={() => toggleCard(cid)} className="mt-0.5" aria-label={`Select ${vol.name}`} />
+                                  {selectable && (
+                                    <Checkbox checked={checked} onCheckedChange={() => toggleRow(rowKey)} className="mt-0.5" aria-label={`Select ${vol.name}`} />
                                   )}
                                   <p className="font-medium text-sm text-foreground truncate">{vol.name}</p>
                                 </div>
@@ -779,7 +803,7 @@ export const MarketplaceReports = ({
                           marketplaceId={selectedMarketplaceId || undefined}
                           open={bulkEditOpen}
                           onOpenChange={setBulkEditOpen}
-                          onCompleted={() => setSelectedCardIds(new Set())}
+                          onCompleted={() => setSelectedRowKeys(new Set())}
                         />
                       </div>
                         );
@@ -814,6 +838,27 @@ export const MarketplaceReports = ({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeleting ? 'Removing…' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !isBulkDeleting) setBulkDeleteOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {selectedRowKeys.size} volunteer{selectedRowKeys.size === 1 ? '' : 's'}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected volunteers will be removed from this marketplace report only.
+              Their volunteer profiles and any data on other marketplaces stay intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isBulkDeleting}
+              onClick={(e) => { e.preventDefault(); handleConfirmBulkDelete(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isBulkDeleting ? 'Removing…' : 'Remove all'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
