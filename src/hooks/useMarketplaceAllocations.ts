@@ -697,6 +697,14 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         }
       }
 
+      // Drop volunteers whose entire participation was excluded for this marketplace.
+      for (const [cardId, entry] of Array.from(volCardMap.entries())) {
+        const volId = entry.vol?.id;
+        if (volId && excludedVolunteerIds.has(volId)) {
+          volCardMap.delete(cardId);
+        }
+      }
+
       const totalVolunteers = volCardMap.size;
       const totalHours = Array.from(volCardMap.values()).reduce((sum, v) => sum + v.totalHours, 0);
       const totalAttended = Array.from(volCardMap.values()).filter(v => v.attended).length;
