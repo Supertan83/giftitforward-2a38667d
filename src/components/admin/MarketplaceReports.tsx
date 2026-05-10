@@ -689,12 +689,14 @@ export const MarketplaceReports = ({
                             <tbody>
                               {list.map((vol: any, idx: number) => {
                                 const cid = vol.cardId as string | undefined;
-                                const checked = cid ? selectedCardIds.has(cid) : false;
+                                const rowKey = getRowKey(vol);
+                                const selectable = !!(cid || vol.volunteerId);
+                                const checked = selectable ? selectedRowKeys.has(rowKey) : false;
                                 return (
                                 <tr key={idx} className="border-b border-border/50 last:border-0">
                                   <td className="py-2.5 px-2">
-                                    {cid && (
-                                      <Checkbox checked={checked} onCheckedChange={() => toggleCard(cid)} aria-label={`Select ${vol.name}`} />
+                                    {selectable && (
+                                      <Checkbox checked={checked} onCheckedChange={() => toggleRow(rowKey)} aria-label={`Select ${vol.name}`} />
                                     )}
                                   </td>
                                   <td className="py-2.5 px-2 font-medium text-foreground truncate">{vol.name}</td>
