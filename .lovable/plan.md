@@ -1,33 +1,49 @@
-## What's wrong
+## Goal
 
-The local marketplace **"She Thrives: Women Workers Marketplace Afternoon Event"** (id `e55c17ed-…`) has `external_id = NULL`, so the Allocation page hides the **Sync from Surpluss** button.
+Add **bulk return remaining items to warehouse** in `AllocationManagement.tsx`, mirroring the existing **bulk distribute** flow but operating on the **Remaining** column. For each target allocation:
 
-The matching Surpluss event **does exist** (external_id = **50**, title `She Thrives: Women Workers Marketplace Afternoon Event`). The auto-linker should have wired them together but didn't, for a clear reason:
+- New `allocated_quantity` = current `distributed_quantity` (i.e. all remaining units returned to warehouse)
+- `distributed_quantity` is **unchanged** (already-distributed history preserved)
+- Material ID is unchanged — same `external_material_id` stays linked to the marketplace
+- Surpluss is updated via `batch_update` with `amount = distributed_quantity` (same logic as single-row Undo)
 
-- A different, **soft-deleted** marketplace ("Women In Facilities Management Marketplace Morning Event", deleted on 2026-04-26) is still holding `external_id = 50` in the DB.
-- `fetch-surpluss-marketplaces` reads `marketplace_events` **without filtering `deleted_at IS NULL`**, so it sees ext_id 50 as "already existing" and skips both linking and creating, leaving the active afternoon event orphaned.
+## UI changes (toolbar above the items table)
 
-## Fix (two parts)
+Add two new buttons next to "Distribute Selected" / "Distribute All Remaining":
 
-### 1. Manual data fix (immediate, unblocks today)
-Run a one-shot migration:
-- Clear `external_id` on the soft-deleted row `93d755de-bc6a-450c-9327-cb101c4372b5` (it's deleted; it shouldn't claim the ID).
-- Set `external_id = 50` on the live row `e55c17ed-5394-4cfd-9a4d-db8aa05c5001` (She Thrives Afternoon Event).
+- **Return Selected to Warehouse** — disabled when nothing is selected or no selected row has remaining > 0
+- **Return All Remaining to Warehouse** — disabled when no row has remaining > 0
 
-After this, the Allocation page will show **Sync from Surpluss** for that marketplace.
+Both open a confirmation dialog (reuse the existing `bulkConfirm` pattern, extended with an `action: "distribute" | "return"` field). The dialog shows: number of items affected, total units to return, and the marketplace name. Uses `Undo2` icon (already imported) and a destructive-styled outline button.
 
-### 2. Code fix in `supabase/functions/fetch-surpluss-marketplaces/index.ts` (prevent recurrence)
-Change the `existingMarketplaces` query to ignore soft-deleted rows:
+## Logic (`runBulkReturn`)
 
-```ts
-.from('marketplace_events')
-.select('id, name, external_id')
-.is('deleted_at', null)
-```
+New handler modelled on `runBulkDistribute`:
 
-So future deletions never block a fresh Surpluss event from linking.
+1. Filter `allocations` to those in `ids` with `remaining = allocated - distributed > 0`.
+2. For each row in chunks of 8 (same concurrency as bulk distribute):
+   - If row has `externalMaterialId` and the marketplace has `external_id`: call `surplussBatchUpdateMaterials(marketplace.external_id, [{ material_id, amount: distributed }], "production")`. On failure, count as failed and **do not** mutate the local row.
+   - On Surpluss success (or when no external linkage exists): 
+     - If `distributed === 0` → `deleteAllocation` (matches single-row Undo behavior).
+     - Else → `updateAllocationQuantities({ allocationId, allocatedQuantity: distributed })`.
+   - Track `unitsReturned += remaining` and success/fail counters.
+3. Update progress bar (`bulkProgress`).
+4. Log one summary `traceability` event with `actionType: "returned_to_warehouse"`, e.g. *"Bulk return: 7 item(s), 2,144 units returned to warehouse from {marketplace}"*.
+5. Toast result and clear `selectedAllocIds`.
+
+## Confirmation dialog content
+
+> Return remaining items to warehouse?
+>
+> This will return **{unitsToReturn}** unit(s) across **{itemCount}** item(s) from **{marketplace}** back to the warehouse pool. Distributed quantities and material IDs are kept unchanged. Surpluss will be updated to reflect the new allocated amounts.
+
+Destructive-style confirm button.
 
 ## Out of scope
-- No other marketplaces, no UI changes, no allocation logic touched.
 
-Awaiting approval to apply the migration and the one-line fetch function fix.
+- No DB schema changes.
+- No edge function changes.
+- No changes to the single-row Undo dialog.
+- No changes to distributed totals on any row.
+
+Awaiting approval.
