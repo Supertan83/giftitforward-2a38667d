@@ -64,14 +64,21 @@ export const MarketplaceReports = ({
   const getRowKey = (vol: any) =>
     vol?.cardId ? `card-${vol.cardId}` : `vol-${vol?.volunteerId || ''}-${(vol?.dependentName || '').toLowerCase()}`;
 
-  // Perform a single delete operation for one row (card-backed or cardless).
+  // Perform a single delete operation for one row.
+  // Always records a marketplace exclusion using the underlying volunteer_id so
+  // the row cannot reappear after refresh via any sync path. Soft-deletes the
+  // card + attendance only when the card actually belongs to the currently
+  // selected marketplace (avoids wiping a card from another event).
   const performDelete = async (
     target: { cardId?: string; volunteerId?: string; dependentName?: string }
   ) => {
     const now = new Date().toISOString();
+    const mpId = selectedMarketplaceId;
+    if (!mpId) throw new Error('No marketplace selected');
+
+    let resolvedVolunteerId = target.volunteerId;
 
     if (target.cardId) {
-      // Soft-delete the card link + attendance for this marketplace.
       const { data: cardRow, error: cardFetchErr } = await supabase
         .from('volunteer_qr_cards')
         .select('id, volunteer_id, marketplace_id')
@@ -79,39 +86,31 @@ export const MarketplaceReports = ({
         .maybeSingle();
       if (cardFetchErr) throw cardFetchErr;
 
-      const { error: cardErr } = await supabase
-        .from('volunteer_qr_cards')
-        .update({ deleted_at: now })
-        .eq('id', target.cardId);
-      if (cardErr) throw cardErr;
+      resolvedVolunteerId = (cardRow as any)?.volunteer_id || resolvedVolunteerId;
 
-      const { error: attErr } = await supabase
-        .from('volunteer_attendance')
-        .update({ deleted_at: now })
-        .eq('volunteer_card_id', target.cardId)
-        .is('deleted_at', null);
-      if (attErr) throw attErr;
+      // Only soft-delete the card if it belongs to THIS marketplace.
+      if ((cardRow as any)?.marketplace_id === mpId) {
+        const { error: cardErr } = await supabase
+          .from('volunteer_qr_cards')
+          .update({ deleted_at: now })
+          .eq('id', target.cardId);
+        if (cardErr) throw cardErr;
 
-      // Also exclude the underlying volunteer from this marketplace's report so
-      // they don't reappear via the form-registered (events_list) path.
-      const volId = (cardRow as any)?.volunteer_id || target.volunteerId;
-      const mpId = (cardRow as any)?.marketplace_id || selectedMarketplaceId;
-      if (volId && mpId) {
-        await supabase
-          .from('marketplace_volunteer_exclusions')
-          .insert({ marketplace_id: mpId, volunteer_id: volId, dependent_name: null })
-          // Ignore unique-conflict — already excluded is fine.
-          .then(({ error }) => {
-            if (error && !/duplicate key|unique/i.test(error.message)) throw error;
-          });
+        const { error: attErr } = await supabase
+          .from('volunteer_attendance')
+          .update({ deleted_at: now })
+          .eq('volunteer_card_id', target.cardId)
+          .is('deleted_at', null);
+        if (attErr) throw attErr;
       }
-    } else if (target.volunteerId) {
-      // Cardless / inactive row: just record an exclusion. Profile stays intact.
+    }
+
+    if (resolvedVolunteerId) {
       const { error } = await supabase
         .from('marketplace_volunteer_exclusions')
         .insert({
-          marketplace_id: selectedMarketplaceId,
-          volunteer_id: target.volunteerId,
+          marketplace_id: mpId,
+          volunteer_id: resolvedVolunteerId,
           dependent_name: target.dependentName || null,
         });
       if (error && !/duplicate key|unique/i.test(error.message)) throw error;
@@ -734,7 +733,7 @@ export const MarketplaceReports = ({
                                         <Pencil className="w-3.5 h-3.5" />
                                       </Button>
                                       {(cid || vol.volunteerId) && (
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer(cid ? { cardId: cid, name: vol.name } : { volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
                                       )}
@@ -786,7 +785,7 @@ export const MarketplaceReports = ({
                                     <Pencil className="w-3 h-3" />
                                   </Button>
                                   {(cid || vol.volunteerId) && (
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer(cid ? { cardId: cid, name: vol.name } : { volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingVolunteer({ cardId: cid, volunteerId: vol.volunteerId, dependentName: vol.dependentName, name: vol.name })} aria-label={`Remove ${vol.name} from this marketplace`}>
                                       <Trash2 className="w-3 h-3" />
                                     </Button>
                                   )}

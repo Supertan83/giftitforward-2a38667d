@@ -755,6 +755,7 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
           uniqueId: cardUniqueId,
           checkedInAt: entry.checkedInAt,
           checkedOutAt: entry.checkedOutAt,
+          volunteerId: vol?.id,
         });
 
         if (!volCategoryMap.has(categoryKey)) {
@@ -812,7 +813,8 @@ export const useMarketplaceReport = (marketplaceId?: string) => {
         const { data: anyCards } = await supabase
           .from('volunteer_qr_cards')
           .select('id, unique_id, volunteer_id')
-          .in('volunteer_id', formVolIds);
+          .in('volunteer_id', formVolIds)
+          .is('deleted_at', null);
         for (const c of anyCards || []) {
           if (!c.volunteer_id) continue;
           if (!cardsByFormVolId.has(c.volunteer_id)) cardsByFormVolId.set(c.volunteer_id, []);
