@@ -1,49 +1,62 @@
-## Goal
+## Problem
 
-Add **bulk return remaining items to warehouse** in `AllocationManagement.tsx`, mirroring the existing **bulk distribute** flow but operating on the **Remaining** column. For each target allocation:
+The "Bulk Return to Warehouse" dialog stays at **Processing 0 / 11** indefinitely. Edge function logs show Surpluss `batch_update` calls returning HTTP 200 successfully, so the upstream API works — but the UI never advances past 0.
 
-- New `allocated_quantity` = current `distributed_quantity` (i.e. all remaining units returned to warehouse)
-- `distributed_quantity` is **unchanged** (already-distributed history preserved)
-- Material ID is unchanged — same `external_material_id` stays linked to the marketplace
-- Surpluss is updated via `batch_update` with `amount = distributed_quantity` (same logic as single-row Undo)
+Root causes in `runBulkReturn` inside `src/components/admin/AllocationManagement.tsx`:
 
-## UI changes (toolbar above the items table)
+1. **Per-chunk progress only.** Progress is updated *after* a chunk of 8 `Promise.all` settles. If even one item in the chunk hangs, the bar stays at 0/11.
+2. **No timeout on the Surpluss call.** `surplussBatchUpdateMaterials` uses `supabase.functions.invoke` with no AbortSignal, so a network stall hangs the chunk forever.
+3. **One Surpluss request per item.** For 11 items we fire 11 separate `batch_update` calls. The endpoint already accepts an array — we should call it once with all materials.
 
-Add two new buttons next to "Distribute Selected" / "Distribute All Remaining":
+## Fix
 
-- **Return Selected to Warehouse** — disabled when nothing is selected or no selected row has remaining > 0
-- **Return All Remaining to Warehouse** — disabled when no row has remaining > 0
+Edit only `runBulkReturn` (and a tiny helper) in `src/components/admin/AllocationManagement.tsx`. No DB or edge function changes.
 
-Both open a confirmation dialog (reuse the existing `bulkConfirm` pattern, extended with an `action: "distribute" | "return"` field). The dialog shows: number of items affected, total units to return, and the marketplace name. Uses `Undo2` icon (already imported) and a destructive-styled outline button.
+### 1. Single batched Surpluss call
 
-## Logic (`runBulkReturn`)
+Before iterating, build one `materials: [{ material_id, amount: distributedQuantity }]` array for every target that has both `externalMaterialId` and `mp.external_id`. Make **one** `surplussBatchUpdateMaterials(mp.external_id, materials, "production")` call.
 
-New handler modelled on `runBulkDistribute`:
+- If the batched call fails: stop the bulk run, toast the error, do not mutate any local row (preserves current "don't drift from Surpluss" guarantee).
+- If it succeeds (or there are no Surpluss-linked items): proceed to update local DB rows.
 
-1. Filter `allocations` to those in `ids` with `remaining = allocated - distributed > 0`.
-2. For each row in chunks of 8 (same concurrency as bulk distribute):
-   - If row has `externalMaterialId` and the marketplace has `external_id`: call `surplussBatchUpdateMaterials(marketplace.external_id, [{ material_id, amount: distributed }], "production")`. On failure, count as failed and **do not** mutate the local row.
-   - On Surpluss success (or when no external linkage exists): 
-     - If `distributed === 0` → `deleteAllocation` (matches single-row Undo behavior).
-     - Else → `updateAllocationQuantities({ allocationId, allocatedQuantity: distributed })`.
-   - Track `unitsReturned += remaining` and success/fail counters.
-3. Update progress bar (`bulkProgress`).
-4. Log one summary `traceability` event with `actionType: "returned_to_warehouse"`, e.g. *"Bulk return: 7 item(s), 2,144 units returned to warehouse from {marketplace}"*.
-5. Toast result and clear `selectedAllocIds`.
+### 2. Local DB updates with live progress + per-item resilience
 
-## Confirmation dialog content
+Loop the targets in chunks of 8 using `Promise.allSettled` instead of `Promise.all`, and increment a `done` counter as **each** item resolves (not after the chunk):
 
-> Return remaining items to warehouse?
->
-> This will return **{unitsToReturn}** unit(s) across **{itemCount}** item(s) from **{marketplace}** back to the warehouse pool. Distributed quantities and material IDs are kept unchanged. Surpluss will be updated to reflect the new allocated amounts.
+```ts
+let done = 0;
+for (const chunk of chunks) {
+  await Promise.allSettled(chunk.map(async (alloc) => {
+    try {
+      if (alloc.distributedQuantity <= 0) {
+        await deleteAllocation.mutateAsync(alloc.id);
+      } else {
+        await updateAllocationQuantities.mutateAsync({
+          allocationId: alloc.id,
+          allocatedQuantity: alloc.distributedQuantity,
+        });
+      }
+      success++;
+      unitsReturned += alloc.allocatedQuantity - alloc.distributedQuantity;
+    } catch {
+      failed++;
+    } finally {
+      done++;
+      setBulkProgress({ done, total: targets.length });
+    }
+  }));
+}
+```
 
-Destructive-style confirm button.
+### 3. Safety timeout on Surpluss call
 
-## Out of scope
+Wrap the batched Surpluss call in a `Promise.race` with a 60s timeout so a hung edge function can no longer freeze the dialog. On timeout, mark as failed, surface the error toast, and abort the run.
 
-- No DB schema changes.
-- No edge function changes.
-- No changes to the single-row Undo dialog.
-- No changes to distributed totals on any row.
+### Out of scope
 
-Awaiting approval.
+- No changes to `runBulkDistribute`, single-row Undo, edge functions, schema, or `surplussBatchUpdateMaterials` itself.
+- No retry logic — failed items are reported in the final toast as today.
+
+## Expected result
+
+For the She Thrives Afternoon Event (11 items, 4,225 remaining): one Surpluss `batch_update` call (~1–3s) + 11 quick local DB updates with the bar advancing 1 → 2 → … → 11 in real time. No more hangs.
