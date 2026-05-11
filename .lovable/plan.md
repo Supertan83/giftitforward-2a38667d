@@ -1,33 +1,65 @@
-## What I found
+## What's happening with material 990 (Toys), event 49
 
-The delete action is writing exclusion records, but the report can still show some deleted rows because of two gaps:
+**On GIF (our DB):** one row, allocated = 915, distributed = 0.
 
-1. **Card-backed rows don’t carry `volunteerId` into the UI row**, so delete relies on refetching the card. If the card is already soft-deleted/reassigned or the fetch doesn’t return the expected relationship, the exclusion can be incomplete.
-2. **Inactive rows can reuse an old QR card from another marketplace**, so the UI treats them as card-backed rows and deletes the wrong card path instead of excluding the volunteer from the currently selected marketplace.
+**On Tractor / Surpluss (event 49):** material 990 is stored as **two separate allocation rows** for the same material:
 
-The database confirms recent exclusions exist, but there are duplicate volunteer profiles and cross-marketplace cards, which makes the current row identity too fragile.
+```
+material_id 990 "Toys"  → amount 130   (donation_metadata 427)
+material_id 990 "Toys"  → amount 785   (donation_metadata 427)
+                          total = 915
+```
+
+The source `donation_metadata 427` has **0 remaining** (everything is already allocated across events).
+
+## Why the save fails
+
+In `AllocationManagement.handleSaveEdit`, every save calls `surplussBatchUpdateMaterials(eventId, [{material_id: 990, amount: 915}])` — even when the user only changed `distributed` and the allocated amount didn't change.
+
+Surpluss `PUT /donation-allocations/batch-allocation` doesn't see "915 = 130 + 785". It matches the first row (130) and treats `amount: 915` as "increase this row by 785". Since donation 427 has 0 remaining at the source, it rejects:
+
+> Cannot increase allocation for "Toys" by 785. Only 0 remaining.
+
+So:
+- The user wanted to update **distributed** (859) / remaining (56), not allocated.
+- We pushed the unchanged allocated value to Tractor anyway.
+- Tractor refused because of duplicate rows + 0 source remaining.
 
 ## Plan
 
-1. **Make volunteer report rows carry stable identity**
-   - Add `volunteerId` to every card-backed volunteer row in `useMarketplaceReport`.
-   - Track whether a row’s `cardId` belongs to the selected marketplace or is only a fallback QR card from another marketplace.
+### 1. Stop pushing unchanged allocations to Tractor (frontend fix)
 
-2. **Fix delete target selection in Marketplace Reports**
-   - For rows with a real card in the current marketplace: soft-delete the card/attendance and insert an exclusion using the row’s `volunteerId`.
-   - For inactive/fallback/cardless rows: do not delete a reused QR card; insert the exclusion directly for the selected marketplace.
+In `src/components/admin/AllocationManagement.tsx > handleSaveEdit`:
+- Only call `surplussBatchUpdateMaterials` when `editAllocated !== alloc.allocatedQuantity`.
+- When only `distributed` changed, skip the Tractor allocation sync entirely and just save locally (distributed is already a GIF-side concept synced separately by the distribution reporting flow).
+- Apply the same guard to the bulk-edit path around line 434 if it has the same shape.
 
-3. **Harden report filtering**
-   - Exclude volunteers consistently from:
-     - form-registered rows
-     - card/attendance rows
-     - fallback inactive QR rows
-     - dependent/family rows
-   - Filter fallback QR cards with `.is('deleted_at', null)` so deleted cards are never reused for display.
+This alone unblocks the user's current scenario (they aren't actually changing 915).
 
-4. **Backfill current affected rows**
-   - Add a migration to insert missing marketplace exclusions for volunteers whose cards were soft-deleted in that marketplace, so previous delete attempts are honored after refresh.
+### 2. Handle Surpluss duplicate-row case for real allocation changes
 
-5. **Verify with data checks**
-   - Query a few recently deleted examples and confirm they now have matching exclusions for the same marketplace.
-   - Confirm the report hook logic no longer allows those volunteers to be rebuilt as “Inactive” rows after refresh.
+When the user *does* change the allocated value and Surpluss has the material split into multiple rows for the same event (as with 990 = 130 + 785):
+- Before calling `batch-allocation`, detect duplicates by reading `get_donation_allocations` for that event and grouping by `material_id`.
+- If duplicates exist, consolidate first: delete the smaller row(s) via `delete_allocation` (or set them to 0), then send one `batch_update` with the new total. This way Surpluss never sees a partial-row delta that exceeds source remaining.
+- If consolidation can't be done automatically (e.g. source has 0 remaining and the new total > current total), surface a clearer error: "Material has duplicate allocations on Surpluss (130 + 785). Please consolidate on Tractor first."
+
+### 3. One-time cleanup for material 990 / event 49
+
+Independent of code changes, the data on Surpluss should be consolidated:
+- Delete one of the two 990 rows on event 49.
+- Re-create as a single row of 915.
+- This removes the trap for any future edit on this row.
+
+I can do this via `surpluss-allocations-api` (`delete_allocation` then `batch_update`) once you confirm.
+
+### 4. Verification
+
+- Re-open the Allocation Management edit for material 990 on the Inclusive Community Afternoon event.
+- Change only `distributed` to 859 → save should succeed with no Tractor call.
+- Then try changing `allocated` and confirm the new dedup-aware sync path works (or returns the friendlier error).
+
+### Out of scope
+
+- No DB schema changes.
+- No changes to the marketplace-reports delete flow from the previous task.
+- No change to how distributed counts are pushed to Surpluss (that path is unaffected).

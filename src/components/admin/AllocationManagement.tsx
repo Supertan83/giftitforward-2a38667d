@@ -263,17 +263,24 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     try {
       const itemType = alloc ? itemTypes.find((i) => i.id === alloc.itemTypeId) : undefined;
       const marketplace = marketplaces.find((m) => m.id === selectedMarketplaceId);
+      const allocatedChanged = !!alloc && editAllocated !== alloc.allocatedQuantity;
 
-      if (itemType?.externalMaterialId != null && marketplace?.external_id != null) {
+      // Only push to Tractor when the allocated quantity actually changed.
+      // Distributed-only edits stay local — they're synced separately by the
+      // distribution reporting flow and don't affect Surpluss allocations.
+      if (allocatedChanged && itemType?.externalMaterialId != null && marketplace?.external_id != null) {
         const sync = await surplussBatchUpdateMaterials(
           marketplace.external_id,
           [{ material_id: itemType.externalMaterialId, amount: editAllocated }],
           SURPLUSS_ENV,
         );
         if (!sync.ok) {
+          const dupHint = /Cannot increase allocation|Only \d+ remaining/i.test(sync.error ?? "")
+            ? " This material may have duplicate allocation rows on Surpluss for this event — please consolidate them on Tractor before retrying."
+            : "";
           toast({
             title: "Tractor sync failed",
-            description: sync.error ?? "Could not update Surpluss. Quantities were not saved.",
+            description: (sync.error ?? "Could not update Surpluss. Quantities were not saved.") + dupHint,
             variant: "destructive",
           });
           return;
