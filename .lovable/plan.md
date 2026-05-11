@@ -1,31 +1,33 @@
-## Root Cause
+## What I found
 
-The local marketplace **"Inclusive Community: Family and People of Determination Marketplace Afternoon Event"** is linked to the wrong Surpluss event.
+The delete action is writing exclusion records, but the report can still show some deleted rows because of two gaps:
 
-- Local `external_id` = **28** → Surpluss event titled *"Inclusive Community Family And People Of Determination Marketplace **March 12**"* (a CANCELLED older event with no allocations).
-- The correct Surpluss event is **id = 49**, titled *"Inclusive Community: Family and People of Determination Marketplace Afternoon Event"* — this is the one shown in your Tractor screenshot with 30,945 / 65 materials.
+1. **Card-backed rows don’t carry `volunteerId` into the UI row**, so delete relies on refetching the card. If the card is already soft-deleted/reassigned or the fetch doesn’t return the expected relationship, the exclusion can be incomplete.
+2. **Inactive rows can reuse an old QR card from another marketplace**, so the UI treats them as card-backed rows and deletes the wrong card path instead of excluding the volunteer from the currently selected marketplace.
 
-That's why the sync fetches `event_id=28` from Tractor and gets 0 allocations back, then reports "Synced 0 allocations".
+The database confirms recent exclusions exist, but there are duplicate volunteer profiles and cross-marketplace cards, which makes the current row identity too fragile.
 
-This wrong link was almost certainly created by the fuzzy auto-linker when both events existed; the older "March 12" cancelled event matched first.
+## Plan
 
-## Fix
+1. **Make volunteer report rows carry stable identity**
+   - Add `volunteerId` to every card-backed volunteer row in `useMarketplaceReport`.
+   - Track whether a row’s `cardId` belongs to the selected marketplace or is only a fallback QR card from another marketplace.
 
-One-line data correction:
+2. **Fix delete target selection in Marketplace Reports**
+   - For rows with a real card in the current marketplace: soft-delete the card/attendance and insert an exclusion using the row’s `volunteerId`.
+   - For inactive/fallback/cardless rows: do not delete a reused QR card; insert the exclusion directly for the selected marketplace.
 
-```sql
-UPDATE public.marketplace_events
-SET external_id = 49, updated_at = now()
-WHERE id = '71792e7c-9f98-4103-bd26-0aec8e5f0ad6';
-```
+3. **Harden report filtering**
+   - Exclude volunteers consistently from:
+     - form-registered rows
+     - card/attendance rows
+     - fallback inactive QR rows
+     - dependent/family rows
+   - Filter fallback QR cards with `.is('deleted_at', null)` so deleted cards are never reused for display.
 
-After the migration, click **Sync from Surpluss** again — it will pull the 65 materials from event 49 into the marketplace.
+4. **Backfill current affected rows**
+   - Add a migration to insert missing marketplace exclusions for volunteers whose cards were soft-deleted in that marketplace, so previous delete attempts are honored after refresh.
 
-## Sister Marketplace Check
-
-The "Morning Event" counterpart should also be verified — Surpluss has id=41 for *"Inclusive Community: Family and People of Determination Marketplace Morning Event"*. I'll check its current local link in the same migration and correct it if needed.
-
-## Out of Scope
-
-- No code changes to the sync function — its logic is correct, the data link was wrong.
-- A separate hardening task (preventing the auto-linker from matching CANCELLED Surpluss events, or preferring exact title matches over fuzzy ones) can be done later if you want; happy to plan that as a follow-up.
+5. **Verify with data checks**
+   - Query a few recently deleted examples and confirm they now have matching exclusions for the same marketplace.
+   - Confirm the report hook logic no longer allows those volunteers to be rebuilt as “Inactive” rows after refresh.
