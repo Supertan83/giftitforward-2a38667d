@@ -83,7 +83,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
 
   // Bulk distribute state
   const [selectedAllocIds, setSelectedAllocIds] = useState<Set<string>>(new Set());
-  const [bulkConfirm, setBulkConfirm] = useState<{ mode: "selected" | "all"; ids: string[] } | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<{ mode: "selected" | "all"; ids: string[]; action: "distribute" | "return" } | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
