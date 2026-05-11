@@ -825,9 +825,16 @@ export const MarketplaceReports = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove from this marketplace?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <span className="font-medium text-foreground">{deletingVolunteer?.name}</span> will be removed from this marketplace report only.
-              Their volunteer profile and any data on other marketplaces stay intact.
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  <span className="font-medium text-foreground">{deletingVolunteer?.name}</span> will be removed from this marketplace report only.
+                  Their volunteer profile and any data on other marketplaces stay intact.
+                </p>
+                <p className="text-destructive font-medium">
+                  ⚠️ This also soft-deletes their attendance record (check-in/out + hours) for this marketplace. The numbers in the report will drop accordingly.
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -842,20 +849,38 @@ export const MarketplaceReports = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !isBulkDeleting) setBulkDeleteOpen(false); }}>
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !isBulkDeleting) { setBulkDeleteOpen(false); setBulkDeleteConfirmText(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {selectedRowKeys.size} volunteer{selectedRowKeys.size === 1 ? '' : 's'}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The selected volunteers will be removed from this marketplace report only.
-              Their volunteer profiles and any data on other marketplaces stay intact.
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  The selected volunteers will be removed from this marketplace report only.
+                  Their volunteer profiles and any data on other marketplaces stay intact.
+                </p>
+                <p className="text-destructive font-medium">
+                  ⚠️ This also soft-deletes their attendance records (check-in/out + hours) for this marketplace. The "Total Attended" figure will drop by up to {selectedRowKeys.size}.
+                </p>
+                <div className="space-y-1">
+                  <p className="text-sm text-foreground">Type <span className="font-mono font-bold">REMOVE</span> to confirm:</p>
+                  <input
+                    type="text"
+                    value={bulkDeleteConfirmText}
+                    onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="REMOVE"
+                    autoFocus
+                  />
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isBulkDeleting} onClick={() => setBulkDeleteConfirmText('')}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={isBulkDeleting}
-              onClick={(e) => { e.preventDefault(); handleConfirmBulkDelete(); }}
+              disabled={isBulkDeleting || bulkDeleteConfirmText.trim() !== 'REMOVE'}
+              onClick={(e) => { e.preventDefault(); handleConfirmBulkDelete(); setBulkDeleteConfirmText(''); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isBulkDeleting ? 'Removing…' : 'Remove all'}
