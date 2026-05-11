@@ -411,6 +411,85 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     setSelectedAllocIds(new Set());
   };
 
+  // Bulk return remaining to warehouse: set allocated_quantity = distributed_quantity
+  const runBulkReturn = async (ids: string[]) => {
+    const targets = allocations.filter(
+      (a) => ids.includes(a.id) && a.allocatedQuantity - a.distributedQuantity > 0,
+    );
+    if (targets.length === 0) {
+      toast({ title: "Nothing to return", description: "No remaining units in the selected items." });
+      setBulkConfirm(null);
+      return;
+    }
+
+    const mp = marketplaces.find((m) => m.id === selectedMarketplaceId);
+    setBulkRunning(true);
+    setBulkProgress({ done: 0, total: targets.length });
+
+    let success = 0;
+    let failed = 0;
+    let unitsReturned = 0;
+    const chunkSize = 8;
+
+    for (let i = 0; i < targets.length; i += chunkSize) {
+      const chunk = targets.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (alloc) => {
+          const remaining = alloc.allocatedQuantity - alloc.distributedQuantity;
+          const newAllocated = alloc.distributedQuantity;
+          try {
+            const itemType = itemTypes.find((i) => i.id === alloc.itemTypeId);
+            if (itemType?.externalMaterialId != null && mp?.external_id != null) {
+              const sync = await surplussBatchUpdateMaterials(
+                mp.external_id,
+                [{ material_id: itemType.externalMaterialId, amount: newAllocated }],
+                SURPLUSS_ENV,
+              );
+              if (!sync.ok) {
+                failed += 1;
+                return;
+              }
+            }
+
+            if (newAllocated <= 0) {
+              await deleteAllocation.mutateAsync(alloc.id);
+            } else {
+              await updateAllocationQuantities.mutateAsync({
+                allocationId: alloc.id,
+                allocatedQuantity: newAllocated,
+              });
+            }
+            success += 1;
+            unitsReturned += remaining;
+          } catch {
+            failed += 1;
+          }
+        }),
+      );
+      setBulkProgress({ done: Math.min(i + chunk.length, targets.length), total: targets.length });
+    }
+
+    logEvent.mutate({
+      marketplaceId: selectedMarketplaceId || undefined,
+      marketplaceName: mp?.name || "Unknown",
+      actionType: "returned_to_warehouse",
+      quantityBefore: 0,
+      quantityAfter: unitsReturned,
+      description: `Bulk return: ${success} item(s), ${unitsReturned.toLocaleString()} units returned to warehouse from ${mp?.name || "marketplace"}${failed ? ` (${failed} failed)` : ""}`,
+    });
+
+    toast({
+      title: failed ? "Bulk Return Completed with Errors" : "Bulk Return Completed",
+      description: `${success} item(s) updated, ${unitsReturned.toLocaleString()} units returned${failed ? `. ${failed} failed.` : "."}`,
+      variant: failed ? "destructive" : "default",
+    });
+
+    setBulkRunning(false);
+    setBulkProgress(null);
+    setBulkConfirm(null);
+    setSelectedAllocIds(new Set());
+  };
+
   // Handle undo / return to warehouse
   const handleUndo = async () => {
     if (!undoAllocation) return;
