@@ -429,28 +429,60 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
     let success = 0;
     let failed = 0;
     let unitsReturned = 0;
-    const chunkSize = 8;
 
+    // Step 1: single batched Surpluss update for all linked materials (with 60s timeout)
+    if (mp?.external_id != null) {
+      const surplussMaterials = targets
+        .map((alloc) => {
+          const itemType = itemTypes.find((i) => i.id === alloc.itemTypeId);
+          if (itemType?.externalMaterialId == null) return null;
+          return { material_id: itemType.externalMaterialId, amount: alloc.distributedQuantity };
+        })
+        .filter((m): m is { material_id: number; amount: number } => m !== null);
+
+      if (surplussMaterials.length > 0) {
+        try {
+          const sync = await Promise.race([
+            surplussBatchUpdateMaterials(mp.external_id, surplussMaterials, SURPLUSS_ENV),
+            new Promise<{ ok: false; error: string }>((_, reject) =>
+              setTimeout(() => reject(new Error("Surpluss batch_update timed out after 60s")), 60_000),
+            ),
+          ]);
+          if (!sync.ok) {
+            toast({
+              title: "Surpluss Sync Failed",
+              description: sync.error || "Could not update Surpluss. No local changes were made.",
+              variant: "destructive",
+            });
+            setBulkRunning(false);
+            setBulkProgress(null);
+            setBulkConfirm(null);
+            return;
+          }
+        } catch (e) {
+          toast({
+            title: "Surpluss Sync Failed",
+            description: e instanceof Error ? e.message : "Unknown error. No local changes were made.",
+            variant: "destructive",
+          });
+          setBulkRunning(false);
+          setBulkProgress(null);
+          setBulkConfirm(null);
+          return;
+        }
+      }
+    }
+
+    // Step 2: local DB updates with live per-item progress
+    let done = 0;
+    const chunkSize = 8;
     for (let i = 0; i < targets.length; i += chunkSize) {
       const chunk = targets.slice(i, i + chunkSize);
-      await Promise.all(
+      await Promise.allSettled(
         chunk.map(async (alloc) => {
           const remaining = alloc.allocatedQuantity - alloc.distributedQuantity;
           const newAllocated = alloc.distributedQuantity;
           try {
-            const itemType = itemTypes.find((i) => i.id === alloc.itemTypeId);
-            if (itemType?.externalMaterialId != null && mp?.external_id != null) {
-              const sync = await surplussBatchUpdateMaterials(
-                mp.external_id,
-                [{ material_id: itemType.externalMaterialId, amount: newAllocated }],
-                SURPLUSS_ENV,
-              );
-              if (!sync.ok) {
-                failed += 1;
-                return;
-              }
-            }
-
             if (newAllocated <= 0) {
               await deleteAllocation.mutateAsync(alloc.id);
             } else {
@@ -463,10 +495,12 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
             unitsReturned += remaining;
           } catch {
             failed += 1;
+          } finally {
+            done += 1;
+            setBulkProgress({ done, total: targets.length });
           }
         }),
       );
-      setBulkProgress({ done: Math.min(i + chunk.length, targets.length), total: targets.length });
     }
 
     logEvent.mutate({
