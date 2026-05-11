@@ -1,31 +1,33 @@
-## Two different issues — one fixable, one not
+## Sorun
 
-### 1. Construction Workers Morning / Afternoon — external_id is swapped (FIXABLE)
+"Dulsco Bus Activation" marketplace'i için Surpluss sync 0 malzeme dönüyor.
 
-| Local marketplace | Currently linked to | Should be |
-|---|---|---|
-| Construction Workers Marketplace **Morning** Event | Surpluss 52 (= "Afternoon Event") | **Surpluss 51** |
-| Construction Workers Marketplace **Afternoon** Event | Surpluss 51 (= "Morning Event") | **Surpluss 52** |
+**Kök neden:** Yerel `marketplace_events` kaydında `external_id = 68` olarak ayarlı, ama Surpluss API'sinde bu ID'de bir event yok (404 "Marketplace event not found").
 
-This is the same swap pattern we just fixed for the Single Mothers events. Surpluss event 51 has 1 allocation and event 52 has 1 allocation, so after the swap, sync will pull the correct data into each.
+Surpluss event listesini taradığımda "Dulsco Bus Activation" başlıklı event'in gerçek ID'si **53** (status: COMPLETED). Yani external_id yanlış eşleşmiş — büyük olasılıkla daha önce yanlış elle girilmiş veya başka bir event'in ID'sine bakılarak set edilmiş.
 
-**Fix:** one DB update swapping the two `external_id` values (using a temporary value to avoid the unique constraint), exactly like the previous Single Mothers migration.
+```text
+Local DB:                          Surpluss:
+  Dulsco Bus Activation             id=53  Dulsco Bus Activation  ✅ (gerçek)
+  external_id = 68      ❌  →       id=68  (yok)                 → 404
+```
 
-### 2. Single Mothers Household Workers Morning / Afternoon Event **3** — already linked correctly, but Surpluss has no data (NOT FIXABLE FROM OUR SIDE)
+Bu yüzden:
+- `sync-surpluss-event-allocations` event 68 için 0 allocation çekiyor
+- `surpluss-allocations-api get_event_allocations` → 404
+- GIF tarafı boş kalıyor
 
-| Local marketplace | external_id | Surpluss title | Allocations on Surpluss |
-|---|---|---|---|
-| Single Mothers ... Morning Event 3 | 47 | "Single Mothers Household Workers Marketplace Morning Event 3" ✓ | **0** |
-| Single Mothers ... Afternoon Event 3 | 48 | "Single Mothers Household Workers Marketplace Afternoon Event 3" ✓ | **0** |
+## Çözüm
 
-The mapping is right. The reason sync returns "0 allocated" is that Surpluss itself has zero donation-allocations on events 47 and 48. The edge-function logs confirm: `[sync] Total allocations fetched for event 52: 0` (and same for 47/48 when tried).
+1. **Yerel external_id'yi düzelt:** `Dulsco Bus Activation` (`c98b7887-…`) kaydının `external_id`'sini **68 → 53** olarak güncelle.
+2. **Allocation sync'i tetikle:** `sync-surpluss-event-allocations` fonksiyonunu event 53 için çalıştır → Surpluss'taki gerçek allocation'lar GIF'e (`marketplace_item_allocations`) yazılır.
+3. **Doğrula:** Sync sonrası bu marketplace için `marketplace_item_allocations` satırlarının dolduğunu ve UI'da malzeme listesinin göründüğünü kontrol et.
 
-**Action needed (outside our app):** allocate materials to events 47 and 48 in the Surpluss platform. Once that's done, the existing "Sync from Surpluss" button will pull them in — no code or DB change required on our side.
+İsteğe bağlı (öneri): `fetch-surpluss-marketplaces` fonksiyonu fuzzy-match yaparken zaten linkli olan kayıtları atlıyor; gelecekte yanlış manuel external_id girişlerini önlemek için MarketplaceManagement UI'ında ID girilirken Surpluss'tan başlık doğrulaması ekleyebiliriz — ama bu ayrı bir iş.
 
----
+## Onay
 
-## What I will do if you approve
-
-Run a single data update that swaps `external_id` 51 ↔ 52 between the two Construction Workers marketplaces. No code changes, no schema changes, no impact on any other marketplace. The previous Single Mothers fix and the Bulk Return work stay as-is.
-
-For the Event 3 marketplaces I won't change anything — please add the allocations on Surpluss and re-sync.
+Onayladığınızda:
+- DB'de external_id 68 → 53 güncellemesi (insert tool ile)
+- Sync fonksiyonunu çağır
+- Sonuç tablosunu paylaş
