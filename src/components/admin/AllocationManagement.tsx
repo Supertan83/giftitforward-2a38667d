@@ -1472,7 +1472,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Distribute Confirmation */}
+      {/* Bulk Confirmation (distribute or return) */}
       <Dialog
         open={!!bulkConfirm}
         onOpenChange={(open) => {
@@ -1481,13 +1481,16 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Bulk Distribute</DialogTitle>
+            <DialogTitle>{bulkConfirm?.action === "return" ? "Bulk Return to Warehouse" : "Bulk Distribute"}</DialogTitle>
             <DialogDescription>
               {bulkConfirm && (() => {
                 const targets = allocations.filter(
                   (a) => bulkConfirm.ids.includes(a.id) && a.allocatedQuantity - a.distributedQuantity > 0,
                 );
                 const units = targets.reduce((s, a) => s + (a.allocatedQuantity - a.distributedQuantity), 0);
+                if (bulkConfirm.action === "return") {
+                  return `This will return ${units.toLocaleString()} unit(s) across ${targets.length} item(s) from ${selectedMarketplace?.name || "this marketplace"} back to the warehouse pool. Distributed quantities and material IDs are kept unchanged. Surpluss will be updated to reflect the new allocated amounts.`;
+                }
                 return `This will mark ${units.toLocaleString()} unit(s) across ${targets.length} item(s) as fully distributed for ${selectedMarketplace?.name || "this marketplace"}. This cannot be undone with one click.`;
               })()}
             </DialogDescription>
@@ -1502,14 +1505,21 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
               Cancel
             </Button>
             <Button
-              onClick={() => bulkConfirm && runBulkDistribute(bulkConfirm.ids)}
+              variant={bulkConfirm?.action === "return" ? "destructive" : "default"}
+              onClick={() => {
+                if (!bulkConfirm) return;
+                if (bulkConfirm.action === "return") runBulkReturn(bulkConfirm.ids);
+                else runBulkDistribute(bulkConfirm.ids);
+              }}
               disabled={bulkRunning}
             >
               {bulkRunning ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Distributing…
+                  {bulkConfirm?.action === "return" ? "Returning…" : "Distributing…"}
                 </>
+              ) : bulkConfirm?.action === "return" ? (
+                "Confirm Return"
               ) : (
                 "Confirm Distribute"
               )}
