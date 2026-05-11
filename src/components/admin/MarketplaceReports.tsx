@@ -58,6 +58,7 @@ export const MarketplaceReports = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
