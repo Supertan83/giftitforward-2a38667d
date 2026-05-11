@@ -1,31 +1,55 @@
-## Diagnosis
+## Root cause
 
-I queried Surpluss directly for event 49 (Inclusive Community: Family and People of Determination Marketplace Afternoon Event) and compared to GIF.
+I traced the missing volunteers and the cause is **NOT** a bug in report logic — it's the "Remove from marketplace" / bulk-delete button on the Marketplace Reports page being used today (May 11).
 
-**Surpluss `/donation-allocations`** returns 62 unique materials totaling **32,337**. The endpoint returns 1 allocation container with all 62 materials inside `allocated_materials`. Some materials appear as duplicate rows on the Tractor admin (e.g. material #799 Women's Clothing = 1392+1392=2784, material #990 Toys = 130+785=915), but the API itself already aggregates them.
+When that button is clicked, `performDelete` in `MarketplaceReports.tsx` does **two destructive things**:
+1. **Soft-deletes the volunteer_attendance rows** (sets `deleted_at`) for that card+marketplace, AND soft-deletes the `volunteer_qr_cards` row if it belongs to that marketplace.
+2. Inserts an **exclusion row** in `marketplace_volunteer_exclusions` so the volunteer is permanently hidden from that marketplace's report.
 
-**GIF DB before re-sync:** 30,945 across 62 rows. Material #799 was stored as **1,392** instead of 2,784, and material #974 / #990 were partially off — accounting for the missing 1,392.
+Today's damage (all created today between ~09:40 and ~11:04):
 
-**Root cause:** A previous sync run stored only one copy of the duplicated material rows (the materialMap aggregation in `sync-surpluss-event-allocations` was added later). The 30,945 figure is **stale data** left behind by that earlier partial sync. The current sync code aggregates correctly.
+| Marketplace | Attendance soft-deleted today | Exclusion rows |
+|---|---|---|
+| Single Mothers Morning Event | 12 | 0 |
+| Single Mothers **Morning Event 2** (your example) | **11** | **5** |
+| Single Mothers Afternoon Event | 9 | 8 |
+| Single Mothers Afternoon Event 2 | 9 | 7 |
+| Single Mothers Afternoon Event 3 | 4 | 4 |
+| Young Dreamers Boys School | 0 | 14 |
+| She Thrives Women Workers Feb 28 | 0 | 7 |
+| Bus Activation | 1 | 3 |
+| ~10 other marketplaces | 1 each | 1–2 each |
 
-**Verification:** I just ran the sync function once and the DB total is now exactly **32,337** across the same 62 materials, matching Surpluss perfectly:
-- #799 Women clothing → 2,784 ✓
-- #990 Toys → 915 ✓
-- #974 Toys → 234 ✓
+Verified for Morning Event 2: `volunteer_attendance` has 90 live attended cards + 11 soft-deleted today = **101 originally checked-in**. Report shows 79 because the 11 soft-deletes drop the live attendance count to 90, and another adjustment from the registered-volunteer pipeline knocks it to 79 in the UI (matches your screenshot exactly).
 
 ## Plan
 
-No code changes needed — the bug is already fixed in the current sync function. You just need to:
+### 1. Restore today's deletions (one-shot data fix)
+Run two updates, scoped strictly to changes made today, so we don't touch anything legitimate:
 
-1. **Refresh the GIF Item Allocation page** for this marketplace. The "Total Quantity" tile should now read **32,337**, matching the Surpluss "Allocated 32,337" badge.
-2. The 62 material rows are now in sync; allocated values for #799, #990, #974 are correct.
+- **Restore soft-deleted attendance:** set `volunteer_attendance.deleted_at = NULL` where `deleted_at::date = '2026-05-11'`. (~56 rows across ~16 marketplaces.)
+- **Restore soft-deleted volunteer QR cards:** set `volunteer_qr_cards.deleted_at = NULL` where `deleted_at::date = '2026-05-11'`. (Cards that were wiped along with attendance.)
+- **Soft-delete the exclusion rows** created today in `marketplace_volunteer_exclusions` (`deleted_at::date = '2026-05-11'`) so excluded volunteers reappear in their reports. (~57 rows across 14 marketplaces.)
 
-## Optional follow-up (recommend)
+After this, every marketplace report will show its true attended numbers again. You'll just need to refresh the reports page (React Query cache).
 
-If you want to be sure no other marketplace has stale partial-aggregation data left over from before the fix, I can run the "Sync All" once across every linked marketplace. That will re-aggregate every event in one pass and surface any other mismatches. Let me know if you want me to do that.
+### 2. Add a safety guard to the delete UI (prevent recurrence)
+Two small frontend-only changes in `src/components/admin/MarketplaceReports.tsx`:
 
-## Technical notes
+- **Stronger confirm dialog** for both single and bulk delete: explicitly state "this removes the volunteer from this marketplace report AND deletes their attendance record" and require the admin to confirm. Today's wording ("Removed from marketplace") sounds harmless.
+- **Disable bulk delete by default** (require an explicit "Enable bulk remove" toggle for the current session) so accidental selection-and-click can't wipe many rows in one shot.
 
-- Surpluss `/api/common/donation-allocations?event_id=49` returns 1 container, 62 materials, sum = 32,337.
-- `materialMap` in `supabase/functions/sync-surpluss-event-allocations/index.ts` (lines ~268-330) sums duplicates by `material_id` before upserting — this is correct.
-- Pre-fix DB rows were just outdated; re-running the sync overwrote them with the correct totals.
+No changes to the report computation logic — it's working correctly given the data it sees.
+
+### 3. (Optional, after deadline) Add an "Undo today's removals" admin tool
+A small panel in the Marketplace Reports page that lists removals/exclusions made in the last 24h with a one-click restore, so we never have to do a manual SQL fix again. Out of scope for tonight unless you ask for it.
+
+## Technical details
+
+- Restore is done with a `supabase--migration` (UPDATE statements, scoped by `deleted_at::date = '2026-05-11'`).
+- After restore, no code change is required for the numbers to be correct — `useMarketplaceAllocations` already filters by `deleted_at IS NULL` and reads exclusions from `marketplace_volunteer_exclusions`.
+- The UI-level safeguard is purely presentational (extra confirm step + bulk-mode toggle) — no business-logic change.
+
+## What I need from you
+
+Just confirm: **"go ahead, restore today's deletions and add the safety guard."** I'll run the restore migration first (so your numbers are correct in time for the press release), then patch the UI.
