@@ -1,65 +1,31 @@
-## What's happening with material 990 (Toys), event 49
+## Diagnosis
 
-**On GIF (our DB):** one row, allocated = 915, distributed = 0.
+I queried Surpluss directly for event 49 (Inclusive Community: Family and People of Determination Marketplace Afternoon Event) and compared to GIF.
 
-**On Tractor / Surpluss (event 49):** material 990 is stored as **two separate allocation rows** for the same material:
+**Surpluss `/donation-allocations`** returns 62 unique materials totaling **32,337**. The endpoint returns 1 allocation container with all 62 materials inside `allocated_materials`. Some materials appear as duplicate rows on the Tractor admin (e.g. material #799 Women's Clothing = 1392+1392=2784, material #990 Toys = 130+785=915), but the API itself already aggregates them.
 
-```
-material_id 990 "Toys"  → amount 130   (donation_metadata 427)
-material_id 990 "Toys"  → amount 785   (donation_metadata 427)
-                          total = 915
-```
+**GIF DB before re-sync:** 30,945 across 62 rows. Material #799 was stored as **1,392** instead of 2,784, and material #974 / #990 were partially off — accounting for the missing 1,392.
 
-The source `donation_metadata 427` has **0 remaining** (everything is already allocated across events).
+**Root cause:** A previous sync run stored only one copy of the duplicated material rows (the materialMap aggregation in `sync-surpluss-event-allocations` was added later). The 30,945 figure is **stale data** left behind by that earlier partial sync. The current sync code aggregates correctly.
 
-## Why the save fails
-
-In `AllocationManagement.handleSaveEdit`, every save calls `surplussBatchUpdateMaterials(eventId, [{material_id: 990, amount: 915}])` — even when the user only changed `distributed` and the allocated amount didn't change.
-
-Surpluss `PUT /donation-allocations/batch-allocation` doesn't see "915 = 130 + 785". It matches the first row (130) and treats `amount: 915` as "increase this row by 785". Since donation 427 has 0 remaining at the source, it rejects:
-
-> Cannot increase allocation for "Toys" by 785. Only 0 remaining.
-
-So:
-- The user wanted to update **distributed** (859) / remaining (56), not allocated.
-- We pushed the unchanged allocated value to Tractor anyway.
-- Tractor refused because of duplicate rows + 0 source remaining.
+**Verification:** I just ran the sync function once and the DB total is now exactly **32,337** across the same 62 materials, matching Surpluss perfectly:
+- #799 Women clothing → 2,784 ✓
+- #990 Toys → 915 ✓
+- #974 Toys → 234 ✓
 
 ## Plan
 
-### 1. Stop pushing unchanged allocations to Tractor (frontend fix)
+No code changes needed — the bug is already fixed in the current sync function. You just need to:
 
-In `src/components/admin/AllocationManagement.tsx > handleSaveEdit`:
-- Only call `surplussBatchUpdateMaterials` when `editAllocated !== alloc.allocatedQuantity`.
-- When only `distributed` changed, skip the Tractor allocation sync entirely and just save locally (distributed is already a GIF-side concept synced separately by the distribution reporting flow).
-- Apply the same guard to the bulk-edit path around line 434 if it has the same shape.
+1. **Refresh the GIF Item Allocation page** for this marketplace. The "Total Quantity" tile should now read **32,337**, matching the Surpluss "Allocated 32,337" badge.
+2. The 62 material rows are now in sync; allocated values for #799, #990, #974 are correct.
 
-This alone unblocks the user's current scenario (they aren't actually changing 915).
+## Optional follow-up (recommend)
 
-### 2. Handle Surpluss duplicate-row case for real allocation changes
+If you want to be sure no other marketplace has stale partial-aggregation data left over from before the fix, I can run the "Sync All" once across every linked marketplace. That will re-aggregate every event in one pass and surface any other mismatches. Let me know if you want me to do that.
 
-When the user *does* change the allocated value and Surpluss has the material split into multiple rows for the same event (as with 990 = 130 + 785):
-- Before calling `batch-allocation`, detect duplicates by reading `get_donation_allocations` for that event and grouping by `material_id`.
-- If duplicates exist, consolidate first: delete the smaller row(s) via `delete_allocation` (or set them to 0), then send one `batch_update` with the new total. This way Surpluss never sees a partial-row delta that exceeds source remaining.
-- If consolidation can't be done automatically (e.g. source has 0 remaining and the new total > current total), surface a clearer error: "Material has duplicate allocations on Surpluss (130 + 785). Please consolidate on Tractor first."
+## Technical notes
 
-### 3. One-time cleanup for material 990 / event 49
-
-Independent of code changes, the data on Surpluss should be consolidated:
-- Delete one of the two 990 rows on event 49.
-- Re-create as a single row of 915.
-- This removes the trap for any future edit on this row.
-
-I can do this via `surpluss-allocations-api` (`delete_allocation` then `batch_update`) once you confirm.
-
-### 4. Verification
-
-- Re-open the Allocation Management edit for material 990 on the Inclusive Community Afternoon event.
-- Change only `distributed` to 859 → save should succeed with no Tractor call.
-- Then try changing `allocated` and confirm the new dedup-aware sync path works (or returns the friendlier error).
-
-### Out of scope
-
-- No DB schema changes.
-- No changes to the marketplace-reports delete flow from the previous task.
-- No change to how distributed counts are pushed to Surpluss (that path is unaffected).
+- Surpluss `/api/common/donation-allocations?event_id=49` returns 1 container, 62 materials, sum = 32,337.
+- `materialMap` in `supabase/functions/sync-surpluss-event-allocations/index.ts` (lines ~268-330) sums duplicates by `material_id` before upserting — this is correct.
+- Pre-fix DB rows were just outdated; re-running the sync overwrote them with the correct totals.
