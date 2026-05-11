@@ -692,7 +692,7 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                       size="sm"
                       disabled={selectedAllocIds.size === 0 || bulkRunning}
                       onClick={() =>
-                        setBulkConfirm({ mode: "selected", ids: Array.from(selectedAllocIds) })
+                        setBulkConfirm({ mode: "selected", ids: Array.from(selectedAllocIds), action: "distribute" })
                       }
                     >
                       <Send className="w-4 h-4 mr-1" />
@@ -703,11 +703,40 @@ export const AllocationManagement = ({ onBack }: AllocationManagementProps) => {
                       size="sm"
                       disabled={bulkRunning || allocations.every((a) => a.allocatedQuantity - a.distributedQuantity <= 0)}
                       onClick={() =>
-                        setBulkConfirm({ mode: "all", ids: allocations.map((a) => a.id) })
+                        setBulkConfirm({ mode: "all", ids: allocations.map((a) => a.id), action: "distribute" })
                       }
                     >
                       <Send className="w-4 h-4 mr-1" />
                       Distribute All Remaining
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        selectedAllocIds.size === 0 ||
+                        bulkRunning ||
+                        allocations.every(
+                          (a) => !selectedAllocIds.has(a.id) || a.allocatedQuantity - a.distributedQuantity <= 0,
+                        )
+                      }
+                      onClick={() =>
+                        setBulkConfirm({ mode: "selected", ids: Array.from(selectedAllocIds), action: "return" })
+                      }
+                    >
+                      <Undo2 className="w-4 h-4 mr-1" />
+                      Return Selected to Warehouse
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      disabled={bulkRunning || allocations.every((a) => a.allocatedQuantity - a.distributedQuantity <= 0)}
+                      onClick={() =>
+                        setBulkConfirm({ mode: "all", ids: allocations.map((a) => a.id), action: "return" })
+                      }
+                    >
+                      <Undo2 className="w-4 h-4 mr-1" />
+                      Return All Remaining to Warehouse
                     </Button>
                   </div>
                 )}
