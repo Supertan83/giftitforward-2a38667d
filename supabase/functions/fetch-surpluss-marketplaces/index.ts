@@ -111,7 +111,8 @@ serve(async (req) => {
     // Get ALL existing local marketplaces (including those without external_id)
     const { data: existingMarketplaces } = await supabase
       .from('marketplace_events')
-      .select('id, name, external_id');
+      .select('id, name, external_id')
+      .is('deleted_at', null);
 
     const existingExternalIds = new Set(
       (existingMarketplaces || [])
