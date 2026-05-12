@@ -5,57 +5,80 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useItemTypesExtended, ExtendedItemType } from '@/hooks/useItemTypesExtended';
-import { cn } from '@/lib/utils';
 
 interface ItemListViewerProps {
   onBack: () => void;
 }
 
-interface CategoryGroup {
-  category: string;
+interface CompanyGroup {
+  company: string;
   items: ExtendedItemType[];
-  totalQuantity: number;
+  totalRemaining: number;
+  totalDistributed: number;
 }
+
+const UNASSIGNED = 'Unassigned Donor';
 
 export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   const { data: items = [], isLoading } = useItemTypesExtended();
   const [search, setSearch] = useState('');
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [onlyRemaining, setOnlyRemaining] = useState(true);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const qrRef = useRef<HTMLCanvasElement | null>(null);
 
-  const filtered = useMemo(() =>
-    items.filter(item =>
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.category?.toLowerCase().includes(search.toLowerCase()) ||
-      item.subcategory?.toLowerCase().includes(search.toLowerCase()) ||
-      item.donorCompany?.toLowerCase().includes(search.toLowerCase()) ||
-      item.marketplaceNames?.toLowerCase().includes(search.toLowerCase()) ||
-      String(item.externalMaterialId).includes(search)
-    ), [items, search]);
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return items.filter(item => {
+      const remaining = item.totalStock - item.distributed;
+      if (onlyRemaining && remaining <= 0) return false;
+      if (!q) return true;
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.category?.toLowerCase().includes(q) ||
+        item.subcategory?.toLowerCase().includes(q) ||
+        item.donorCompany?.toLowerCase().includes(q) ||
+        item.marketplaceNames?.toLowerCase().includes(q) ||
+        String(item.externalMaterialId ?? '').includes(q)
+      );
+    });
+  }, [items, search, onlyRemaining]);
 
-  const categoryGroups = useMemo((): CategoryGroup[] => {
+  const companyGroups = useMemo((): CompanyGroup[] => {
     const groups: Record<string, ExtendedItemType[]> = {};
     filtered.forEach(item => {
-      const cat = item.category || 'Uncategorized';
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(item);
+      const key = item.donorCompany || UNASSIGNED;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
     });
     return Object.entries(groups)
-      .map(([category, items]) => ({
-        category,
-        items,
-        totalQuantity: items.reduce((sum, i) => sum + i.totalStock, 0),
-      }))
-      .sort((a, b) => a.category.localeCompare(b.category));
+      .map(([company, items]) => {
+        const sorted = [...items].sort(
+          (a, b) => (b.totalStock - b.distributed) - (a.totalStock - a.distributed)
+        );
+        return {
+          company,
+          items: sorted,
+          totalRemaining: sorted.reduce((s, i) => s + Math.max(0, i.totalStock - i.distributed), 0),
+          totalDistributed: sorted.reduce((s, i) => s + i.distributed, 0),
+        };
+      })
+      .sort((a, b) => {
+        // Unassigned at bottom, otherwise by remaining desc
+        if (a.company === UNASSIGNED) return 1;
+        if (b.company === UNASSIGNED) return -1;
+        return b.totalRemaining - a.totalRemaining;
+      });
   }, [filtered]);
 
-  const toggleCategory = (cat: string) => {
-    setCollapsedCategories(prev => {
+  const toggle = (key: string) => {
+    setCollapsed(prev => {
       const next = new Set(prev);
-      next.has(cat) ? next.delete(cat) : next.add(cat);
+      next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   };
@@ -75,73 +98,91 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <span className="text-muted-foreground animate-pulse">Loading items...</span>
+        <span className="text-muted-foreground animate-pulse">Loading inventory...</span>
       </div>
     );
   }
 
+  const grandRemaining = companyGroups.reduce((s, g) => s + g.totalRemaining, 0);
+
   return (
     <div className="py-4 md:py-6 px-2 md:px-4 mx-auto space-y-4 max-w-full overflow-hidden">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-display text-xl font-bold">Item List</h1>
-        <Badge variant="secondary">{items.length} items</Badge>
-        <Badge variant="outline">{categoryGroups.length} categories</Badge>
+        <h1 className="font-display text-xl font-bold">Inventory by Donor</h1>
+        <Badge variant="secondary">{filtered.length} items</Badge>
+        <Badge variant="outline">{companyGroups.length} donors</Badge>
+        <Badge className="bg-primary/10 text-primary border-primary/20" variant="outline">
+          Total Remaining: {grandRemaining.toLocaleString()}
+        </Badge>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name, category, company..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-col md:flex-row md:items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name, material ID, donor, marketplace..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch id="only-remaining" checked={onlyRemaining} onCheckedChange={setOnlyRemaining} />
+          <Label htmlFor="only-remaining" className="text-sm cursor-pointer">
+            Only items with remaining stock
+          </Label>
+        </div>
       </div>
 
       <div className="space-y-3">
-        {categoryGroups.map(group => {
-          const isCollapsed = collapsedCategories.has(group.category);
+        {companyGroups.map(group => {
+          const isCollapsed = collapsed.has(group.company);
           return (
-            <Card key={group.category} className="overflow-hidden">
+            <Card key={group.company} className="overflow-hidden">
               <button
-                onClick={() => toggleCategory(group.category)}
-                className="w-full flex items-center justify-between px-4 md:px-6 py-3 bg-muted/50 hover:bg-muted/80 transition-colors text-left"
+                onClick={() => toggle(group.company)}
+                className="w-full flex items-center justify-between gap-3 px-4 md:px-6 py-3 bg-muted/50 hover:bg-muted/80 transition-colors text-left"
               >
-                <div className="flex items-center gap-2">
-                  {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                  <span className="font-display font-bold text-base md:text-lg">{group.category}</span>
-                  <Badge variant="secondary" className="text-xs">{group.items.length} Items</Badge>
+                <div className="flex items-center gap-2 min-w-0">
+                  {isCollapsed
+                    ? <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                  <span className="font-display font-bold text-base md:text-lg truncate">{group.company}</span>
+                  <Badge variant="secondary" className="text-xs flex-shrink-0">{group.items.length} items</Badge>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Total Quantity: <span className="font-bold text-primary text-base">{group.totalQuantity.toLocaleString()}</span>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-shrink-0">
+                  <span className="hidden md:inline">Distributed: <span className="font-semibold text-foreground">{group.totalDistributed.toLocaleString()}</span></span>
+                  <span>Remaining: <span className="font-bold text-primary text-base">{group.totalRemaining.toLocaleString()}</span></span>
                 </div>
               </button>
 
               {!isCollapsed && (
                 <CardContent className="p-0">
-                  {/* Mobile card view */}
+                  {/* Mobile */}
                   <div className="md:hidden divide-y divide-border">
                     {group.items.map(item => {
-                      const available = item.totalStock - item.distributed;
+                      const remaining = item.totalStock - item.distributed;
                       return (
                         <button
                           key={item.id}
                           onClick={() => setSelectedItemId(item.id)}
                           className="w-full p-3 text-left hover:bg-muted/30 transition-colors"
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="font-medium text-sm">{item.name}</p>
-                            <span className="font-bold text-primary text-sm">{available.toLocaleString()}</span>
+                          <div className="flex items-center justify-between mb-1 gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                <span className="font-mono">ID: {item.externalMaterialId ?? '—'}</span>
+                                {item.category && <> · {item.category}</>}
+                              </p>
+                            </div>
+                            <span className="font-bold text-primary text-sm flex-shrink-0">{remaining.toLocaleString()}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground">{item.subcategory || '—'}</p>
-                          {item.donorCompany && (
-                            <p className="text-xs text-muted-foreground mt-1">Donor: {item.donorCompany}</p>
-                          )}
                           {item.marketplaceNames && (
-                            <p className="text-xs text-muted-foreground">Marketplace: {item.marketplaceNames}</p>
+                            <p className="text-xs text-muted-foreground truncate">MP: {item.marketplaceNames}</p>
                           )}
                           <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                             <span>Assigned: {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}</span>
@@ -152,33 +193,37 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                     })}
                   </div>
 
-                  {/* Desktop table view */}
+                  {/* Desktop */}
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm table-fixed">
                       <thead>
                         <tr className="border-b bg-muted/20 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          <th className="text-left px-4 lg:px-6 py-2 w-[25%]">Item Name</th>
-                          <th className="text-left px-3 py-2 w-[20%]">Donor Company</th>
-                          <th className="text-left px-3 py-2 w-[15%]">Marketplace</th>
+                          <th className="text-left px-4 lg:px-6 py-2 w-[10%]">Material ID</th>
+                          <th className="text-left px-3 py-2 w-[28%]">Item Name</th>
+                          <th className="text-left px-3 py-2 w-[22%]">Marketplace</th>
                           <th className="text-right px-3 py-2 w-[12%]">Assigned</th>
                           <th className="text-right px-3 py-2 w-[12%]">Distributed</th>
-                          <th className="text-right px-4 lg:px-6 py-2 w-[16%]">Qty Available</th>
+                          <th className="text-right px-4 lg:px-6 py-2 w-[16%]">Remaining</th>
                         </tr>
                       </thead>
                       <tbody>
                         {group.items.map(item => {
-                          const available = item.totalStock - item.distributed;
+                          const remaining = item.totalStock - item.distributed;
                           return (
                             <tr
                               key={item.id}
                               onClick={() => setSelectedItemId(item.id)}
                               className="border-b last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30"
                             >
-                              <td className="px-4 lg:px-6 py-3">
-                                <p className="font-medium truncate">{item.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">{item.subcategory || '—'}</p>
+                              <td className="px-4 lg:px-6 py-3 font-mono font-semibold">
+                                {item.externalMaterialId ?? '—'}
                               </td>
-                              <td className="px-3 py-3 text-muted-foreground truncate">{item.donorCompany || '—'}</td>
+                              <td className="px-3 py-3">
+                                <p className="font-medium truncate">{item.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {item.category || '—'}{item.subcategory ? ` · ${item.subcategory}` : ''}
+                                </p>
+                              </td>
                               <td className="px-3 py-3 text-muted-foreground truncate">{item.marketplaceNames || '—'}</td>
                               <td className="px-3 py-3 text-right text-muted-foreground">
                                 {item.allocatedToMarketplace > 0 ? item.allocatedToMarketplace.toLocaleString() : '—'}
@@ -187,7 +232,9 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                                 {item.distributed > 0 ? item.distributed.toLocaleString() : '—'}
                               </td>
                               <td className="px-4 lg:px-6 py-3 text-right">
-                                <span className="font-bold text-primary">{available.toLocaleString()}</span>
+                                <span className={`font-bold ${remaining > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                                  {remaining.toLocaleString()}
+                                </span>
                               </td>
                             </tr>
                           );
@@ -201,7 +248,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
           );
         })}
 
-        {categoryGroups.length === 0 && (
+        {companyGroups.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               No items found
@@ -210,7 +257,6 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
         )}
       </div>
 
-      {/* Item Detail Dialog */}
       <Dialog open={!!selectedItem} onOpenChange={(open) => { if (!open) setSelectedItemId(null); }}>
         <DialogContent className="w-fit max-w-[90vw] max-h-[90vh] overflow-y-auto">
           {selectedItem && (
@@ -226,7 +272,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Material ID</p>
-                  <p className="font-medium">{selectedItem.externalMaterialId || '—'}</p>
+                  <p className="font-medium font-mono">{selectedItem.externalMaterialId || '—'}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Donor Company</p>
@@ -241,7 +287,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                   <p className="font-medium">{selectedItem.totalStock.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs">Available</p>
+                  <p className="text-muted-foreground text-xs">Remaining</p>
                   <p className="font-medium text-primary">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</p>
                 </div>
               </div>

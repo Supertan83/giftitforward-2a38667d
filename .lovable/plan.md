@@ -1,33 +1,67 @@
-## Sorun
+# Item List → Mini Inventory (Grouped by Donor Company)
 
-"Dulsco Bus Activation" marketplace'i için Surpluss sync 0 malzeme dönüyor.
+Convert the existing **Item List** screen into an operational inventory view so Ops can quickly identify which **Material IDs still have remaining stock** to consolidate against her Excel list. All underlying data already exists — only the presentation layer changes.
 
-**Kök neden:** Yerel `marketplace_events` kaydında `external_id = 68` olarak ayarlı, ama Surpluss API'sinde bu ID'de bir event yok (404 "Marketplace event not found").
+## Goal
 
-Surpluss event listesini taradığımda "Dulsco Bus Activation" başlıklı event'in gerçek ID'si **53** (status: COMPLETED). Yani external_id yanlış eşleşmiş — büyük olasılıkla daha önce yanlış elle girilmiş veya başka bir event'in ID'sine bakılarak set edilmiş.
+Give Ops a single screen that answers: *"For each donor company, which materials are still sitting with remaining stock, and where were they assigned/distributed?"*
+
+## New layout
+
+Replace the current **Category-grouped** accordion with a **Donor Company-grouped** accordion.
 
 ```text
-Local DB:                          Surpluss:
-  Dulsco Bus Activation             id=53  Dulsco Bus Activation  ✅ (gerçek)
-  external_id = 68      ❌  →       id=68  (yok)                 → 404
+┌─ Centrepoint  (12 items • Total Remaining: 8,420) ──────────────┐
+│ MATERIAL ID │ ITEM NAME       │ MARKETPLACE(S)     │ ASSIGNED │ DISTRIBUTED │ REMAINING │
+│  10234      │ Baby Accessories│ —                  │   —      │   —         │  2,404    │
+│  10456      │ Toys            │ Single Mothers …   │ 2,000    │ 1,500       │    500    │
+│  …                                                                                       │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ L'Occitane En Provence  (8 items • Total Remaining: 6,424) ────┐
+│ …                                                                │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-Bu yüzden:
-- `sync-surpluss-event-allocations` event 68 için 0 allocation çekiyor
-- `surpluss-allocations-api get_event_allocations` → 404
-- GIF tarafı boş kalıyor
+### Group header shows
+- Donor company name
+- Item count
+- **Total Remaining** across all that company's materials (highlighted)
+- Collapse/expand toggle
 
-## Çözüm
+### Row columns (per material)
+1. **Material ID** (external_material_id) — bold/monospace, easy to cross-reference Excel
+2. **Item Name** + subcategory below
+3. **Category** (small muted)
+4. **Marketplace(s)** — comma list of all marketplaces it's allocated to
+5. **Assigned** (allocated_to_marketplace)
+6. **Distributed** (distributed)
+7. **Remaining** (totalStock − distributed) — bold primary color
 
-1. **Yerel external_id'yi düzelt:** `Dulsco Bus Activation` (`c98b7887-…`) kaydının `external_id`'sini **68 → 53** olarak güncelle.
-2. **Allocation sync'i tetikle:** `sync-surpluss-event-allocations` fonksiyonunu event 53 için çalıştır → Surpluss'taki gerçek allocation'lar GIF'e (`marketplace_item_allocations`) yazılır.
-3. **Doğrula:** Sync sonrası bu marketplace için `marketplace_item_allocations` satırlarının dolduğunu ve UI'da malzeme listesinin göründüğünü kontrol et.
+### Filters & controls (top bar)
+- Search (existing) — by name, material ID, donor, marketplace
+- **"Only show items with remaining > 0"** toggle (default ON) — directly addresses Ops' use case
+- Sort within group: by Remaining desc (default) so high-stock materials surface first
+- Sort groups: by Total Remaining desc (default), or alphabetical
 
-İsteğe bağlı (öneri): `fetch-surpluss-marketplaces` fonksiyonu fuzzy-match yaparken zaten linkli olan kayıtları atlıyor; gelecekte yanlış manuel external_id girişlerini önlemek için MarketplaceManagement UI'ında ID girilirken Surpluss'tan başlık doğrulaması ekleyebiliriz — ama bu ayrı bir iş.
+### Item detail dialog
+Keep existing dialog (QR + Surpluss link) — no changes.
 
-## Onay
+## Data
 
-Onayladığınızda:
-- DB'de external_id 68 → 53 güncellemesi (insert tool ile)
-- Sync fonksiyonunu çağır
-- Sonuç tablosunu paylaş
+No backend changes. `useItemTypesExtended` already returns:
+- `externalMaterialId`, `donorCompany`, `marketplaceNames`
+- `totalStock`, `distributed`, `allocatedToMarketplace`
+
+Items without a donor company go into an **"Unassigned Donor"** group at the bottom.
+
+## Files to change
+
+- `src/components/admin/ItemListViewer.tsx` — rework grouping logic (company instead of category), add Material ID column, add "remaining > 0" filter toggle, update header totals.
+
+No changes to hooks, DB, or other components.
+
+## Out of scope
+- Export to Excel (can be added later if needed)
+- Editing stock from this screen
+- Changing the Item Detail dialog
