@@ -53,7 +53,7 @@ const beneficiaryItems = [
 
 const adminItems = [
   { view: 'full-report' as AdminView, label: 'Full Report', icon: BarChart3, color: 'text-primary' },
-  { view: 'item-list' as AdminView, label: 'Item List', icon: Package, color: 'text-sky-500' },
+  { view: 'item-list' as AdminView, label: 'Mini Inventory', icon: Package, color: 'text-sky-500' },
   { view: 'allocations' as AdminView, label: 'Allocate Items', icon: TrendingUp, color: 'text-teal-500' },
   { view: 'statistics' as AdminView, label: 'Live Statistics', icon: TrendingUp, color: 'text-emerald-500' },
   { view: 'users' as AdminView, label: 'Manage Users', icon: Users, color: 'text-violet-500' },
