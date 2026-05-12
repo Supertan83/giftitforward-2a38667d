@@ -111,7 +111,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-display text-xl font-bold">Inventory by Donor</h1>
+        <h1 className="font-display text-xl font-bold">Mini Inventory</h1>
         <Badge variant="secondary">{filtered.length} items</Badge>
         <Badge variant="outline">{companyGroups.length} donors</Badge>
         <Badge className="bg-primary/10 text-primary border-primary/20" variant="outline">
