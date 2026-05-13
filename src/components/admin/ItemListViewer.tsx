@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Download, ExternalLink, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Search, ChevronDown, ChevronRight, Package, CheckCircle2, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +23,8 @@ interface CompanyGroup {
 
 const UNASSIGNED = 'Unassigned Donor';
 
+const getDonorRemaining = (item: ExtendedItemType) => Math.max(item.totalStock - item.allocatedToMarketplace, 0);
+
 export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   const { data: items = [], isLoading } = useItemTypesExtended();
   const [search, setSearch] = useState('');
@@ -34,7 +36,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return items.filter(item => {
-      const remaining = item.totalStock - item.distributed;
+      const remaining = getDonorRemaining(item);
       if (onlyRemaining && remaining <= 0) return false;
       if (!q) return true;
       return (
@@ -58,12 +60,12 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
     return Object.entries(groups)
       .map(([company, items]) => {
         const sorted = [...items].sort(
-          (a, b) => (b.totalStock - b.distributed) - (a.totalStock - a.distributed)
+          (a, b) => getDonorRemaining(b) - getDonorRemaining(a)
         );
         return {
           company,
           items: sorted,
-          totalRemaining: sorted.reduce((s, i) => s + Math.max(0, i.totalStock - i.distributed), 0),
+          totalRemaining: sorted.reduce((s, i) => s + getDonorRemaining(i), 0),
           totalDistributed: sorted.reduce((s, i) => s + i.distributed, 0),
         };
       })
