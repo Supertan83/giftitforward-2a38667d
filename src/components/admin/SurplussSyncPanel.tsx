@@ -96,7 +96,44 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
   const [selectedForReport, setSelectedForReport] = useState<Set<number>>(new Set());
   const [isSyncingCategories, setIsSyncingCategories] = useState(false);
   const [isSyncingEventAllocations, setIsSyncingEventAllocations] = useState(false);
+  const [isSyncingInventory, setIsSyncingInventory] = useState(false);
+  const [inventorySyncSummary, setInventorySyncSummary] = useState<null | {
+    marketplaces_total: number;
+    marketplaces_reported: number;
+    marketplaces_failed: number;
+    allocations_reported: number;
+    materials_total: number;
+    materials_reconciled: number;
+    materials_drifted: number;
+    materials_failed: number;
+    errors: Array<{ scope: string; id: string | number; error: string }>;
+  }>(null);
   const { toast } = useToast();
+
+  const syncMiniInventory = async () => {
+    setIsSyncingInventory(true);
+    setInventorySyncSummary(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-surpluss-inventory', {
+        body: { environment, dry_run: false },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Sync failed');
+      setInventorySyncSummary(data.summary);
+      toast({
+        title: 'Mini Inventory Synced',
+        description: `${data.summary.marketplaces_reported}/${data.summary.marketplaces_total} marketplaces · ${data.summary.materials_reconciled}/${data.summary.materials_total} materials (${data.summary.materials_drifted} drifted)`,
+      });
+    } catch (e) {
+      toast({
+        title: 'Inventory Sync Failed',
+        description: e instanceof Error ? e.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncingInventory(false);
+    }
+  };
 
   // Hooks for reporting
   const { data: allocationsWithDistribution, isLoading: isLoadingDistribution, refetch: refetchDistribution } = 
