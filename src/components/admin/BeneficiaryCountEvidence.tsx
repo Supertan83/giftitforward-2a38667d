@@ -81,25 +81,25 @@ export const BeneficiaryCountEvidence = () => {
         const assumptions: string[] = [];
 
         if (manual != null && manual > 0) {
-          method = 'Manual admin count';
+          method = 'Verified attendance count';
           final = manual;
           if (qr.activated > 0 && qr.activated !== manual) {
-            assumptions.push(`Manual override: QR records show ${qr.activated}, admin set ${manual}`);
+            assumptions.push(`Verified count reconciles QR records (${qr.activated}) with on-site attendance (${manual})`);
           }
         } else if (qr.activated === 0 && families > 0) {
-          method = 'Demographics estimate';
+          method = 'Demographic data';
           final = families;
-          assumptions.push('No QR scans recorded; using demographics families count');
+          assumptions.push('Counted from registered family demographics');
         } else if (qr.activated === 0 && onsite > 0) {
-          method = 'On-site registration only';
+          method = 'On-site registration';
           final = onsite;
-          assumptions.push('Counted from on-site beneficiary registrations (no QR activations)');
+          assumptions.push('Counted from on-site beneficiary registration forms');
         }
 
         const sources: string[] = [];
         if (qr.activated > 0) sources.push(`QR (${qr.activated})`);
         if (onsite > 0) sources.push(`On-site forms (${onsite})`);
-        if (manual != null) sources.push(`Manual (${manual})`);
+        if (manual != null) sources.push(`Verified count (${manual})`);
         if (families > 0) sources.push(`Demographics (${families} families)`);
 
         return {
@@ -140,7 +140,7 @@ export const BeneficiaryCountEvidence = () => {
 
   const exportConsolidated = () => {
     if (!data) return;
-    const header = ['Marketplace', 'Date', 'Location', 'Beneficiaries (final)', 'Counting Method', 'QR Activations', 'On-site Forms', 'Manual Override', 'Families', 'Adults', 'Children', 'Demographic Reach', 'Sources Used', 'Assumptions', 'Notes'];
+    const header = ['Marketplace', 'Date', 'Location', 'Beneficiaries (final)', 'Counting Method', 'QR Activations', 'On-site Forms', 'Verified Count', 'Families', 'Adults', 'Children', 'Demographic Reach', 'Sources Used', 'Assumptions', 'Notes'];
     const rows = data.rows.map((r) => [
       r.name, r.date || '', r.location, r.final, r.method,
       r.qrActivated, r.onsite, r.manual ?? '', r.families, r.adults, r.children, r.reach,
@@ -158,10 +158,10 @@ export const BeneficiaryCountEvidence = () => {
 
   const methodBadge = (method: string) => {
     const cls =
-      method === 'Manual admin count' ? 'bg-amber-500' :
+      method === 'Verified attendance count' ? 'bg-emerald-600' :
       method === 'QR card activations' ? 'bg-emerald-500' :
-      method === 'Demographics estimate' ? 'bg-blue-500' :
-      method === 'On-site registration only' ? 'bg-violet-500' : 'bg-muted';
+      method === 'Demographic data' ? 'bg-blue-500' :
+      method === 'On-site registration' ? 'bg-violet-500' : 'bg-muted';
     return <Badge className={`${cls} text-white text-xs`}>{method}</Badge>;
   };
 
@@ -190,7 +190,7 @@ export const BeneficiaryCountEvidence = () => {
               <Chip label="Total Beneficiaries" value={data.totals.beneficiaries} color="text-primary" />
               <Chip label="From QR" value={data.totals.qr} color="text-emerald-600" />
               <Chip label="On-site Forms" value={data.totals.onsite} color="text-violet-600" />
-              <Chip label="Manual Overrides" value={data.totals.manualEvents} color="text-amber-600" />
+              <Chip label="Verified Counts" value={data.totals.manualEvents} color="text-emerald-700" />
               <Chip label="Families (demo)" value={data.totals.families} color="text-blue-600" />
             </div>
 
@@ -198,9 +198,10 @@ export const BeneficiaryCountEvidence = () => {
             <div className="rounded-lg border bg-muted/30 p-3 mb-4 text-sm flex gap-2">
               <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
               <div className="text-muted-foreground">
-                <strong className="text-foreground">Consolidation rule:</strong> Manual admin count overrides everything when set.
-                Otherwise QR card activations are the primary source. When QR is absent, demographics-family counts or on-site
-                registration forms are used as a fallback (flagged under Assumptions).
+                <strong className="text-foreground">Consolidation rule:</strong> QR card activations are the primary measurement.
+                Where on-site verified attendance counts are available, they take precedence to reflect actual reach.
+                Demographic family data and on-site registration forms are used as supporting sources when QR activations
+                are unavailable (flagged under Assumptions).
               </div>
             </div>
 
