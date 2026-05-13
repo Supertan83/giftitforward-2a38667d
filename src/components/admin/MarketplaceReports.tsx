@@ -893,9 +893,9 @@ export const MarketplaceReports = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Send to Surpluss?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will sync volunteers, beneficiaries, and distribution figures to Surpluss
-              (production). It can take 30–60 seconds for large marketplaces. Please don't close
-              this tab until it finishes.
+              This will send only the <strong>item distribution figures</strong> to Surpluss
+              (production). Volunteer and beneficiary data on Surpluss will <strong>not</strong> be
+              modified.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
