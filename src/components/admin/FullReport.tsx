@@ -198,7 +198,7 @@ export const FullReport = ({ onBack }: Props) => {
       </div>
 
       <Tabs defaultValue="marketplaces">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
           <TabsTrigger value="volunteers">Volunteer Check-in Evidence</TabsTrigger>
           <TabsTrigger value="beneficiaries">Beneficiary Count Evidence</TabsTrigger>
