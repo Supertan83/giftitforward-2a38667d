@@ -62,14 +62,36 @@ export const useItemTypesExtended = () => {
         }
       }
 
-      // Fetch marketplace allocations
+      // Fetch marketplace allocations (with distributed_quantity for live counts)
       const itemIds = (items || []).map(i => i.id);
       let marketplaceMap: Record<string, string> = {};
+      let distributedByItem: Record<string, number> = {};
       if (itemIds.length > 0) {
         const { data: allocations } = await supabase
           .from('marketplace_item_allocations')
-          .select('item_type_id, marketplace_id')
-          .in('item_type_id', itemIds);
+          .select('item_type_id, marketplace_id, distributed_quantity')
+          .in('item_type_id', itemIds)
+          .is('deleted_at', null);
+
+        // Manual counts override allocation distributed_quantity when present
+        const { data: manualCounts } = await supabase
+          .from('marketplace_manual_counts')
+          .select('item_type_id, marketplace_id, actual_distributed')
+          .in('item_type_id', itemIds)
+          .is('deleted_at', null);
+
+        const manualMap = new Map<string, number>();
+        (manualCounts || []).forEach(m => {
+          manualMap.set(`${m.item_type_id}|${m.marketplace_id}`, Number(m.actual_distributed || 0));
+        });
+
+        (allocations || []).forEach(a => {
+          const key = `${a.item_type_id}|${a.marketplace_id}`;
+          const dist = manualMap.has(key)
+            ? (manualMap.get(key) || 0)
+            : Number(a.distributed_quantity || 0);
+          distributedByItem[a.item_type_id] = (distributedByItem[a.item_type_id] || 0) + dist;
+        });
 
         if (allocations && allocations.length > 0) {
           const mpIds = [...new Set(allocations.map(a => a.marketplace_id))];
@@ -81,7 +103,6 @@ export const useItemTypesExtended = () => {
           const mpLookup: Record<string, string> = {};
           (marketplaces || []).forEach(m => { mpLookup[m.id] = m.name; });
 
-          // Group by item
           const itemMpNames: Record<string, Set<string>> = {};
           allocations.forEach(a => {
             if (!itemMpNames[a.item_type_id]) itemMpNames[a.item_type_id] = new Set();
@@ -99,7 +120,7 @@ export const useItemTypesExtended = () => {
         name: item.name,
         icon: item.icon,
         totalStock: item.total_stock,
-        distributed: item.distributed,
+        distributed: distributedByItem[item.id] ?? (item.distributed || 0),
         allocatedToMarketplace: item.allocated_to_marketplace,
         category: item.category || null,
         subcategory: item.subcategory || null,
