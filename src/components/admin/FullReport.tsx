@@ -293,6 +293,10 @@ export const FullReport = ({ onBack }: Props) => {
         <TabsContent value="volunteers">
           <VolunteerCheckInEvidence />
         </TabsContent>
+
+        <TabsContent value="beneficiaries">
+          <BeneficiaryCountEvidence />
+        </TabsContent>
       </Tabs>
     </div>
   );
