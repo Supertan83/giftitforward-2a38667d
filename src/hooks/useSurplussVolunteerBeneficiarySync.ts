@@ -39,9 +39,9 @@ export type SurplussSyncStep = 'idle' | 'volunteers' | 'beneficiaries' | 'distri
 
 const STEP_LABELS: Record<SurplussSyncStep, string> = {
   idle: '',
-  volunteers: 'Syncing volunteers… (1/3)',
-  beneficiaries: 'Syncing beneficiaries… (2/3)',
-  distribution: 'Reporting distribution… (3/3)',
+  volunteers: '',
+  beneficiaries: '',
+  distribution: 'Reporting distribution…',
 };
 
 async function extractFunctionError(err: unknown, fallback: string): Promise<string> {
