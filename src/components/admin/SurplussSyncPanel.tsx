@@ -732,6 +732,97 @@ export const SurplussSyncPanel = ({ onBack }: SurplussSyncPanelProps) => {
                 Clear History
               </Button>
             </div>
+
+            {/* Mini Inventory Sync Card */}
+            <Card className="border-primary/40 bg-gradient-to-br from-primary/5 to-transparent">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Cloud className="w-5 h-5 text-primary" />
+                  Sync Mini Inventory to Surpluss
+                </CardTitle>
+                <CardDescription>
+                  Pushes the full GIF snapshot to Surpluss in one click. Reports current distribution per
+                  marketplace allocation, then triggers a per-material reconcile so the donor "remaining"
+                  on Surpluss equals <code className="text-xs px-1 py-0.5 rounded bg-muted">received − allocated</code>.
+                  Use after large dispatch batches or whenever the Surpluss "Total Items Donated" widget
+                  drifts from GIF.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={syncMiniInventory}
+                    disabled={isSyncingInventory}
+                    size="lg"
+                  >
+                    {isSyncingInventory ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Syncing inventory snapshot…
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Sync Inventory Snapshot ({environment})
+                      </>
+                    )}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Runs against the selected environment. May take 1–3 minutes for large catalogues.
+                  </span>
+                </div>
+
+                {inventorySyncSummary && (
+                  <div className="rounded-lg border bg-card p-4 space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Marketplaces reported</div>
+                        <div className="font-semibold">
+                          {inventorySyncSummary.marketplaces_reported}/{inventorySyncSummary.marketplaces_total}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Allocations pushed</div>
+                        <div className="font-semibold">{inventorySyncSummary.allocations_reported}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Materials reconciled</div>
+                        <div className="font-semibold">
+                          {inventorySyncSummary.materials_reconciled}/{inventorySyncSummary.materials_total}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Drifted (corrected)</div>
+                        <div className="font-semibold text-amber-600 dark:text-amber-400">
+                          {inventorySyncSummary.materials_drifted}
+                        </div>
+                      </div>
+                    </div>
+                    {(inventorySyncSummary.marketplaces_failed > 0 ||
+                      inventorySyncSummary.materials_failed > 0) && (
+                      <div className="text-xs text-destructive flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-medium">
+                            {inventorySyncSummary.marketplaces_failed} marketplace failures ·{' '}
+                            {inventorySyncSummary.materials_failed} material failures
+                          </div>
+                          {inventorySyncSummary.errors.slice(0, 3).map((err, i) => (
+                            <div key={i} className="opacity-80">{err.error}</div>
+                          ))}
+                          {inventorySyncSummary.errors.length > 3 && (
+                            <div className="opacity-60">
+                              …and {inventorySyncSummary.errors.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Filters Card */}
             <Card>
               <CardHeader>
