@@ -27,22 +27,29 @@ export const useItemTypesExtended = () => {
       const { data: items, error } = await supabase
         .from('item_types')
         .select('*')
+        .is('deleted_at', null)
         .order('name');
       if (error) throw error;
 
-      // Fetch donor companies via external_items
+      // Fetch donor companies and received counts via external_items (Surpluss/GIF source of truth)
       const materialIds = (items || [])
         .map(i => i.external_material_id)
         .filter((id): id is number => id !== null);
 
       let companyMap: Record<number, string> = {};
+      let receivedByMaterial: Record<number, number> = {};
       if (materialIds.length > 0) {
         const { data: extItems } = await supabase
           .from('external_items')
-          .select('external_id, company_id')
-          .in('external_id', materialIds);
+          .select('external_id, company_id, item_count')
+          .in('external_id', materialIds)
+          .is('deleted_at', null);
 
         if (extItems && extItems.length > 0) {
+          extItems.forEach(ei => {
+            receivedByMaterial[ei.external_id] = (receivedByMaterial[ei.external_id] || 0) + Number(ei.item_count || 0);
+          });
+
           const companyIds = [...new Set(extItems.map(e => e.company_id).filter(Boolean))] as string[];
           if (companyIds.length > 0) {
             const { data: companies } = await supabase
@@ -65,11 +72,12 @@ export const useItemTypesExtended = () => {
       // Fetch marketplace allocations (with distributed_quantity for live counts)
       const itemIds = (items || []).map(i => i.id);
       let marketplaceMap: Record<string, string> = {};
+      let allocatedByItem: Record<string, number> = {};
       let distributedByItem: Record<string, number> = {};
       if (itemIds.length > 0) {
         const { data: allocations } = await supabase
           .from('marketplace_item_allocations')
-          .select('item_type_id, marketplace_id, distributed_quantity')
+          .select('item_type_id, marketplace_id, allocated_quantity, distributed_quantity')
           .in('item_type_id', itemIds)
           .is('deleted_at', null);
 
@@ -87,6 +95,7 @@ export const useItemTypesExtended = () => {
 
         (allocations || []).forEach(a => {
           const key = `${a.item_type_id}|${a.marketplace_id}`;
+          allocatedByItem[a.item_type_id] = (allocatedByItem[a.item_type_id] || 0) + Number(a.allocated_quantity || 0);
           const dist = manualMap.has(key)
             ? (manualMap.get(key) || 0)
             : Number(a.distributed_quantity || 0);
@@ -115,20 +124,25 @@ export const useItemTypesExtended = () => {
         }
       }
 
-      return (items || []).map(item => ({
-        id: item.id,
-        name: item.name,
-        icon: item.icon,
-        totalStock: item.total_stock,
-        distributed: distributedByItem[item.id] ?? (item.distributed || 0),
-        allocatedToMarketplace: item.allocated_to_marketplace,
-        category: item.category || null,
-        subcategory: item.subcategory || null,
-        externalMaterialId: item.external_material_id ?? null,
-        surplussUrl: item.surpluss_url ?? null,
-        donorCompany: item.external_material_id ? (companyMap[item.external_material_id] || null) : null,
-        marketplaceNames: marketplaceMap[item.id] || null,
-      }));
+      return (items || []).map(item => {
+        const materialId = item.external_material_id ?? null;
+        return {
+          id: item.id,
+          name: item.name,
+          icon: item.icon,
+          totalStock: materialId != null && receivedByMaterial[materialId] != null
+            ? receivedByMaterial[materialId]
+            : item.total_stock,
+          distributed: distributedByItem[item.id] ?? (item.distributed || 0),
+          allocatedToMarketplace: allocatedByItem[item.id] ?? (item.allocated_to_marketplace || 0),
+          category: item.category || null,
+          subcategory: item.subcategory || null,
+          externalMaterialId: materialId,
+          surplussUrl: item.surpluss_url ?? null,
+          donorCompany: materialId ? (companyMap[materialId] || null) : null,
+          marketplaceNames: marketplaceMap[item.id] || null,
+        };
+      });
     }
   });
 
@@ -136,6 +150,15 @@ export const useItemTypesExtended = () => {
     const channel = supabase
       .channel('item_types_extended_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_types' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['item_types_extended'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'external_items' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['item_types_extended'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_item_allocations' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['item_types_extended'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_manual_counts' }, () => {
         queryClient.invalidateQueries({ queryKey: ['item_types_extended'] });
       })
       .subscribe();
