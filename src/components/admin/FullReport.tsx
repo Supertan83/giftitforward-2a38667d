@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { VolunteerCheckInEvidence } from './VolunteerCheckInEvidence';
 import { BeneficiaryCountEvidence } from './BeneficiaryCountEvidence';
+import { ItemAllocationEvidence } from './ItemAllocationEvidence';
 
 interface Props {
   onBack: () => void;
