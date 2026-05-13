@@ -70,72 +70,17 @@ export const useSurplussVolunteerBeneficiarySync = () => {
     environment: 'staging' | 'production'
   ): Promise<SyncResult | null> => {
     setIsSyncing(true);
-    setCurrentStep('volunteers');
+    setCurrentStep('distribution');
 
     let failedStep: SurplussSyncStep | null = null;
 
     try {
-      // 1. Sync volunteers & demographics
-      let volData: any = null;
-      try {
-        const { data, error } = await supabase.functions.invoke('sync-surpluss-volunteer-beneficiary', {
-          body: { marketplace_id: marketplaceId, environment },
-        });
-        if (error) {
-          failedStep = 'volunteers';
-          const msg = await extractFunctionError(error, 'Volunteer sync failed');
-          throw new Error(msg);
-        }
-        volData = data;
-      } catch (err) {
-        if (!failedStep) failedStep = 'volunteers';
-        throw err;
-      }
+      // Volunteer + beneficiary syncs intentionally skipped — admins manage that
+      // data manually on Surpluss. This action only reports distribution figures.
+      const volData: any = null;
+      const benData: any = null;
 
-      // 2. Sync beneficiaries (paginated — loop until done to avoid edge timeout)
-      setCurrentStep('beneficiaries');
-      let benData: any = {
-        success: true,
-        beneficiaries_sent: 0,
-        beneficiaries_failed: 0,
-        beneficiaries_skipped: 0,
-        beneficiaries_total: 0,
-        marketplace_events_updated: 0,
-        marketplace_events_failed: 0,
-        beneficiary_details: [] as any[],
-        errors: [] as string[],
-      };
-      try {
-        let offset = 0;
-        const BATCH = 80;
-        for (let i = 0; i < 30; i++) {
-          const { data, error } = await supabase.functions.invoke('sync-surpluss-beneficiaries', {
-            body: { marketplace_id: marketplaceId, environment, batch_size: BATCH, offset },
-          });
-          if (error) {
-            failedStep = 'beneficiaries';
-            const msg = await extractFunctionError(error, 'Beneficiary sync failed');
-            throw new Error(msg);
-          }
-          benData.beneficiaries_sent += data?.beneficiaries_sent ?? 0;
-          benData.beneficiaries_failed += data?.beneficiaries_failed ?? 0;
-          benData.beneficiaries_skipped += data?.beneficiaries_skipped ?? 0;
-          benData.beneficiaries_total = data?.beneficiaries_total ?? benData.beneficiaries_total;
-          benData.marketplace_events_updated += data?.marketplace_events_updated ?? 0;
-          benData.marketplace_events_failed += data?.marketplace_events_failed ?? 0;
-          benData.beneficiary_details.push(...(data?.beneficiary_details ?? []));
-          benData.errors.push(...(data?.errors ?? []));
-          if (data?.success === false) benData.success = false;
-          if (data?.done) break;
-          offset = data?.next_offset ?? (offset + BATCH);
-        }
-      } catch (err) {
-        if (!failedStep) failedStep = 'beneficiaries';
-        throw err;
-      }
-
-      // 3. Report distribution figures (non-fatal — capture in result)
-      setCurrentStep('distribution');
+      // Report distribution figures (non-fatal — capture in result)
       let distributionReported = false;
       let distributionError: string | null = null;
       let distributionAllocationsSent = 0;
