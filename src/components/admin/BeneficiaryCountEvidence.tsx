@@ -190,7 +190,7 @@ export const BeneficiaryCountEvidence = () => {
               <Chip label="Total Beneficiaries" value={data.totals.beneficiaries} color="text-primary" />
               <Chip label="From QR" value={data.totals.qr} color="text-emerald-600" />
               <Chip label="On-site Forms" value={data.totals.onsite} color="text-violet-600" />
-              <Chip label="Manual Overrides" value={data.totals.manualEvents} color="text-amber-600" />
+              <Chip label="Verified Counts" value={data.totals.manualEvents} color="text-emerald-700" />
               <Chip label="Families (demo)" value={data.totals.families} color="text-blue-600" />
             </div>
 
@@ -198,9 +198,10 @@ export const BeneficiaryCountEvidence = () => {
             <div className="rounded-lg border bg-muted/30 p-3 mb-4 text-sm flex gap-2">
               <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
               <div className="text-muted-foreground">
-                <strong className="text-foreground">Consolidation rule:</strong> Manual admin count overrides everything when set.
-                Otherwise QR card activations are the primary source. When QR is absent, demographics-family counts or on-site
-                registration forms are used as a fallback (flagged under Assumptions).
+                <strong className="text-foreground">Consolidation rule:</strong> QR card activations are the primary measurement.
+                Where on-site verified attendance counts are available, they take precedence to reflect actual reach.
+                Demographic family data and on-site registration forms are used as supporting sources when QR activations
+                are unavailable (flagged under Assumptions).
               </div>
             </div>
 
