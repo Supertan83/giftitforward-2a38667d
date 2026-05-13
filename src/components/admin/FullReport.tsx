@@ -16,6 +16,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { VolunteerCheckInEvidence } from './VolunteerCheckInEvidence';
+import { BeneficiaryCountEvidence } from './BeneficiaryCountEvidence';
 
 interface Props {
   onBack: () => void;
@@ -199,6 +200,7 @@ export const FullReport = ({ onBack }: Props) => {
         <TabsList>
           <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
           <TabsTrigger value="volunteers">Volunteer Check-in Evidence</TabsTrigger>
+          <TabsTrigger value="beneficiaries">Beneficiary Count Evidence</TabsTrigger>
         </TabsList>
 
         <TabsContent value="marketplaces">
@@ -290,6 +292,10 @@ export const FullReport = ({ onBack }: Props) => {
 
         <TabsContent value="volunteers">
           <VolunteerCheckInEvidence />
+        </TabsContent>
+
+        <TabsContent value="beneficiaries">
+          <BeneficiaryCountEvidence />
         </TabsContent>
       </Tabs>
     </div>
