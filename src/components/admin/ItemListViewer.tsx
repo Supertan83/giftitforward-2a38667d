@@ -210,7 +210,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                   {/* Mobile */}
                   <div className="md:hidden divide-y divide-border">
                     {group.items.map(item => {
-                      const remaining = item.totalStock - item.distributed;
+                      const remaining = getDonorRemaining(item);
                       return (
                         <button
                           key={item.id}
@@ -254,7 +254,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                       </thead>
                       <tbody>
                         {group.items.map(item => {
-                          const remaining = item.totalStock - item.distributed;
+                          const remaining = getDonorRemaining(item);
                           return (
                             <tr
                               key={item.id}
@@ -334,7 +334,7 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Remaining</p>
-                  <p className="font-medium text-primary">{(selectedItem.totalStock - selectedItem.distributed).toLocaleString()}</p>
+                  <p className="font-medium text-primary">{getDonorRemaining(selectedItem).toLocaleString()}</p>
                 </div>
               </div>
 
