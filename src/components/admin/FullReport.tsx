@@ -299,6 +299,10 @@ export const FullReport = ({ onBack }: Props) => {
         <TabsContent value="beneficiaries">
           <BeneficiaryCountEvidence />
         </TabsContent>
+
+        <TabsContent value="allocation">
+          <ItemAllocationEvidence />
+        </TabsContent>
       </Tabs>
     </div>
   );
