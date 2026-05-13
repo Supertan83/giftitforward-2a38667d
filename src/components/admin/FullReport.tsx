@@ -200,6 +200,7 @@ export const FullReport = ({ onBack }: Props) => {
         <TabsList>
           <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
           <TabsTrigger value="volunteers">Volunteer Check-in Evidence</TabsTrigger>
+          <TabsTrigger value="beneficiaries">Beneficiary Count Evidence</TabsTrigger>
         </TabsList>
 
         <TabsContent value="marketplaces">
