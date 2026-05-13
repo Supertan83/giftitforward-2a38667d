@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { VolunteerCheckInEvidence } from './VolunteerCheckInEvidence';
 import { BeneficiaryCountEvidence } from './BeneficiaryCountEvidence';
+import { ItemAllocationEvidence } from './ItemAllocationEvidence';
 
 interface Props {
   onBack: () => void;
@@ -197,10 +198,11 @@ export const FullReport = ({ onBack }: Props) => {
       </div>
 
       <Tabs defaultValue="marketplaces">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
           <TabsTrigger value="volunteers">Volunteer Check-in Evidence</TabsTrigger>
           <TabsTrigger value="beneficiaries">Beneficiary Count Evidence</TabsTrigger>
+          <TabsTrigger value="allocation">Item Allocation Evidence</TabsTrigger>
         </TabsList>
 
         <TabsContent value="marketplaces">
@@ -296,6 +298,10 @@ export const FullReport = ({ onBack }: Props) => {
 
         <TabsContent value="beneficiaries">
           <BeneficiaryCountEvidence />
+        </TabsContent>
+
+        <TabsContent value="allocation">
+          <ItemAllocationEvidence />
         </TabsContent>
       </Tabs>
     </div>
