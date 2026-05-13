@@ -106,6 +106,9 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
   }
 
   const grandRemaining = companyGroups.reduce((s, g) => s + g.totalRemaining, 0);
+  const totalReceived = items.reduce((s, i) => s + i.totalStock, 0);
+  const totalAllocated = items.reduce((s, i) => s + i.allocatedToMarketplace, 0);
+  const totalDistributed = items.reduce((s, i) => s + i.distributed, 0);
 
   return (
     <div className="py-4 md:py-6 px-2 md:px-4 mx-auto space-y-4 max-w-full overflow-hidden">
@@ -120,6 +123,47 @@ export const ItemListViewer = ({ onBack }: ItemListViewerProps) => {
           Total Remaining: {grandRemaining.toLocaleString()}
         </Badge>
       </div>
+
+      <Card className="overflow-hidden border-primary/20 shadow-card">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Total Items Donated</p>
+              <p className="font-display text-3xl md:text-4xl font-bold text-foreground mt-1">
+                {totalReceived.toLocaleString()}
+              </p>
+              <p className="text-sm text-muted-foreground">Items received</p>
+            </div>
+            <div className="h-11 w-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Package className="h-6 w-6" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-primary">
+                <Archive className="h-4 w-4" />
+                <span className="text-xl font-bold">{totalAllocated.toLocaleString()}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Number of items allocated</p>
+            </div>
+            <div className="rounded-lg border border-accent/25 bg-accent/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-accent-foreground">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-xl font-bold">{totalDistributed.toLocaleString()}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Number of items distributed</p>
+            </div>
+            <div className="rounded-lg border border-secondary bg-secondary/50 px-4 py-3">
+              <div className="flex items-center gap-2 text-foreground">
+                <Package className="h-4 w-4" />
+                <span className="text-xl font-bold">{grandRemaining.toLocaleString()}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Number of items remaining</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col md:flex-row md:items-center gap-3">
         <div className="relative flex-1 max-w-md">
