@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
+import { VolunteerCheckInEvidence } from './VolunteerCheckInEvidence';
 
 interface Props {
   onBack: () => void;
@@ -278,6 +279,8 @@ export const FullReport = ({ onBack }: Props) => {
           )}
         </CardContent>
       </Card>
+
+      <VolunteerCheckInEvidence />
     </div>
   );
 };
