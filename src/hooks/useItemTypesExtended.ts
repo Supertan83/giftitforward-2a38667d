@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 export interface ExtendedItemType {
   id: string;
@@ -75,11 +76,13 @@ export const useItemTypesExtended = () => {
       let allocatedByItem: Record<string, number> = {};
       let distributedByItem: Record<string, number> = {};
       if (itemIds.length > 0) {
-        const { data: allocations } = await supabase
-          .from('marketplace_item_allocations')
-          .select('item_type_id, marketplace_id, allocated_quantity, distributed_quantity')
-          .in('item_type_id', itemIds)
-          .is('deleted_at', null);
+        const allocations = await fetchAllRows<any>(() =>
+          supabase
+            .from('marketplace_item_allocations')
+            .select('item_type_id, marketplace_id, allocated_quantity, distributed_quantity')
+            .in('item_type_id', itemIds)
+            .is('deleted_at', null)
+        );
 
         // Manual counts override allocation distributed_quantity when present
         const { data: manualCounts } = await supabase
