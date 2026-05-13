@@ -279,6 +279,8 @@ export const FullReport = ({ onBack }: Props) => {
           )}
         </CardContent>
       </Card>
+
+      <VolunteerCheckInEvidence />
     </div>
   );
 };
