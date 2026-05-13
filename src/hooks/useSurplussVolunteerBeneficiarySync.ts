@@ -228,7 +228,7 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         distribution_items_total: distributionItemsTotal,
         distribution_skipped_items: distributionSkippedItems,
         allocations_resynced: allocationsResynced,
-        errors: [...(volData?.errors ?? []), ...(benData?.errors ?? []), ...(distributionError ? [distributionError] : [])],
+        errors: distributionError ? [distributionError] : [],
       };
 
       const resyncNote = allocationsResynced > 0 ? ` Re-synced ${allocationsResynced} mapping(s).` : '';
@@ -236,25 +236,22 @@ export const useSurplussVolunteerBeneficiarySync = () => {
         ? ` Skipped ${distributionSkippedItems.length} item(s).`
         : '';
       const distStatus = distributionReported
-        ? `Distribution: ${distributionItemsReported}/${distributionItemsTotal} item(s) reported.${resyncNote}${skipNote}`
+        ? `${distributionItemsReported}/${distributionItemsTotal} item(s) reported.${resyncNote}${skipNote}`
         : distributionError
-        ? `Distribution: failed (${distributionError}).${resyncNote}`
+        ? `Failed (${distributionError}).${resyncNote}`
         : '';
 
-      const hasIssues = !result.success || !!distributionError || distributionSkippedItems.length > 0;
-
-      // Volunteers summary: report the number actually attached to the marketplace event on Surpluss
-      const volSummary = `Volunteers: ${result.volunteers_attached_to_event} attached to event (${result.volunteers_sent} new, ${result.volunteers_bulk_updated} re-linked)`;
+      const hasIssues = !!distributionError || distributionSkippedItems.length > 0;
 
       if (!hasIssues) {
         toast({
-          title: 'Sync Complete',
-          description: `${volSummary}. Beneficiaries: ${result.beneficiaries_sent} sent, ${result.beneficiaries_skipped} skipped. ${distStatus}`,
+          title: 'Distribution Sent',
+          description: `Item distribution sent to Surpluss. ${distStatus}`,
         });
       } else {
         toast({
-          title: result.success ? 'Sync Complete with Warnings' : 'Sync Completed with Issues',
-          description: `${volSummary}, ${result.volunteers_failed} failed. Ben: ${result.beneficiaries_sent} sent, ${result.beneficiaries_failed} failed. ${distStatus}`,
+          title: distributionReported ? 'Sent with Warnings' : 'Send Failed',
+          description: distStatus || 'Distribution report failed',
           variant: 'destructive',
         });
       }
