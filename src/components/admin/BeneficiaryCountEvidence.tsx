@@ -140,7 +140,7 @@ export const BeneficiaryCountEvidence = () => {
 
   const exportConsolidated = () => {
     if (!data) return;
-    const header = ['Marketplace', 'Date', 'Location', 'Beneficiaries (final)', 'Counting Method', 'QR Activations', 'On-site Forms', 'Manual Override', 'Families', 'Adults', 'Children', 'Demographic Reach', 'Sources Used', 'Assumptions', 'Notes'];
+    const header = ['Marketplace', 'Date', 'Location', 'Beneficiaries (final)', 'Counting Method', 'QR Activations', 'On-site Forms', 'Verified Count', 'Families', 'Adults', 'Children', 'Demographic Reach', 'Sources Used', 'Assumptions', 'Notes'];
     const rows = data.rows.map((r) => [
       r.name, r.date || '', r.location, r.final, r.method,
       r.qrActivated, r.onsite, r.manual ?? '', r.families, r.adults, r.children, r.reach,
@@ -158,10 +158,10 @@ export const BeneficiaryCountEvidence = () => {
 
   const methodBadge = (method: string) => {
     const cls =
-      method === 'Manual admin count' ? 'bg-amber-500' :
+      method === 'Verified attendance count' ? 'bg-emerald-600' :
       method === 'QR card activations' ? 'bg-emerald-500' :
-      method === 'Demographics estimate' ? 'bg-blue-500' :
-      method === 'On-site registration only' ? 'bg-violet-500' : 'bg-muted';
+      method === 'Demographic data' ? 'bg-blue-500' :
+      method === 'On-site registration' ? 'bg-violet-500' : 'bg-muted';
     return <Badge className={`${cls} text-white text-xs`}>{method}</Badge>;
   };
 
