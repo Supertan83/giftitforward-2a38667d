@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -194,93 +195,103 @@ export const FullReport = ({ onBack }: Props) => {
         <SummaryCard icon={Users} label="Beneficiaries" value={totals.beneficiaries} color="text-violet-600" />
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="w-4 h-4" /> Marketplaces
-            </CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  className="pl-8 h-9 w-64"
-                  placeholder="Search marketplace..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-1">
-                {(['all', 'completed', 'active', 'upcoming'] as const).map((s) => (
-                  <Button key={s} size="sm" variant={statusFilter === s ? 'default' : 'outline'}
-                    onClick={() => setStatusFilter(s)} className="capitalize">
-                    {s}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">No marketplaces match the filter.</div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Marketplace</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Allocated</TableHead>
-                    <TableHead className="text-right">Distributed</TableHead>
-                    <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead className="text-right">Volunteers</TableHead>
-                    <TableHead className="text-right">Beneficiaries</TableHead>
-                    <TableHead className="text-right">Families</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r) => {
-                    const remaining = Math.max(r.allocated - r.distributed, 0);
-                    const pct = r.allocated > 0 ? Math.round((r.distributed / r.allocated) * 100) : 0;
-                    return (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <div className="font-medium">{r.name}</div>
-                          {r.location && <div className="text-xs text-muted-foreground">{r.location}</div>}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {r.event_date ? format(new Date(r.event_date), 'MMM d, yyyy') : '-'}
-                        </TableCell>
-                        <TableCell>{statusBadge(r.status)}</TableCell>
-                        <TableCell className="text-right font-mono">{r.allocated.toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {r.distributed.toLocaleString()}
-                          {r.allocated > 0 && (
-                            <span className="text-xs text-muted-foreground ml-1">({pct}%)</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">{remaining.toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{r.volunteersAttended}</TableCell>
-                        <TableCell className="text-right font-mono">{r.beneficiariesServed}</TableCell>
-                        <TableCell className="text-right font-mono">{r.totalFamilies}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="marketplaces">
+        <TabsList>
+          <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
+          <TabsTrigger value="volunteers">Volunteer Check-in Evidence</TabsTrigger>
+        </TabsList>
 
-      <VolunteerCheckInEvidence />
+        <TabsContent value="marketplaces">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="w-4 h-4" /> Marketplaces
+                </CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      className="pl-8 h-9 w-64"
+                      placeholder="Search marketplace..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    {(['all', 'completed', 'active', 'upcoming'] as const).map((s) => (
+                      <Button key={s} size="sm" variant={statusFilter === s ? 'default' : 'outline'}
+                        onClick={() => setStatusFilter(s)} className="capitalize">
+                        {s}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">No marketplaces match the filter.</div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Marketplace</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Allocated</TableHead>
+                        <TableHead className="text-right">Distributed</TableHead>
+                        <TableHead className="text-right">Remaining</TableHead>
+                        <TableHead className="text-right">Volunteers</TableHead>
+                        <TableHead className="text-right">Beneficiaries</TableHead>
+                        <TableHead className="text-right">Families</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((r) => {
+                        const remaining = Math.max(r.allocated - r.distributed, 0);
+                        const pct = r.allocated > 0 ? Math.round((r.distributed / r.allocated) * 100) : 0;
+                        return (
+                          <TableRow key={r.id}>
+                            <TableCell>
+                              <div className="font-medium">{r.name}</div>
+                              {r.location && <div className="text-xs text-muted-foreground">{r.location}</div>}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {r.event_date ? format(new Date(r.event_date), 'MMM d, yyyy') : '-'}
+                            </TableCell>
+                            <TableCell>{statusBadge(r.status)}</TableCell>
+                            <TableCell className="text-right font-mono">{r.allocated.toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {r.distributed.toLocaleString()}
+                              {r.allocated > 0 && (
+                                <span className="text-xs text-muted-foreground ml-1">({pct}%)</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">{remaining.toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-mono">{r.volunteersAttended}</TableCell>
+                            <TableCell className="text-right font-mono">{r.beneficiariesServed}</TableCell>
+                            <TableCell className="text-right font-mono">{r.totalFamilies}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="volunteers">
+          <VolunteerCheckInEvidence />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
