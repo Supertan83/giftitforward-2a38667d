@@ -258,12 +258,7 @@ export const MarketplaceManualDataEditor = ({ marketplaceId, marketplaceName }: 
           </div>
         </div>
 
-        {!isEditing ? (
-          <Button variant="outline" size="sm" onClick={startEditing}>
-            <Edit2 className="w-4 h-4 mr-2" />
-            {hasData ? "Edit" : "Add Data"}
-          </Button>
-        ) : (
+        {!isEditing ? null : (
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={cancelEditing}>
               <X className="w-4 h-4 mr-1" /> Cancel
