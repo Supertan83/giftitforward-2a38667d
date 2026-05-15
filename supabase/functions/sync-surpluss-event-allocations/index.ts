@@ -406,8 +406,12 @@ async function syncSingleMarketplace(
         const donationMeta = alloc.donation_metadata as Record<string, unknown> | undefined;
         const materialId = (donationMeta?.id ?? alloc.material_id ?? alloc.donation_metadata_id) as number | undefined;
         const materialTitle = (donationMeta?.title ?? alloc.title ?? `Material ${materialId}`) as string;
-        const allocatedAmount = (alloc.amount as number) ?? (alloc.total_amount as number) ?? 0;
-        const distributedAmount = (alloc.distributed_amount as number) ?? (alloc.total_distributed as number) ?? 0;
+        const apiAmount = Number((alloc.amount as number | undefined) ?? (alloc.total_amount as number | undefined) ?? 0);
+        const distributedAmount = Number((alloc.distributed_amount as number | undefined) ?? (alloc.total_distributed as number | undefined) ?? 0);
+        const remainingAmount = Number((alloc.remaining_amount as number | undefined) ?? (alloc.total_remaining as number | undefined) ?? 0);
+        const allocatedAmount = distributedAmount > 0 && remainingAmount > 0
+          ? distributedAmount + remainingAmount
+          : apiAmount;
 
         if (!materialId) {
           console.log(`[sync] Skipping allocation ${alloc.id}: no materials`);
@@ -418,12 +422,14 @@ async function syncSingleMarketplace(
         if (existing) {
           existing.totalAllocated += allocatedAmount;
           existing.totalDistributed += distributedAmount;
+          existing.totalRemaining += remainingAmount;
           if (!existing.surplussAllocId && surplussAllocId) existing.surplussAllocId = surplussAllocId;
         } else {
           materialMap.set(materialId, {
             title: materialTitle,
             totalAllocated: allocatedAmount,
             totalDistributed: distributedAmount,
+            totalRemaining: remainingAmount,
             category: null,
             subcategory: null,
             surplussAllocId,
