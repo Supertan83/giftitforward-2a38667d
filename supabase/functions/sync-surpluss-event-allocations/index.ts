@@ -441,7 +441,13 @@ async function syncSingleMarketplace(
     }
   }
 
-  console.log(`[sync] Event ${marketplace.external_id}: ${materialMap.size} unique materials after aggregation`);
+  const aggregateAllocated = Array.from(materialMap.values()).reduce((sum, m) => sum + m.totalAllocated, 0);
+  const aggregateDistributed = Array.from(materialMap.values()).reduce((sum, m) => sum + m.totalDistributed, 0);
+  const aggregateRemaining = Array.from(materialMap.values()).reduce((sum, m) => sum + m.totalRemaining, 0);
+
+  console.log(
+    `[sync] Event ${marketplace.external_id}: ${materialMap.size} unique materials after aggregation; allocated=${aggregateAllocated}, distributed=${aggregateDistributed}, remaining=${aggregateRemaining}`,
+  );
 
   // Now sync once per unique material with the correct totals
   for (const [materialId, { title, totalAllocated, totalDistributed, category, subcategory, surplussAllocId }] of materialMap) {
