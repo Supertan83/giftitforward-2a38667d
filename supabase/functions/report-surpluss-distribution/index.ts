@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface DistributedMaterial {
   material_id: number;
+  amount: number;
   distributed_amount: number;
   remaining_amount: number;
 }
@@ -15,6 +16,7 @@ interface DistributedMaterial {
 interface AllocationReport {
   id: number;
   distributed_materials: DistributedMaterial[];
+  total_amount: number;
   total_distributed: number;
   total_remaining: number;
   status: string;
