@@ -75,13 +75,16 @@ Deno.serve(async (req) => {
       const materialMap = new Map<number, { title: string; totalAmount: number; category: string | null; subcategory: string | null }>()
 
       for (const alloc of allocations) {
-        const materials = alloc.allocated_materials || []
+      const materials = alloc.allocated_materials || []
 
         if (materials.length > 0) {
           for (const mat of materials) {
             const materialId = mat.material_id || mat.donation_metadata_id
             const title = mat.material_title || mat.title || `Material ${materialId}`
-            const amount = mat.amount || 0
+            const apiAmount = Number(mat.amount || 0)
+            const distributed = Number(mat.distributed_amount || 0)
+            const remaining = Number(mat.remaining_amount || 0)
+            const amount = remaining > 0 ? distributed + remaining : apiAmount
             const category = mat.donation_tag_name || null
             const subcategory = mat.donation_tag_subcategory_name || null
 
@@ -98,7 +101,10 @@ Deno.serve(async (req) => {
           // Fallback: legacy format
           const materialId = alloc.donation_metadata?.id || alloc.material_id || alloc.donation_metadata_id
           const title = alloc.donation_metadata?.title || alloc.title || `Material ${materialId}`
-          const amount = alloc.amount || alloc.total_amount || 0
+          const apiAmount = Number(alloc.amount || alloc.total_amount || 0)
+          const distributed = Number(alloc.distributed_amount || alloc.total_distributed || 0)
+          const remaining = Number(alloc.remaining_amount || alloc.total_remaining || 0)
+          const amount = remaining > 0 ? distributed + remaining : apiAmount
 
           if (!materialId || amount <= 0) continue
 
