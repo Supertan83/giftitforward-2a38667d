@@ -14,6 +14,7 @@ import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceReport, useAllMarketplaceReports, eventSlugMatchesMarketplace } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
+import { OriginalAllocationAuditPanel } from './OriginalAllocationAuditPanel';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
 import { VolunteerHoursEditDialog } from './VolunteerHoursEditDialog';
 import {
@@ -414,6 +415,9 @@ export const MarketplaceReports = ({
 
                 {/* Marketplace Manual Data Editor */}
                 <MarketplaceManualDataEditor marketplaceId={selectedMarketplaceId} marketplaceName={report.marketplace.name} />
+
+                {/* Audit Reconciliation Panel — Originally Pledged vs Distributed */}
+                <OriginalAllocationAuditPanel marketplaceId={selectedMarketplaceId} marketplaceName={report.marketplace.name} />
 
                 {/* Items Section */}
                 <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">

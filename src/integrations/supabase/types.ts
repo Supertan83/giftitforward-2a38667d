@@ -1113,6 +1113,8 @@ export type Database = {
           id: string
           item_type_id: string
           marketplace_id: string
+          original_allocated_quantity: number | null
+          original_allocated_synced_at: string | null
           surpluss_allocation_id: number | null
           updated_at: string
         }
@@ -1124,6 +1126,8 @@ export type Database = {
           id?: string
           item_type_id: string
           marketplace_id: string
+          original_allocated_quantity?: number | null
+          original_allocated_synced_at?: string | null
           surpluss_allocation_id?: number | null
           updated_at?: string
         }
@@ -1135,6 +1139,8 @@ export type Database = {
           id?: string
           item_type_id?: string
           marketplace_id?: string
+          original_allocated_quantity?: number | null
+          original_allocated_synced_at?: string | null
           surpluss_allocation_id?: number | null
           updated_at?: string
         }
