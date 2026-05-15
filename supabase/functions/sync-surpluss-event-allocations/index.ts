@@ -252,6 +252,11 @@ async function syncMaterial(
       item_type_id: resolvedItemType.id,
       allocated_quantity: allocatedAmount,
       distributed_quantity: distributedAmount,
+      // AUDIT: snapshot of original Surpluss pledge — set on first insert and never updated.
+      // Surpluss reconciles `amount` to `distributed_amount` after the event, so this is the only
+      // place we preserve the pre-reconciliation allocation for auditors.
+      original_allocated_quantity: allocatedAmount,
+      original_allocated_synced_at: new Date().toISOString(),
     };
     if (surplussAllocationId) insertData.surpluss_allocation_id = surplussAllocationId;
 
