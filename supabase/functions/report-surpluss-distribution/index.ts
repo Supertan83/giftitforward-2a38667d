@@ -80,9 +80,11 @@ serve(async (req) => {
       id: alloc.allocation_id,
       distributed_materials: alloc.materials.map(m => ({
         material_id: m.material_id,
+        amount: m.allocated,
         distributed_amount: m.distributed,
         remaining_amount: m.allocated - m.distributed,
       })),
+      total_amount: alloc.materials.reduce((sum, m) => sum + m.allocated, 0),
       total_distributed: alloc.materials.reduce((sum, m) => sum + m.distributed, 0),
       total_remaining: alloc.materials.reduce((sum, m) => sum + (m.allocated - m.distributed), 0),
       status: alloc.materials.every(m => m.distributed >= m.allocated) ? 'completed' : 'in_progress',
