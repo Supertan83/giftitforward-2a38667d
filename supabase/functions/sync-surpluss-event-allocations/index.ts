@@ -355,6 +355,7 @@ async function syncSingleMarketplace(
     title: string;
     totalAllocated: number;
     totalDistributed: number;
+    totalRemaining: number;
     category: string | null;
     subcategory: string | null;
     surplussAllocId: number | undefined;
@@ -369,8 +370,12 @@ async function syncSingleMarketplace(
         for (const mat of allocatedMaterials) {
           const materialId = (mat.material_id ?? mat.donation_metadata_id) as number | undefined;
           const materialTitle = (mat.material_title ?? mat.title ?? `Material ${materialId}`) as string;
-          const allocatedAmount = (mat.amount as number) ?? 0;
-          const distributedAmount = (mat.distributed_amount as number) ?? 0;
+          const apiAmount = Number((mat.amount as number | undefined) ?? 0);
+          const distributedAmount = Number((mat.distributed_amount as number | undefined) ?? 0);
+          const remainingAmount = Number((mat.remaining_amount as number | undefined) ?? 0);
+          const allocatedAmount = distributedAmount > 0 && remainingAmount > 0
+            ? distributedAmount + remainingAmount
+            : apiAmount;
           const category = (mat.donation_tag_name as string | null) ?? null;
           const subcategory = (mat.donation_tag_subcategory_name as string | null) ?? null;
 
@@ -383,12 +388,14 @@ async function syncSingleMarketplace(
           if (existing) {
             existing.totalAllocated += allocatedAmount;
             existing.totalDistributed += distributedAmount;
+            existing.totalRemaining += remainingAmount;
             if (!existing.surplussAllocId && surplussAllocId) existing.surplussAllocId = surplussAllocId;
           } else {
             materialMap.set(materialId, {
               title: materialTitle,
               totalAllocated: allocatedAmount,
               totalDistributed: distributedAmount,
+              totalRemaining: remainingAmount,
               category,
               subcategory,
               surplussAllocId,
