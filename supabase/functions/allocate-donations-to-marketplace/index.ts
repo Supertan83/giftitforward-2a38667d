@@ -199,6 +199,10 @@ async function upsertAllocation(
       item_type_id: itemType!.id,
       allocated_quantity: amount,
       distributed_quantity: 0,
+      // AUDIT: snapshot of the original Surpluss pledge on first sync.
+      // Never updated afterwards (Surpluss reconciles allocated → distributed at end of event).
+      original_allocated_quantity: amount,
+      original_allocated_synced_at: new Date().toISOString(),
     })
 
   return {
