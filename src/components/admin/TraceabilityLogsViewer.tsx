@@ -174,6 +174,10 @@ export const TraceabilityLogsViewer = ({ onBack }: TraceabilityLogsViewerProps) 
           <h1 className="text-xl font-bold">Traceability Logs</h1>
           <p className="text-sm text-muted-foreground">Full audit trail of allocation lifecycle events</p>
         </div>
+        <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm" className="gap-2">
+          <Download className="w-4 h-4" />
+          {exporting ? 'Exporting...' : 'Export to Excel'}
+        </Button>
       </div>
 
       {/* Filters */}
