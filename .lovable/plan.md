@@ -1,64 +1,31 @@
-## Sorun
+## Add Excel Export to Traceability Logs
 
-Surpluss platformundaki "Total Items Donated" mini inventory widget'ı 3 sayı gösteriyor:
+Add an "Export to Excel" button in the Traceability Logs header (next to the back button / page title) that exports the currently filtered logs to an `.xlsx` file.
 
-- **Items received** (örn. 546,005)
-- **Number of items distributed** (örn. 500,074)
-- **Number of items remaining** (örn. 45,931)
+### Behavior
+- Button appears in the top header of `TraceabilityLogsViewer` (right side, aligned with the title row).
+- Exports the **currently filtered** result set respecting Marketplace, Action, and QR Card search filters.
+- To avoid the 500-row UI cap, the export runs its own query using the same filters but without the limit (fetched via `fetchAllRows` for safety).
+- Filename: `traceability-logs-YYYY-MM-DD-HHmm.xlsx`.
+- Disabled while loading; shows a spinner during export; toast on success/failure.
 
-Şu anki davranış:
-- `report-surpluss-distribution` her marketplace allocation'ı için sadece `{distributed_amount, remaining_amount = allocated − distributed}` gönderiyor. Yani Surpluss'a sadece **marketplace seviyesinde** rapor gidiyor, donor (material) seviyesindeki "remaining" güncellenmiyor.
-- Surpluss mini inventory ise **material seviyesinde** çalışıyor: `received` = donor toplam donation, `remaining` = material'in donor stoğunda kalan kısım.
-- Bu yüzden distributed/remaining/received üçlüsü GIF gerçeğiyle senkron değil.
+### Columns
+| Column | Source |
+|---|---|
+| Timestamp | `created_at` formatted `yyyy-MM-dd HH:mm:ss` |
+| Action | `action_type` |
+| Marketplace | `marketplace_name` |
+| QR Card | `card_unique_id` |
+| Quantity Before | `quantity_before` |
+| Quantity After | `quantity_after` |
+| Quantity Change | `quantity_after - quantity_before` |
+| Performed By | `performed_by_email` |
+| Description | `description` |
 
-Kullanıcının istediği mantık: **Remaining = Received − Allocated** (yani henüz hiçbir marketplace'e atanmamış donor stoğu). Tüm 3 sayı da GIF'in resmi rakamlarıyla aynı olmalı.
+Header row bold, columns auto-sized, frozen header row.
 
-## Yapılacaklar
-
-### 1. Yeni edge function: `sync-surpluss-inventory`
-
-Her material (external_material_id) için tek seferde donor seviyesinde Surpluss'a şunu gönderir:
-- `material_id`
-- `total_received` = `external_items.item_count` toplamı (donor envanteri)
-- `total_allocated` = GIF'teki tüm aktif `marketplace_item_allocations.allocated_quantity` toplamı
-- `total_distributed` = manual count varsa onu, yoksa `distributed_quantity` toplamı (mevcut report-surpluss-distribution mantığıyla aynı)
-- `total_remaining` = `total_received − total_allocated`
-
-İki API çağrısı seti yapar:
-1. **Per-allocation distribution PUT** → mevcut `report-surpluss-distribution` payload'ı (her marketplace allocation için günceller).
-2. **Per-material reconcile** → mevcut `surpluss-allocations-api` `reconcile_donation_remaining` action'ını her unique material_id için çağırır → bu Surpluss'taki donor "remaining"i GIF'in allocated'ına göre yeniden hesaplatır.
-
-Sonuç: Surpluss tarafındaki mini inventory hem distributed hem remaining hem de allocated rakamlarını GIF'ten alır.
-
-### 2. UI: "Sync Mini Inventory to Surpluss" butonu
-
-`SurplussSyncPanel` (Admin → Surpluss Sync) içine yeni bir kart:
-
-- **Buton**: "Sync Inventory Snapshot to Surpluss"
-- **Environment seçimi**: Staging / Production toggle (mevcut pattern)
-- Çalışınca özet gösterir:
-  - Materyal sayısı
-  - Reconcile edilen (drift olan) sayısı
-  - Rapor edilen allocation sayısı
-  - Hatalar varsa listeler
-- Çalıştırma sonrası mini özet tablosu: Material | Received | Allocated | Distributed | Remaining (GIF tarafı) — kullanıcı GIF ile Surpluss'ı karşılaştırabilsin.
-
-### 3. Otomatik tetikleme (opsiyonel)
-
-`report-surpluss-distribution` çağrıldıktan hemen sonra ilgili material'ler için `reconcile_donation_remaining` otomatik tetiklenir. Böylece her zaman elle "sync" basmaya gerek kalmaz.
-
-## Beklenen Sonuç
-
-Sync sonrası Surpluss mini inventory:
-- **Items received** = `SUM(external_items.item_count)` (Surpluss zaten kendi donor verisinden alıyor — bizim göndermemize gerek yok; reconcile sonrası uyum sağlanır)
-- **Number of items distributed** = GIF'in raporladığı toplam dağıtım
-- **Number of items remaining** = received − allocated (donor warehouse'da hâlâ taahhüt edilmemiş kalan stok)
-
-## Teknik Notlar
-
-- Yeni edge function `verify_jwt = false` değil — admin JWT gerekli.
-- Mevcut `bulk_reconcile_remaining` action'ı zaten tüm materialler için reconcile yapabiliyor; yeni edge function bunu çağırıp ardından her marketplace için `report-surpluss-distribution` invoke eder, single transaction olarak loglar.
-- Veri kaynağı: `marketplace_item_allocations` (deleted_at IS NULL filtreli), `marketplace_manual_counts` (override), `external_items` (donor envanter), `item_types` (material mapping).
-- Audit: tüm çağrılar `surpluss_api_audit_log` ve `surpluss_distribution_reports` tablolarına yazılır.
-- UI dosyası: `src/components/admin/SurplussSyncPanel.tsx` — mevcut card pattern'ini takip et.
-- Yeni dosyalar: `supabase/functions/sync-surpluss-inventory/index.ts`, `src/hooks/useSurplussInventorySync.ts`.
+### Technical notes
+- Use existing `xlsx` / `exceljs` if already in the project; otherwise add `xlsx` (SheetJS) — small, sync, ideal for this. Will check `package.json` first and reuse what's installed.
+- New helper: `src/lib/exportTraceabilityLogs.ts` that takes filters, fetches all matching rows via `fetchAllRows`, builds the workbook, and triggers download.
+- Edit `src/components/admin/TraceabilityLogsViewer.tsx` to add the `Download` (lucide) button in the header and wire it to the helper.
+- No backend / RLS / schema changes needed.

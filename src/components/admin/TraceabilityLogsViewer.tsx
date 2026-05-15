@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, Search, Filter, Clock, X } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Clock, X, Download } from 'lucide-react';
+import { exportTraceabilityLogsToExcel } from '@/lib/exportTraceabilityLogs';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -67,8 +69,26 @@ export const TraceabilityLogsViewer = ({ onBack }: TraceabilityLogsViewerProps) 
   const [cardSearch, setCardSearch] = useState('');
   const [appliedCardSearch, setAppliedCardSearch] = useState('');
   const [timelineCardId, setTimelineCardId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const { toast } = useToast();
 
   const { data: marketplaces = [] } = useMarketplaces();
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const count = await exportTraceabilityLogsToExcel({
+        marketplaceId: marketplaceFilter || undefined,
+        actionType: actionFilter || undefined,
+        cardUniqueId: appliedCardSearch || undefined,
+      });
+      toast({ title: 'Export complete', description: `${count} log entries exported.` });
+    } catch (e: any) {
+      toast({ title: 'Export failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data: logs = [], isLoading } = useAllTraceabilityLogs({
     marketplaceId: marketplaceFilter || undefined,
@@ -154,6 +174,10 @@ export const TraceabilityLogsViewer = ({ onBack }: TraceabilityLogsViewerProps) 
           <h1 className="text-xl font-bold">Traceability Logs</h1>
           <p className="text-sm text-muted-foreground">Full audit trail of allocation lifecycle events</p>
         </div>
+        <Button onClick={handleExport} disabled={exporting} variant="outline" size="sm" className="gap-2">
+          <Download className="w-4 h-4" />
+          {exporting ? 'Exporting...' : 'Export to Excel'}
+        </Button>
       </div>
 
       {/* Filters */}
