@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, Search, Filter, Clock, X } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Clock, X, Download } from 'lucide-react';
+import { exportTraceabilityLogsToExcel } from '@/lib/exportTraceabilityLogs';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
