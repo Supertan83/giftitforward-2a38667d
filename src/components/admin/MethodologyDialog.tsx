@@ -64,14 +64,10 @@ export function MethodologyDialog({ open, onOpenChange, marketplaceName }: Props
           <section>
             <h4 className="font-semibold text-foreground mb-1">Reconciliation behaviour</h4>
             <p className="text-muted-foreground">
-              At the end of each event, Surpluss reconciles the allocated quantity to the actual
-              distributed quantity. This means that, on the Surpluss platform, the field labelled
-              <em> "Items Requested" </em> will, after reconciliation, display the same value as
-              <em> "Items Used in Marketplace"</em>. The figure shown on the Surpluss page as
-              <em> "Items Remaining" </em> refers to the donor's broader inventory leftover and
-              should <strong>not</strong> be added to "Items Used" to derive a total allocation.
-              The "Originally Pledged" column on this page is the authoritative pre-reconciliation
-              figure.
+              The event-level requested quantity is calculated as the physical count total:
+              <em> Distributed at Event + Remaining After Event</em>. The remaining quantity is kept
+              visible so auditors can reconcile the original allocation against both items used in
+              the marketplace and items not distributed.
             </p>
           </section>
 
