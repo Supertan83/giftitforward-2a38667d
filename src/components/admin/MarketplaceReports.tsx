@@ -416,6 +416,9 @@ export const MarketplaceReports = ({
                 {/* Marketplace Manual Data Editor */}
                 <MarketplaceManualDataEditor marketplaceId={selectedMarketplaceId} marketplaceName={report.marketplace.name} />
 
+                {/* Audit Reconciliation Panel — Originally Pledged vs Distributed */}
+                <OriginalAllocationAuditPanel marketplaceId={selectedMarketplaceId} marketplaceName={report.marketplace.name} />
+
                 {/* Items Section */}
                 <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
                   <button onClick={() => toggleSection('items')} className="w-full p-4 md:p-6 flex items-center justify-between text-left hover:bg-muted/50 transition-colors">
