@@ -409,7 +409,7 @@ async function syncSingleMarketplace(
         const apiAmount = Number((alloc.amount as number | undefined) ?? (alloc.total_amount as number | undefined) ?? 0);
         const distributedAmount = Number((alloc.distributed_amount as number | undefined) ?? (alloc.total_distributed as number | undefined) ?? 0);
         const remainingAmount = Number((alloc.remaining_amount as number | undefined) ?? (alloc.total_remaining as number | undefined) ?? 0);
-        const allocatedAmount = distributedAmount > 0 && remainingAmount > 0
+        const allocatedAmount = remainingAmount > 0
           ? distributedAmount + remainingAmount
           : apiAmount;
 
