@@ -373,7 +373,7 @@ async function syncSingleMarketplace(
           const apiAmount = Number((mat.amount as number | undefined) ?? 0);
           const distributedAmount = Number((mat.distributed_amount as number | undefined) ?? 0);
           const remainingAmount = Number((mat.remaining_amount as number | undefined) ?? 0);
-          const allocatedAmount = distributedAmount > 0 && remainingAmount > 0
+          const allocatedAmount = remainingAmount > 0
             ? distributedAmount + remainingAmount
             : apiAmount;
           const category = (mat.donation_tag_name as string | null) ?? null;

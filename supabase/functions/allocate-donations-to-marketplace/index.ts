@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
             const apiAmount = Number(mat.amount || 0)
             const distributed = Number(mat.distributed_amount || 0)
             const remaining = Number(mat.remaining_amount || 0)
-            const amount = distributed > 0 && remaining > 0 ? distributed + remaining : apiAmount
+            const amount = remaining > 0 ? distributed + remaining : apiAmount
             const category = mat.donation_tag_name || null
             const subcategory = mat.donation_tag_subcategory_name || null
 
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
           const apiAmount = Number(alloc.amount || alloc.total_amount || 0)
           const distributed = Number(alloc.distributed_amount || alloc.total_distributed || 0)
           const remaining = Number(alloc.remaining_amount || alloc.total_remaining || 0)
-          const amount = distributed > 0 && remaining > 0 ? distributed + remaining : apiAmount
+          const amount = remaining > 0 ? distributed + remaining : apiAmount
 
           if (!materialId || amount <= 0) continue
 
