@@ -69,8 +69,26 @@ export const TraceabilityLogsViewer = ({ onBack }: TraceabilityLogsViewerProps) 
   const [cardSearch, setCardSearch] = useState('');
   const [appliedCardSearch, setAppliedCardSearch] = useState('');
   const [timelineCardId, setTimelineCardId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const { toast } = useToast();
 
   const { data: marketplaces = [] } = useMarketplaces();
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const count = await exportTraceabilityLogsToExcel({
+        marketplaceId: marketplaceFilter || undefined,
+        actionType: actionFilter || undefined,
+        cardUniqueId: appliedCardSearch || undefined,
+      });
+      toast({ title: 'Export complete', description: `${count} log entries exported.` });
+    } catch (e: any) {
+      toast({ title: 'Export failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data: logs = [], isLoading } = useAllTraceabilityLogs({
     marketplaceId: marketplaceFilter || undefined,
