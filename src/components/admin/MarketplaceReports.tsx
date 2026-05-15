@@ -14,6 +14,7 @@ import { useMarketplaces } from '@/hooks/useSupabaseData';
 import { useMarketplaceReport, useAllMarketplaceReports, eventSlugMatchesMarketplace } from '@/hooks/useMarketplaceAllocations';
 import { MarketplaceDemographicsEditor } from './MarketplaceDemographicsEditor';
 import { MarketplaceManualDataEditor } from './MarketplaceManualDataEditor';
+import { OriginalAllocationAuditPanel } from './OriginalAllocationAuditPanel';
 import { useSurplussVolunteerBeneficiarySync } from '@/hooks/useSurplussVolunteerBeneficiarySync';
 import { VolunteerHoursEditDialog } from './VolunteerHoursEditDialog';
 import {
