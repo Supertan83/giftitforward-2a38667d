@@ -551,17 +551,29 @@ function MarketplaceSectionView({
     <Accordion type="single" collapsible defaultValue="section">
       <AccordionItem value="section" className="border rounded-lg">
         <AccordionTrigger className="px-3 py-2 hover:no-underline">
-          <div className="flex items-center justify-between w-full pr-2">
-            <span className="font-medium text-sm flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 text-primary" />
-              {section.marketplace_name}
-              {section.event_date && (
-                <span className="text-muted-foreground font-normal">
-                  ({format(new Date(section.event_date), 'MMM d')})
-                </span>
-              )}
+          <div className="flex items-start sm:items-center justify-between w-full pr-2 gap-2 flex-col sm:flex-row">
+            <span className="font-medium text-sm flex items-center gap-2 text-left">
+              <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span>
+                {section.marketplace_name}
+                {section.event_date && (
+                  <span className="text-muted-foreground font-normal ml-1">
+                    ({format(new Date(section.event_date), 'MMM d')})
+                  </span>
+                )}
+              </span>
             </span>
-            <Badge variant="secondary" className="text-xs ml-2">{section.totalTx} tx</Badge>
+            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+              <Badge className="text-xs bg-emerald-500/10 text-emerald-700 border-emerald-200 border">
+                {section.netDistributed} item{section.netDistributed === 1 ? '' : 's'} checked out
+              </Badge>
+              {section.totalReturned > 0 && (
+                <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-200 border">
+                  ↩ {section.totalReturned} returned
+                </Badge>
+              )}
+              <Badge variant="secondary" className="text-xs">{section.totalTx} tx</Badge>
+            </div>
           </div>
         </AccordionTrigger>
         <AccordionContent>
