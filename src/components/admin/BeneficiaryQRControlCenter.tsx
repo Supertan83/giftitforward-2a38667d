@@ -55,6 +55,9 @@ interface MarketplaceSection {
   event_date: string | null;
   transactions: GroupedTx[];
   totalTx: number;
+  totalDistributed: number;
+  totalReturned: number;
+  netDistributed: number;
 }
 
 interface Props {
@@ -236,12 +239,21 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
       }
 
       const mpInfo = mpId ? marketplaceNames[mpId] : null;
+      let totalDistributed = 0;
+      let totalReturned = 0;
+      for (const g of grouped) {
+        if (g.type === 'Distribution') totalDistributed += g.quantity;
+        else if (g.type === 'Return') totalReturned += g.quantity;
+      }
       sections.push({
         marketplace_id: mpId,
         marketplace_name: mpInfo?.name || 'Unknown Marketplace',
         event_date: mpInfo?.event_date || null,
         transactions: grouped,
         totalTx: txList.length,
+        totalDistributed,
+        totalReturned,
+        netDistributed: totalDistributed - totalReturned,
       });
     }
 
@@ -539,20 +551,43 @@ function MarketplaceSectionView({
     <Accordion type="single" collapsible defaultValue="section">
       <AccordionItem value="section" className="border rounded-lg">
         <AccordionTrigger className="px-3 py-2 hover:no-underline">
-          <div className="flex items-center justify-between w-full pr-2">
-            <span className="font-medium text-sm flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 text-primary" />
-              {section.marketplace_name}
-              {section.event_date && (
-                <span className="text-muted-foreground font-normal">
-                  ({format(new Date(section.event_date), 'MMM d')})
-                </span>
-              )}
+          <div className="flex items-start sm:items-center justify-between w-full pr-2 gap-2 flex-col sm:flex-row">
+            <span className="font-medium text-sm flex items-center gap-2 text-left">
+              <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span>
+                {section.marketplace_name}
+                {section.event_date && (
+                  <span className="text-muted-foreground font-normal ml-1">
+                    ({format(new Date(section.event_date), 'MMM d')})
+                  </span>
+                )}
+              </span>
             </span>
-            <Badge variant="secondary" className="text-xs ml-2">{section.totalTx} tx</Badge>
+            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+              <Badge className="text-xs bg-emerald-500/10 text-emerald-700 border-emerald-200 border">
+                {section.netDistributed} item{section.netDistributed === 1 ? '' : 's'} checked out
+              </Badge>
+              {section.totalReturned > 0 && (
+                <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-200 border">
+                  ↩ {section.totalReturned} returned
+                </Badge>
+              )}
+              <Badge variant="secondary" className="text-xs">{section.totalTx} tx</Badge>
+            </div>
           </div>
         </AccordionTrigger>
         <AccordionContent>
+          <div className="px-3 py-2 border-b bg-muted/30 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="text-emerald-700 font-medium">
+              Distributed: <strong>{section.totalDistributed}</strong>
+            </span>
+            <span className="text-amber-700 font-medium">
+              Returned: <strong>{section.totalReturned}</strong>
+            </span>
+            <span className="text-foreground font-semibold">
+              Net checked out: <strong>{section.netDistributed}</strong>
+            </span>
+          </div>
           <div className="max-h-[400px] overflow-auto">
             <Table>
               <TableHeader>
