@@ -55,6 +55,9 @@ interface MarketplaceSection {
   event_date: string | null;
   transactions: GroupedTx[];
   totalTx: number;
+  totalDistributed: number;
+  totalReturned: number;
+  netDistributed: number;
 }
 
 interface Props {
