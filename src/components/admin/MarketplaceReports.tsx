@@ -219,11 +219,114 @@ export const MarketplaceReports = ({
     }));
   };
 
-  const exportAttendanceLog = () => {
-    if (!report) return;
+  const fmtTs = (iso: string | null | undefined) => iso ? formatDate(new Date(iso), 'yyyy-MM-dd HH:mm:ss') : '';
+
+  const autosizeCols = (ws: XLSX.WorkSheet, rows: any[]) => {
+    const headers = Object.keys(rows[0] || {});
+    ws['!cols'] = headers.map(h => {
+      const maxLen = Math.max(h.length, ...rows.map(r => String((r as any)[h] ?? '').length));
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
+    });
+  };
+
+  const fetchQrEvidence = async (marketplaceId: string) => {
+    const [activeRes, archivedRes, logsRes] = await Promise.all([
+      supabase
+        .from('qr_cards')
+        .select('unique_id, status, activated_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null)
+        .order('activated_at', { ascending: true, nullsFirst: false }),
+      supabase
+        .from('archived_card_data')
+        .select('unique_id, activated_at, checked_out_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null)
+        .order('activated_at', { ascending: true, nullsFirst: false }),
+      supabase
+        .from('allocation_traceability_logs' as any)
+        .select('created_at, action_type, card_unique_id, quantity_before, quantity_after, performed_by_email, description')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true }),
+    ]);
+    return {
+      active: (activeRes.data || []) as any[],
+      archived: (archivedRes.data || []) as any[],
+      logs: (logsRes.data || []) as any[],
+    };
+  };
+
+  const buildQrSheets = (qr: { active: any[]; archived: any[]; logs: any[] }) => {
+    const evidenceRows = [
+      ...qr.active.map(c => ({
+        'QR Unique ID': c.unique_id || '',
+        'Status': c.status || '',
+        'Activated At': fmtTs(c.activated_at),
+        'Checked Out At': '',
+        'Gender': c.gender || '',
+        'Marital Status': c.marital_status || '',
+        'Nationality': c.nationality || '',
+        'Children Count': c.children_count ?? 0,
+        'Items Collected': c.total_items_collected ?? 0,
+        'Credit Balance': c.credit_balance ?? 0,
+        'Source': 'Active',
+      })),
+      ...qr.archived.map(c => ({
+        'QR Unique ID': c.unique_id || '',
+        'Status': 'archived',
+        'Activated At': fmtTs(c.activated_at),
+        'Checked Out At': fmtTs(c.checked_out_at),
+        'Gender': c.gender || '',
+        'Marital Status': c.marital_status || '',
+        'Nationality': c.nationality || '',
+        'Children Count': c.children_count ?? 0,
+        'Items Collected': c.total_items_collected ?? 0,
+        'Credit Balance': c.credit_balance ?? 0,
+        'Source': 'Archived',
+      })),
+    ];
+    const totalCards = evidenceRows.length;
+    const totalActivated = [...qr.active, ...qr.archived].filter(c => c.activated_at).length;
+    const totalCheckedOut =
+      qr.archived.filter(c => c.checked_out_at).length +
+      qr.active.filter(c => c.status === 'checked_out').length;
+    const totalItems = evidenceRows.reduce((s, r) => s + (Number(r['Items Collected']) || 0), 0);
+    evidenceRows.push({
+      'QR Unique ID': `TOTAL: ${totalCards} cards`,
+      'Status': '', 'Activated At': '', 'Checked Out At': '',
+      'Gender': '', 'Marital Status': '', 'Nationality': '',
+      'Children Count': 0,
+      'Items Collected': totalItems,
+      'Credit Balance': 0,
+      'Source': '',
+    });
+
+    const logRows = qr.logs.map(l => ({
+      'Timestamp': fmtTs(l.created_at),
+      'Action': l.action_type || '',
+      'QR Card': l.card_unique_id || '',
+      'Qty Before': l.quantity_before ?? 0,
+      'Qty After': l.quantity_after ?? 0,
+      'Change': (l.quantity_after ?? 0) - (l.quantity_before ?? 0),
+      'Performed By': l.performed_by_email || '',
+      'Description': l.description || '',
+    }));
+
+    return { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut, totalItems };
+  };
+
+  const safeName = () =>
+    ((report?.marketplace.name) || 'marketplace').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  const dateStr = () =>
+    report?.marketplace.eventDate
+      ? formatDate(new Date(report.marketplace.eventDate), 'yyyy-MM-dd')
+      : formatDate(new Date(), 'yyyy-MM-dd');
+
+  const exportAttendanceLog = async () => {
+    if (!report || !selectedMarketplaceId) return;
     const list: any[] = (report as any)?.volunteers?.volunteerList || [];
     const attended = list.filter(v => v.checkedInAt || v.status === 'checked_in' || v.status === 'checked_out');
-    const fmt = (iso: string | null) => iso ? formatDate(new Date(iso), 'yyyy-MM-dd HH:mm:ss') : '';
     const rows = attended.map(v => ({
       'Volunteer Name': v.name || '',
       'Organization': v.company || '',
@@ -231,8 +334,8 @@ export const MarketplaceReports = ({
       'Gender': v.gender || '',
       'QR Card': v.uniqueId || '',
       'Status': v.status || '',
-      'Checked In At': fmt(v.checkedInAt),
-      'Checked Out At': fmt(v.checkedOutAt),
+      'Checked In At': fmtTs(v.checkedInAt),
+      'Checked Out At': fmtTs(v.checkedOutAt),
       'Hours Worked': Number(v.hoursWorked || 0).toFixed(2),
     }));
     const totalHours = attended.reduce((s, v) => s + (Number(v.hoursWorked) || 0), 0);
@@ -242,15 +345,10 @@ export const MarketplaceReports = ({
       'Checked In At': '', 'Checked Out At': '',
       'Hours Worked': totalHours.toFixed(2),
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const headers = Object.keys(rows[0] || {});
-    ws['!cols'] = headers.map(h => {
-      const maxLen = Math.max(h.length, ...rows.map(r => String((r as any)[h] ?? '').length));
-      return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
-    });
-    const wb = XLSX.utils.book_new();
 
-    // Summary sheet — beneficiary & distribution quantities
+    const qr = await fetchQrEvidence(selectedMarketplaceId);
+    const { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut } = buildQrSheets(qr);
+
     const beneficiariesCount =
       (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
     const itemsDistributed = report.items?.totalDistributed ?? 0;
@@ -260,23 +358,74 @@ export const MarketplaceReports = ({
       { Metric: 'Marketplace', Quantity: report.marketplace.name },
       { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
       { Metric: 'Beneficiaries', Quantity: beneficiariesCount },
+      { Metric: 'Beneficiary QR Cards', Quantity: totalCards },
+      { Metric: 'QR Cards Activated (scans)', Quantity: totalActivated },
+      { Metric: 'QR Cards Checked Out (deactivated)', Quantity: totalCheckedOut },
       { Metric: 'Volunteers Attended', Quantity: attended.length },
       { Metric: 'Total Hours Worked', Quantity: Number(totalHours.toFixed(2)) },
       { Metric: 'Items Allocated', Quantity: itemsAllocated },
       { Metric: 'Items Distributed', Quantity: itemsDistributed },
       { Metric: 'Items Remaining', Quantity: itemsRemaining },
     ];
+
+    const wb = XLSX.utils.book_new();
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-    wsSummary['!cols'] = [{ wch: 24 }, { wch: 32 }];
+    wsSummary['!cols'] = [{ wch: 32 }, { wch: 32 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-    const safeName = (report.marketplace.name || 'marketplace').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-    const dateStr = report.marketplace.eventDate
-      ? formatDate(new Date(report.marketplace.eventDate), 'yyyy-MM-dd')
-      : formatDate(new Date(), 'yyyy-MM-dd');
-    XLSX.writeFile(wb, `attendance-${safeName}-${dateStr}.xlsx`);
-    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers` });
+    const wsAtt = XLSX.utils.json_to_sheet(rows);
+    autosizeCols(wsAtt, rows);
+    XLSX.utils.book_append_sheet(wb, wsAtt, 'Attendance');
+
+    const wsEv = XLSX.utils.json_to_sheet(evidenceRows);
+    autosizeCols(wsEv, evidenceRows);
+    XLSX.utils.book_append_sheet(wb, wsEv, 'Beneficiary QR Evidence');
+
+    if (logRows.length) {
+      const wsLog = XLSX.utils.json_to_sheet(logRows);
+      autosizeCols(wsLog, logRows);
+      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Logs');
+    }
+
+    XLSX.writeFile(wb, `attendance-${safeName()}-${dateStr()}.xlsx`);
+    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers · ${totalCards} QR cards` });
+  };
+
+  const exportQrEvidence = async () => {
+    if (!report || !selectedMarketplaceId) return;
+    const qr = await fetchQrEvidence(selectedMarketplaceId);
+    const { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut, totalItems } = buildQrSheets(qr);
+    const beneficiariesCount =
+      (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
+
+    const summaryRows = [
+      { Metric: 'Marketplace', Quantity: report.marketplace.name },
+      { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
+      { Metric: 'Reported Beneficiaries', Quantity: beneficiariesCount },
+      { Metric: 'Beneficiary QR Cards', Quantity: totalCards },
+      { Metric: 'QR Cards Activated (scans)', Quantity: totalActivated },
+      { Metric: 'QR Cards Checked Out (deactivated)', Quantity: totalCheckedOut },
+      { Metric: 'Total Items Distributed via QR', Quantity: totalItems },
+      { Metric: 'Scan Log Entries', Quantity: logRows.length },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    wsSummary['!cols'] = [{ wch: 32 }, { wch: 32 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    const wsEv = XLSX.utils.json_to_sheet(evidenceRows);
+    autosizeCols(wsEv, evidenceRows);
+    XLSX.utils.book_append_sheet(wb, wsEv, 'Beneficiary QR Evidence');
+
+    if (logRows.length) {
+      const wsLog = XLSX.utils.json_to_sheet(logRows);
+      autosizeCols(wsLog, logRows);
+      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Logs');
+    }
+
+    XLSX.writeFile(wb, `qr-evidence-${safeName()}-${dateStr()}.xlsx`);
+    toast({ title: 'QR evidence exported', description: `${totalCards} cards · ${logRows.length} log entries` });
   };
   return <div className="min-h-screen bg-background">
       {/* Header */}
