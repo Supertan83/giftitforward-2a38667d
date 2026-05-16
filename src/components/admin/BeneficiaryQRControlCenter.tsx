@@ -239,12 +239,21 @@ export const BeneficiaryQRControlCenter = ({ onBack }: Props) => {
       }
 
       const mpInfo = mpId ? marketplaceNames[mpId] : null;
+      let totalDistributed = 0;
+      let totalReturned = 0;
+      for (const g of grouped) {
+        if (g.type === 'Distribution') totalDistributed += g.quantity;
+        else if (g.type === 'Return') totalReturned += g.quantity;
+      }
       sections.push({
         marketplace_id: mpId,
         marketplace_name: mpInfo?.name || 'Unknown Marketplace',
         event_date: mpInfo?.event_date || null,
         transactions: grouped,
         totalTx: txList.length,
+        totalDistributed,
+        totalReturned,
+        netDistributed: totalDistributed - totalReturned,
       });
     }
 
