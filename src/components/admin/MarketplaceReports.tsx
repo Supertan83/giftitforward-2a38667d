@@ -236,24 +236,36 @@ export const MarketplaceReports = ({
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Marketplace Selector */}
-        <div className="mb-6">
-          <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
-          <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
-            <SelectTrigger className="w-full md:w-[32rem]">
-              <SelectValue placeholder="Choose a marketplace to view report..." />
-            </SelectTrigger>
-            <SelectContent className="min-w-[var(--radix-select-trigger-width)] max-w-[90vw]">
-              {marketplaces.map(mp => <SelectItem key={mp.id} value={mp.id} className="whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span>{mp.name}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${mp.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                      {mp.status}
-                    </span>
-                  </div>
-                </SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div className="flex-1">
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
+            <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+              <SelectTrigger className="w-full md:w-[32rem]">
+                <SelectValue placeholder="Choose a marketplace to view report..." />
+              </SelectTrigger>
+              <SelectContent className="min-w-[var(--radix-select-trigger-width)] max-w-[90vw]">
+                {marketplaces.map(mp => <SelectItem key={mp.id} value={mp.id} className="whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{mp.name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${mp.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                        {mp.status}
+                      </span>
+                    </div>
+                  </SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedMarketplaceId && report && (
+            <Button
+              variant="outline"
+              onClick={() => exportAttendanceLog()}
+              className="gap-2 w-full md:w-auto"
+            >
+              <Download className="w-4 h-4" />
+              Export Attendance Log
+            </Button>
+          )}
         </div>
 
         {/* All Marketplaces Overview */}
