@@ -5,7 +5,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { VolunteerBulkHoursEditDialog, type BulkVolunteerEditTarget } from './VolunteerBulkHoursEditDialog';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, Trash2, GraduationCap, QrCode } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, Trash2, GraduationCap, QrCode, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { format as formatDate } from 'date-fns';
 import { QRCodeSVG } from 'qrcode.react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -216,6 +218,45 @@ export const MarketplaceReports = ({
       value
     }));
   };
+
+  const exportAttendanceLog = () => {
+    if (!report) return;
+    const list: any[] = (report as any)?.volunteers?.volunteerList || [];
+    const attended = list.filter(v => v.checkedInAt || v.status === 'checked_in' || v.status === 'checked_out');
+    const fmt = (iso: string | null) => iso ? formatDate(new Date(iso), 'yyyy-MM-dd HH:mm:ss') : '';
+    const rows = attended.map(v => ({
+      'Volunteer Name': v.name || '',
+      'Organization': v.company || '',
+      'Category': v.category || '',
+      'Gender': v.gender || '',
+      'QR Card': v.uniqueId || '',
+      'Status': v.status || '',
+      'Checked In At': fmt(v.checkedInAt),
+      'Checked Out At': fmt(v.checkedOutAt),
+      'Hours Worked': Number(v.hoursWorked || 0).toFixed(2),
+    }));
+    const totalHours = attended.reduce((s, v) => s + (Number(v.hoursWorked) || 0), 0);
+    rows.push({
+      'Volunteer Name': `TOTAL: ${attended.length} volunteers`,
+      'Organization': '', 'Category': '', 'Gender': '', 'QR Card': '', 'Status': '',
+      'Checked In At': '', 'Checked Out At': '',
+      'Hours Worked': totalHours.toFixed(2),
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = Object.keys(rows[0] || {});
+    ws['!cols'] = headers.map(h => {
+      const maxLen = Math.max(h.length, ...rows.map(r => String((r as any)[h] ?? '').length));
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    const safeName = (report.marketplace.name || 'marketplace').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const dateStr = report.marketplace.eventDate
+      ? formatDate(new Date(report.marketplace.eventDate), 'yyyy-MM-dd')
+      : formatDate(new Date(), 'yyyy-MM-dd');
+    XLSX.writeFile(wb, `attendance-${safeName}-${dateStr}.xlsx`);
+    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers` });
+  };
   return <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
@@ -234,24 +275,36 @@ export const MarketplaceReports = ({
 
       <main className="container max-w-6xl py-4 md:py-6 px-4">
         {/* Marketplace Selector */}
-        <div className="mb-6">
-          <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
-          <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
-            <SelectTrigger className="w-full md:w-[32rem]">
-              <SelectValue placeholder="Choose a marketplace to view report..." />
-            </SelectTrigger>
-            <SelectContent className="min-w-[var(--radix-select-trigger-width)] max-w-[90vw]">
-              {marketplaces.map(mp => <SelectItem key={mp.id} value={mp.id} className="whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span>{mp.name}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${mp.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                      {mp.status}
-                    </span>
-                  </div>
-                </SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div className="flex-1">
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Marketplace</label>
+            <Select value={selectedMarketplaceId} onValueChange={setSelectedMarketplaceId}>
+              <SelectTrigger className="w-full md:w-[32rem]">
+                <SelectValue placeholder="Choose a marketplace to view report..." />
+              </SelectTrigger>
+              <SelectContent className="min-w-[var(--radix-select-trigger-width)] max-w-[90vw]">
+                {marketplaces.map(mp => <SelectItem key={mp.id} value={mp.id} className="whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{mp.name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${mp.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : mp.status === 'active' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                        {mp.status}
+                      </span>
+                    </div>
+                  </SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedMarketplaceId && report && (
+            <Button
+              variant="outline"
+              onClick={() => exportAttendanceLog()}
+              className="gap-2 w-full md:w-auto"
+            >
+              <Download className="w-4 h-4" />
+              Export Attendance Log
+            </Button>
+          )}
         </div>
 
         {/* All Marketplaces Overview */}
