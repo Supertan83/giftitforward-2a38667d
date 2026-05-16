@@ -249,6 +249,27 @@ export const MarketplaceReports = ({
       return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
     });
     const wb = XLSX.utils.book_new();
+
+    // Summary sheet — beneficiary & distribution quantities
+    const beneficiariesCount =
+      (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
+    const itemsDistributed = report.items?.totalDistributed ?? 0;
+    const itemsAllocated = report.items?.totalAllocated ?? 0;
+    const itemsRemaining = report.items?.totalRemaining ?? 0;
+    const summaryRows = [
+      { Metric: 'Marketplace', Quantity: report.marketplace.name },
+      { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
+      { Metric: 'Beneficiaries', Quantity: beneficiariesCount },
+      { Metric: 'Volunteers Attended', Quantity: attended.length },
+      { Metric: 'Total Hours Worked', Quantity: Number(totalHours.toFixed(2)) },
+      { Metric: 'Items Allocated', Quantity: itemsAllocated },
+      { Metric: 'Items Distributed', Quantity: itemsDistributed },
+      { Metric: 'Items Remaining', Quantity: itemsRemaining },
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    wsSummary['!cols'] = [{ wch: 24 }, { wch: 32 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
     const safeName = (report.marketplace.name || 'marketplace').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     const dateStr = report.marketplace.eventDate
