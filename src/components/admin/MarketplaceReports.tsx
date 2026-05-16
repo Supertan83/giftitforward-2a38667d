@@ -218,6 +218,45 @@ export const MarketplaceReports = ({
       value
     }));
   };
+
+  const exportAttendanceLog = () => {
+    if (!report) return;
+    const list: any[] = (report as any)?.volunteers?.volunteerList || [];
+    const attended = list.filter(v => v.checkedInAt || v.status === 'checked_in' || v.status === 'checked_out');
+    const fmt = (iso: string | null) => iso ? formatDate(new Date(iso), 'yyyy-MM-dd HH:mm:ss') : '';
+    const rows = attended.map(v => ({
+      'Volunteer Name': v.name || '',
+      'Organization': v.company || '',
+      'Category': v.category || '',
+      'Gender': v.gender || '',
+      'QR Card': v.uniqueId || '',
+      'Status': v.status || '',
+      'Checked In At': fmt(v.checkedInAt),
+      'Checked Out At': fmt(v.checkedOutAt),
+      'Hours Worked': Number(v.hoursWorked || 0).toFixed(2),
+    }));
+    const totalHours = attended.reduce((s, v) => s + (Number(v.hoursWorked) || 0), 0);
+    rows.push({
+      'Volunteer Name': `TOTAL: ${attended.length} volunteers`,
+      'Organization': '', 'Category': '', 'Gender': '', 'QR Card': '', 'Status': '',
+      'Checked In At': '', 'Checked Out At': '',
+      'Hours Worked': totalHours.toFixed(2),
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = Object.keys(rows[0] || {});
+    ws['!cols'] = headers.map(h => {
+      const maxLen = Math.max(h.length, ...rows.map(r => String((r as any)[h] ?? '').length));
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    const safeName = (report.marketplace.name || 'marketplace').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const dateStr = report.marketplace.eventDate
+      ? formatDate(new Date(report.marketplace.eventDate), 'yyyy-MM-dd')
+      : formatDate(new Date(), 'yyyy-MM-dd');
+    XLSX.writeFile(wb, `attendance-${safeName}-${dateStr}.xlsx`);
+    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers` });
+  };
   return <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
