@@ -577,6 +577,17 @@ function MarketplaceSectionView({
           </div>
         </AccordionTrigger>
         <AccordionContent>
+          <div className="px-3 py-2 border-b bg-muted/30 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="text-emerald-700 font-medium">
+              Distributed: <strong>{section.totalDistributed}</strong>
+            </span>
+            <span className="text-amber-700 font-medium">
+              Returned: <strong>{section.totalReturned}</strong>
+            </span>
+            <span className="text-foreground font-semibold">
+              Net checked out: <strong>{section.netDistributed}</strong>
+            </span>
+          </div>
           <div className="max-h-[400px] overflow-auto">
             <Table>
               <TableHeader>
