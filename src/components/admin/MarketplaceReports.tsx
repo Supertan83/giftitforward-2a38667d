@@ -466,14 +466,24 @@ export const MarketplaceReports = ({
             </Select>
           </div>
           {selectedMarketplaceId && report && (
-            <Button
-              variant="outline"
-              onClick={() => exportAttendanceLog()}
-              className="gap-2 w-full md:w-auto"
-            >
-              <Download className="w-4 h-4" />
-              Export Attendance Log
-            </Button>
+            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+              <Button
+                variant="outline"
+                onClick={() => exportAttendanceLog()}
+                className="gap-2 w-full md:w-auto"
+              >
+                <Download className="w-4 h-4" />
+                Export Attendance Log
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => exportQrEvidence()}
+                className="gap-2 w-full md:w-auto"
+              >
+                <QrCode className="w-4 h-4" />
+                Export QR Evidence
+              </Button>
+            </div>
           )}
         </div>
 
