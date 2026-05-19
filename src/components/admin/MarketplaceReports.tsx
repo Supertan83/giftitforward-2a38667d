@@ -230,19 +230,36 @@ export const MarketplaceReports = ({
   };
 
   const fetchQrEvidence = async (marketplaceId: string) => {
+    // 1) Scan events for this marketplace come from `transactions`
+    //    (each row = a beneficiary scan: check_in / distribution / return / check_out)
+    const txnPageSize = 1000;
+    const txns: any[] = [];
+    for (let page = 0; page < 200; page++) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('id, card_id, type, item_type, credit_change, timestamp, scanned_by, marketplace_id')
+        .eq('marketplace_id', marketplaceId)
+        .is('deleted_at', null)
+        .order('timestamp', { ascending: true })
+        .range(page * txnPageSize, page * txnPageSize + txnPageSize - 1);
+      if (error) throw error;
+      const rows = data || [];
+      txns.push(...rows);
+      if (rows.length < txnPageSize) break;
+    }
+
+    // 2) Cards directly linked to this marketplace (legacy / pre-scan activations)
     const [activeRes, archivedRes, logsRes] = await Promise.all([
       supabase
         .from('qr_cards')
-        .select('unique_id, status, activated_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
+        .select('id, unique_id, status, activated_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
         .eq('marketplace_id', marketplaceId)
-        .is('deleted_at', null)
-        .order('activated_at', { ascending: true, nullsFirst: false }),
+        .is('deleted_at', null),
       supabase
         .from('archived_card_data')
-        .select('unique_id, activated_at, checked_out_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
+        .select('original_card_id, unique_id, activated_at, checked_out_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
         .eq('marketplace_id', marketplaceId)
-        .is('deleted_at', null)
-        .order('activated_at', { ascending: true, nullsFirst: false }),
+        .is('deleted_at', null),
       supabase
         .from('allocation_traceability_logs' as any)
         .select('created_at, action_type, card_unique_id, quantity_before, quantity_after, performed_by_email, description')
@@ -250,59 +267,123 @@ export const MarketplaceReports = ({
         .is('deleted_at', null)
         .order('created_at', { ascending: true }),
     ]);
+
+    // 3) Resolve cards referenced by transactions but missing from the linked sets
+    const knownIds = new Set<string>([
+      ...((activeRes.data || []) as any[]).map((c: any) => c.id),
+      ...((archivedRes.data || []) as any[]).map((c: any) => c.original_card_id).filter(Boolean),
+    ]);
+    const missingCardIds = Array.from(
+      new Set(txns.map((t: any) => t.card_id).filter((id: string) => id && !knownIds.has(id)))
+    );
+
+    const extraActive: any[] = [];
+    const extraArchived: any[] = [];
+    const chunk = 300;
+    for (let i = 0; i < missingCardIds.length; i += chunk) {
+      const ids = missingCardIds.slice(i, i + chunk);
+      const [a, b] = await Promise.all([
+        supabase
+          .from('qr_cards')
+          .select('id, unique_id, status, activated_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
+          .in('id', ids),
+        supabase
+          .from('archived_card_data')
+          .select('original_card_id, unique_id, activated_at, checked_out_at, gender, marital_status, nationality, children_count, total_items_collected, credit_balance')
+          .in('original_card_id', ids),
+      ]);
+      extraActive.push(...((a.data || []) as any[]));
+      extraArchived.push(...((b.data || []) as any[]));
+    }
+
     return {
-      active: (activeRes.data || []) as any[],
-      archived: (archivedRes.data || []) as any[],
+      active: [...((activeRes.data || []) as any[]), ...extraActive],
+      archived: [...((archivedRes.data || []) as any[]), ...extraArchived],
       logs: (logsRes.data || []) as any[],
+      transactions: txns,
     };
   };
 
-  const buildQrSheets = (qr: { active: any[]; archived: any[]; logs: any[] }) => {
-    const evidenceRows = [
-      ...qr.active.map(c => ({
-        'QR Unique ID': c.unique_id || '',
-        'Status': c.status || '',
-        'Activated At': fmtTs(c.activated_at),
-        'Checked Out At': '',
+  const buildQrSheets = (qr: { active: any[]; archived: any[]; logs: any[]; transactions: any[] }) => {
+    // Index cards by their internal id so transactions can be attributed
+    const cardById = new Map<string, any>();
+    for (const c of qr.active) cardById.set(c.id, { ...c, _source: 'Active' });
+    for (const c of qr.archived) {
+      const id = c.original_card_id;
+      if (id && !cardById.has(id)) {
+        cardById.set(id, { ...c, status: 'archived', _source: 'Archived' });
+      }
+    }
+
+    // Per-card scan aggregates
+    type Agg = { firstScan?: string; lastScan?: string; scans: number; items: number; checkOut?: string };
+    const aggByCardId = new Map<string, Agg>();
+    for (const t of qr.transactions) {
+      const a = aggByCardId.get(t.card_id) || { scans: 0, items: 0 };
+      a.scans += 1;
+      const tt = String(t.type || '').toLowerCase();
+      if (tt === 'distribution') a.items += 1;
+      if (tt === 'check_out') a.checkOut = t.timestamp;
+      if (!a.firstScan || t.timestamp < a.firstScan) a.firstScan = t.timestamp;
+      if (!a.lastScan || t.timestamp > a.lastScan) a.lastScan = t.timestamp;
+      aggByCardId.set(t.card_id, a);
+    }
+
+    const allCardIds = new Set<string>([...cardById.keys(), ...aggByCardId.keys()]);
+
+    const evidenceRows: any[] = [];
+    for (const id of allCardIds) {
+      const c = cardById.get(id) || {};
+      const a = aggByCardId.get(id);
+      evidenceRows.push({
+        'QR Unique ID': c.unique_id || id,
+        'Status': c.status || (a ? 'scanned' : ''),
+        'First Scan At': fmtTs(a?.firstScan || c.activated_at),
+        'Last Scan At': fmtTs(a?.lastScan),
+        'Checked Out At': fmtTs(a?.checkOut || c.checked_out_at),
+        'Scan Count': a?.scans ?? 0,
+        'Items Distributed': a?.items ?? (c.total_items_collected ?? 0),
         'Gender': c.gender || '',
         'Marital Status': c.marital_status || '',
         'Nationality': c.nationality || '',
         'Children Count': c.children_count ?? 0,
-        'Items Collected': c.total_items_collected ?? 0,
         'Credit Balance': c.credit_balance ?? 0,
-        'Source': 'Active',
-      })),
-      ...qr.archived.map(c => ({
-        'QR Unique ID': c.unique_id || '',
-        'Status': 'archived',
-        'Activated At': fmtTs(c.activated_at),
-        'Checked Out At': fmtTs(c.checked_out_at),
-        'Gender': c.gender || '',
-        'Marital Status': c.marital_status || '',
-        'Nationality': c.nationality || '',
-        'Children Count': c.children_count ?? 0,
-        'Items Collected': c.total_items_collected ?? 0,
-        'Credit Balance': c.credit_balance ?? 0,
-        'Source': 'Archived',
-      })),
-    ];
+        'Source': c._source || 'Scan only',
+      });
+    }
+    evidenceRows.sort((x, y) => String(x['First Scan At']).localeCompare(String(y['First Scan At'])));
+
     const totalCards = evidenceRows.length;
-    const totalActivated = [...qr.active, ...qr.archived].filter(c => c.activated_at).length;
-    const totalCheckedOut =
-      qr.archived.filter(c => c.checked_out_at).length +
-      qr.active.filter(c => c.status === 'checked_out').length;
-    const totalItems = evidenceRows.reduce((s, r) => s + (Number(r['Items Collected']) || 0), 0);
+    const totalActivated = evidenceRows.filter(r => r['First Scan At']).length;
+    const totalCheckedOut = evidenceRows.filter(r => r['Checked Out At']).length;
+    const totalItems = evidenceRows.reduce((s, r) => s + (Number(r['Items Distributed']) || 0), 0);
+    const totalScans = qr.transactions.length;
+
     evidenceRows.push({
       'QR Unique ID': `TOTAL: ${totalCards} cards`,
-      'Status': '', 'Activated At': '', 'Checked Out At': '',
+      'Status': '', 'First Scan At': '', 'Last Scan At': '', 'Checked Out At': '',
+      'Scan Count': totalScans,
+      'Items Distributed': totalItems,
       'Gender': '', 'Marital Status': '', 'Nationality': '',
       'Children Count': 0,
-      'Items Collected': totalItems,
       'Credit Balance': 0,
       'Source': '',
     });
 
-    const logRows = qr.logs.map(l => ({
+    // Per-scan log: one row per transaction = real audit trail of QR scans
+    const scanLogRows = qr.transactions.map((t: any) => {
+      const c = cardById.get(t.card_id) || {};
+      return {
+        'Timestamp': fmtTs(t.timestamp),
+        'Action': t.type || '',
+        'QR Card': c.unique_id || t.card_id,
+        'Item': t.item_type || '',
+        'Credit Change': t.credit_change ?? 0,
+      };
+    });
+
+    // Allocation-level audit (kept as supplementary evidence)
+    const allocLogRows = qr.logs.map(l => ({
       'Timestamp': fmtTs(l.created_at),
       'Action': l.action_type || '',
       'QR Card': l.card_unique_id || '',
@@ -313,7 +394,16 @@ export const MarketplaceReports = ({
       'Description': l.description || '',
     }));
 
-    return { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut, totalItems };
+    return {
+      evidenceRows,
+      scanLogRows,
+      allocLogRows,
+      totalCards,
+      totalActivated,
+      totalCheckedOut,
+      totalItems,
+      totalScans,
+    };
   };
 
   const safeName = () =>
@@ -347,7 +437,7 @@ export const MarketplaceReports = ({
     });
 
     const qr = await fetchQrEvidence(selectedMarketplaceId);
-    const { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut } = buildQrSheets(qr);
+    const { evidenceRows, scanLogRows, allocLogRows, totalCards, totalActivated, totalCheckedOut, totalScans } = buildQrSheets(qr);
 
     const beneficiariesCount =
       (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
@@ -358,9 +448,10 @@ export const MarketplaceReports = ({
       { Metric: 'Marketplace', Quantity: report.marketplace.name },
       { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
       { Metric: 'Beneficiaries', Quantity: beneficiariesCount },
-      { Metric: 'Beneficiary QR Cards', Quantity: totalCards },
-      { Metric: 'QR Cards Activated (scans)', Quantity: totalActivated },
-      { Metric: 'QR Cards Checked Out (deactivated)', Quantity: totalCheckedOut },
+      { Metric: 'Beneficiary QR Cards Scanned', Quantity: totalCards },
+      { Metric: 'QR Cards Activated', Quantity: totalActivated },
+      { Metric: 'QR Cards Checked Out', Quantity: totalCheckedOut },
+      { Metric: 'Total QR Scan Events', Quantity: totalScans },
       { Metric: 'Volunteers Attended', Quantity: attended.length },
       { Metric: 'Total Hours Worked', Quantity: Number(totalHours.toFixed(2)) },
       { Metric: 'Items Allocated', Quantity: itemsAllocated },
@@ -375,26 +466,31 @@ export const MarketplaceReports = ({
 
     const wsAtt = XLSX.utils.json_to_sheet(rows);
     autosizeCols(wsAtt, rows);
-    XLSX.utils.book_append_sheet(wb, wsAtt, 'Attendance');
+    XLSX.utils.book_append_sheet(wb, wsAtt, 'Volunteer Attendance');
 
     const wsEv = XLSX.utils.json_to_sheet(evidenceRows);
     autosizeCols(wsEv, evidenceRows);
     XLSX.utils.book_append_sheet(wb, wsEv, 'Beneficiary QR Evidence');
 
-    if (logRows.length) {
-      const wsLog = XLSX.utils.json_to_sheet(logRows);
-      autosizeCols(wsLog, logRows);
-      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Logs');
+    if (scanLogRows.length) {
+      const wsLog = XLSX.utils.json_to_sheet(scanLogRows);
+      autosizeCols(wsLog, scanLogRows);
+      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Log');
+    }
+    if (allocLogRows.length) {
+      const wsAlloc = XLSX.utils.json_to_sheet(allocLogRows);
+      autosizeCols(wsAlloc, allocLogRows);
+      XLSX.utils.book_append_sheet(wb, wsAlloc, 'Allocation Audit');
     }
 
     XLSX.writeFile(wb, `attendance-${safeName()}-${dateStr()}.xlsx`);
-    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers · ${totalCards} QR cards` });
+    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers · ${totalCards} QR cards · ${totalScans} scans` });
   };
 
   const exportQrEvidence = async () => {
     if (!report || !selectedMarketplaceId) return;
     const qr = await fetchQrEvidence(selectedMarketplaceId);
-    const { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut, totalItems } = buildQrSheets(qr);
+    const { evidenceRows, scanLogRows, allocLogRows, totalCards, totalActivated, totalCheckedOut, totalItems, totalScans } = buildQrSheets(qr);
     const beneficiariesCount =
       (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
 
@@ -402,11 +498,11 @@ export const MarketplaceReports = ({
       { Metric: 'Marketplace', Quantity: report.marketplace.name },
       { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
       { Metric: 'Reported Beneficiaries', Quantity: beneficiariesCount },
-      { Metric: 'Beneficiary QR Cards', Quantity: totalCards },
-      { Metric: 'QR Cards Activated (scans)', Quantity: totalActivated },
-      { Metric: 'QR Cards Checked Out (deactivated)', Quantity: totalCheckedOut },
+      { Metric: 'Beneficiary QR Cards Scanned', Quantity: totalCards },
+      { Metric: 'QR Cards Activated', Quantity: totalActivated },
+      { Metric: 'QR Cards Checked Out', Quantity: totalCheckedOut },
+      { Metric: 'Total QR Scan Events', Quantity: totalScans },
       { Metric: 'Total Items Distributed via QR', Quantity: totalItems },
-      { Metric: 'Scan Log Entries', Quantity: logRows.length },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -418,14 +514,19 @@ export const MarketplaceReports = ({
     autosizeCols(wsEv, evidenceRows);
     XLSX.utils.book_append_sheet(wb, wsEv, 'Beneficiary QR Evidence');
 
-    if (logRows.length) {
-      const wsLog = XLSX.utils.json_to_sheet(logRows);
-      autosizeCols(wsLog, logRows);
-      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Logs');
+    if (scanLogRows.length) {
+      const wsLog = XLSX.utils.json_to_sheet(scanLogRows);
+      autosizeCols(wsLog, scanLogRows);
+      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Log');
+    }
+    if (allocLogRows.length) {
+      const wsAlloc = XLSX.utils.json_to_sheet(allocLogRows);
+      autosizeCols(wsAlloc, allocLogRows);
+      XLSX.utils.book_append_sheet(wb, wsAlloc, 'Allocation Audit');
     }
 
     XLSX.writeFile(wb, `qr-evidence-${safeName()}-${dateStr()}.xlsx`);
-    toast({ title: 'QR evidence exported', description: `${totalCards} cards · ${logRows.length} log entries` });
+    toast({ title: 'QR evidence exported', description: `${totalCards} cards · ${totalScans} scans` });
   };
   return <div className="min-h-screen bg-background">
       {/* Header */}
