@@ -490,7 +490,7 @@ export const MarketplaceReports = ({
   const exportQrEvidence = async () => {
     if (!report || !selectedMarketplaceId) return;
     const qr = await fetchQrEvidence(selectedMarketplaceId);
-    const { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut, totalItems } = buildQrSheets(qr);
+    const { evidenceRows, scanLogRows, allocLogRows, totalCards, totalActivated, totalCheckedOut, totalItems, totalScans } = buildQrSheets(qr);
     const beneficiariesCount =
       (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
 
@@ -498,11 +498,11 @@ export const MarketplaceReports = ({
       { Metric: 'Marketplace', Quantity: report.marketplace.name },
       { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
       { Metric: 'Reported Beneficiaries', Quantity: beneficiariesCount },
-      { Metric: 'Beneficiary QR Cards', Quantity: totalCards },
-      { Metric: 'QR Cards Activated (scans)', Quantity: totalActivated },
-      { Metric: 'QR Cards Checked Out (deactivated)', Quantity: totalCheckedOut },
+      { Metric: 'Beneficiary QR Cards Scanned', Quantity: totalCards },
+      { Metric: 'QR Cards Activated', Quantity: totalActivated },
+      { Metric: 'QR Cards Checked Out', Quantity: totalCheckedOut },
+      { Metric: 'Total QR Scan Events', Quantity: totalScans },
       { Metric: 'Total Items Distributed via QR', Quantity: totalItems },
-      { Metric: 'Scan Log Entries', Quantity: logRows.length },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -514,14 +514,19 @@ export const MarketplaceReports = ({
     autosizeCols(wsEv, evidenceRows);
     XLSX.utils.book_append_sheet(wb, wsEv, 'Beneficiary QR Evidence');
 
-    if (logRows.length) {
-      const wsLog = XLSX.utils.json_to_sheet(logRows);
-      autosizeCols(wsLog, logRows);
-      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Logs');
+    if (scanLogRows.length) {
+      const wsLog = XLSX.utils.json_to_sheet(scanLogRows);
+      autosizeCols(wsLog, scanLogRows);
+      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Log');
+    }
+    if (allocLogRows.length) {
+      const wsAlloc = XLSX.utils.json_to_sheet(allocLogRows);
+      autosizeCols(wsAlloc, allocLogRows);
+      XLSX.utils.book_append_sheet(wb, wsAlloc, 'Allocation Audit');
     }
 
     XLSX.writeFile(wb, `qr-evidence-${safeName()}-${dateStr()}.xlsx`);
-    toast({ title: 'QR evidence exported', description: `${totalCards} cards · ${logRows.length} log entries` });
+    toast({ title: 'QR evidence exported', description: `${totalCards} cards · ${totalScans} scans` });
   };
   return <div className="min-h-screen bg-background">
       {/* Header */}
