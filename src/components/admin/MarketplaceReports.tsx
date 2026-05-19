@@ -448,9 +448,10 @@ export const MarketplaceReports = ({
       { Metric: 'Marketplace', Quantity: report.marketplace.name },
       { Metric: 'Event Date', Quantity: report.marketplace.eventDate || '' },
       { Metric: 'Beneficiaries', Quantity: beneficiariesCount },
-      { Metric: 'Beneficiary QR Cards', Quantity: totalCards },
-      { Metric: 'QR Cards Activated (scans)', Quantity: totalActivated },
-      { Metric: 'QR Cards Checked Out (deactivated)', Quantity: totalCheckedOut },
+      { Metric: 'Beneficiary QR Cards Scanned', Quantity: totalCards },
+      { Metric: 'QR Cards Activated', Quantity: totalActivated },
+      { Metric: 'QR Cards Checked Out', Quantity: totalCheckedOut },
+      { Metric: 'Total QR Scan Events', Quantity: totalScans },
       { Metric: 'Volunteers Attended', Quantity: attended.length },
       { Metric: 'Total Hours Worked', Quantity: Number(totalHours.toFixed(2)) },
       { Metric: 'Items Allocated', Quantity: itemsAllocated },
@@ -465,20 +466,25 @@ export const MarketplaceReports = ({
 
     const wsAtt = XLSX.utils.json_to_sheet(rows);
     autosizeCols(wsAtt, rows);
-    XLSX.utils.book_append_sheet(wb, wsAtt, 'Attendance');
+    XLSX.utils.book_append_sheet(wb, wsAtt, 'Volunteer Attendance');
 
     const wsEv = XLSX.utils.json_to_sheet(evidenceRows);
     autosizeCols(wsEv, evidenceRows);
     XLSX.utils.book_append_sheet(wb, wsEv, 'Beneficiary QR Evidence');
 
-    if (logRows.length) {
-      const wsLog = XLSX.utils.json_to_sheet(logRows);
-      autosizeCols(wsLog, logRows);
-      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Logs');
+    if (scanLogRows.length) {
+      const wsLog = XLSX.utils.json_to_sheet(scanLogRows);
+      autosizeCols(wsLog, scanLogRows);
+      XLSX.utils.book_append_sheet(wb, wsLog, 'QR Scan Log');
+    }
+    if (allocLogRows.length) {
+      const wsAlloc = XLSX.utils.json_to_sheet(allocLogRows);
+      autosizeCols(wsAlloc, allocLogRows);
+      XLSX.utils.book_append_sheet(wb, wsAlloc, 'Allocation Audit');
     }
 
     XLSX.writeFile(wb, `attendance-${safeName()}-${dateStr()}.xlsx`);
-    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers · ${totalCards} QR cards` });
+    toast({ title: 'Attendance log exported', description: `${attended.length} volunteers · ${totalCards} QR cards · ${totalScans} scans` });
   };
 
   const exportQrEvidence = async () => {
