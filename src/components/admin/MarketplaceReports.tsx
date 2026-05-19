@@ -437,7 +437,7 @@ export const MarketplaceReports = ({
     });
 
     const qr = await fetchQrEvidence(selectedMarketplaceId);
-    const { evidenceRows, logRows, totalCards, totalActivated, totalCheckedOut } = buildQrSheets(qr);
+    const { evidenceRows, scanLogRows, allocLogRows, totalCards, totalActivated, totalCheckedOut, totalScans } = buildQrSheets(qr);
 
     const beneficiariesCount =
       (report.marketplace as any).manualBeneficiaryCount ?? report.beneficiaries?.total ?? 0;
