@@ -316,14 +316,17 @@ export const MarketplaceReports = ({
     }
 
     // Per-card scan aggregates
-    type Agg = { firstScan?: string; lastScan?: string; scans: number; items: number; checkOut?: string };
+    type Agg = { firstScan?: string; lastScan?: string; scans: number; items: number; checkIn?: string; checkOut?: string };
     const aggByCardId = new Map<string, Agg>();
     for (const t of qr.transactions) {
       const a = aggByCardId.get(t.card_id) || { scans: 0, items: 0 };
       a.scans += 1;
-      const tt = String(t.type || '').toLowerCase();
+      const tt = String(t.type || '').toLowerCase().replace(/[_\s-]/g, '');
       if (tt === 'distribution') a.items += 1;
-      if (tt === 'check_out') a.checkOut = t.timestamp;
+      if (tt === 'checkin') {
+        if (!a.checkIn || t.timestamp < a.checkIn) a.checkIn = t.timestamp;
+      }
+      if (tt === 'checkout') a.checkOut = t.timestamp;
       if (!a.firstScan || t.timestamp < a.firstScan) a.firstScan = t.timestamp;
       if (!a.lastScan || t.timestamp > a.lastScan) a.lastScan = t.timestamp;
       aggByCardId.set(t.card_id, a);
@@ -338,6 +341,7 @@ export const MarketplaceReports = ({
       evidenceRows.push({
         'QR Unique ID': c.unique_id || id,
         'Status': c.status || (a ? 'scanned' : ''),
+        'Checked In At': fmtTs(a?.checkIn || c.activated_at || a?.firstScan),
         'First Scan At': fmtTs(a?.firstScan || c.activated_at),
         'Last Scan At': fmtTs(a?.lastScan),
         'Checked Out At': fmtTs(a?.checkOut || c.checked_out_at),
@@ -351,17 +355,17 @@ export const MarketplaceReports = ({
         'Source': c._source || 'Scan only',
       });
     }
-    evidenceRows.sort((x, y) => String(x['First Scan At']).localeCompare(String(y['First Scan At'])));
+    evidenceRows.sort((x, y) => String(x['Checked In At']).localeCompare(String(y['Checked In At'])));
 
     const totalCards = evidenceRows.length;
-    const totalActivated = evidenceRows.filter(r => r['First Scan At']).length;
+    const totalActivated = evidenceRows.filter(r => r['Checked In At']).length;
     const totalCheckedOut = evidenceRows.filter(r => r['Checked Out At']).length;
     const totalItems = evidenceRows.reduce((s, r) => s + (Number(r['Items Distributed']) || 0), 0);
     const totalScans = qr.transactions.length;
 
     evidenceRows.push({
       'QR Unique ID': `TOTAL: ${totalCards} cards`,
-      'Status': '', 'First Scan At': '', 'Last Scan At': '', 'Checked Out At': '',
+      'Status': '', 'Checked In At': '', 'First Scan At': '', 'Last Scan At': '', 'Checked Out At': '',
       'Scan Count': totalScans,
       'Items Distributed': totalItems,
       'Gender': '', 'Marital Status': '', 'Nationality': '',
