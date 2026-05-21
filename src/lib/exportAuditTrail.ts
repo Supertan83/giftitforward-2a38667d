@@ -302,13 +302,11 @@ export async function exportFullAuditTrail(): Promise<{
       const firstAlloc = itemAllocs.length
         ? itemAllocs.map((a) => a.created_at).sort()[0]
         : null;
-      // Last distribution timestamp across this item
-      let lastDist: string | null = null;
-      for (const a of itemAllocs) {
-        const itemKey = `${a.marketplace_id}|${(item.name ?? '').toLowerCase()}`;
-        const range = distTxByKey.get(itemKey);
-        if (range && (!lastDist || range.last > lastDist)) lastDist = range.last;
-      }
+      // Last activity timestamp across this item (allocation row touched on scan)
+      const lastDist = itemAllocs.length
+        ? itemAllocs.map((a) => a.updated_at).sort().slice(-1)[0]
+        : null;
+
       let disposition = 'No Allocation';
       if (totalAllocated > 0) {
         if (totalRemaining <= 0) disposition = 'Fully Distributed';
