@@ -27,6 +27,18 @@ export async function exportFullAuditTrail(): Promise<{
   materials: number;
 }> {
   // 1. Fetch all needed data in parallel (paginated, soft-delete filtered)
+  // NOTE: we intentionally DO NOT scan the transactions table here (300k+ rows would
+  // take minutes to paginate client-side). Distribution timestamps are derived from
+  // marketplace_item_allocations.updated_at which is touched on every scan.
+  const safeFetch = async <T,>(label: string, fn: () => Promise<T[]>): Promise<T[]> => {
+    try {
+      return await fn();
+    } catch (e: any) {
+      console.error(`[audit-export] ${label} failed:`, e);
+      throw new Error(`Failed to load ${label}: ${e?.message ?? e}`);
+    }
+  };
+
   const [
     itemTypes,
     extItems,
@@ -34,58 +46,77 @@ export async function exportFullAuditTrail(): Promise<{
     extMatGroups,
     allocations,
     marketplaces,
-    transactions,
     warehouseReturns,
   ] = await Promise.all([
-    fetchAllRows<any>(() =>
-      supabase
-        .from('item_types')
-        .select('id, name, category, subcategory, external_material_id, surpluss_url, total_stock')
-        .is('deleted_at', null)
+    safeFetch('item_types', () =>
+      fetchAllRows<any>(() =>
+        supabase
+          .from('item_types')
+          .select('id, name, category, subcategory, external_material_id, surpluss_url, total_stock')
+          .is('deleted_at', null)
+      )
     ),
-    fetchAllRows<any>(() =>
-      supabase
-        .from('external_items')
-        .select('external_id, title, description, quantity, item_count, company_id, material_group_id, created_at, image_url')
-        .is('deleted_at', null)
+    safeFetch('external_items', () =>
+      fetchAllRows<any>(() =>
+        supabase
+          .from('external_items')
+          .select('external_id, title, description, quantity, item_count, company_id, material_group_id, created_at, image_url')
+          .is('deleted_at', null)
+      )
     ),
-    fetchAllRows<any>(() =>
-      supabase
-        .from('external_companies')
-        .select('id, external_id, name, sector, main_business')
-        .is('deleted_at', null)
+    safeFetch('external_companies', () =>
+      fetchAllRows<any>(() =>
+        supabase
+          .from('external_companies')
+          .select('id, external_id, name, sector, main_business')
+          .is('deleted_at', null)
+      )
     ),
-    fetchAllRows<any>(() =>
-      supabase
-        .from('external_material_groups')
-        .select('id, external_id, name, code, uom')
-        .is('deleted_at', null)
+    safeFetch('external_material_groups', () =>
+      fetchAllRows<any>(() =>
+        supabase
+          .from('external_material_groups')
+          .select('id, external_id, name, code, uom')
+          .is('deleted_at', null)
+      )
     ),
-    fetchAllRows<any>(() =>
-      supabase
-        .from('marketplace_item_allocations')
-        .select('id, marketplace_id, item_type_id, allocated_quantity, distributed_quantity, original_allocated_quantity, surpluss_allocation_id, created_at, updated_at')
-        .is('deleted_at', null)
+    safeFetch('marketplace_item_allocations', () =>
+      fetchAllRows<any>(() =>
+        supabase
+          .from('marketplace_item_allocations')
+          .select('id, marketplace_id, item_type_id, allocated_quantity, distributed_quantity, original_allocated_quantity, surpluss_allocation_id, created_at, updated_at')
+          .is('deleted_at', null)
+      )
     ),
-    fetchAllRows<any>(() =>
-      supabase
-        .from('marketplace_events')
-        .select('id, name, event_date, status, location, external_id')
-        .is('deleted_at', null)
-    ),
-    fetchAllRows<any>(() =>
-      supabase
-        .from('transactions')
-        .select('marketplace_id, item_type, type, timestamp')
-        .eq('type', 'Distribution')
+    safeFetch('marketplace_events', () =>
+      fetchAllRows<any>(() =>
+        supabase
+          .from('marketplace_events')
+          .select('id, name, event_date, status, location, external_id')
+          .is('deleted_at', null)
+      )
     ),
     fetchAllRows<any>(() =>
       supabase
         .from('warehouse_returns')
         .select('marketplace_id, item_type_id, allocation_id, quantity_returned, return_batch_code, returned_at')
         .is('deleted_at', null)
-    ).catch(() => []),
+    ).catch((e) => {
+      console.warn('[audit-export] warehouse_returns unavailable:', e);
+      return [] as any[];
+    }),
   ]);
+
+  console.log('[audit-export] fetched', {
+    itemTypes: itemTypes.length,
+    extItems: extItems.length,
+    extCompanies: extCompanies.length,
+    extMatGroups: extMatGroups.length,
+    allocations: allocations.length,
+    marketplaces: marketplaces.length,
+    warehouseReturns: warehouseReturns.length,
+  });
+
 
   // Lookup maps
   const itemById = new Map(itemTypes.map((i) => [i.id, i]));
