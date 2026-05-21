@@ -7,6 +7,7 @@ import { VolunteerBulkHoursEditDialog, type BulkVolunteerEditTarget } from './Vo
 import { motion } from 'framer-motion';
 import { ArrowLeft, BarChart3, Users, Package, MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Loader2, PieChart as PieChartIcon, Building2, Tags, Send, Pencil, Trash2, GraduationCap, QrCode, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { exportFullAuditTrail } from '@/lib/exportAuditTrail';
 import { format as formatDate } from 'date-fns';
 import { QRCodeSVG } from 'qrcode.react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
