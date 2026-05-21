@@ -169,35 +169,9 @@ export async function exportFullAuditTrail(): Promise<{
     })
     .sort((a, b) => String(b['Allocation Date']).localeCompare(String(a['Allocation Date'])));
 
-  // ============ Distribution timestamp aggregation ============
-  // Group transactions by marketplace_id + item_type (item type stored as text name)
-  const distTxByKey = new Map<string, { first: string; last: string; count: number }>();
-  for (const t of transactions) {
-    if (!t.marketplace_id || !t.timestamp) continue;
-    const key = `${t.marketplace_id}|${(t.item_type ?? '').toLowerCase()}`;
-    const ts = t.timestamp;
-    const cur = distTxByKey.get(key);
-    if (!cur) {
-      distTxByKey.set(key, { first: ts, last: ts, count: 1 });
-    } else {
-      if (ts < cur.first) cur.first = ts;
-      if (ts > cur.last) cur.last = ts;
-      cur.count += 1;
-    }
-  }
-  // Also a fallback: any distribution by marketplace (ignoring item)
-  const distMpRange = new Map<string, { first: string; last: string }>();
-  for (const t of transactions) {
-    if (!t.marketplace_id || !t.timestamp) continue;
-    const cur = distMpRange.get(t.marketplace_id);
-    if (!cur) distMpRange.set(t.marketplace_id, { first: t.timestamp, last: t.timestamp });
-    else {
-      if (t.timestamp < cur.first) cur.first = t.timestamp;
-      if (t.timestamp > cur.last) cur.last = t.timestamp;
-    }
-  }
-
   // ============ SHEET 3: Distribution (aggregate per marketplace × material) ============
+  // Distribution timestamps come from allocation.updated_at (touched on every scan)
+  // — exhaustive transaction scan was removed to keep export under 30s for 300k+ rows.
   const distributionRows = allocations
     .filter((a) => (a.distributed_quantity ?? 0) > 0)
     .map((a) => {
@@ -205,8 +179,6 @@ export async function exportFullAuditTrail(): Promise<{
       const mp = mpById.get(a.marketplace_id);
       const allocatedQty = a.allocated_quantity ?? 0;
       const distributed = a.distributed_quantity ?? 0;
-      const itemKey = `${a.marketplace_id}|${(item?.name ?? '').toLowerCase()}`;
-      const txRange = distTxByKey.get(itemKey) ?? distTxByKey.get(`${a.marketplace_id}|item`) ?? distMpRange.get(a.marketplace_id);
       return {
         Marketplace: mp?.name ?? '',
         'Event Date': fmtD(mp?.event_date),
@@ -216,8 +188,7 @@ export async function exportFullAuditTrail(): Promise<{
         Allocated: allocatedQty,
         Distributed: distributed,
         '% Distributed': allocatedQty > 0 ? Math.round((distributed / allocatedQty) * 1000) / 10 : 0,
-        'First Distribution': fmtDT(txRange?.first),
-        'Last Distribution': fmtDT(txRange?.last),
+        'Last Activity': fmtDT(a.updated_at),
       };
     })
     .sort(
@@ -225,6 +196,7 @@ export async function exportFullAuditTrail(): Promise<{
         String(b['Event Date']).localeCompare(String(a['Event Date'])) ||
         String(a.Marketplace).localeCompare(String(b.Marketplace))
     );
+
 
   // Aggregate warehouse returns
   const returnsByAllocation = new Map<string, { qty: number; batch: string; date: string }>();
