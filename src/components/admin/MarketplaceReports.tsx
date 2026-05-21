@@ -571,26 +571,45 @@ export const MarketplaceReports = ({
               </SelectContent>
             </Select>
           </div>
-          {selectedMarketplaceId && report && (
-            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-              <Button
-                variant="outline"
-                onClick={() => exportAttendanceLog()}
-                className="gap-2 w-full md:w-auto"
-              >
-                <Download className="w-4 h-4" />
-                Export Attendance Log
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => exportQrEvidence()}
-                className="gap-2 w-full md:w-auto"
-              >
-                <QrCode className="w-4 h-4" />
-                Export QR Evidence
-              </Button>
-            </div>
-          )}
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+            <Button
+              variant="default"
+              onClick={async () => {
+                toast({ title: 'Building full audit trail…', description: 'Fetching donations, allocations, distributions. This may take 10–30 seconds.' });
+                try {
+                  const r = await exportFullAuditTrail();
+                  toast({ title: 'Audit trail exported', description: `${r.materials} materials · ${r.donations} donations · ${r.allocations} allocations · ${r.distributions} distribution rows · ${r.remaining} with remaining stock.` });
+                } catch (e: any) {
+                  toast({ title: 'Export failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+                }
+              }}
+              className="gap-2 w-full md:w-auto"
+            >
+              <Download className="w-4 h-4" />
+              Export Full Audit Trail
+            </Button>
+            {selectedMarketplaceId && report && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => exportAttendanceLog()}
+                  className="gap-2 w-full md:w-auto"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Attendance Log
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => exportQrEvidence()}
+                  className="gap-2 w-full md:w-auto"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Export QR Evidence
+                </Button>
+              </>
+            )}
+          </div>
+
         </div>
 
         {/* All Marketplaces Overview */}
