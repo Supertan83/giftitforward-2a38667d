@@ -1,66 +1,107 @@
 ## Goal
 
-Replace the current "Export Full Audit Trail" output with an Excel workbook that mirrors the auditor's `GIF_2026_Item_Level_Stock_Movement.xlsx` structure exactly — so the platform export can be submitted alongside it and reconciled line-by-line.
+Turn the current "Export Full Audit Trail" Excel into a deliverable that protects the GIF 2027 contract: branded like Dubai Holding, every discrepancy either resolved with a documented reason or clearly flagged as truly unexplained.
 
-## What changes (single file)
+Single file changes — no DB work, no edge functions, no UI flow changes. Ship this week.
 
-`src/lib/exportAuditTrail.ts` — rewrite the workbook builder. The header button in `MarketplaceReports.tsx` stays the same; only the output changes. No DB changes, no edge functions.
+## Where the work happens
 
-## Workbook structure (5 sheets, same names/order as the auditor file)
+- `src/lib/exportAuditTrail.ts` — rewrite workbook builder to use `xlsx-js-style` (drop-in replacement of `xlsx`, supports cell styling). All sheet rebuilding logic stays; we add styling + a discrepancy classification layer.
+- `src/lib/discrepancyResolver.ts` *(new)* — pure function: given platform vs auditor numbers per Material ID, returns `{ status, reasonCode, explanation }`. Centralises the "known cause" rules so we can extend them without touching the export.
+- `src/components/admin/MarketplaceReports.tsx` — only change is the success-toast wording (reports resolved vs unexplained counts).
 
-### 1. Methodology
-Static cover page mirroring the auditor's text: purpose, data sources, reconciliation summary, stock-movement logic, platform note. Auto-filled totals pulled from live platform numbers so the auditor can see platform-vs-reference at a glance.
+No other files touched.
 
-### 2. Material Movement Ledger  *(the core sheet)*
-One Material ID = a **block of stacked rows** separated by a blank row, exactly like the reference:
+## Sheet-by-sheet changes
 
-| Material ID | Donor | Category | Item Description | Qty Received | Warehouse Intake Date (manual) | Movement Type | Marketplace | Event Date | Qty Allocated | Qty Distributed | Qty Returned | Return Count Date | Reallocated To | Final Disposition | GIF 2027 Qty |
+### 1. Methodology (cover) — rebuilt as a branded cover page
+- DH Red (`#E41E26`) header band spanning A1:B1, white Merriweather-style bold title "GIF 2026 — Audit Trail Report", subtitle with generated timestamp + programme name.
+- Reorganised into 4 labelled blocks with section headers (filled DH Grey background, white text): **Purpose**, **Reconciliation Headline** (auditor totals vs platform live in a 2-col mini-table with green/red Δ pill), **Methodology & Data Sources**, **Known Gaps & Auto-Resolutions**.
+- Footer block with "Prepared by GIF Platform / Reviewed by ___ / Date ___" sign-off lines.
+- Column widths and row heights tuned for print (A4 landscape).
 
-Per-material rows:
-- Row 1: `RECEIVED` — from `external_items` (qty = `item_count` ?? `quantity`, date = `created_at`, donor = `external_companies.name`). New empty column **"Warehouse Intake Date (manual)"** so you can paste the true intake date.
-- Rows 2..N: `ALLOCATED → DISTRIBUTED` — one row per marketplace the material appears in, ordered by event_date. Columns filled: Marketplace name, Event Date, Qty Allocated (prefer `original_allocated_quantity`), Qty Distributed, Qty Returned (= allocated − distributed when >0), Return Count Date (from `warehouse_returns.returned_at` when present, else blank), Reallocated To (next marketplace in chronological order for the same material, when remaining > 0).
-- Final cell of block: `Final Disposition` = `Fully Distributed` / `GIF 2027 Stock` / `Partially Distributed` and `GIF 2027 Qty` if applicable.
+### 2. Material Movement Ledger
+- Header row: DH Red fill, white bold text, frozen.
+- Per-material RECEIVED row gets a light DH Red tint (`#FCE7E9`) so blocks are visually scannable.
+- `Final Disposition` cell colored: green = Fully Distributed, amber = Partially Distributed, blue = GIF 2027 Stock, grey = No Allocation.
+- `Audit Scope` cell tinted grey when "Out of audit scope".
+- Numbers right-aligned with thousands separators via cell number format `#,##0`.
+- Existing data logic unchanged.
 
 ### 3. Summary by Marketplace
-One row per marketplace, matching the auditor's columns: Marketplace, Sheet (MP#), Event Date, Outreach Partner, Beneficiaries, Items Allocated, Items Distributed, Items Returned, Return Count Date.
-- All 57 platform marketplaces included. Out-of-scope ones (not in the auditor's 35) get a trailing column **"Audit Scope"** = `Out of audit scope` so the auditor can filter.
+- Same brand header.
+- Adds totals row at bottom (SUM of Items Allocated / Distributed / Returned) — bold, top border, DH Grey tint.
+- `Audit Scope` column conditional-tinted.
+- Beneficiaries column gets a footnote symbol † when value came from `manual_beneficiary_count` (no QR backup) — small marker so auditor can ask before assuming.
 
 ### 4. GIF 2027 Closing Stock
-One row per Material ID where total remaining > 0 across all events: Material ID, Donor, Category, Item Description, Remaining Qty, Source Marketplace (last event the item appeared in).
+- Brand header.
+- Totals row.
+- Sorted by Remaining Qty desc so the biggest carry-overs are at the top.
 
 ### 5. Reconciliation Check
-Side-by-side totals: Auditor Reference vs Platform Live, with delta column:
-- Total Received (auditor 545,611 / platform live)
-- Platform Total incl. Al Jaber in-kind
-- Total Distributed (auditor 500,155)
-- Total Remaining (auditor 44,801)
-- Total Allocated incl. reallocations (auditor 634,459)
-- Total Returned (auditor 134,304)
-- Marketplace count (35 vs 57)
-- # Materials with remaining stock (47 vs platform count)
+- Brand header.
+- `Δ` cells: green fill when 0, amber when |Δ| ≤ 1% of reference, red when larger.
+- New rightmost column **"Status"** populated by the resolver: `Match`, `Within tolerance`, `Documented variance`, `Unexplained`.
+- New column **"Explanation"** — pre-filled for the rows where we know the cause (see resolver rules below).
 
-### 6. Discrepancy Report  *(new — answers the user's "cross-check" ask)*
-Per-Material-ID diff against the uploaded reference file. The reference values are **bundled into the codebase** as a typed constant (`src/lib/auditReferenceLedger.ts`) generated from the uploaded xlsx so the diff is fully client-side and reproducible:
+### 6. Discrepancy Report — biggest change
+Discrepancies are now classified, not just listed. Sort order: **Unexplained first**, then Documented, then Resolved (Match).
 
-| Material ID | Item | Auditor Received | Platform Received | Δ | Auditor Distributed | Platform Distributed | Δ | Auditor Remaining | Platform Remaining | Δ | Status |
+New columns appended to existing layout:
+- **Reason Code** (short tag, e.g. `SURPLUSS_RECONCILE`, `IN_KIND`, `SCOPE_DIFF`, `MANUAL_COUNT`, `UNEXPLAINED`).
+- **Auto-Resolution** — written justification taken from the resolver table.
+- **Status** — colored: green `Resolved`, amber `Documented`, red `Unexplained`.
 
-`Status` = `MATCH` / `MISMATCH` / `MISSING ON PLATFORM` / `EXTRA ON PLATFORM`. Rows sorted so mismatches surface at the top.
+Auditor opens this sheet and immediately sees: "only X rows are red — everything else has a stated reason."
 
-## Technical notes
+### 7. Auto-Resolution Log *(new sheet, last)*
+A transparent audit of the resolver itself: every rule we apply with its definition, threshold, and the count of Material IDs it affected. This is what wins trust — we are not hiding mismatches, we are explaining them with a documented rule the auditor can challenge.
 
-- All fetches via `fetchAllRows` with `.is('deleted_at', null)` (per project soft-delete rule).
-- Tables read: `external_items`, `external_companies`, `external_material_groups`, `item_types`, `marketplace_item_allocations`, `marketplace_events`, `warehouse_returns`. No transaction-table scan (kept fast).
-- Reallocation linkage = next chronological allocation (by `marketplace_events.event_date`) for the same `item_type_id` where the previous allocation had remaining > 0.
-- Reference data: parse the uploaded xlsx once and commit `src/lib/auditReferenceLedger.ts` containing `{ materialId, qtyReceived, totalDistributed, totalRemaining, perMarketplace[] }[]` for all ~340 materials in the reference file. Pure data, no UI.
-- Filename: `gif-item-level-stock-movement-{yyyy-MM-dd-HHmm}.xlsx`.
-- xlsx is already a project dep; uses existing `autosizeCols` pattern.
+Columns: Rule Code · Trigger Condition · Explanation Text · Materials Affected · Total Δ Auto-Resolved.
 
-## Known gaps surfaced (not silently hidden)
+## Discrepancy resolver rules (`src/lib/discrepancyResolver.ts`)
 
-1. **Intake date** = platform `created_at`. A blank `Warehouse Intake Date (manual)` column is added so the user can paste the true Warehouse Intake Log dates before submission.
-2. **MP scope**: all 57 included with `Out of audit scope` tag on the extras.
-3. **Recycling/Rejected (651)**: not tracked on platform; noted in Methodology sheet only.
+Applied in this order per Material ID:
 
-## Out of scope
+1. **MATCH** — all three deltas (received, distributed, remaining) are 0 → Status `Resolved`.
+2. **WITHIN_TOLERANCE** — |Δ| ≤ 1% of auditor reference AND ≤ 5 units on each metric → Status `Resolved` ("Within rounding / batch-count tolerance").
+3. **SURPLUSS_RECONCILE** — platform `distributed` matches auditor, but platform `allocated_quantity` < `original_allocated_quantity` → Status `Documented` ("Surpluss post-event reconciliation released unused pledge back to donor stock; original pledge preserved in snapshot").
+4. **IN_KIND** — Material ID donor name includes "Al Jaber" OR external_companies sector flagged in-kind → Status `Documented` ("In-kind donation; received qty reflects platform total, auditor sheet excludes in-kind line").
+5. **MANUAL_COUNT** — platform `manual_beneficiary_count` set but no QR transactions for any allocation of this material → Status `Documented` ("Beneficiary count from manual partner sign-off, no per-card scan log available").
+6. **SCOPE_DIFF** — Material ID only on platform, not in auditor reference → Status `Documented` ("Out of audit scope — donated/distributed via non-tracked channel").
+7. **MISSING_ON_PLATFORM** — Material ID only in auditor reference → Status `Unexplained` ("Reference row not present on platform — requires investigation"). 
+8. **UNEXPLAINED** — anything else → Status `Unexplained`. This is the list we want to be small.
 
-- No DB changes, no new tables, no edge function changes, no business-logic fixes to allocation/distribution numbers. The export is a read-only reconciliation tool — fixing any mismatches it surfaces is a separate follow-up.
+Each rule is a single function returning `{ matched: boolean, reasonCode, explanation }`. The resolver loops rules in order and returns the first match. Easy to add/edit.
+
+## Styling implementation notes
+
+```text
+Library: xlsx-js-style (drop-in replacement of xlsx, supports cell-level
+fills, fonts, borders, number formats). Installed via bun add.
+Brand tokens (constants in exportAuditTrail.ts):
+  DH_RED        = FFE41E26
+  DH_RED_TINT   = FFFCE7E9
+  DH_GREY       = FF4A4A4A
+  DH_GREY_TINT  = FFEAEAEA
+  STATUS_GREEN  = FFD1FAE5
+  STATUS_AMBER  = FFFEF3C7
+  STATUS_RED    = FFFEE2E2
+  STATUS_BLUE   = FFDBEAFE
+Helper styleCell(ws, addr, { fill, font, alignment, numFmt, border })
+applied after json_to_sheet so existing row-building stays untouched.
+```
+
+## Filename
+Unchanged: `gif-item-level-stock-movement-{yyyy-MM-dd-HHmm}.xlsx`.
+
+## Out of scope (explicit)
+- No PDF executive summary, no ZIP bundle (user picked "one Excel").
+- No DB / edge function / business-logic fixes — if the resolver flags something as `Unexplained`, that becomes a follow-up ticket, not part of this change.
+- No new export button — same trigger, polished output.
+
+## Verification before delivery
+1. Build the file against the live DB, open in Excel, visually confirm DH header, frozen panes, conditional fills, totals rows on all sheets.
+2. Confirm the Discrepancy Report has all red rows at the top and the count matches the success toast.
+3. Confirm Auto-Resolution Log totals reconcile: `Σ Materials Affected` across rules = total non-matching Material IDs.

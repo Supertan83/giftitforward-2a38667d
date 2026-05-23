@@ -614,7 +614,7 @@ export const MarketplaceReports = ({
                 toast({ title: 'Building full audit trail…', description: 'Fetching donations, allocations, distributions. This may take 10–30 seconds.' });
                 try {
                   const r = await exportFullAuditTrail();
-                  toast({ title: 'Audit trail exported', description: `${r.materials} materials · ${r.allocations} allocations · ${r.remaining} with remaining stock · ${r.mismatches} mismatches vs auditor reference.` });
+                  toast({ title: 'Audit trail exported', description: `${r.materials} materials · ${r.resolved} reconciled · ${r.documented} documented variance · ${r.unexplained} unexplained.` });
                 } catch (e: any) {
                   toast({ title: 'Export failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
                 }
