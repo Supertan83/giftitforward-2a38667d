@@ -861,7 +861,7 @@ export async function exportFullAuditTrail(): Promise<{
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 
   return {
     donations: receivedByMatId.size,
