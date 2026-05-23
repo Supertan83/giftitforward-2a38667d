@@ -852,7 +852,16 @@ export async function exportFullAuditTrail(): Promise<{
   XLSX.utils.book_append_sheet(wb, ws7, 'Auto-Resolution Log');
 
   const filename = `gif-item-level-stock-movement-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 
   return {
     donations: receivedByMatId.size,
