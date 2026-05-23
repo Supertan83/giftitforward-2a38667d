@@ -231,6 +231,16 @@ export const MarketplaceReports = ({
   };
 
   const fetchQrEvidence = async (marketplaceId: string) => {
+    // 0) Resolve the event date so we can also recover scans whose
+    //    marketplace_id was never tagged (CheckIn / CheckOut scans are
+    //    typically saved with marketplace_id = NULL by the QR scanner).
+    const { data: mpRow } = await supabase
+      .from('marketplace_events')
+      .select('event_date')
+      .eq('id', marketplaceId)
+      .maybeSingle();
+    const eventDate: string | null = (mpRow as any)?.event_date || null;
+
     // 1) Scan events for this marketplace come from `transactions`
     //    (each row = a beneficiary scan: check_in / distribution / return / check_out)
     const txnPageSize = 1000;
@@ -247,6 +257,32 @@ export const MarketplaceReports = ({
       const rows = data || [];
       txns.push(...rows);
       if (rows.length < txnPageSize) break;
+    }
+
+    // 1b) Untagged scans (marketplace_id IS NULL) that happened on the
+    //     event day. These are usually CheckIn/CheckOut scans from the QR
+    //     scanner, which the scanner doesn't tag with a marketplace.
+    //     Without this, "QR Cards Activated" undercounts (only cards that
+    //     also had a Distribution scan show up).
+    if (eventDate) {
+      const dayStart = `${eventDate}T00:00:00.000Z`;
+      const dayEnd = `${eventDate}T23:59:59.999Z`;
+      const seen = new Set(txns.map((t: any) => t.id));
+      for (let page = 0; page < 200; page++) {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('id, card_id, type, item_type, credit_change, timestamp, scanned_by, marketplace_id')
+          .is('marketplace_id', null)
+          .is('deleted_at', null)
+          .gte('timestamp', dayStart)
+          .lte('timestamp', dayEnd)
+          .order('timestamp', { ascending: true })
+          .range(page * txnPageSize, page * txnPageSize + txnPageSize - 1);
+        if (error) throw error;
+        const rows = data || [];
+        for (const r of rows) if (!seen.has(r.id)) { txns.push(r); seen.add(r.id); }
+        if (rows.length < txnPageSize) break;
+      }
     }
 
     // 2) Cards directly linked to this marketplace (legacy / pre-scan activations)
