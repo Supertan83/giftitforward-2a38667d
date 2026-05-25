@@ -176,15 +176,20 @@ export const EntranceZone = ({ selectedMarketplaceId }: EntranceZoneProps) => {
           variant="scan" 
           size="xl" 
           className="w-full"
-          disabled={isProcessing}
+          disabled={isProcessing || !selectedMarketplaceId}
         >
           {isProcessing ? (
             <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
           ) : (
             <QrCode className="w-5 h-5 md:w-6 md:h-6" />
           )}
-          {isProcessing ? 'Processing...' : 'Scan QR Card'}
+          {isProcessing ? 'Processing...' : (selectedMarketplaceId ? 'Scan QR Card' : 'Select a marketplace first')}
         </Button>
+        {!selectedMarketplaceId && (
+          <p className="text-xs text-amber-600 text-center mt-2">
+            Pick today's marketplace at the top so every check-in is logged against the right event.
+          </p>
+        )}
       </motion.div>
 
       {/* Last Activated Card */}
