@@ -1,107 +1,57 @@
-## Goal
+# Fix "QR Cards Activated" undercount on Feb 28 export
 
-Turn the current "Export Full Audit Trail" Excel into a deliverable that protects the GIF 2027 contract: branded like Dubai Holding, every discrepancy either resolved with a documented reason or clearly flagged as truly unexplained.
+## Root cause (confirmed against the database)
 
-Single file changes — no DB work, no edge functions, no UI flow changes. Ship this week.
+For **She Thrives Women Workers Marketplace February 28** (`ff0d8005-7c85-4a8d-9e0c-147475e7b0eb`) the database holds:
 
-## Where the work happens
+- **864** distinct cards with scans tagged to this marketplace (only Distribution + Return).
+- **1,191** distinct cards with scans on Feb 28 (Asia/Dubai) but `marketplace_id = NULL` — specifically 1,189 CheckIn, 413 Distribution and 1,175 CheckOut rows that were saved by the scanner without a marketplace tag.
+- All 864 tagged cards are a strict subset of the 1,191 NULL-tagged cards.
 
-- `src/lib/exportAuditTrail.ts` — rewrite workbook builder to use `xlsx-js-style` (drop-in replacement of `xlsx`, supports cell styling). All sheet rebuilding logic stays; we add styling + a discrepancy classification layer.
-- `src/lib/discrepancyResolver.ts` *(new)* — pure function: given platform vs auditor numbers per Material ID, returns `{ status, reasonCode, explanation }`. Centralises the "known cause" rules so we can extend them without touching the export.
-- `src/components/admin/MarketplaceReports.tsx` — only change is the success-toast wording (reports resolved vs unexplained counts).
+The export reads `transactions` filtered by `marketplace_id = <event>`, so only the 864 tagged cards land in the workbook. The earlier "untagged scans on event day" fallback added to `fetchQrEvidence` is still in source but is clearly not active for this export (likely never re-published, and even when it does run it picks up scans from any concurrent event on the same date — fragile for audit work).
 
-No other files touched.
+The check-in path (`activate_beneficiary_card` RPC called from EntranceZone) writes whatever `p_marketplace_id` it gets. When a kiosk session was opened without an event selected, every CheckIn/CheckOut on that device went in as NULL. That is why the auditor sees 864 instead of 1,183.
 
-## Sheet-by-sheet changes
+## Fix in three parts
 
-### 1. Methodology (cover) — rebuilt as a branded cover page
-- DH Red (`#E41E26`) header band spanning A1:B1, white Merriweather-style bold title "GIF 2026 — Audit Trail Report", subtitle with generated timestamp + programme name.
-- Reorganised into 4 labelled blocks with section headers (filled DH Grey background, white text): **Purpose**, **Reconciliation Headline** (auditor totals vs platform live in a 2-col mini-table with green/red Δ pill), **Methodology & Data Sources**, **Known Gaps & Auto-Resolutions**.
-- Footer block with "Prepared by GIF Platform / Reviewed by ___ / Date ___" sign-off lines.
-- Column widths and row heights tuned for print (A4 landscape).
+### 1. Backfill historical NULL transactions (one-time data repair)
 
-### 2. Material Movement Ledger
-- Header row: DH Red fill, white bold text, frozen.
-- Per-material RECEIVED row gets a light DH Red tint (`#FCE7E9`) so blocks are visually scannable.
-- `Final Disposition` cell colored: green = Fully Distributed, amber = Partially Distributed, blue = GIF 2027 Stock, grey = No Allocation.
-- `Audit Scope` cell tinted grey when "Out of audit scope".
-- Numbers right-aligned with thousands separators via cell number format `#,##0`.
-- Existing data logic unchanged.
+Add a migration that infers the correct `marketplace_id` for every existing NULL row and writes it back. Inference order, applied per card:
 
-### 3. Summary by Marketplace
-- Same brand header.
-- Adds totals row at bottom (SUM of Items Allocated / Distributed / Returned) — bold, top border, DH Grey tint.
-- `Audit Scope` column conditional-tinted.
-- Beneficiaries column gets a footnote symbol † when value came from `manual_beneficiary_count` (no QR backup) — small marker so auditor can ask before assuming.
+1. **Same-card tagged scan on the same Dubai day** → use that `marketplace_id`. Covers the 864 cards immediately.
+2. **`archived_card_data.marketplace_id`** for that `original_card_id` whose `checked_out_at` falls on the same Dubai day → use it.
+3. **`qr_cards.marketplace_id`** if the card is still linked and `activated_at` is the same Dubai day.
+4. **Single marketplace scheduled for that Dubai day** (i.e. only one `marketplace_events.event_date` matches) → use it.
+5. Anything left unresolved is logged to a small `transaction_backfill_unresolved` table for manual review (expected to be tiny — mostly test scans).
 
-### 4. GIF 2027 Closing Stock
-- Brand header.
-- Totals row.
-- Sorted by Remaining Qty desc so the biggest carry-overs are at the top.
+The migration runs inside a transaction, reports per-step counts, and is idempotent (only touches rows where `marketplace_id IS NULL`). Expected outcome for Feb 28: 1,191 distinct cards tagged to `ff0d8005…`, so the export immediately reads **1,183 activated / 1,189 checked in**.
 
-### 5. Reconciliation Check
-- Brand header.
-- `Δ` cells: green fill when 0, amber when |Δ| ≤ 1% of reference, red when larger.
-- New rightmost column **"Status"** populated by the resolver: `Match`, `Within tolerance`, `Documented variance`, `Unexplained`.
-- New column **"Explanation"** — pre-filled for the rows where we know the cause (see resolver rules below).
+### 2. Stop the bleeding at the scanner
 
-### 6. Discrepancy Report — biggest change
-Discrepancies are now classified, not just listed. Sort order: **Unexplained first**, then Documented, then Resolved (Match).
+- Update `activate_beneficiary_card`, `checkout_beneficiary_card`, `distribute_marketplace_item(s)_batch` and `return_marketplace_item(s)_batch` so that when the caller passes `NULL` they fall back to "the single marketplace scheduled today (Asia/Dubai)". If zero or more than one event is scheduled, raise an explicit error so the scanner shows a clear message instead of silently writing a NULL row.
+- In `EntranceZone` and `BeneficiaryQRControlCenter`, disable the scan button until a marketplace is selected and surface the same guard in the UI (today the button is enabled even when `selectedMarketplaceId` is empty).
 
-New columns appended to existing layout:
-- **Reason Code** (short tag, e.g. `SURPLUSS_RECONCILE`, `IN_KIND`, `SCOPE_DIFF`, `MANUAL_COUNT`, `UNEXPLAINED`).
-- **Auto-Resolution** — written justification taken from the resolver table.
-- **Status** — colored: green `Resolved`, amber `Documented`, red `Unexplained`.
+### 3. Make the export self-healing and label-clear
 
-Auditor opens this sheet and immediately sees: "only X rows are red — everything else has a stated reason."
+In `src/components/admin/MarketplaceReports.tsx → fetchQrEvidence`:
 
-### 7. Auto-Resolution Log *(new sheet, last)*
-A transparent audit of the resolver itself: every rule we apply with its definition, threshold, and the count of Material IDs it affected. This is what wins trust — we are not hiding mismatches, we are explaining them with a documented rule the auditor can challenge.
+- Keep the existing tagged-scan fetch.
+- Replace the "any NULL on event_date" fallback with a stricter one: pull NULL scans on the event day **and** only keep cards whose archived/active record points at this marketplace, or whose tagged scans elsewhere belong to this marketplace. This prevents accidental cross-event inflation once backfill is done.
+- Add a small footnote row to the Summary sheet: `Reported Beneficiaries (manual count)` vs `Beneficiary QR Cards Scanned` vs `Cards Reconciled via Backfill` so the auditor can see the reconciliation explicitly.
 
-Columns: Rule Code · Trigger Condition · Explanation Text · Materials Affected · Total Δ Auto-Resolved.
+## Verification
 
-## Discrepancy resolver rules (`src/lib/discrepancyResolver.ts`)
+After the migration runs we will re-query and confirm:
 
-Applied in this order per Material ID:
+- `SELECT COUNT(DISTINCT card_id) FROM transactions WHERE marketplace_id='ff0d8005…' AND type='CheckIn'` → **1,189**
+- Re-export "QR Evidence" for She Thrives Feb 28 → Summary shows **Reported 1,183 / QR Activated 1,183 / Scanned 1,189**.
+- Spot-check D022–D024 (other Feb events) to confirm their counts are unchanged or corrected upward.
+- Sanity-check no card was tagged to two marketplaces.
 
-1. **MATCH** — all three deltas (received, distributed, remaining) are 0 → Status `Resolved`.
-2. **WITHIN_TOLERANCE** — |Δ| ≤ 1% of auditor reference AND ≤ 5 units on each metric → Status `Resolved` ("Within rounding / batch-count tolerance").
-3. **SURPLUSS_RECONCILE** — platform `distributed` matches auditor, but platform `allocated_quantity` < `original_allocated_quantity` → Status `Documented` ("Surpluss post-event reconciliation released unused pledge back to donor stock; original pledge preserved in snapshot").
-4. **IN_KIND** — Material ID donor name includes "Al Jaber" OR external_companies sector flagged in-kind → Status `Documented` ("In-kind donation; received qty reflects platform total, auditor sheet excludes in-kind line").
-5. **MANUAL_COUNT** — platform `manual_beneficiary_count` set but no QR transactions for any allocation of this material → Status `Documented` ("Beneficiary count from manual partner sign-off, no per-card scan log available").
-6. **SCOPE_DIFF** — Material ID only on platform, not in auditor reference → Status `Documented` ("Out of audit scope — donated/distributed via non-tracked channel").
-7. **MISSING_ON_PLATFORM** — Material ID only in auditor reference → Status `Unexplained` ("Reference row not present on platform — requires investigation"). 
-8. **UNEXPLAINED** — anything else → Status `Unexplained`. This is the list we want to be small.
+## Files touched
 
-Each rule is a single function returning `{ matched: boolean, reasonCode, explanation }`. The resolver loops rules in order and returns the first match. Easy to add/edit.
-
-## Styling implementation notes
-
-```text
-Library: xlsx-js-style (drop-in replacement of xlsx, supports cell-level
-fills, fonts, borders, number formats). Installed via bun add.
-Brand tokens (constants in exportAuditTrail.ts):
-  DH_RED        = FFE41E26
-  DH_RED_TINT   = FFFCE7E9
-  DH_GREY       = FF4A4A4A
-  DH_GREY_TINT  = FFEAEAEA
-  STATUS_GREEN  = FFD1FAE5
-  STATUS_AMBER  = FFFEF3C7
-  STATUS_RED    = FFFEE2E2
-  STATUS_BLUE   = FFDBEAFE
-Helper styleCell(ws, addr, { fill, font, alignment, numFmt, border })
-applied after json_to_sheet so existing row-building stays untouched.
-```
-
-## Filename
-Unchanged: `gif-item-level-stock-movement-{yyyy-MM-dd-HHmm}.xlsx`.
-
-## Out of scope (explicit)
-- No PDF executive summary, no ZIP bundle (user picked "one Excel").
-- No DB / edge function / business-logic fixes — if the resolver flags something as `Unexplained`, that becomes a follow-up ticket, not part of this change.
-- No new export button — same trigger, polished output.
-
-## Verification before delivery
-1. Build the file against the live DB, open in Excel, visually confirm DH header, frozen panes, conditional fills, totals rows on all sheets.
-2. Confirm the Discrepancy Report has all red rows at the top and the count matches the success toast.
-3. Confirm Auto-Resolution Log totals reconcile: `Σ Materials Affected` across rules = total non-matching Material IDs.
+- `supabase/migrations/<timestamp>_backfill_null_transaction_marketplace.sql` (new)
+- `supabase/migrations/<timestamp>_harden_scan_rpcs.sql` (new — updates the four RPCs above)
+- `src/components/zones/EntranceZone.tsx` (disable scan w/o marketplace)
+- `src/components/admin/BeneficiaryQRControlCenter.tsx` (same guard)
+- `src/components/admin/MarketplaceReports.tsx` (tighter fallback + summary labels)
