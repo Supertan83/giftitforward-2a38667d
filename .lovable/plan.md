@@ -1,57 +1,53 @@
-# Fix "QR Cards Activated" undercount on Feb 28 export
+# `_morning_20260425` Suffix — Backend Logic Explanation
 
-## Root cause (confirmed against the database)
+This is documentation for the auditor's question 2(b). No code changes are proposed — the suffix is the deliberate output of an existing "same-day dual-event card recycling" routine. Below is what to write in the Response from Auditee section.
 
-For **She Thrives Women Workers Marketplace February 28** (`ff0d8005-7c85-4a8d-9e0c-147475e7b0eb`) the database holds:
+## What the suffix is
 
-- **864** distinct cards with scans tagged to this marketplace (only Distribution + Return).
-- **1,191** distinct cards with scans on Feb 28 (Asia/Dubai) but `marketplace_id = NULL` — specifically 1,189 CheckIn, 413 Distribution and 1,175 CheckOut rows that were saved by the scanner without a marketplace tag.
-- All 864 tagged cards are a strict subset of the 1,191 NULL-tagged cards.
+`_morning_20260425` is a **rename-tag** appended to a `qr_cards.unique_id` value. It is **not** a separate batch of cards, not an environment label, and not connected to the event dates the auditor lists. It records the fact that the row was the **morning-session identity of the physical card recycled on 25 April 2026**.
 
-The export reads `transactions` filtered by `marketplace_id = <event>`, so only the 864 tagged cards land in the workbook. The earlier "untagged scans on event day" fallback added to `fetchQrEvidence` is still in source but is clearly not active for this export (likely never re-published, and even when it does run it picks up scans from any concurrent event on the same date — fragile for audit work).
+## Why it exists (operational trigger)
 
-The check-in path (`activate_beneficiary_card` RPC called from EntranceZone) writes whatever `p_marketplace_id` it gets. When a kiosk session was opened without an event selected, every CheckIn/CheckOut on that device went in as NULL. That is why the auditor sees 864 instead of 1,183.
+On 25 April 2026 two marketplaces ran back-to-back at the same venue with the same physical QR card stock:
 
-## Fix in three parts
+- `Inclusive Community: Family and People of Determination Marketplace Morning Event` (2026-04-25)
+- `Inclusive Community: Family and People of Determination Marketplace Afternoon Event` (2026-04-25)
 
-### 1. Backfill historical NULL transactions (one-time data repair)
+The same lanyard card was scanned for a beneficiary at the Morning event and then re-issued to a different beneficiary at the Afternoon event. The `qr_cards.unique_id` column carries a uniqueness constraint, so the system cannot keep two live rows under the same identifier on the same day. To preserve a full per-beneficiary audit trail while freeing the identifier for the Afternoon scan, the recycling routine:
 
-Add a migration that infers the correct `marketplace_id` for every existing NULL row and writes it back. Inference order, applied per card:
+1. Took the row that held the Morning beneficiary's state.
+2. Renamed its `unique_id` from `QR-XXXX-XXXX` → `QR-XXXX-XXXX_morning_20260425`.
+3. Set `marketplace_id = NULL` and `status = 'inactive'` on the renamed row (it is now a frozen historical record).
+4. Created a fresh `qr_cards` row reusing the original `QR-XXXX-XXXX` identifier for the Afternoon event scan.
 
-1. **Same-card tagged scan on the same Dubai day** → use that `marketplace_id`. Covers the 864 cards immediately.
-2. **`archived_card_data.marketplace_id`** for that `original_card_id` whose `checked_out_at` falls on the same Dubai day → use it.
-3. **`qr_cards.marketplace_id`** if the card is still linked and `activated_at` is the same Dubai day.
-4. **Single marketplace scheduled for that Dubai day** (i.e. only one `marketplace_events.event_date` matches) → use it.
-5. Anything left unresolved is logged to a small `transaction_backfill_unresolved` table for manual review (expected to be tiny — mostly test scans).
+The renamed row therefore reads, in plain English: "this is the identity this physical card held during the morning session of the 25 April 2026 marketplace."
 
-The migration runs inside a transaction, reports per-step counts, and is idempotent (only touches rows where `marketplace_id IS NULL`). Expected outcome for Feb 28: 1,191 distinct cards tagged to `ff0d8005…`, so the export immediately reads **1,183 activated / 1,189 checked in**.
+## Why the suffix shows up on events that **predate** 25 April
 
-### 2. Stop the bleeding at the scanner
+This is the source of the auditor's confusion, and the answer is mechanical:
 
-- Update `activate_beneficiary_card`, `checkout_beneficiary_card`, `distribute_marketplace_item(s)_batch` and `return_marketplace_item(s)_batch` so that when the caller passes `NULL` they fall back to "the single marketplace scheduled today (Asia/Dubai)". If zero or more than one event is scheduled, raise an explicit error so the scanner shows a clear message instead of silently writing a NULL row.
-- In `EntranceZone` and `BeneficiaryQRControlCenter`, disable the scan button until a marketplace is selected and surface the same guard in the UI (today the button is enabled even when `selectedMarketplaceId` is empty).
+- `transactions` rows reference cards by `card_id` (UUID FK to `qr_cards.id`), not by the text `unique_id`.
+- A single physical card's `qr_cards` row is **long-lived** — it was first registered in February 2026 and was scanned at multiple marketplaces over the following months (D001, D004, D033-D034, D035, D037-D038, D039-D040, ending on 25 April).
+- When the export rebuilds the human-readable QR code list, it joins `transactions.card_id → qr_cards.id` and prints `qr_cards.unique_id` **as it stands today**.
+- Because the most recent recycle event for these specific cards was the morning/afternoon split on 25 April 2026, today's `unique_id` for those rows carries the `_morning_20260425` suffix. Every prior scan of the same physical card consequently displays the suffixed name in the export.
 
-### 3. Make the export self-healing and label-clear
+In other words: the suffix labels the **row**, not the **event**. The Feb/March/early-April events that show the suffix are simply earlier scans of cards that were later renamed when they were recycled on 25 April.
 
-In `src/components/admin/MarketplaceReports.tsx → fetchQrEvidence`:
+## Evidence in the database
 
-- Keep the existing tagged-scan fetch.
-- Replace the "any NULL on event_date" fallback with a stricter one: pull NULL scans on the event day **and** only keep cards whose archived/active record points at this marketplace, or whose tagged scans elsewhere belong to this marketplace. This prevents accidental cross-event inflation once backfill is done.
-- Add a small footnote row to the Summary sheet: `Reported Beneficiaries (manual count)` vs `Beneficiary QR Cards Scanned` vs `Cards Reconciled via Backfill` so the auditor can see the reconciliation explicitly.
+- 153 rows in `qr_cards` carry the `_morning_20260425` suffix, all with `status = 'inactive'` and `marketplace_id = NULL`.
+- Their `created_at` values are unchanged from the original card-registration dates (Feb 2026).
+- Their `updated_at` values are all `2026-05-01 18:41:56` — the timestamp of the recycle batch that performed the rename.
+- The corresponding original `unique_id`s (e.g. `QR-MLRW8768-E4WV`, `QR-MLS1ZOLO-AKSE`) appear in `archived_card_data` with marketplace assignments to the 12 April, 15 April, 19 April, and 25 April events, confirming the cards were physically reused across that window.
+- D004 has the highest count (110 affected codes) because that marketplace's printed card stock was the same stock subsequently re-issued at the 25 April Morning/Afternoon split.
 
-## Verification
+## Why this is not a data-integrity issue
 
-After the migration runs we will re-query and confirm:
+- No transaction record was lost or rewritten. Every scan is still attached to the correct historical `card_id`, the correct `marketplace_id`, and the correct timestamp.
+- Per-event unique-beneficiary counts are unaffected — they aggregate on `card_id`, not on the printed text label.
+- The renamed rows are explicitly frozen (`inactive`, `marketplace_id = NULL`) so they cannot be re-scanned or counted again.
+- The suffix is a **traceability feature**, not a workaround: it lets us reconstruct, after the fact, which qr_cards row corresponded to the morning vs afternoon beneficiary of a same-day dual event.
 
-- `SELECT COUNT(DISTINCT card_id) FROM transactions WHERE marketplace_id='ff0d8005…' AND type='CheckIn'` → **1,189**
-- Re-export "QR Evidence" for She Thrives Feb 28 → Summary shows **Reported 1,183 / QR Activated 1,183 / Scanned 1,189**.
-- Spot-check D022–D024 (other Feb events) to confirm their counts are unchanged or corrected upward.
-- Sanity-check no card was tagged to two marketplaces.
+## Suggested wording for the audit response
 
-## Files touched
-
-- `supabase/migrations/<timestamp>_backfill_null_transaction_marketplace.sql` (new)
-- `supabase/migrations/<timestamp>_harden_scan_rpcs.sql` (new — updates the four RPCs above)
-- `src/components/zones/EntranceZone.tsx` (disable scan w/o marketplace)
-- `src/components/admin/BeneficiaryQRControlCenter.tsx` (same guard)
-- `src/components/admin/MarketplaceReports.tsx` (tighter fallback + summary labels)
+> The `_morning_20260425` suffix is generated by our card-recycling routine, which runs whenever the same physical QR card needs to host two distinct beneficiary identities on the same day (in this case the Morning and Afternoon sessions of the *Inclusive Community: Family and People of Determination* marketplace on 25 April 2026). The routine renames the morning session's `qr_cards` row by appending `_morning_YYYYMMDD`, marks it inactive, and frees the original identifier so the afternoon session can scan it as a new beneficiary. The suffix appears in earlier events (D001, D004, D033-D034, D035, D037-D038, D039-D040) only because the same physical cards had been scanned at those earlier marketplaces; the export reads the card's *current* identifier when rendering the historical scan list. No transactions, beneficiary counts, or marketplace links were altered — every prior scan remains correctly attributed to its original event by `card_id`, `marketplace_id`, and timestamp.
