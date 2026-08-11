@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const PASSWORD = 'GifTest2026!'
+const PASSWORD = '12345678'
 
 const ACCOUNTS = [
   { email: 'admin.test@gif.com', role: 'admin', first: 'Test', last: 'Admin' },
